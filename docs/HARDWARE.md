@@ -472,6 +472,35 @@ Chain order is chosen for **cable voltage drop** (heavy loads nearest the inject
 
 Optional wires from the Inkplate header: **SET** (PMSA003I fan) to expander **P1_3**; nothing else is needed.
 
+### Every board runs at 3.3 V
+
+There is nothing unusual to do to any board. All four take 3.3 V on an
+ordinary Qwiic cable. The PMSA003I is no exception: its module needs 5 V for
+the fan, but the Adafruit breakout generates that itself with a charge pump
+from a 3–5 V input.
+
+**Do not give the PMSA003I board 5 V** to skip that charge pump. Its
+connector-side I²C pull-ups go to its VIN pin, so a 5 V input pulls the whole
+shared bus to 5 V — past the SCD41's absolute maximum of VDD + 0.3 V.
+
+### Can I just daisy-chain it all off the Inkplate?
+
+**For bench bring-up, yes.** Plug the chain into easyC K3 and use stock
+cables throughout. Everything enumerates and reads.
+
+**For the built device, no.** Two reasons, both about current, neither about
+any individual board:
+
+- The Inkplate's 3.3 V rail is 500 mA and already carries the ESP32, the
+  panel PMIC and Wi-Fi bursts. Sensor peaks alone reach ~470 mA (§7).
+- ~200 mA for the PM board would flow through every upstream board's
+  connectors. SparkFun's conservative figure for a Qwiic cable is 226 mA.
+
+Hence the separate regulator and the heaviest-load-first order above. The
+symptom if you skip it is an intermittent brown-out when the fan, an SCD41
+measurement peak and a Wi-Fi transmit coincide — the hardest kind of fault to
+find later.
+
 ---
 
 ## 9. Placement in the enclosure
