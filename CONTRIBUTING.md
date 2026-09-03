@@ -76,9 +76,18 @@ epd must be checked out beside this repo. Then, once the server exists:
 
 ```sh
 python3 -m venv server/.venv && source server/.venv/bin/activate
+pip install -e ../epd/server        # the local kit, not the pushed branch
 pip install -r server/requirements-dev.txt
-pip install -e ../epd/server        # develop against the local kit
 ```
+
+Install the local `epd` checkout **editable**, and first. `requirements.txt`
+pulls `epd-server` from GitHub at `@main`, which is right for a deployment
+and wrong while developing both repos at once.
+
+`server/pyrightconfig.json` points the editor at that virtualenv and adds
+`server/` to the import path, so Pylance resolves `epd_server` and
+`sources.*`. Without it both show as unresolved even though the tests pass,
+because Pylance does not read `pytest.ini`.
 
 ## Making Changes
 
