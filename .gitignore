@@ -1,0 +1,11 @@
+.pio/
+.vscode/
+src/defaults.cpp
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+server/config.yaml
+server/*.png
+server/static/*.html
+.DS_Store
