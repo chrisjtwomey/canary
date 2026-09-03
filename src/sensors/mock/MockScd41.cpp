@@ -51,7 +51,11 @@ void MockScd41::refresh(uint32_t nowMs) {
         case LOW_POWER_PERIODIC:
             if (nowMs >= nextDataMs_) {
                 due = true;
-                nextDataMs_ += (mode_ == PERIODIC) ? kPeriodicMs : kLowPowerMs;
+                // The part measures on its own schedule and keeps only the
+                // latest result, so intervals that passed with nobody reading
+                // are gone rather than queued.
+                uint32_t interval = (mode_ == PERIODIC) ? kPeriodicMs : kLowPowerMs;
+                do { nextDataMs_ += interval; } while (nowMs >= nextDataMs_);
             }
             break;
         case SINGLE_SHOT:

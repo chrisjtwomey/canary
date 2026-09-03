@@ -21,11 +21,11 @@ public:
     void setOversampling(uint8_t osT, uint8_t osP, uint8_t osH) override;
     void setHeaterProfile(uint16_t degC, uint16_t ms) override;
     bool startForced(uint32_t nowMs) override;
+    uint32_t measurementMs() const override;
     bool fetchData(uint32_t nowMs, Bme688Data& out) override;
     uint8_t chipId() override { return 0x61; }
 
     uint32_t cycles() const { return cycles_; }
-    uint32_t measurementMs() const;   // what this profile costs per cycle
 
     static const uint32_t kHeaterSettleMs = 30;
     static const float    kSelfHeatingC;        // 1.5

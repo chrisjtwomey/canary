@@ -103,9 +103,16 @@ firmware/                      PlatformIO project (or src/ at root, like weather
   platformio.ini               esp32dev + -DARDUINO_INKPLATE5V2, lib_deps symlink://../epd/firmware, boards/inkplate
   src/main.cpp                 the awake loop from §3.1
   src/defaults.cpp             WiFi, server URL, MQTT logging (gitignored, example committed)
+  include/sensors/
+    Readings.h                 what each sensor returns, and the posted set
+    IShtc3.h  IScd41.h  IPmsa003i.h  IBme688.h    one interface per part, shaped by its datasheet
+    IClock.h                   millis() / waitMs(); ArduinoClock on the device
+    SensorSuite.h              the four sensors as one begin() and one sample()
   src/sensors/
-    ISensor.h                  begin() / poll(now) / read(out) / sleep(); one Reading struct
-    Scd41.{h,cpp}  Pmsa003i.{h,cpp}  Bme688.{h,cpp}  Shtc3.{h,cpp}     wrap the vendor libraries
+    SensorSuite.cpp            the sampling protocol, written once against the interfaces
+    Pmsa003iFrame.cpp          the 32-byte frame decoder, shared by every driver
+    ReadingsJson.cpp           the wire format in docs/READINGS.md
+    Shtc3Driver.cpp  Scd41Driver.cpp  ...          the real parts (not written yet)
     mock/
       EnvModel.{h,cpp}         one simulated room driving all four mocks coherently
       MockScd41.h  MockPmsa003i.h  MockBme688.h  MockShtc3.h
@@ -117,6 +124,31 @@ server/
   static/
   config.example.yaml
 ```
+
+## 5.1 The sensor seam
+
+`main.cpp` names a concrete sensor type in exactly one place, a
+`#if defined(USE_MOCK_SENSORS)` block that constructs either the mocks or the
+real drivers and binds them to `IShtc3&`, `IScd41&`, `IPmsa003i&`, `IBme688&`.
+Everything else — including the whole sampling protocol — is written against
+those interfaces in `SensorSuite`, so the mocks exercise the code that will
+run on the device rather than a parallel copy of it.
+
+`SensorSuite::sample()` runs the datasheet sequence: wake the SHTC3, measure,
+wait 13 ms, read, put it back to sleep; one BME688 forced cycle, then feed its
+pressure to the SCD41 so the CO₂ conversion is right; take whatever the
+SCD41's periodic mode has ready; read a PM frame, retrying once on a bad
+checksum, and only after the fan's 30 s warm-up.
+
+The waits are real, so the clock is injected (`IClock`): `ArduinoClock` on the
+device, a fake the tests drive. A sample costs ~150 ms of wall clock, nearly
+all of it the BME688 heater — 3% of the 5 s cadence, and `::delay()` yields on
+ESP32, so WiFi keeps running. If that ever becomes a problem the interfaces
+already return false-when-not-ready, so `sample()` can become a state machine
+without touching the drivers.
+
+Building without `-DUSE_MOCK_SENSORS` is a `#error` naming the four drivers to
+write, not a link failure.
 
 ## 6. Mocks — what "as close as possible" means
 

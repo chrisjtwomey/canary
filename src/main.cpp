@@ -1,80 +1,80 @@
-// Mock-sensor demo: drives the four mocks against the simulated room and
-// prints one readings document every 5 s. No display, no network yet — this
-// exists so the mocks are proven on the target before the awake loop lands
-// (docs/ARCHITECTURE.md §7).
+// Reads the four sensors and prints one readings document every 5 s.
+//
+// Everything below the sensor-selection block runs unchanged against the
+// mocks and against real drivers: it talks to SensorSuite, which talks to
+// the IShtc3 / IScd41 / IPmsa003i / IBme688 interfaces. Swapping in real
+// hardware means writing those four drivers and clearing USE_MOCK_SENSORS.
+//
+// Still to come (docs/ARCHITECTURE.md §7): the epd libraries, so the epoch
+// comes from the Inkplate's RTC, readings are POSTed to the server, and the
+// rendered PNG is fetched and drawn.
 #include <Arduino.h>
 
+#include "sensors/IClock.h"
 #include "sensors/Readings.h"
+#include "sensors/SensorSuite.h"
+
+// ─── The only part that knows which implementation is in use ──────────────
+
+#if defined(USE_MOCK_SENSORS)
 #include "sensors/mock/EnvModel.h"
 #include "sensors/mock/MockBme688.h"
 #include "sensors/mock/MockPmsa003i.h"
 #include "sensors/mock/MockScd41.h"
 #include "sensors/mock/MockShtc3.h"
 
-static const uint32_t kEpochAtBoot = 1756900000;   // 2025-09-03 ~12:26 UTC
-static const uint32_t kSampleMs = 5000;
-
 static EnvModel     room(7);
-static MockShtc3    shtc3(room);
-static MockScd41    scd41(room);
-static MockPmsa003i pm(room);
-static MockBme688   bme(room);
+static MockShtc3    shtc3Impl(room);
+static MockScd41    scd41Impl(room);
+static MockPmsa003i pmImpl(room);
+static MockBme688   bmeImpl(room);
+
+// The simulated room only moves when it is told to.
+static void advanceSimulation(uint32_t epoch) { room.advanceTo(epoch); }
+static const char* kBanner = "mock sensors up; PM fan warming up for 30 s";
+
+#else
+#error "No real sensor drivers yet. Build with -DUSE_MOCK_SENSORS, or add \
+Shtc3Driver / Scd41Driver / Pmsa003iDriver / Bme688Driver implementing the \
+IShtc3 / IScd41 / IPmsa003i / IBme688 interfaces and wire them up here."
+#endif
+
+// ─── Everything below is implementation-agnostic ──────────────────────────
+
+static const uint32_t kEpochAtBoot = 1756900000;   // stands in for the RTC
+static const uint32_t kSampleIntervalMs = 5000;
+
+static ArduinoClock wallClock;
+static SensorSuite  sensors(wallClock, shtc3Impl, scd41Impl, pmImpl, bmeImpl);
 
 static uint32_t lastSampleMs = 0;
 static char json[640];
 
+static uint32_t epochNow() { return kEpochAtBoot + millis() / 1000; }
+
 void setup() {
     Serial.begin(115200);
     delay(200);
-    uint32_t now = millis();
-    room.reset(kEpochAtBoot);
 
-    shtc3.begin(now);
-    scd41.begin(now);
-    delay(MockScd41::kWakeMs);
-    scd41.startPeriodicMeasurement(millis());
-    pm.begin(now);
-    bme.begin(now);
-    bme.setOversampling(2, 16, 1);
-    bme.setHeaterProfile(300, 100);
-    Serial.println("mock sensors up; PM fan warming up for 30 s");
+    advanceSimulation(epochNow());
+    if (!sensors.begin()) {
+        Serial.printf("sensor start incomplete: shtc3=%d scd41=%d pm=%d bme688=%d\n",
+                      sensors.shtc3Present(), sensors.scd41Present(),
+                      sensors.pmPresent(), sensors.bme688Present());
+    }
+    Serial.println(kBanner);
 }
 
 void loop() {
-    uint32_t now = millis();
-    if (now - lastSampleMs < kSampleMs) { delay(10); return; }
-    lastSampleMs = now;
-    room.advanceTo(kEpochAtBoot + now / 1000);
-
-    Readings r = {};
-    r.ts = room.epoch();
-
-    // SHTC3: wake, measure, wait 13 ms, read, sleep.
-    shtc3.wakeup(now);
-    shtc3.measure(now, false);
-    delay(MockShtc3::kNormalMs);
-    r.shtc3Valid = shtc3.read(millis(), r.shtc3);
-    shtc3.sleep();
-
-    // BME688: one forced cycle; feed its pressure to the SCD41.
-    bme.startForced(millis());
-    delay(bme.measurementMs());
-    r.bme688Valid = bme.fetchData(millis(), r.bme688);
-    if (r.bme688Valid) scd41.setAmbientPressure((uint32_t)(r.bme688.pressureHpa * 100.0f));
-
-    // SCD41: take whatever the periodic mode has ready.
-    bool ready = false;
-    scd41.getDataReadyStatus(millis(), ready);
-    r.scd41Valid = ready && scd41.readMeasurement(millis(), r.scd41);
-
-    // PMSA003I: read a frame, retry once on a bad checksum, ignore during warm-up.
-    uint8_t frame[32];
-    r.pmValid = false;
-    if (pm.stable(millis())) {
-        for (int attempt = 0; attempt < 2 && !r.pmValid; ++attempt) {
-            if (pm.readFrame(millis(), frame)) r.pmValid = IPmsa003i::parseFrame(frame, r.pm);
-        }
+    if (millis() - lastSampleMs < kSampleIntervalMs) {
+        delay(10);
+        return;
     }
+    lastSampleMs = millis();
+
+    uint32_t epoch = epochNow();
+    advanceSimulation(epoch);
+    Readings r = sensors.sample(epoch);
 
     if (readingsToJson(r, "inkplate5-env-monitor", json, sizeof(json))) {
         Serial.println(json);
