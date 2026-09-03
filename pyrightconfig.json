@@ -1,0 +1,9 @@
+{
+  "include": ["server"],
+  "venvPath": "server",
+  "venv": ".venv",
+  "extraPaths": [
+    "server",
+    "../epd/server"
+  ]
+}

@@ -14,7 +14,7 @@ import math
 import time
 from typing import Callable, Mapping
 
-from epd_server.source import DataSource
+from epd_server.source import DataSource, Fetcher
 
 CO2_OUTDOOR = 420.0
 CO2_PER_PERSON_PER_S = 4.0 / 60.0
@@ -234,7 +234,7 @@ class MockReadingsSource(DataSource):
         _, docs = self._room_at(end - hours * 3600, end)
         return docs
 
-    def datasets(self) -> Mapping[str, Callable[[], object]]:
+    def datasets(self) -> Mapping[str, Fetcher]:
         return {
             "latest": self.latest,
             "history_24h": lambda: self.history(24),
