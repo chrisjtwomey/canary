@@ -1,0 +1,27 @@
+# Copy to config.yaml. Every key can be set by an environment variable
+# too: server.port becomes SERVER_PORT.
+
+server:
+  port: 8080
+  timezone: Europe/Dublin
+  regen_lead_seconds: 60
+
+# HH:MM:SS in server.timezone -> the image the client fetches then.
+# The awake client will move to an interval schedule; see docs/ARCHITECTURE.md.
+display_schedule:
+  "07:00:00": breathe.png
+  "12:00:00": comfort.png
+  "21:00:00": day.png
+
+image:
+  width: 1280
+  height: 720
+
+source:
+  kind: mock        # the simulated room; the readings store comes later
+  seed: 7
+
+mqtt:
+  enabled: false
+
+debug: false

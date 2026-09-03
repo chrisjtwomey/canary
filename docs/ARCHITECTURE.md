@@ -120,7 +120,7 @@ firmware/                      PlatformIO project (or src/ at root, like weather
 server/
   server.py                    config, pages, DisplayServer(...).run()
   sources/mock.py              MockReadingsSource — the same room model in Python, for page work
-  pages/now.py  pages/trend.py
+  pages/breathe.py  pages/comfort.py  pages/day.py
   static/
   config.example.yaml
 ```

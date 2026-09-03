@@ -1,0 +1,47 @@
+.page-day {
+  display: grid;
+  grid-template-columns: 19cqw 1fr;
+  grid-template-rows: 10cqh repeat(4, 19cqh) 7cqh;
+  column-gap: 1.5cqw;
+  padding: 0 4.2cqw;
+  box-sizing: border-box;
+}
+
+.page-day .head {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding-bottom: 1.4cqh;
+}
+
+.page-day .key {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border-top: 2px solid var(--ink-faint);
+}
+
+.page-day .key .label {
+  font-size: 1.5cqw;
+  letter-spacing: 0.14em;
+  margin-bottom: 0.6cqh;
+}
+
+.page-day .key .hero {
+  font-size: 5.2cqw;
+}
+
+.page-day .key .hero .unit {
+  font-size: 0.34em;
+}
+
+.page-day .chart {
+  border-top: 2px solid var(--ink-faint);
+  padding-top: 0.6cqh;
+  box-sizing: border-box;
+}
+
+.page-day .axis {
+  grid-column: 2;
+}

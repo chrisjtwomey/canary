@@ -15,8 +15,8 @@ src/defaults.example.cpp  copy to defaults.cpp: WiFi, server URL, MQTT logging
 server/
   server.py               config keys, a DataSource, a page list, DisplayServer(...).run()
   sources/                where the readings come from
-  pages/                  the views
-  static/                 CSS, icons, fonts
+  pages/                  the views, one class each
+  static/                 CSS, fonts, charts.js; the rendered HTML lands here too
   config.example.yaml
 ```
 
@@ -56,7 +56,49 @@ warms up and between the SCD41's five-second conversions.
 pio test -e native            # room model, sensor mocks, SensorSuite protocol
 ```
 
-### 3. On the Inkplate
+### 3. The pages
+
+The server renders the pages from the simulated room. It needs Chrome; on
+macOS point Selenium at it:
+
+```sh
+export CHROME_BIN="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+cd server && cp config.example.yaml config.yaml
+python3 server.py --once                                   # every page -> server/*.png
+python3 server.py --only comfort.png --at 2026-09-03T21:45  # one page, clock pinned
+python3 server.py                                          # serve, follow the schedule
+```
+
+`--at` pins the clock the room and the pages see, so a render is the same
+every time and you can pick an interesting hour: the evening CO₂ climb
+starts at 18:30, cooking spikes the particulates at 19:00, a window opens
+at 22:00. (The room keeps UTC hours; local time is one hour later in
+summer.)
+
+The HTML is written to `server/static/<page>.html` beside its CSS, so open
+it in a browser to iterate on layout without a render. The PNG is what the
+panel shows: 1280×720, eight greys, dithered.
+
+Selenium needs a chromedriver that matches Chrome. If a stale one is on
+your PATH (Homebrew's, say) it is used and fails; `brew upgrade
+chromedriver`, or take it off the PATH and Selenium fetches the right one.
+
+#### Adding a page
+
+Subclass `EnvPage` in `server/pages/`, set `title`, `stylesheet`,
+`css_class` and `requires`, build the DOM in `body()`, and return chart
+specs from `charts()`. Add it to `make_pages()` in `server.py`, give it a
+stylesheet in `static/` keyed on `.page-<css_class>`, and a slot in
+`display_schedule`. Layout units are `cqw`/`cqh`: 1% of the panel's width
+and height.
+
+Charts are drawn by `static/charts.js` with rough.js. A spec names its
+`canvas` and `kind` (`sparkline`, `comfort`, `ribbon`, `axis`) and carries
+plain data; the page computes everything time-zone or unit related in
+Python, where it is tested. `metrics.py` holds the derived values and the
+wording.
+
+### 4. On the Inkplate
 
 Works today with the mocks: no sensors need to be wired.
 
@@ -72,7 +114,7 @@ flag is an `#error` naming them.
 
 ## Setup
 
-epd must be checked out beside this repo. Then, once the server exists:
+epd must be checked out beside this repo. Then:
 
 ```sh
 python3 -m venv server/.venv && source server/.venv/bin/activate
@@ -84,10 +126,10 @@ Install the local `epd` checkout **editable**, and first. `requirements.txt`
 pulls `epd-server` from GitHub at `@main`, which is right for a deployment
 and wrong while developing both repos at once.
 
-`server/pyrightconfig.json` points the editor at that virtualenv and adds
-`server/` to the import path, so Pylance resolves `epd_server` and
-`sources.*`. Without it both show as unresolved even though the tests pass,
-because Pylance does not read `pytest.ini`.
+`pyrightconfig.json` at the repo root points the editor at that virtualenv
+and adds `server/` and `../epd/server` to the import path, so Pylance
+resolves `epd_server` and `sources.*`. Without it both show as unresolved
+even though the tests pass, because Pylance does not read `pytest.ini`.
 
 ## Making Changes
 
