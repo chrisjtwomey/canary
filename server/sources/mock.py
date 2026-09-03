@@ -187,14 +187,18 @@ def reading_from(room: EnvModel, device: str = "inkplate5-env-monitor") -> dict:
         "pc_0_3": int(round(pm25 * 150)), "pc_0_5": int(round(pm25 * 45)), "pc_1_0": int(round(pm25 * 8)),
         "pc_2_5": int(round(pm25 * 0.6)), "pc_5_0": int(round(pm25 * 0.15)), "pc_10": int(round(pm25 * 0.05)),
         "gas_ohm": int(round(gas)),
-        "pressure_hpa": round(room.pressure_hpa + room.noise(0.02), 1),
         "iaq": int(round(_iaq_from_gas(gas))),
         "iaq_accuracy": 3,
+        "pressure_hpa": round(room.pressure_hpa + room.noise(0.02), 1),
         "scd41": {"temp_c": round(scd_t, 1),
                   "rh_pct": round(rh_from_abs(room.abs_hum, scd_t) + room.noise(0.4), 1)},
         "bme688": {"temp_c": round(bme_t, 1),
                    "rh_pct": round(rh_from_abs(room.abs_hum, bme_t) + room.noise(0.2), 1)},
-        "valid": {"trh": True, "co2": True, "pm": True, "gas": True},
+        # The simulated room is always settled, so every measurement is
+        # trustworthy here. The firmware drops keys it does not trust; see
+        # docs/READINGS.md.
+        "valid": {"temp_humidity": True, "co2": True, "particulates": True,
+                  "pressure": True, "gas": True},
     }
 
 

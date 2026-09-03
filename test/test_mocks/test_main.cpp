@@ -270,9 +270,10 @@ void test_json_matches_readings_md() {
         "{\"ts\":1756900000,\"device\":\"inkplate5-env-monitor\""
         ",\"temp_c\":21.3,\"rh_pct\":44.1,\"co2_ppm\":812"
         ",\"pm1_0\":4,\"pm2_5\":6,\"pm10\":8,\"pc_0_3\":900,\"pc_0_5\":250,\"pc_1_0\":40,\"pc_2_5\":4,\"pc_5_0\":1,\"pc_10\":0"
-        ",\"gas_ohm\":132000,\"pressure_hpa\":1011.2,\"iaq\":63,\"iaq_accuracy\":2"
+        ",\"gas_ohm\":132000,\"iaq\":63,\"iaq_accuracy\":2,\"pressure_hpa\":1011.2"
         ",\"scd41\":{\"temp_c\":25.2,\"rh_pct\":36.0},\"bme688\":{\"temp_c\":22.8,\"rh_pct\":40.2}"
-        ",\"valid\":{\"trh\":true,\"co2\":true,\"pm\":true,\"gas\":true}}";
+        ",\"valid\":{\"temp_humidity\":true,\"co2\":true,\"particulates\":true"
+        ",\"pressure\":true,\"gas\":true}}";
     TEST_ASSERT_EQUAL_STRING(want, buf);
     TEST_ASSERT_EQUAL_UINT32(strlen(want), n);
 }
@@ -284,7 +285,34 @@ void test_json_omits_invalid_sensors_and_flags_them() {
     TEST_ASSERT_TRUE(readingsToJson(r, "x", buf, sizeof(buf)) > 0);
     TEST_ASSERT_EQUAL_STRING(
         "{\"ts\":1,\"device\":\"x\",\"temp_c\":20.0,\"rh_pct\":50.0"
-        ",\"valid\":{\"trh\":true,\"co2\":false,\"pm\":false,\"gas\":false}}", buf);
+        ",\"valid\":{\"temp_humidity\":true,\"co2\":false,\"particulates\":false"
+        ",\"pressure\":false,\"gas\":false}}", buf);
+}
+
+void test_json_keeps_pressure_but_drops_gas_when_the_heater_is_cold() {
+    Readings r = {};
+    r.ts = 5;
+    r.bme688 = {22.8f, 1011.2f, 40.2f, 132000.0f, true, /*heatStable=*/false, 63.4f, 0};
+    r.bme688Valid = true;
+    char buf[400];
+    TEST_ASSERT_TRUE(readingsToJson(r, "x", buf, sizeof(buf)) > 0);
+    TEST_ASSERT_EQUAL_STRING(
+        "{\"ts\":5,\"device\":\"x\",\"pressure_hpa\":1011.2"
+        ",\"bme688\":{\"temp_c\":22.8,\"rh_pct\":40.2}"
+        ",\"valid\":{\"temp_humidity\":false,\"co2\":false,\"particulates\":false"
+        ",\"pressure\":true,\"gas\":false}}", buf);
+}
+
+void test_json_drops_gas_when_the_conversion_was_a_dummy_slot() {
+    Readings r = {};
+    r.ts = 5;
+    r.bme688 = {22.8f, 1011.2f, 40.2f, 132000.0f, /*gasValid=*/false, true, 63.4f, 3};
+    r.bme688Valid = true;
+    char buf[400];
+    readingsToJson(r, "x", buf, sizeof(buf));
+    TEST_ASSERT_NULL(strstr(buf, "gas_ohm"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "\"gas\":false"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "\"pressure\":true"));
 }
 
 void test_json_too_small_buffer_returns_zero_and_empty() {
@@ -317,6 +345,8 @@ int main(int, char**) {
     RUN_TEST(test_bme_iaq_accuracy_climbs_with_cycles);
     RUN_TEST(test_json_matches_readings_md);
     RUN_TEST(test_json_omits_invalid_sensors_and_flags_them);
+    RUN_TEST(test_json_keeps_pressure_but_drops_gas_when_the_heater_is_cold);
+    RUN_TEST(test_json_drops_gas_when_the_conversion_was_a_dummy_slot);
     RUN_TEST(test_json_too_small_buffer_returns_zero_and_empty);
     return UNITY_END();
 }

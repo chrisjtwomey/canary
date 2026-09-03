@@ -10,6 +10,10 @@ size_t readingsToJson(const Readings& r, const char* device, char* buf, size_t l
     if (n < 0 || (size_t)n >= len) { if (len) buf[0] = 0; return 0; }
     size_t pos = (size_t)n;
 
+    // The gas plate must have reached temperature for its resistance, and
+    // the IAQ derived from it, to mean anything. Pressure is unaffected.
+    const bool gasTrusted = r.bme688Valid && r.bme688.gasValid && r.bme688.heatStable;
+
     auto add = [&](const char* fmt, double a, double b) {
         int k = snprintf(buf + pos, len - pos, fmt, a, b);
         if (k < 0 || (size_t)k >= len - pos) { pos = 0; return false; }
@@ -34,18 +38,21 @@ size_t readingsToJson(const Readings& r, const char* device, char* buf, size_t l
         if (!addI(",\"pc_2_5\":%lu,\"pc_5_0\":%lu", r.pm.pc2_5, r.pm.pc5_0)) goto fail;
         if (!addI(",\"pc_10\":%lu", r.pm.pc10, 0)) goto fail;
     }
-    if (r.bme688Valid) {
-        if (!add(",\"gas_ohm\":%.0f,\"pressure_hpa\":%.1f", r.bme688.gasOhm, r.bme688.pressureHpa)) goto fail;
-        if (!add(",\"iaq\":%.0f,\"iaq_accuracy\":%.0f", r.bme688.iaq, (double)r.bme688.iaqAccuracy)) goto fail;
+    if (gasTrusted) {
+        if (!add(",\"gas_ohm\":%.0f,\"iaq\":%.0f", r.bme688.gasOhm, r.bme688.iaq)) goto fail;
+        if (!add(",\"iaq_accuracy\":%.0f", (double)r.bme688.iaqAccuracy, 0.0)) goto fail;
     }
+    if (r.bme688Valid && !add(",\"pressure_hpa\":%.1f", r.bme688.pressureHpa, 0.0)) goto fail;
     if (r.scd41Valid && !add(",\"scd41\":{\"temp_c\":%.1f,\"rh_pct\":%.1f}", r.scd41.tempC, r.scd41.rhPct)) goto fail;
     if (r.bme688Valid && !add(",\"bme688\":{\"temp_c\":%.1f,\"rh_pct\":%.1f}", r.bme688.tempC, r.bme688.rhPct)) goto fail;
 
     {
         int k = snprintf(buf + pos, len - pos,
-            ",\"valid\":{\"trh\":%s,\"co2\":%s,\"pm\":%s,\"gas\":%s}}",
+            ",\"valid\":{\"temp_humidity\":%s,\"co2\":%s,\"particulates\":%s"
+            ",\"pressure\":%s,\"gas\":%s}}",
             r.shtc3Valid ? "true" : "false", r.scd41Valid ? "true" : "false",
-            r.pmValid ? "true" : "false", r.bme688Valid ? "true" : "false");
+            r.pmValid ? "true" : "false", r.bme688Valid ? "true" : "false",
+            gasTrusted ? "true" : "false");
         if (k < 0 || (size_t)k >= len - pos) goto fail;
         pos += (size_t)k;
     }

@@ -63,7 +63,8 @@ def test_reading_has_every_key_in_readings_md():
                 "gas_ohm", "pressure_hpa", "iaq", "iaq_accuracy", "scd41", "bme688", "valid"}
     assert set(d) == expected
     assert set(d["scd41"]) == set(d["bme688"]) == {"temp_c", "rh_pct"}
-    assert d["valid"] == {"trh": True, "co2": True, "pm": True, "gas": True}
+    assert d["valid"] == {"temp_humidity": True, "co2": True, "particulates": True,
+                          "pressure": True, "gas": True}
     json.dumps(d)  # serialisable
 
 
