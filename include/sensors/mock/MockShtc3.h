@@ -1,11 +1,15 @@
 #pragma once
 #include "../IShtc3.h"
 #include "EnvModel.h"
+#include "LaggedValue.h"
 
 // Behaves like the datasheet says an SHTC3 does: 12.1 ms per normal
 // measurement, 0.8 ms in low-power mode, NACKs when asleep, +-0.1 C /
-// +-0.1 %RH repeatability (0.4 / 0.4 in low-power mode). It reads the room
-// exactly: this is the reference sensor.
+// +-0.1 %RH repeatability (0.4 / 0.4 in low-power mode).
+//
+// The element trails the room by its response time. Electrically there is no
+// warm-up at all - 240 us to idle and the first reading is valid - so this
+// lag is the only settling it has.
 class MockShtc3 : public IShtc3 {
 public:
     explicit MockShtc3(EnvModel& room) : room_(room) {}
@@ -21,6 +25,11 @@ public:
 
     static const uint32_t kNormalMs   = 13;   // 12.1 ms max, rounded up
     static const uint32_t kLowPowerMs = 1;    // 0.8 ms max
+    // tau63: humidity 8 s. Temperature is quoted as 5-30 s "depends on heat
+    // conductivity of sensor substrate and design-in"; 15 s is mid-range and
+    // wants revisiting once the enclosure exists.
+    static constexpr float kTempTauS = 15.0f;
+    static constexpr float kRhTauS = 8.0f;
 
 private:
     EnvModel& room_;
@@ -29,4 +38,6 @@ private:
     bool lowPower_ = false;
     uint32_t readyAtMs_ = 0;
     uint32_t wokeAtMs_ = 0;
+    LaggedValue temp_{kTempTauS};
+    LaggedValue rh_{kRhTauS};
 };

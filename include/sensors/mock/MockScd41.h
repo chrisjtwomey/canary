@@ -1,6 +1,7 @@
 #pragma once
 #include "../IScd41.h"
 #include "EnvModel.h"
+#include "LaggedValue.h"
 
 // Behaves like the datasheet says an SCD41 does.
 //   - periodic mode: new data every 5 s (30 s low-power), data_ready false in between
@@ -10,7 +11,12 @@
 //   - commands other than read / data-ready / stop / pressure are refused
 //     while periodic measurement runs; everything is refused for 500 ms
 //     after stop
-//   - temperature reads +4 C over the room until setTemperatureOffset is tuned
+//   - self-heating rises from nothing after power-up toward +4 C, so with
+//     the default 4 C offset a cold device reads about 4 C LOW and takes
+//     roughly fifteen minutes to come right (design-in guide: allow 15 min
+//     for thermal equilibration before judging the offset)
+//   - every output trails the room by its response time: CO2 60 s, RH 90 s,
+//     temperature 120 s
 //   - CO2 scales with the ratio of true to assumed ambient pressure, so
 //     setAmbientPressure from the BME688 matters
 //   - +-10 ppm repeatability
@@ -41,6 +47,12 @@ public:
     static const uint32_t kStopBusyMs   = 500;
     static const uint32_t kWakeMs       = 30;
     static const float    kSelfHeatingC;       // 4.0, the datasheet default offset
+    static constexpr float kCo2TauS = 60.0f;
+    static constexpr float kRhTauS = 90.0f;
+    static constexpr float kTempTauS = 120.0f;
+    // Not a datasheet figure: the enclosure's thermal mass. 300 s puts it
+    // within 5% at the 15 minutes the design-in guide asks you to wait.
+    static constexpr float kSelfHeatTauS = 300.0f;
 
 private:
     void refresh(uint32_t nowMs);
@@ -55,4 +67,8 @@ private:
     uint32_t assumedPa_ = 101300;
     float offsetC_ = 4.0f;
     Scd41Data pending_{};
+    LaggedValue co2_{kCo2TauS};
+    LaggedValue temp_{kTempTauS};
+    LaggedValue rh_{kRhTauS};
+    LaggedValue selfHeat_{kSelfHeatTauS};
 };

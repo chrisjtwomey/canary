@@ -1,6 +1,7 @@
 #pragma once
 #include "../IBme688.h"
 #include "EnvModel.h"
+#include "LaggedValue.h"
 
 // Behaves like the datasheet says a BME688 does in forced mode.
 //   - a cycle takes the T/P/H conversion time (oversampling-dependent) plus
@@ -8,9 +9,11 @@
 //   - heat_stab is false on the first cycle after power-up, and always false
 //     if the heater duration is under 30 ms or the target is outside
 //     200–400 C (the plate needs 20–30 ms to reach temperature)
-//   - the die runs ~1.5 C above the room (Bosch's LP-mode figure is 1.3),
-//     so its RH reads low for the same absolute humidity
-//   - gas resistance follows the room's VOC index and humidity, +-2 % noise
+//   - the die settles ~1.5 C above the room (Bosch's LP-mode figure is 1.3),
+//     rising from nothing after power-up, so its RH reads low for the same
+//     absolute humidity once warm
+//   - gas resistance follows the room's VOC index and humidity, +-2 % noise,
+//     trailing by the 92 s Bosch quotes for the ULP duty cycle
 //   - IAQ is derived from gas resistance the way BSEC's output looks:
 //     accuracy climbs 0 -> 1 -> 2 -> 3 over the first cycles, as BSEC's does
 class MockBme688 : public IBme688 {
@@ -29,6 +32,11 @@ public:
 
     static const uint32_t kHeaterSettleMs = 30;
     static const float    kSelfHeatingC;        // 1.5
+    static constexpr float kGasTauS = 92.0f;        // ULP duty cycle, new sensors
+    static constexpr float kRhTauS = 8.0f;
+    // No datasheet tau63 for temperature; the die tracks its own package.
+    static constexpr float kTempTauS = 20.0f;
+    static constexpr float kSelfHeatTauS = 300.0f;
 
 private:
     EnvModel& room_;
@@ -37,4 +45,8 @@ private:
     bool running_ = false;
     uint32_t doneAtMs_ = 0;
     uint32_t cycles_ = 0;
+    LaggedValue temp_{kTempTauS};
+    LaggedValue rh_{kRhTauS};
+    LaggedValue gas_{kGasTauS};
+    LaggedValue selfHeat_{kSelfHeatTauS};
 };

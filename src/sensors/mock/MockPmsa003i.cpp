@@ -10,6 +10,7 @@ void MockPmsa003i::setEnabled(bool on, uint32_t nowMs) {
         enabledAtMs_ = nowMs;
         frameAtMs_ = 0;
         haveFrame_ = false;
+        pm25_.reset();
     }
     enabled_ = on;
 }
@@ -26,9 +27,10 @@ void MockPmsa003i::buildFrame(uint32_t nowMs) {
     ramp *= 1.0f + room_.noise(elapsed >= kWarmupMs ? 0.03f : 0.15f);
     if (ramp < 0) ramp = 0;
 
-    float pm25 = room_.pm25() * ramp;
-    float pm1 = room_.pm1() * ramp;
-    float pm10 = room_.pm10() * ramp;
+    float sensed = pm25_.update(room_.pm25(), nowMs);
+    float pm25 = sensed * ramp;
+    float pm1 = sensed * 0.62f * ramp;
+    float pm10 = sensed * 1.35f * ramp;
 
     // CF=1 ("standard particle") runs above the atmospheric value once the
     // air is dirty; they agree in clean air.

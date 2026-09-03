@@ -1,6 +1,7 @@
 #pragma once
 #include "../IPmsa003i.h"
 #include "EnvModel.h"
+#include "LaggedValue.h"
 
 // Behaves like the datasheet says a PMSA003I does.
 //   - no answer for 3 s after power or wake (the library waits 3 s before begin)
@@ -25,6 +26,10 @@ public:
     static const uint32_t kWarmupMs        = 30000;
     static const uint32_t kFrameIntervalMs = 2300;
     static const uint32_t kChecksumFailEvery = 200;
+    // "Total response time <=10 s" to settle, so about 4 s per tau63. This is
+    // the optics answering a change in concentration; the 30 s above is the
+    // fan reaching speed, and both apply.
+    static constexpr float kConcentrationTauS = 4.0f;
 
 private:
     void buildFrame(uint32_t nowMs);
@@ -37,4 +42,5 @@ private:
     uint32_t reads_ = 0;
     uint8_t frame_[32] = {0};
     bool haveFrame_ = false;
+    LaggedValue pm25_{kConcentrationTauS};
 };

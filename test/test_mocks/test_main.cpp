@@ -94,18 +94,53 @@ void test_scd41_refuses_config_while_measuring_and_is_busy_after_stop() {
     TEST_ASSERT_TRUE(c.startPeriodicMeasurement(6600));
 }
 
-void test_scd41_temperature_runs_4c_warm_until_offset_is_set() {
+void test_scd41_reads_cold_then_warms_into_its_offset() {
     MockScd41 c(*room);
     c.begin(0);
     c.startPeriodicMeasurement(40);
     Scd41Data d;
-    c.readMeasurement(5100, d); c.readMeasurement(10100, d);
-    TEST_ASSERT_FLOAT_WITHIN(0.3f, room->tempC(), d.tempC);       // default offset 4 cancels the 4 C self-heating
-    c.stopPeriodicMeasurement(11000);
+    // The default offset subtracts 4 C from the moment it powers up, but the
+    // part has not warmed itself yet, so a cold device reads low.
+    c.readMeasurement(5100, d);
+    TEST_ASSERT_FLOAT_WITHIN(0.5f, room->tempC() - MockScd41::kSelfHeatingC, d.tempC);
+    // Fifteen minutes is what the design-in guide asks you to wait before
+    // judging the offset.
+    c.readMeasurement(900000, d);
+    TEST_ASSERT_FLOAT_WITHIN(0.5f, room->tempC(), d.tempC);
+}
+
+void test_scd41_offset_shifts_the_warm_reading() {
+    MockScd41 c(*room);
+    c.begin(0);
+    c.startPeriodicMeasurement(40);
+    Scd41Data d;
+    c.readMeasurement(900000, d);
+    TEST_ASSERT_FLOAT_WITHIN(0.5f, room->tempC(), d.tempC);
+    c.stopPeriodicMeasurement(901000);
     c.setTemperatureOffset(0.0f);
-    c.startPeriodicMeasurement(12000);
-    c.readMeasurement(17100, d);
-    TEST_ASSERT_FLOAT_WITHIN(0.3f, room->tempC() + 4.0f, d.tempC);
+    c.startPeriodicMeasurement(902000);
+    c.readMeasurement(910000, d);
+    TEST_ASSERT_FLOAT_WITHIN(0.5f, room->tempC() + MockScd41::kSelfHeatingC, d.tempC);
+}
+
+void test_scd41_co2_trails_a_change_in_the_room() {
+    MockScd41 c(*room);
+    c.begin(0);
+    c.startPeriodicMeasurement(40);
+    Scd41Data d;
+    c.readMeasurement(5100, d);                       // adopts the room
+    c.readMeasurement(10100, d);                      // past the start-up error
+    float before = d.co2Ppm;
+
+    room->advanceTo(room->epoch() + 9 * 3600);        // evening: two people in
+    float roomNow = room->co2Ppm();
+    TEST_ASSERT_TRUE_MESSAGE(roomNow > before + 200, "the room should have changed a lot");
+
+    c.readMeasurement(15100, d);                      // five seconds later
+    TEST_ASSERT_TRUE_MESSAGE(d.co2Ppm < roomNow - 100,
+                             "tau63 is 60 s, so 5 s covers about 8% of the step");
+    c.readMeasurement(315100, d);                     // five minutes on
+    TEST_ASSERT_UINT16_WITHIN(60, (uint16_t)roomNow, d.co2Ppm);
 }
 
 void test_scd41_wrong_assumed_pressure_skews_co2() {
@@ -230,16 +265,21 @@ void test_bme_short_heater_never_stabilises() {
     TEST_ASSERT_FALSE(d.heatStable);
 }
 
-void test_bme_runs_warm_and_its_rh_reads_low() {
+void test_bme_starts_at_room_temperature_and_warms_above_it() {
     MockBme688 b(*room);
     MockShtc3 s(*room);
     b.begin(0); s.begin(0);
     Bme688Data bd; Shtc3Data sd;
+
     b.startForced(0); b.fetchData(200, bd);
-    b.startForced(1000); b.fetchData(1200, bd);
-    s.wakeup(1300); s.measure(1300, false); s.read(1320, sd);
-    TEST_ASSERT_FLOAT_WITHIN(0.3f, 1.5f, bd.tempC - sd.tempC);
-    TEST_ASSERT_TRUE(bd.rhPct < sd.rhPct);
+    s.wakeup(300); s.measure(300, false); s.read(320, sd);
+    TEST_ASSERT_FLOAT_WITHIN_MESSAGE(0.4f, 0.0f, bd.tempC - sd.tempC,
+                                     "cold, the die sits at room temperature");
+
+    b.startForced(900000); b.fetchData(900200, bd);
+    s.wakeup(900300); s.measure(900300, false); s.read(900320, sd);
+    TEST_ASSERT_FLOAT_WITHIN(0.4f, MockBme688::kSelfHeatingC, bd.tempC - sd.tempC);
+    TEST_ASSERT_TRUE_MESSAGE(bd.rhPct < sd.rhPct, "warmer die, same water, lower RH");
     TEST_ASSERT_FLOAT_WITHIN(0.2f, room->pressureHpa(), bd.pressureHpa);
 }
 
@@ -331,7 +371,9 @@ int main(int, char**) {
     RUN_TEST(test_scd41_periodic_data_every_5s_and_nack_between);
     RUN_TEST(test_scd41_first_reading_after_power_up_reads_high);
     RUN_TEST(test_scd41_refuses_config_while_measuring_and_is_busy_after_stop);
-    RUN_TEST(test_scd41_temperature_runs_4c_warm_until_offset_is_set);
+    RUN_TEST(test_scd41_reads_cold_then_warms_into_its_offset);
+    RUN_TEST(test_scd41_offset_shifts_the_warm_reading);
+    RUN_TEST(test_scd41_co2_trails_a_change_in_the_room);
     RUN_TEST(test_scd41_wrong_assumed_pressure_skews_co2);
     RUN_TEST(test_scd41_power_down_and_wake);
     RUN_TEST(test_pm_boots_3s_then_warms_up_30s);
@@ -341,7 +383,7 @@ int main(int, char**) {
     RUN_TEST(test_pm_parse_rejects_bad_start_length_and_checksum);
     RUN_TEST(test_bme_cycle_takes_tph_plus_heater_and_first_cycle_is_unstable);
     RUN_TEST(test_bme_short_heater_never_stabilises);
-    RUN_TEST(test_bme_runs_warm_and_its_rh_reads_low);
+    RUN_TEST(test_bme_starts_at_room_temperature_and_warms_above_it);
     RUN_TEST(test_bme_iaq_accuracy_climbs_with_cycles);
     RUN_TEST(test_json_matches_readings_md);
     RUN_TEST(test_json_omits_invalid_sensors_and_flags_them);

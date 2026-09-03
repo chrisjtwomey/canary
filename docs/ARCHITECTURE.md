@@ -158,10 +158,47 @@ real part does:
 
 | Mock | Reproduces |
 |---|---|
-| `MockScd41` | 5 s measurement interval; `data_ready` false in between; first shot after power-up discarded; ±10 ppm repeatability noise; T reads +4 °C over the room until an offset is set; responds to `set_ambient_pressure` |
-| `MockPmsa003i` | 30 s fan spin-up with unstable/zero frames; 2.3 s frame cadence; occasional checksum failure (1 in 200); stale identical frames between updates; SET-low = no frames |
-| `MockBme688` | forced-mode timing (TPH + 100 ms heater); `heat_stab` false on the first cycle; gas resistance falls with VOC and with humidity; T reads +1.5 °C over the room; pressure tracks the model |
-| `MockShtc3` | 12 ms measurement; sleep/wake; ±0.1 °C / ±0.1 % RH repeatability; the reference truth of the room |
+| `MockScd41` | 5 s measurement interval; `data_ready` false in between; missed intervals dropped, not queued; first shot after power-up discarded; ±10 ppm repeatability noise; commands refused while measuring and for 500 ms after stop; `set_ambient_pressure` changes the answer |
+| `MockPmsa003i` | 3 s boot then 30 s fan spin-up with counts ramping from zero; 2.3 s frame cadence with stale bytes in between; occasional checksum failure; SET-low silences it and restarts the warm-up |
+| `MockBme688` | forced-mode timing (TPH + heater); `heat_stab` false on the first cycle and whenever the profile is too short or too hot; gas resistance falls with VOC and with humidity; pressure tracks the model |
+| `MockShtc3` | 12 ms measurement, 0.8 ms low-power; sleep/wake with NACKs when asleep; ±0.1 °C / ±0.1 % RH repeatability, ±0.4 in low-power mode |
+
+### Warm-up and response time
+
+Every reading trails what it measures, and two of the parts warm themselves.
+`LaggedValue` is the shared first-order lag; each mock applies the τ63 its
+datasheet quotes:
+
+| | τ63 |
+|---|---|
+| SHTC3 temperature / humidity | 15 s (quoted 5–30 s, design-dependent) / 8 s |
+| SCD41 CO₂ / humidity / temperature | 60 s / 90 s / 120 s |
+| BME688 gas / humidity | 92 s (ULP duty cycle) / 8 s |
+| PMSA003I concentration | 4 s, from "total response time ≤10 s" |
+
+Self-heating rises from nothing after power-on rather than appearing at
+once, with a 300 s time constant — not a datasheet figure, but it puts the
+part within 5% at the fifteen minutes Sensirion's design-in guide asks you
+to wait before judging the temperature offset.
+
+The visible consequence, and the reason the SHTC3 is the display reference:
+
+```
+  time    SHTC3   SCD41   BME688
+  14:00    18.4       -    18.4
+  14:04    18.3    16.7    19.3
+  14:12    18.4    18.3    19.8
+  14:20    18.4    18.4    19.9
+```
+
+The SCD41 reads about 4 °C **low** at a cold boot, because its default
+offset subtracts self-heating the part has not produced yet. The SHTC3 has
+no meaningful self-heating (16 µW) and no electrical warm-up at all — 240 µs
+to idle, first reading valid — so it is steady from the first sample.
+
+The Python mock source always runs settled, since it replays three hours
+before the window it returns. Pages therefore never see the warm-up, which
+is what you want while designing them.
 
 `EnvModel` is the room: CO₂ rises with occupancy and decays with ventilation
 (τ ≈ 60–90 min), PM has cooking/cleaning spikes, VOC has a baseline and

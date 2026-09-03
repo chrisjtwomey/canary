@@ -3,9 +3,13 @@
 
 const float MockBme688::kSelfHeatingC = 1.5f;
 
-bool MockBme688::begin(uint32_t) {
+bool MockBme688::begin(uint32_t nowMs) {
     running_ = false;
     cycles_ = 0;
+    selfHeat_.primeAt(0.0f, nowMs);
+    temp_.reset();
+    rh_.reset();
+    gas_.reset();
     return true;
 }
 
@@ -36,14 +40,16 @@ bool MockBme688::fetchData(uint32_t nowMs, Bme688Data& out) {
     running_ = false;
     ++cycles_;
 
-    out.tempC = room_.tempC() + kSelfHeatingC + room_.noise(0.05f);
+    out.tempC = temp_.update(room_.tempC(), nowMs)
+                + selfHeat_.update(kSelfHeatingC, nowMs) + room_.noise(0.05f);
     out.pressureHpa = room_.pressureHpa() + room_.noise(0.02f);
-    out.rhPct = EnvModel::rhFromAbs(room_.absHumidity(), out.tempC) + room_.noise(0.2f);
+    out.rhPct = rh_.update(EnvModel::rhFromAbs(room_.absHumidity(), out.tempC), nowMs)
+                + room_.noise(0.2f);
 
     bool heaterOk = heaterMs_ >= kHeaterSettleMs && heaterC_ >= 200 && heaterC_ <= 400;
     out.heatStable = heaterOk && cycles_ > 1;
     out.gasValid = true;
-    out.gasOhm = room_.gasOhm() * (1.0f + room_.noise(0.02f));
+    out.gasOhm = gas_.update(room_.gasOhm(), nowMs) * (1.0f + room_.noise(0.02f));
     if (!out.heatStable) out.gasOhm *= 1.6f;   // a cold plate reads high
 
     // What BSEC's IAQ looks like for this resistance: log-linear between

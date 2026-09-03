@@ -32,7 +32,7 @@ bool MockShtc3::read(uint32_t nowMs, Shtc3Data& out) {
     measuring_ = false;
     float sigmaT = lowPower_ ? 0.4f : 0.1f;
     float sigmaRh = lowPower_ ? 0.4f : 0.1f;
-    out.tempC = room_.tempC() + room_.noise(sigmaT);
-    out.rhPct = room_.rhPct() + room_.noise(sigmaRh);
+    out.tempC = temp_.update(room_.tempC(), nowMs) + room_.noise(sigmaT);
+    out.rhPct = rh_.update(room_.rhPct(), nowMs) + room_.noise(sigmaRh);
     return true;
 }

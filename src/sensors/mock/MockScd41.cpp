@@ -7,6 +7,11 @@ bool MockScd41::begin(uint32_t nowMs) {
     ready_ = false;
     firstShotPending_ = true;
     busyUntilMs_ = nowMs + kWakeMs;
+    // Cold: the part has not warmed itself yet.
+    selfHeat_.primeAt(0.0f, nowMs);
+    co2_.reset();
+    temp_.reset();
+    rh_.reset();
     return true;
 }
 
@@ -69,15 +74,19 @@ void MockScd41::refresh(uint32_t nowMs) {
     // NDIR absorption scales with gas density; the part converts using the
     // pressure it was told, so a wrong assumed pressure skews the result.
     float truePa = room_.pressureHpa() * 100.0f;
-    float co2 = room_.co2Ppm() * (truePa / (float)assumedPa_) + room_.noise(10.0f);
+    float co2 = co2_.update(room_.co2Ppm() * (truePa / (float)assumedPa_), nowMs)
+                + room_.noise(10.0f);
     if (firstShotPending_) {
         co2 += 150.0f;   // the first shot after power-up is not to be trusted
         firstShotPending_ = false;
     }
     if (co2 < 0) co2 = 0;
     pending_.co2Ppm = (uint16_t)(co2 + 0.5f);
-    pending_.tempC = room_.tempC() + kSelfHeatingC - offsetC_ + room_.noise(0.1f);
-    pending_.rhPct = EnvModel::rhFromAbs(room_.absHumidity(), pending_.tempC) + room_.noise(0.4f);
+
+    float dieC = temp_.update(room_.tempC(), nowMs) + selfHeat_.update(kSelfHeatingC, nowMs);
+    pending_.tempC = dieC - offsetC_ + room_.noise(0.1f);
+    pending_.rhPct = rh_.update(EnvModel::rhFromAbs(room_.absHumidity(), dieC), nowMs)
+                     + room_.noise(0.4f);
     ready_ = true;
 }
 
