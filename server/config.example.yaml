@@ -1,0 +1,42 @@
+# Copy to config.yaml. Every key can be set by an environment variable
+# too: server.port becomes SERVER_PORT.
+
+server:
+  port: 8080
+  timezone: Europe/Dublin
+  regen_lead_seconds: 60
+
+# What the client shows, and when. Each pool is a list of images read in
+# turn on its own count, from a random start that moves every
+# `reshuffle_hours`, so one pass is never all traces or all deltas. The
+# schedule visits the pools in `order` (default: as listed) every `every`
+# seconds on the wall clock (:00, :05, :10 ...).
+display:
+  pools:
+    co2: [breathe.png, co2-trace.png, co2-delta.png]
+    comfort: [comfort.png, comfort-trace.png, comfort-delta.png]
+    dust: [dust.png, dust-trace.png, dust-delta.png]
+    air: [air.png, air-trace.png, air-delta.png]
+    pressure: [barometer-trace.png, barometer-delta.png]
+    day: [day.png]
+    diagnostics: [diagnostics.png]
+  schedule:
+    type: interval
+    every: 300
+    reshuffle_hours: 3
+
+image:
+  width: 1280
+  height: 720
+
+source:
+  kind: mock        # the simulated room; the readings store comes later
+  seed: 7
+
+site:
+  altitude_m: 10    # pressure is reduced to sea level, as forecasts quote it
+
+mqtt:
+  enabled: false
+
+debug: false

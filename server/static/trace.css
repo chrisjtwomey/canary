@@ -1,0 +1,25 @@
+.page-trace .title { position: absolute; left: 4.2cqw; top: 6cqh; }
+.page-trace .stamp { position: absolute; right: 4.2cqw; top: 6cqh; }
+
+.page-trace .stats {
+  position: absolute;
+  left: 4.2cqw;
+  right: 4.2cqw;
+  top: 13cqh;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 3cqw;
+}
+
+.page-trace .stats .hero { font-size: 9cqw; }
+.page-trace .stats .verdict { font-size: 4.4cqw; }
+.page-trace .stats .detail { flex-basis: 100%; font-size: 2cqw; margin-top: -1cqh; }
+
+.page-trace .chart {
+  position: absolute;
+  left: 3cqw;
+  right: 3cqw;
+  top: 34cqh;
+  height: 60cqh;
+}

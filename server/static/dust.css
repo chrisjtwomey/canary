@@ -1,0 +1,52 @@
+.page-dust .title {
+  position: absolute;
+  left: 4.2cqw;
+  top: 6cqh;
+}
+
+.page-dust .stamp {
+  position: absolute;
+  right: 4.2cqw;
+  top: 6cqh;
+}
+
+.page-dust .hero {
+  position: absolute;
+  left: 3.6cqw;
+  top: 16cqh;
+  font-size: 20cqw;
+}
+
+.page-dust .verdict {
+  position: absolute;
+  left: 4.2cqw;
+  top: 58cqh;
+  font-size: 5.4cqw;
+}
+
+.page-dust .detail {
+  position: absolute;
+  left: 4.4cqw;
+  top: 74cqh;
+  width: 50cqw;
+  font-size: 2.1cqw;
+}
+
+.page-dust .cloud {
+  position: absolute;
+  right: 4cqw;
+  top: 12cqh;
+  width: 38cqw;
+  height: 74cqh;
+}
+
+.page-dust .caption {
+  position: absolute;
+  right: 4cqw;
+  bottom: 4cqh;
+  width: 38cqw;
+  text-align: center;
+  font-size: 1.8cqw;
+  font-style: italic;
+  color: var(--ink-soft);
+}

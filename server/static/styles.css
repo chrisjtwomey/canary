@@ -1,0 +1,159 @@
+@font-face {
+  font-family: "Fraunces";
+  src: url("fonts/Fraunces.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Fraunces";
+  src: url("fonts/Fraunces-Italic.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: italic;
+}
+
+/* The panel's eight greys. Use these values exactly; anything between
+   two of them is dithered. */
+:root {
+  --g0: #000000;
+  --g1: #242424;
+  --g2: #494949;
+  --g3: #6d6d6d;
+  --g4: #929292;
+  --g5: #b6b6b6;
+  --g6: #dbdbdb;
+  --g7: #ffffff;
+
+  --ink: var(--g0);
+  --ink-soft: var(--g2);
+  --ink-mid: var(--g4);
+  --ink-faint: var(--g6);
+  --paper: var(--g7);
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  overflow: hidden;
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 400;
+  font-variation-settings: "SOFT" 40, "WONK" 0;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+.inner-canvas-outer {
+  width: var(--outer-width, 1280px);
+  height: var(--outer-height, 720px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--paper);
+}
+
+.inner-canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  padding-top: var(--inner-pad-top, 0px);
+  padding-right: var(--inner-pad-right, 0px);
+  padding-bottom: var(--inner-pad-bottom, 0px);
+  padding-left: var(--inner-pad-left, 0px);
+  background: var(--paper);
+}
+
+/* Every page lays out inside this box. It is a size container, so
+   1cqw is 1% of the panel width and 1cqh 1% of its height. */
+.inner-canvas-content {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  container-type: size;
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ── Shared type ─────────────────────────────────────────────── */
+.label {
+  font-size: 1.9cqw;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.stamp {
+  font-size: 1.9cqw;
+  font-style: italic;
+  color: var(--ink-soft);
+}
+
+.hero {
+  font-weight: 500;
+  line-height: 0.85;
+  letter-spacing: -0.03em;
+  font-variation-settings: "SOFT" 70, "WONK" 0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.hero .unit {
+  font-size: 0.17em;
+  font-weight: 500;
+  letter-spacing: 0;
+  margin-left: 0.06em;
+  color: var(--ink-soft);
+  vertical-align: baseline;
+}
+
+.verdict {
+  font-style: italic;
+  font-weight: 400;
+  line-height: 1.05;
+}
+
+.detail {
+  color: var(--ink-soft);
+  line-height: 1.35;
+}
+
+/* A measurement the firmware does not trust yet. The number stays, in a
+   lighter grey, with a tag beside it. */
+.cold .value {
+  color: var(--ink-mid);
+}
+
+.cold-tag {
+  display: inline-block;
+  font-size: 0.13em;
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--ink-soft);
+  border: 2px solid var(--ink-mid);
+  border-radius: 1em;
+  padding: 0.15em 0.7em;
+  margin-left: 0.4em;
+  vertical-align: middle;
+}
+
+.footer {
+  position: absolute;
+  left: 4cqw;
+  right: 4cqw;
+  bottom: 3.5cqh;
+  display: flex;
+  justify-content: space-between;
+  font-size: 2cqw;
+  color: var(--ink-soft);
+}

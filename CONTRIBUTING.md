@@ -15,8 +15,8 @@ src/defaults.example.cpp  copy to defaults.cpp: WiFi, server URL, MQTT logging
 server/
   server.py               config keys, a DataSource, a page list, DisplayServer(...).run()
   sources/                where the readings come from
-  pages/                  the views
-  static/                 CSS, icons, fonts
+  pages/                  the views, one class each
+  static/                 CSS, fonts, charts.js; the rendered HTML lands here too
   config.example.yaml
 ```
 
@@ -56,23 +56,124 @@ warms up and between the SCD41's five-second conversions.
 pio test -e native            # room model, sensor mocks, SensorSuite protocol
 ```
 
-### 3. On the Inkplate
+### 3. The pages
 
-Works today with the mocks: no sensors need to be wired.
+The server renders the pages from the simulated room. It needs Chrome; on
+macOS point Selenium at it:
 
 ```sh
-pio run -e esp32 -t upload
-pio device monitor -b 115200
+export CHROME_BIN="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+cd server && source .venv/bin/activate && cp config.example.yaml config.yaml
+python3 server.py --once                                   # every page -> server/*.png
+python3 server.py --only comfort.png --at 2026-09-03T21:45  # one page, clock pinned
+python3 server.py                                          # serve, follow the schedule
 ```
 
-It prints one readings document every five seconds. Swapping in real hardware
-means writing four drivers against the `IShtc3` / `IScd41` / `IPmsa003i` /
-`IBme688` interfaces and clearing `-DUSE_MOCK_SENSORS`; building without that
-flag is an `#error` naming them.
+`epd_server` lives in `server/.venv` (see Setup), so activate it first or
+run `.venv/bin/python server.py`.
+
+`--at` pins the clock the room and the pages see, so a render is the same
+every time and you can pick an interesting hour: the evening CO₂ climb
+starts at 18:30, cooking spikes the particulates at 19:00, a window opens
+at 22:00. (The room keeps UTC hours; local time is one hour later in
+summer.)
+
+The HTML is written to `server/static/<page>.html` beside its CSS, so open
+it in a browser to iterate on layout without a render. The PNG is what the
+panel shows: 1280×720, eight greys, dithered.
+
+Selenium needs a chromedriver that matches Chrome. If a stale one is on
+your PATH (Homebrew's, say) it is used and fails; `brew upgrade
+chromedriver`, or take it off the PATH and Selenium fetches the right one.
+
+#### Adding a page
+
+Subclass `EnvPage` in `server/pages/`, set `title`, `stylesheet`,
+`css_class` and `requires`, build the DOM in `body()`, and return chart
+specs from `charts()`. Add it to `make_pages()` in `server.py`, give it a
+stylesheet in `static/` keyed on `.page-<css_class>`, and a slot in
+`display.pools`. Layout units are `cqw`/`cqh`: 1% of the panel's width
+and height.
+
+Charts are drawn by `static/charts.js` with rough.js. A spec names its
+`canvas` and `kind` (`sparkline`, `comfort`, `ribbon`, `axis`, `dotcloud`,
+`scale`, `dial`, `meter`, `bars`) and carries plain data; the page computes
+everything time-zone or unit related in Python, where it is tested.
+`metrics.py` holds the derived values and the wording.
+
+The pages: Breathe (CO₂), Comfort (temperature and humidity), Dust
+(particulates), Air (the VOC index), a trace and a delta page for each of
+those and for pressure, Day (24 h ribbons), and Diagnostics (the board's
+own report). All but Diagnostics read the simulated room; Diagnostics reads
+the `status` dataset, the last document the board posted.
+
+A metric's *pool* is its main page plus two pages of the same two shapes,
+both in `pages/pool.py` and driven by a `Metric` spec: `TracePage`, the
+value now with three days behind it and the thresholds as dashed lines;
+and `DeltaPage`, the change over a short window, a column showing where
+the value stood, and a sentence on what such a change usually means.
+
+The `display` block in `config.yaml` has two parts. `pools` is what can
+show: named lists of images, each read in turn on its own count from a
+random start that moves every `reshuffle_hours`, so a pass is never all of
+one shape. `schedule` is when: `type: interval` visits the pools in `order`
+every `every` seconds. The randomness is seeded from the clock, so a
+restart changes nothing. Day and Diagnostics ride along as pools of one;
+leave a pool out of `order` to keep it off the panel. The weather calendar
+uses the same block with `type: times` and one image per pool.
+
+To review pages on the panel quickly, set `every: 20` in `config.yaml`
+and restart the server; the board follows whatever it is told.
+
+`site.altitude_m` in `config.yaml` reduces the pressure to sea level, as
+forecasts quote it. The reading as measured stays under
+`pressure_station_hpa`.
+
+### 4. On the Inkplate, end to end
+
+The board fetches the pages from the server and draws them; the mocks stand
+in for the sensors. Three things to set up.
+
+1. **Credentials.** Copy `src/defaults.example.cpp` to `src/defaults.cpp`
+   (gitignored) and fill in the WiFi SSID and password. Point `serverURL`
+   at the machine that runs the server, for example
+   `http://192.168.1.20:8080/breathe.png`. On a Mac, `ipconfig getifaddr en0`
+   prints its address.
+2. **The server**, on the same network:
+
+   ```sh
+   cd server && source .venv/bin/activate && python3 server.py
+   ```
+
+   It renders every page at start, then one page a minute before each
+   five-minute slot. macOS asks once whether Python may accept incoming
+   connections; allow it.
+3. **Flash and watch:**
+
+   ```sh
+   pio run -e esp32 -t upload
+   pio device monitor -b 115200
+   ```
+
+The log shows the boot banner and User-Agent, WiFi and NTP, then
+`downloading file at URL ...`, `drawing image from buffer` and
+`next refresh in N s`. The panel shows the seven pages in turn, five
+minutes apart on the wall clock (:00, :05, ...). Once a minute the board
+posts a readings document to the server's `/readings`, with a `client`
+object beside the measurements (`posted readings (204)`); the Diagnostics
+page is drawn from the last one. A fetch that fails leaves the last image
+on the panel and backs off (`back-off step N`).
+
+`kRotation` in `src/main.cpp` is 0. If the image is upside down for the way
+the board sits, set it to 2.
+
+Swapping in real hardware means writing four drivers against the `IShtc3` /
+`IScd41` / `IPmsa003i` / `IBme688` interfaces and clearing
+`-DUSE_MOCK_SENSORS`; building without that flag is an `#error` naming them.
 
 ## Setup
 
-epd must be checked out beside this repo. Then, once the server exists:
+epd must be checked out beside this repo. Then:
 
 ```sh
 python3 -m venv server/.venv && source server/.venv/bin/activate
@@ -84,10 +185,10 @@ Install the local `epd` checkout **editable**, and first. `requirements.txt`
 pulls `epd-server` from GitHub at `@main`, which is right for a deployment
 and wrong while developing both repos at once.
 
-`server/pyrightconfig.json` points the editor at that virtualenv and adds
-`server/` to the import path, so Pylance resolves `epd_server` and
-`sources.*`. Without it both show as unresolved even though the tests pass,
-because Pylance does not read `pytest.ini`.
+`pyrightconfig.json` at the repo root points the editor at that virtualenv
+and adds `server/` and `../epd/server` to the import path, so Pylance
+resolves `epd_server` and `sources.*`. Without it both show as unresolved
+even though the tests pass, because Pylance does not read `pytest.ini`.
 
 ## Making Changes
 

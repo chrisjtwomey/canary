@@ -1,0 +1,50 @@
+.page-comfort .title {
+  position: absolute;
+  left: 4.2cqw;
+  top: 6cqh;
+}
+
+.page-comfort .stamp {
+  position: absolute;
+  right: 4.2cqw;
+  top: 6cqh;
+}
+
+.page-comfort .chart {
+  position: absolute;
+  left: 3cqw;
+  top: 13cqh;
+  width: 52cqw;
+  height: 78cqh;
+}
+
+.page-comfort .stats {
+  position: absolute;
+  left: 60cqw;
+  top: 15cqh;
+  width: 36cqw;
+}
+
+.page-comfort .stat {
+  margin-bottom: 4cqh;
+}
+
+.page-comfort .stat .hero {
+  font-size: 11cqw;
+}
+
+.page-comfort .stat .label {
+  margin-top: 1.2cqh;
+  font-size: 1.6cqw;
+}
+
+.page-comfort .detail {
+  font-size: 1.9cqw;
+  margin-top: 1cqh;
+  white-space: nowrap;
+}
+
+.page-comfort .verdict {
+  font-size: 4.4cqw;
+  margin-top: 3cqh;
+}

@@ -238,4 +238,5 @@ class MockReadingsSource(DataSource):
         return {
             "latest": self.latest,
             "history_24h": lambda: self.history(24),
+            "history_72h": lambda: self.history(72),
         }

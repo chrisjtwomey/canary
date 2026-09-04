@@ -1,20 +1,37 @@
-// Reads the four sensors and prints one readings document every 5 s.
+// The awake loop.
 //
-// Everything below the sensor-selection block runs unchanged against the
-// mocks and against real drivers: it talks to SensorSuite, which talks to
-// the IShtc3 / IScd41 / IPmsa003i / IBme688 interfaces. Swapping in real
-// hardware means writing those four drivers and clearing USE_MOCK_SENSORS.
-//
-// Still to come (docs/ARCHITECTURE.md §7): the epd libraries, so the epoch
-// comes from the Inkplate's RTC, readings are POSTed to the server, and the
-// rendered PNG is fetched and drawn.
+// Mains powered, so nothing sleeps. The board connects once, then fetches
+// the page the server names, draws it, and waits the seconds the server
+// sends before fetching again. Between fetches it samples the sensors
+// every 5 s and once a minute posts a readings document, with the board's
+// own status beside it, to the server's /readings. A failed fetch leaves
+// the last image on the panel and backs off before the next try.
 #include <Arduino.h>
+#include <WiFi.h>
+#include <ezTime.h>
 
+#include "IBoard.h"
+#include "InkplateBoard.h"
+#include "backoff.h"
+#include "defaults.h"
+#include "display_utils.h"
+#include "log_utils.h"
+#include "network_utils.h"
+#include "time_utils.h"
+#include "user_agent.h"
+#include "version.h"
+
+#include "net/ClientStatus.h"
+#include "net/RefreshTimer.h"
+#include "net/Url.h"
 #include "sensors/IClock.h"
 #include "sensors/Readings.h"
 #include "sensors/SensorSuite.h"
 
-// ─── The only part that knows which implementation is in use ──────────────
+static InkplateBoard inkplateBoard;
+IBoard& board = inkplateBoard;   // EpdClient's helpers draw and log through this
+
+// ─── The only part that knows which sensor implementation is in use ───────
 
 #if defined(USE_MOCK_SENSORS)
 #include "sensors/mock/EnvModel.h"
@@ -29,9 +46,18 @@ static MockScd41    scd41Impl(room);
 static MockPmsa003i pmImpl(room);
 static MockBme688   bmeImpl(room);
 
-// The simulated room only moves when it is told to.
-static void advanceSimulation(uint32_t epoch) { room.advanceTo(epoch); }
+// The simulated room only moves when it is told to. The first call settles
+// it over the three hours before now; walking from epoch 0 would take minutes.
+static void advanceSimulation(uint32_t epoch) {
+    static bool started = false;
+    if (!started) {
+        room.reset(epoch - 3 * 3600);
+        started = true;
+    }
+    room.advanceTo(epoch);
+}
 static const char* kBanner = "mock sensors up; PM fan warming up for 30 s";
+static const bool  kMockSensors = true;
 
 #else
 #error "No real sensor drivers yet. Build with -DUSE_MOCK_SENSORS, or add \
@@ -41,44 +67,179 @@ IShtc3 / IScd41 / IPmsa003i / IBme688 interfaces and wire them up here."
 
 // ─── Everything below is implementation-agnostic ──────────────────────────
 
-static const uint32_t kEpochAtBoot = 1756900000;   // stands in for the RTC
+static const uint8_t  kRotation = 0;             // landscape; 2 turns it round
 static const uint32_t kSampleIntervalMs = 5000;
+static const uint32_t kReportIntervalMs = 60000;
+// Buffer size when the server sends no Content-Length. An eight-grey
+// 1280x720 PNG is under 200 KB.
+static const int32_t  kDownloadFallbackBytes = 512 * 1024;
 
 static ArduinoClock wallClock;
 static SensorSuite  sensors(wallClock, shtc3Impl, scd41Impl, pmImpl, bmeImpl);
+static RefreshTimer refresh(serverDefaultRefreshSeconds);
 
+static char     nextURL[256];        // from X-Next-URL; empty means serverURL
+static char     readingsURL[300];    // the server's /readings; empty disables posting
 static uint32_t lastSampleMs = 0;
-static char json[640];
+static uint32_t lastReportMs = 0;
+static uint32_t fetchOk = 0;
+static uint32_t fetchFailed = 0;
+static char     json[640];
+static char     clientJson[512];
+static char     body[1200];
+static char     ipText[16];
 
-static uint32_t epochNow() { return kEpochAtBoot + millis() / 1000; }
-
-void setup() {
-    Serial.begin(115200);
-    delay(200);
-
-    advanceSimulation(epochNow());
-    if (!sensors.begin()) {
-        Serial.printf("sensor start incomplete: shtc3=%d scd41=%d pm=%d bme688=%d\n",
-                      sensors.shtc3Present(), sensors.scd41Present(),
-                      sensors.pmPresent(), sensors.bme688Present());
-    }
-    Serial.println(kBanner);
+// UTC seconds: network time once NTP has answered, the RTC until then.
+static uint32_t epochNow() {
+    if (timeStatus() != timeNotSet) return (uint32_t)now();
+    return (uint32_t)board.rtcGetEpoch();
 }
 
-void loop() {
-    if (millis() - lastSampleMs < kSampleIntervalMs) {
-        delay(10);
+static void connectWiFi() {
+    while (configureWiFi(wifiSSID, wifiPass, wifiRetries) != ESP_OK) {
+        log(LOG_ERROR, "wifi connect timeout; trying again in 30 s");
+        delay(30000);
+    }
+}
+
+static void fetchAndDraw() {
+    if (WiFi.status() != WL_CONNECTED) {
+        log(LOG_WARNING, "wifi down; reconnecting");
+        configureWiFi(wifiSSID, wifiPass, wifiRetries);
+    }
+
+    const char* url = nextURL[0] ? nextURL : serverURL;
+    uint32_t waitSeconds = 0;
+    int32_t len = kDownloadFallbackBytes;
+    uint8_t* buf = downloadFile(url, clientUserAgent(board.deviceName()),
+                                &waitSeconds, &len, nextURL, sizeof(nextURL));
+    if (!buf) {
+        ++fetchFailed;
+        uint32_t wait = refresh.failed(millis(), computeBackoffSeconds);
+        logf(LOG_ERROR, "download failed (back-off step %d): next try in %u s",
+             refresh.step(), wait);
         return;
     }
-    lastSampleMs = millis();
 
+    board.clearDisplay();
+    esp_err_t err = loadImage(buf, len);
+    free(buf);
+    if (err != ESP_OK) {
+        ++fetchFailed;
+        uint32_t wait = refresh.failed(millis(), computeBackoffSeconds);
+        logf(LOG_ERROR, "image draw failed (back-off step %d): next try in %u s",
+             refresh.step(), wait);
+        return;
+    }
+    board.display();
+
+    ++fetchOk;
+    refresh.succeeded(millis(), waitSeconds);
+    logf(LOG_INFO, "next refresh in %u s",
+         waitSeconds ? waitSeconds : serverDefaultRefreshSeconds);
+}
+
+static ClientStatus clientStatus(uint32_t nowMs) {
+    strncpy(ipText, WiFi.localIP().toString().c_str(), sizeof(ipText) - 1);
+    ClientStatus s = {};
+    s.board = board.deviceName();
+    s.version = CLIENT_VERSION;
+    s.ip = ipText;
+    s.rssi = WiFi.RSSI();
+    s.uptimeS = nowMs / 1000;
+    s.heapFree = ESP.getFreeHeap();
+    s.heapSize = ESP.getHeapSize();
+    s.psramFree = ESP.getFreePsram();
+    s.psramSize = ESP.getPsramSize();
+    s.panelTempC = board.readPanelTemperature();
+    s.width = board.getWidth();
+    s.height = board.getHeight();
+    s.rotation = kRotation;
+    s.mockSensors = kMockSensors;
+    s.shtc3 = sensors.shtc3Present();
+    s.scd41 = sensors.scd41Present();
+    s.pm = sensors.pmPresent();
+    s.bme688 = sensors.bme688Present();
+    s.nextUrl = nextURL[0] ? nextURL : serverURL;
+    s.nextInS = refresh.secondsUntilDue(nowMs);
+    s.backoffStep = refresh.step();
+    s.fetchOk = fetchOk;
+    s.fetchFailed = fetchFailed;
+    return s;
+}
+
+static void postReadings(const Readings& r, uint32_t nowMs) {
+    if (!readingsToJson(r, CLIENT_NAME, json, sizeof(json)) ||
+        !clientStatusJson(clientStatus(nowMs), clientJson, sizeof(clientJson)) ||
+        !withClientStatus(json, clientJson, body, sizeof(body))) {
+        log(LOG_WARNING, "readings document too large to post");
+        return;
+    }
+    log(LOG_DEBUG, body);
+    if (!readingsURL[0]) return;
+    int code = postJson(readingsURL, clientUserAgent(board.deviceName()), body);
+    if (code == 204 || code == 200) {
+        logf(LOG_INFO, "posted readings (%d)", code);
+    } else {
+        logf(LOG_ERROR, "posting readings failed (%d)", code);
+    }
+}
+
+static void sampleSensors(uint32_t nowMs) {
     uint32_t epoch = epochNow();
     advanceSimulation(epoch);
     Readings r = sensors.sample(epoch);
 
-    if (readingsToJson(r, "inkplate5-env-monitor", json, sizeof(json))) {
-        Serial.println(json);
+    if (nowMs - lastReportMs < kReportIntervalMs) return;
+    lastReportMs = nowMs;
+    postReadings(r, nowMs);
+}
+
+void setup() {
+    Serial.begin(115200);
+    board.begin();
+    board.setRotation(kRotation);
+    board.rtcGetData();
+    setTime(board.rtcGetEpoch());
+
+    logf(LOG_NOTICE, "##### %s boot #####", board.deviceName());
+    logf(LOG_NOTICE, "Client version: %s", CLIENT_VERSION);
+    logf(LOG_INFO, "User-Agent: %s", clientUserAgent(board.deviceName()));
+
+    connectWiFi();
+    if (urlOrigin(serverURL, readingsURL, sizeof(readingsURL) - 10)) {
+        strcat(readingsURL, "/readings");
+        logf(LOG_INFO, "posting readings to %s", readingsURL);
     } else {
-        Serial.println("json buffer too small");
+        log(LOG_WARNING, "serverURL has no host; readings stay on the serial log");
     }
+    if (configureTime(ntpHost, ntpTimezone) != ESP_OK) {
+        log(LOG_WARNING, "NTP sync failed; running on the RTC");
+    }
+    if (mqttLoggerEnabled &&
+        configureMQTT(mqttLoggerBroker, mqttLoggerPort, mqttLoggerTopic,
+                      mqttLoggerClientID, mqttLoggerRetries) != ESP_OK) {
+        log(LOG_WARNING, "remote logging unavailable; serial only");
+    }
+
+    advanceSimulation(epochNow());
+    if (!sensors.begin()) {
+        logf(LOG_WARNING, "sensor start incomplete: shtc3=%d scd41=%d pm=%d bme688=%d",
+             sensors.shtc3Present(), sensors.scd41Present(),
+             sensors.pmPresent(), sensors.bme688Present());
+    }
+    log(LOG_INFO, kBanner);
+}
+
+void loop() {
+    events();   // ezTime: periodic NTP re-sync
+    uint32_t nowMs = millis();
+
+    if (refresh.due(nowMs)) fetchAndDraw();
+
+    if (nowMs - lastSampleMs >= kSampleIntervalMs) {
+        lastSampleMs = nowMs;
+        sampleSensors(nowMs);
+    }
+    delay(10);
 }

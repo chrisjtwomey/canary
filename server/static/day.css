@@ -1,0 +1,110 @@
+/* Two columns: what is true now, and the last 24 hours. The row rules
+   break between them, so the split reads at a glance. */
+.page-day {
+  --range-w: 15cqw;
+  display: grid;
+  grid-template-columns: 17cqw 1fr;
+  grid-template-rows: 9cqh repeat(4, minmax(0, 1fr)) 6cqh;
+  column-gap: 2.2cqw;
+  padding: 0 4.2cqw 2cqh 4.2cqw;
+  box-sizing: border-box;
+}
+
+.page-day .head-now,
+.page-day .head-hist {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding-bottom: 1.4cqh;
+}
+
+.page-day .now {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border-top: 2px solid var(--ink-faint);
+}
+
+.page-day .now .label {
+  font-size: 1.5cqw;
+  letter-spacing: 0.14em;
+  margin-bottom: 0.6cqh;
+}
+
+.page-day .now .hero {
+  font-size: 5.2cqw;
+}
+
+.page-day .now .hero .unit {
+  font-size: 0.34em;
+}
+
+.page-day .hist {
+  display: flex;
+  align-items: center;
+  gap: 1.5cqw;
+  border-top: 2px solid var(--ink-faint);
+  min-height: 0;
+}
+
+/* The day's high and low: tag, value, time, one line each. */
+.page-day .range,
+.page-day .spacer {
+  flex: none;
+  width: var(--range-w);
+}
+
+.page-day .range {
+  display: grid;
+  grid-template-columns: max-content max-content max-content;
+  column-gap: 0.9cqw;
+  row-gap: 0.6cqh;
+  align-items: baseline;
+  font-size: 1.9cqw;
+  color: var(--ink-soft);
+}
+
+.page-day .range .tag {
+  font-size: 1.25cqw;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.page-day .range .v {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--ink);
+}
+
+.page-day .range .t {
+  font-style: italic;
+}
+
+/* The canvases are taken out of flow so their 2:1 intrinsic size cannot
+   stretch the rows; they fill whatever height the grid gives. */
+.page-day .chart {
+  position: relative;
+  flex: 1;
+  align-self: stretch;
+  min-height: 0;
+}
+
+.page-day .chart canvas {
+  position: absolute;
+  left: 0;
+  top: 0.8cqh;
+  width: 100%;
+  height: calc(100% - 0.8cqh);
+}
+
+.page-day .axis {
+  grid-column: 2;
+  border-top: none;
+}
+
+.page-day .axis .chart canvas {
+  top: 0;
+  height: 100%;
+}
