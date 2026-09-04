@@ -44,8 +44,16 @@ static MockScd41    scd41Impl(room);
 static MockPmsa003i pmImpl(room);
 static MockBme688   bmeImpl(room);
 
-// The simulated room only moves when it is told to.
-static void advanceSimulation(uint32_t epoch) { room.advanceTo(epoch); }
+// The simulated room only moves when it is told to. The first call settles
+// it over the three hours before now; walking from epoch 0 would take minutes.
+static void advanceSimulation(uint32_t epoch) {
+    static bool started = false;
+    if (!started) {
+        room.reset(epoch - 3 * 3600);
+        started = true;
+    }
+    room.advanceTo(epoch);
+}
 static const char* kBanner = "mock sensors up; PM fan warming up for 30 s";
 
 #else
