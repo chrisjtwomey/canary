@@ -309,10 +309,14 @@
         fillWeight: 1.2, stroke: 'none', roughness: 1 });
       c.rc.line(x - 6, yv, x + colW + 6, yv, { stroke: G[0], strokeWidth: 3, roughness: 0.5 });
     }
-    (s.marks || []).forEach(function (mk) {
-      var y = Y(mk.y);
+    // Marks close together keep their ticks but stack their labels.
+    var placed = [];
+    (s.marks || []).slice().sort(function (a, b) { return a.y - b.y; }).forEach(function (mk) {
+      var y = Y(mk.y), ly = y + 6;
+      placed.forEach(function (py) { if (Math.abs(ly - py) < 18) ly = py - 18; });
+      placed.push(ly);
       c.rc.line(x + colW + 12, y, x + colW + 44, y, { stroke: G[2], strokeWidth: 1.5, roughness: 0.5, strokeLineDash: [4, 4] });
-      label(c.ctx, mk.label, x + colW + 50, y + 6, { size: 17, italic: true, color: G[2] });
+      label(c.ctx, mk.label, x + colW + 50, ly, { size: 17, italic: true, color: G[2] });
     });
   }
 
