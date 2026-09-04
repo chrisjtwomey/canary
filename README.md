@@ -3,9 +3,10 @@
 An indoor air-quality display: CO₂, particulates, VOC and temperature on a
 5.2" e-paper panel, rendered server-side.
 
-**Status: scaffold.** The sensors have not arrived. What runs today is the
-simulated room and its four sensor mocks, on the host and on the device, and
-the server, which renders three pages from that room.
+**Status: end to end with mocks.** The sensors have not arrived. What runs
+today is the simulated room and its four sensor mocks, on the host and on
+the device; the server, which renders three pages from that room; and the
+board, which fetches and shows them in turn.
 
 | | |
 |---|---|
@@ -54,8 +55,10 @@ python3 server.py --only breathe.png --at 2026-09-03T21:45  # one page, clock pi
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the pages and the render loop.
 
-`pio run -e esp32 -t upload` then `pio device monitor` prints one readings
-document every five seconds, driven by the simulated room.
+`pio run -e esp32 -t upload` then `pio device monitor` shows the board
+fetch a page every five minutes and print one readings document a minute,
+driven by the simulated room. [CONTRIBUTING.md](CONTRIBUTING.md) has the
+setup.
 
 ## The mocks
 

@@ -6,12 +6,12 @@ server:
   timezone: Europe/Dublin
   regen_lead_seconds: 60
 
-# HH:MM:SS in server.timezone -> the image the client fetches then.
-# The awake client will move to an interval schedule; see docs/ARCHITECTURE.md.
+# The client fetches a page every `every` seconds, on the wall clock
+# (:00, :05, :10 ...), taking `pages` in turn. A mapping of HH:MM:SS to
+# page works too, as in the weather calendar.
 display_schedule:
-  "07:00:00": breathe.png
-  "12:00:00": comfort.png
-  "21:00:00": day.png
+  every: 300
+  pages: [breathe.png, comfort.png, day.png]
 
 image:
   width: 1280

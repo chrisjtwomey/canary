@@ -98,19 +98,45 @@ plain data; the page computes everything time-zone or unit related in
 Python, where it is tested. `metrics.py` holds the derived values and the
 wording.
 
-### 4. On the Inkplate
+### 4. On the Inkplate, end to end
 
-Works today with the mocks: no sensors need to be wired.
+The board fetches the pages from the server and draws them; the mocks stand
+in for the sensors. Three things to set up.
 
-```sh
-pio run -e esp32 -t upload
-pio device monitor -b 115200
-```
+1. **Credentials.** Copy `src/defaults.example.cpp` to `src/defaults.cpp`
+   (gitignored) and fill in the WiFi SSID and password. Point `serverURL`
+   at the machine that runs the server, for example
+   `http://192.168.1.20:8080/breathe.png`. On a Mac, `ipconfig getifaddr en0`
+   prints its address.
+2. **The server**, on the same network:
 
-It prints one readings document every five seconds. Swapping in real hardware
-means writing four drivers against the `IShtc3` / `IScd41` / `IPmsa003i` /
-`IBme688` interfaces and clearing `-DUSE_MOCK_SENSORS`; building without that
-flag is an `#error` naming them.
+   ```sh
+   cd server && python3 server.py
+   ```
+
+   It renders every page at start, then one page a minute before each
+   five-minute slot. macOS asks once whether Python may accept incoming
+   connections; allow it.
+3. **Flash and watch:**
+
+   ```sh
+   pio run -e esp32 -t upload
+   pio device monitor -b 115200
+   ```
+
+The log shows the boot banner and User-Agent, WiFi and NTP, then
+`downloading file at URL ...`, `drawing image from buffer` and
+`next refresh in N s`. The panel shows Breathe, Comfort and Day in turn,
+five minutes apart on the wall clock (:00, :05, ...). One readings document
+a minute prints from the mock sensors. A fetch that fails leaves the last
+image on the panel and backs off (`back-off step N`).
+
+`kRotation` in `src/main.cpp` is 0. If the image is upside down for the way
+the board sits, set it to 2.
+
+Swapping in real hardware means writing four drivers against the `IShtc3` /
+`IScd41` / `IPmsa003i` / `IBme688` interfaces and clearing
+`-DUSE_MOCK_SENSORS`; building without that flag is an `#error` naming them.
 
 ## Setup
 

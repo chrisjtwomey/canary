@@ -1,11 +1,12 @@
 // Copy to src/defaults.cpp and fill in. That file is gitignored so your
 // credentials stay local. Definitions for the symbols EpdClient's
-// defaults.h declares; used once the awake loop lands.
+// defaults.h declares.
 #include <stdint.h>
 
-// Where the display server runs.
-char serverURL[] = "http://YOUR_SERVER_HOST:8080/now.png";
+// The first page to fetch. After that the server names the next one.
+char serverURL[] = "http://YOUR_SERVER_HOST:8080/breathe.png";
 int serverRetries = 3;
+// Seconds between fetches when the server does not say.
 uint32_t serverDefaultRefreshSeconds = 300;
 
 char wifiSSID[] = "XXXX";
