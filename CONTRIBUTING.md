@@ -63,11 +63,14 @@ macOS point Selenium at it:
 
 ```sh
 export CHROME_BIN="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-cd server && cp config.example.yaml config.yaml
+cd server && source .venv/bin/activate && cp config.example.yaml config.yaml
 python3 server.py --once                                   # every page -> server/*.png
 python3 server.py --only comfort.png --at 2026-09-03T21:45  # one page, clock pinned
 python3 server.py                                          # serve, follow the schedule
 ```
+
+`epd_server` lives in `server/.venv` (see Setup), so activate it first or
+run `.venv/bin/python server.py`.
 
 `--at` pins the clock the room and the pages see, so a render is the same
 every time and you can pick an interesting hour: the evening CO₂ climb
@@ -111,7 +114,7 @@ in for the sensors. Three things to set up.
 2. **The server**, on the same network:
 
    ```sh
-   cd server && python3 server.py
+   cd server && source .venv/bin/activate && python3 server.py
    ```
 
    It renders every page at start, then one page a minute before each
