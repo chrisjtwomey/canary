@@ -32,12 +32,14 @@ from sources.status import DeviceReports, StatusSource
 cwd = os.path.dirname(os.path.realpath(__file__))
 log = logging.getLogger("server")
 
-DEFAULT_SCHEDULE = {"07:00:00": "breathe.png"}
+# One page an hour when config.yaml has no display block.
+DEFAULT_DISPLAY = {"pools": {"co2": ["breathe.png"]},
+                   "schedule": {"type": "interval", "every": 3600}}
 
 
 def make_pages(tz, **geometry) -> list:
     """Every page the server can serve. Which ones show, and in what order,
-    is display_schedule's business; see config.example.yaml."""
+    is the display block's business; see config.example.yaml."""
     pages = [
         BreathePage("breathe", tz=tz, **geometry),
         ComfortPage("comfort", tz=tz, **geometry),
@@ -76,7 +78,7 @@ def main():
     config = load_yaml(os.path.join(cwd, "config.yaml"))
 
     try:
-        core = load_core_config(config, default_schedule=DEFAULT_SCHEDULE,
+        core = load_core_config(config, default_display=DEFAULT_DISPLAY,
                                 default_width=1280, default_height=720)
         kind = get_prop_by_keys(config, "source", "kind", default="mock")
         if kind != "mock":
@@ -107,7 +109,7 @@ def main():
         server = DisplayServer(
             pages=pages,
             source=source,
-            schedule=core.server.display_schedule,
+            schedule=core.server.schedule,
             tz=tz,
             regen_lead_seconds=core.server.regen_lead_seconds,
             port=core.server.port,

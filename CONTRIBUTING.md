@@ -92,7 +92,7 @@ Subclass `EnvPage` in `server/pages/`, set `title`, `stylesheet`,
 `css_class` and `requires`, build the DOM in `body()`, and return chart
 specs from `charts()`. Add it to `make_pages()` in `server.py`, give it a
 stylesheet in `static/` keyed on `.page-<css_class>`, and a slot in
-`display_schedule`. Layout units are `cqw`/`cqh`: 1% of the panel's width
+`display.pools`. Layout units are `cqw`/`cqh`: 1% of the panel's width
 and height.
 
 Charts are drawn by `static/charts.js` with rough.js. A spec names its
@@ -113,12 +113,14 @@ value now with three days behind it and the thresholds as dashed lines;
 and `DeltaPage`, the change over a short window, a column showing where
 the value stood, and a sentence on what such a change usually means.
 
-`display_schedule.pools` in `config.yaml` names the pools in order. The
-server visits them round-robin, one page per slot, and reads each pool
-round-robin on its own count from a random start, so a pass is never all
-of one shape; the starts move every `reshuffle_hours`. The randomness is
-seeded from the clock, so a restart changes nothing. Day and Diagnostics
-ride along as pools of one; drop a line to leave a page out.
+The `display` block in `config.yaml` has two parts. `pools` is what can
+show: named lists of images, each read in turn on its own count from a
+random start that moves every `reshuffle_hours`, so a pass is never all of
+one shape. `schedule` is when: `type: interval` visits the pools in `order`
+every `every` seconds. The randomness is seeded from the clock, so a
+restart changes nothing. Day and Diagnostics ride along as pools of one;
+leave a pool out of `order` to keep it off the panel. The weather calendar
+uses the same block with `type: times` and one image per pool.
 
 To review pages on the panel quickly, set `every: 20` in `config.yaml`
 and restart the server; the board follows whatever it is told.

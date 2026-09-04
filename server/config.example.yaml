@@ -6,14 +6,12 @@ server:
   timezone: Europe/Dublin
   regen_lead_seconds: 60
 
-# The client fetches a page every `every` seconds, on the wall clock
-# (:00, :05, :10 ...). The pools are visited round-robin, and each pool is
-# read round-robin on its own count from a random start, so one pass is
-# never all traces or all deltas; the starts move every `reshuffle_hours`.
-# A mapping of HH:MM:SS to page, or `every` with a `pages` list, works too.
-display_schedule:
-  every: 300
-  reshuffle_hours: 3
+# What the client shows, and when. Each pool is a list of images read in
+# turn on its own count, from a random start that moves every
+# `reshuffle_hours`, so one pass is never all traces or all deltas. The
+# schedule visits the pools in `order` (default: as listed) every `every`
+# seconds on the wall clock (:00, :05, :10 ...).
+display:
   pools:
     co2: [breathe.png, co2-trace.png, co2-delta.png]
     comfort: [comfort.png, comfort-trace.png, comfort-delta.png]
@@ -22,6 +20,10 @@ display_schedule:
     pressure: [barometer-trace.png, barometer-delta.png]
     day: [day.png]
     diagnostics: [diagnostics.png]
+  schedule:
+    type: interval
+    every: 300
+    reshuffle_hours: 3
 
 image:
   width: 1280
