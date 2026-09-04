@@ -116,7 +116,11 @@ class TestDay:
     def test_four_ribbons_and_an_axis(self, data, tz):
         latest = data["latest"]
         soup, specs = render(DayPage("day", tz=tz, width=WIDTH, height=HEIGHT), data)
-        assert text(soup, ".head .label") == "Last 24 hours"
+        assert text(soup, ".head-now .label") == "Current"
+        assert text(soup, ".head-hist .label") == "Last 24 hours"
+        assert soup.select_one(".now #now-co2_ppm") is not None
+        assert soup.select_one(".hist #range-co2_ppm") is not None
+        assert soup.select_one(".hist #rib-co2_ppm") is not None
         assert text(soup, "#now-co2_ppm .value") == fmt_int(latest["co2_ppm"])
         assert text(soup, "#now-temp_c .value") == f"{latest['temp_c']:.1f}"
         assert [c["id"] for c in soup.find_all("canvas")] == [

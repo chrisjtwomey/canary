@@ -25,18 +25,20 @@ class DayPage(EnvPage):
     requires = ("latest", "history_24h")
 
     def body(self, a: Airium, latest: dict, history_24h: list[dict]) -> None:
-        with a.div(klass="head"):
+        with a.div(klass="head-now"):
+            a.div(klass="label", _t="Current")
+        with a.div(klass="head-hist"):
             a.div(klass="label", _t=f"Last {WINDOW_HOURS} hours")
             a.div(klass="stamp", _t=fmt_stamp(latest["ts"], self.tz))
         for key, name, unit, fmt, _ in ROWS:
             value = latest.get(key)
             lo, hi = extremes(history_24h + [latest], key)
-            with a.div(klass="key"):
-                with a.div(klass="now"):
-                    a.div(klass="label", _t=name)
-                    with a.div(klass="hero", id=f"now-{key}"):
-                        a.span(klass="value", _t=fmt(value) if value is not None else "—")
-                        a.span(klass="unit", _t=unit)
+            with a.div(klass="now"):
+                a.div(klass="label", _t=name)
+                with a.div(klass="hero", id=f"now-{key}"):
+                    a.span(klass="value", _t=fmt(value) if value is not None else "—")
+                    a.span(klass="unit", _t=unit)
+            with a.div(klass="hist"):
                 with a.div(klass="range", id=f"range-{key}"):
                     for tag, doc in (("high", hi), ("low", lo)):
                         if doc is None:
@@ -44,10 +46,12 @@ class DayPage(EnvPage):
                         a.span(klass="tag", _t=tag)
                         a.span(klass="v", _t=fmt(doc[key]))
                         a.span(klass="t", _t=fmt_hm(doc["ts"], self.tz))
+                with a.div(klass="chart"):
+                    a.canvas(id=f"rib-{key}")
+        with a.div(klass="hist axis"):
+            a.div(klass="spacer")
             with a.div(klass="chart"):
-                a.canvas(id=f"rib-{key}")
-        with a.div(klass="axis"):
-            a.canvas(id="rib-axis")
+                a.canvas(id="rib-axis")
 
     def charts(self, latest: dict, history_24h: list[dict]) -> list[dict]:
         end = latest["ts"]
