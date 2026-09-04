@@ -278,7 +278,104 @@
     }
   }
 
+  // Days of pressure as a barograph trace: the dial's legends as faint
+  // bands, a rule at each midnight, the last hours drawn heavier.
+  function barograph(canvas, s) {
+    var c = prepare(canvas);
+    var m = { l: 64, r: 44, t: 16, b: 40 };
+    var X = linear(s.x.min, s.x.max, m.l, c.w - m.r);
+    var Y = linear(s.y.min, s.y.max, c.h - m.b, m.t);
+    (s.zones || []).forEach(function (z) {
+      if (z.from > s.y.min && z.from < s.y.max) {
+        var y = Y(z.from);
+        c.rc.line(m.l, y, c.w - m.r, y, { stroke: G[4], strokeWidth: 1.5, roughness: 0.6, strokeLineDash: [9, 8] });
+      }
+      var mid = (Math.max(z.from, s.y.min) + Math.min(z.to, s.y.max)) / 2;
+      if (z.from < s.y.max && z.to > s.y.min) {
+        label(c.ctx, z.label, c.w - m.r - 6, Y(mid) + 6, { size: 17, italic: true, align: 'right', color: G[3] });
+      }
+    });
+    (s.days || []).forEach(function (d) {
+      var x = X(d.x);
+      c.rc.line(x, m.t, x, c.h - m.b, { stroke: G[4], strokeWidth: 1.2, roughness: 0.5, strokeLineDash: [6, 6] });
+    });
+    (s.dayLabels || []).forEach(function (d) {
+      label(c.ctx, d.label, X(d.x), c.h - 10, { size: 18, align: 'center' });
+    });
+    (s.yticks || []).forEach(function (v) {
+      c.rc.line(m.l - 6, Y(v), m.l, Y(v), { stroke: G[3], strokeWidth: 1.2, roughness: 0.4 });
+      label(c.ctx, String(v), m.l - 12, Y(v) + 6, { size: 15, align: 'right', color: G[3] });
+    });
+    c.rc.line(m.l, c.h - m.b, c.w - m.r, c.h - m.b, { stroke: G[3], strokeWidth: 1.5, roughness: 0.6 });
+    line(c, s.points.map(function (p) { return [X(p[0]), Y(p[1])]; }), 2.5);
+    if (s.recent && s.recent.length > 1) {
+      line(c, s.recent.map(function (p) { return [X(p[0]), Y(p[1])]; }), 5);
+    }
+    if (s.set) {
+      c.rc.circle(X(s.set[0]), Y(s.set[1]), 16, { stroke: G[2], strokeWidth: 1.5, fill: 'none', roughness: 1 });
+    }
+    if (s.now) marker(c, X(s.now[0]), Y(s.now[1]));
+  }
+
+  // The WMO pressure-tendency symbol: two legs, one per half of the window.
+  function tendency(canvas, s) {
+    var c = prepare(canvas);
+    var pad = 50, w = c.w - 2 * pad, h = c.h - 2 * pad - 30;
+    var lvl = { rising: 1, steady: 0, falling: -1 };
+    var l1 = lvl[s.first], l2 = lvl[s.second];
+    var x0 = pad, y0 = pad + h / 2 + (l1 + l2) * h / 6;
+    var p1 = [x0 + w / 2, y0 - l1 * h / 3];
+    var p2 = [p1[0] + w / 2, p1[1] - l2 * h / 3];
+    c.rc.linearPath([[x0, y0], p1, p2], { stroke: G[0], strokeWidth: 10, roughness: 1.2, bowing: 1 });
+    var dx = p2[0] - p1[0], dy = p2[1] - p1[1], L = Math.hypot(dx, dy);
+    dx /= L; dy /= L;
+    var a = 30;
+    c.rc.polygon([
+      [p2[0], p2[1]],
+      [p2[0] - a * dx + a * 0.55 * dy, p2[1] - a * dy - a * 0.55 * dx],
+      [p2[0] - a * dx - a * 0.55 * dy, p2[1] - a * dy + a * 0.55 * dx]
+    ], { fill: G[0], fillStyle: 'solid', stroke: G[0], roughness: 1 });
+    label(c.ctx, 'three hours ago', x0, c.h - 12, { size: 18, italic: true, color: G[3] });
+    label(c.ctx, 'now', p2[0], c.h - 12, { size: 18, italic: true, color: G[3], align: 'right' });
+  }
+
+  // A vertical scale zoomed around now, a column up to the value, and
+  // marks for where it was.
+  function column(canvas, s) {
+    var c = prepare(canvas);
+    var m = { l: 76, r: 20, t: 24, b: 24 };
+    var Y = linear(s.min, s.max, c.h - m.b, m.t);
+    var x = m.l, colW = 46;
+    (s.zones || []).forEach(function (z) {
+      if (z.from > s.min && z.from < s.max) {
+        var y = Y(z.from);
+        c.rc.line(x + colW + 12, y, c.w - m.r, y, { stroke: G[4], strokeWidth: 1.5, roughness: 0.6, strokeLineDash: [9, 8] });
+      }
+      var mid = (Math.max(z.from, s.min) + Math.min(z.to, s.max)) / 2;
+      if (z.from < s.max && z.to > s.min) {
+        label(c.ctx, z.label, c.w - m.r - 6, Y(mid) + 6, { size: 17, italic: true, align: 'right', color: G[3] });
+      }
+    });
+    for (var v = Math.ceil(s.min / 5) * 5; v <= s.max; v += 5) {
+      c.rc.line(x - 8, Y(v), x, Y(v), { stroke: G[2], strokeWidth: 1.5, roughness: 0.4 });
+      label(c.ctx, String(v), x - 14, Y(v) + 7, { size: 18, align: 'right' });
+    }
+    c.rc.rectangle(x, m.t, colW, c.h - m.t - m.b, { stroke: G[2], strokeWidth: 1.5, fill: 'none', roughness: 1 });
+    if (s.value != null) {
+      var yv = Y(s.value);
+      c.rc.rectangle(x, yv, colW, c.h - m.b - yv, { fill: G[2], fillStyle: 'hachure', hachureGap: 6,
+        fillWeight: 1.2, stroke: 'none', roughness: 1 });
+      c.rc.line(x - 6, yv, x + colW + 6, yv, { stroke: G[0], strokeWidth: 3, roughness: 0.5 });
+    }
+    (s.marks || []).forEach(function (mk) {
+      var y = Y(mk.y);
+      c.rc.line(x + colW + 12, y, x + colW + 44, y, { stroke: G[2], strokeWidth: 1.5, roughness: 0.5, strokeLineDash: [4, 4] });
+      label(c.ctx, mk.label, x + colW + 50, y + 6, { size: 17, italic: true, color: G[2] });
+    });
+  }
+
   var KINDS = { sparkline: sparkline, comfort: comfort, ribbon: ribbon, axis: axis,
+                barograph: barograph, tendency: tendency, column: column,
                 dotcloud: dotcloud, scale: scale_, dial: dial, meter: meter, bars: bars };
 
   function render(specs) {

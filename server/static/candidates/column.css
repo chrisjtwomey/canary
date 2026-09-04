@@ -1,0 +1,7 @@
+.page-column .title { position: absolute; left: 4.2cqw; top: 6cqh; }
+.page-column .stamp { position: absolute; right: 4.2cqw; top: 6cqh; }
+.page-column .column { position: absolute; left: 3cqw; top: 12cqh; width: 44cqw; height: 82cqh; }
+.page-column .stats { position: absolute; left: 54cqw; top: 20cqh; width: 42cqw; }
+.page-column .stats .hero { font-size: 13cqw; }
+.page-column .stats .verdict { font-size: 5cqw; margin-top: 5cqh; }
+.page-column .stats .detail { font-size: 2.1cqw; margin-top: 2.5cqh; }

@@ -45,7 +45,13 @@ class ComfortPage(EnvPage):
                 a.div(klass="detail", _t=(
                     f"Dew point {dew_point_c(temp, rh):.1f}°, "
                     f"vapour {abs_humidity_g_m3(temp, rh):.1f} g/m³."))
+            extra = self.extra_detail(latest, history_24h)
+            if extra:
+                a.div(klass="detail", _t=extra)
             a.div(klass="verdict", _t=comfort_verdict(temp, rh) if valid else "Warming up.")
+
+    def extra_detail(self, latest: dict, history_24h: list[dict]) -> str | None:
+        return None
 
     def charts(self, latest: dict, history_24h: list[dict]) -> list[dict]:
         end = latest["ts"]

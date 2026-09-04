@@ -23,6 +23,7 @@ class DayPage(EnvPage):
     stylesheet = "day.css"
     css_class = "day"
     requires = ("latest", "history_24h")
+    rows = ROWS
 
     def body(self, a: Airium, latest: dict, history_24h: list[dict]) -> None:
         with a.div(klass="head-now"):
@@ -30,7 +31,7 @@ class DayPage(EnvPage):
         with a.div(klass="head-hist"):
             a.div(klass="label", _t=f"Last {WINDOW_HOURS} hours")
             a.div(klass="stamp", _t=fmt_stamp(latest["ts"], self.tz))
-        for key, name, unit, fmt, _ in ROWS:
+        for key, name, unit, fmt, _ in self.rows:
             value = latest.get(key)
             lo, hi = extremes(history_24h + [latest], key)
             with a.div(klass="now"):
@@ -59,7 +60,7 @@ class DayPage(EnvPage):
         window = {"min": start, "max": end}
         nights = night_spans(start, end, self.tz)
         specs = []
-        for key, _, _, _, rng in ROWS:
+        for key, _, _, _, rng in self.rows:
             pts = [p for p in series(history_24h, key, STEP_S) if p[0] >= start]
             value = latest.get(key)
             if value is not None:
