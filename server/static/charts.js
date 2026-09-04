@@ -39,19 +39,6 @@
     ctx.restore();
   }
 
-  function boxed(c, s, x, y, o) {
-    o = o || {};
-    var size = o.size || 18;
-    c.ctx.save();
-    c.ctx.font = '500 ' + size + 'px ' + FONT;
-    var w = c.ctx.measureText(s).width + 8;
-    c.ctx.restore();
-    x = Math.max(w / 2, Math.min(c.w - w / 2, x));
-    c.ctx.fillStyle = G[7];
-    c.ctx.fillRect(x - w / 2, y - size + 2, w, size + 4);
-    label(c.ctx, s, x, y, { size: size, align: 'center', color: o.color });
-  }
-
   function dot(ctx, x, y, r, color) {
     ctx.save();
     ctx.beginPath();
@@ -146,31 +133,25 @@
 
   function ribbon(canvas, s) {
     var c = prepare(canvas);
-    var m = { l: 4, r: 44, t: 26, b: 6 };
+    var m = { l: 4, r: 24, t: 12, b: 6 };
     var X = linear(s.x.min, s.x.max, m.l, c.w - m.r);
     var Y = linear(s.y.min, s.y.max, c.h - m.b, m.t);
 
     (s.nights || []).forEach(function (nt) {
       c.ctx.fillStyle = G[6];
-      c.ctx.fillRect(X(nt[0]), m.t - 12, X(nt[1]) - X(nt[0]), c.h - m.b - m.t + 12);
+      c.ctx.fillRect(X(nt[0]), 0, X(nt[1]) - X(nt[0]), c.h - m.b);
     });
 
     var pts = s.points.map(function (p) { return [X(p[0]), Y(p[1])]; });
     area(c, pts, c.h - m.b, G[4], 10);
     line(c, pts, 2.5);
     c.rc.line(m.l, c.h - m.b, c.w - m.r, c.h - m.b, { stroke: G[3], strokeWidth: 1.5, roughness: 0.6 });
-
-    if (s.extremes) {
-      var hi = s.extremes.max, lo = s.extremes.min;
-      if (hi) boxed(c, hi[2], X(hi[0]), Y(hi[1]) - 10, { color: G[0] });
-      if (lo) boxed(c, lo[2], X(lo[0]), Y(lo[1]) + 22, { color: G[2] });
-    }
     if (s.now) dot(c.ctx, X(s.now[0]), Y(s.now[1]), 6, G[0]);
   }
 
   function axis(canvas, s) {
     var c = prepare(canvas);
-    var m = { l: 4, r: 44 };
+    var m = { l: 4, r: 24 };
     var X = linear(s.x.min, s.x.max, m.l, c.w - m.r);
     s.ticks.forEach(function (t) {
       var x = X(t.x);

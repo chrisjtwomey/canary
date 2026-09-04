@@ -128,10 +128,18 @@ class TestDay:
             assert rib["kind"] == "ribbon" and rib["x"] == window
             assert rib["points"][-1][0] == latest["ts"]
             assert all(window["min"] <= a < b <= window["max"] for a, b in rib["nights"])
-            assert rib["extremes"]["max"][1] >= rib["extremes"]["min"][1]
-        co2 = ribbons[0]
-        assert co2["extremes"]["max"][2] == fmt_int(max(v for _, v in co2["points"]))
+            assert "extremes" not in rib
         assert axis["kind"] == "axis" and [t["label"] for t in axis["ticks"]] == ["00", "06", "12", "18"]
+
+    def test_each_row_names_the_days_high_and_low(self, data, tz):
+        latest, history = data["latest"], data["history_24h"]
+        soup, _ = render(DayPage("day", tz=tz, width=WIDTH, height=HEIGHT), data)
+        rng = soup.select_one("#range-co2_ppm")
+        assert [t.get_text() for t in rng.select(".tag")] == ["high", "low"]
+        values = [d["co2_ppm"] for d in history + [latest]]
+        assert [v.get_text() for v in rng.select(".v")] == [fmt_int(max(values)), fmt_int(min(values))]
+        for t in rng.select(".t"):
+            assert len(t.get_text()) == 5 and t.get_text()[2] == ":"
 
     def test_ribbon_points_are_thinned_to_five_minutes(self, data, tz):
         _, specs = render(DayPage("day", tz=tz, width=WIDTH, height=HEIGHT), data)
