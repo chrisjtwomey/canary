@@ -102,10 +102,24 @@ everything time-zone or unit related in Python, where it is tested.
 `metrics.py` holds the derived values and the wording.
 
 The pages: Breathe (CO₂), Comfort (temperature and humidity), Day (24 h
-ribbons), Dust (particulates), Air (the VOC index), Barometer (pressure and
-its tendency) and Diagnostics (the board's own report). The first six read
-the simulated room; Diagnostics reads the `status` dataset, which is the
-last document the board posted.
+ribbons), Dust (particulates), Air (the VOC index), the barometer pool, and
+Diagnostics (the board's own report). All but Diagnostics read the simulated
+room; Diagnostics reads the `status` dataset, the last document the board
+posted.
+
+A metric's *pool* is two pages of the same two shapes, both in
+`pages/pool.py` and driven by a `Metric` spec: `TracePage`, the value now
+with three days behind it and the thresholds as dashed lines; and
+`DeltaPage`, the change over a short window, a column showing where the
+value stood, and a sentence on what such a change usually means. The
+barometer pool is in the rotation. `candidates/pool.py` holds the same two
+shapes for CO₂, comfort, dust and air, rendered by `candidates/render.py`
+and served to the board one a minute by `candidates/serve.py`, until they
+are chosen into pools too.
+
+`site.altitude_m` in `config.yaml` reduces the pressure to sea level, as
+forecasts quote it. The reading as measured stays under
+`pressure_station_hpa`.
 
 ### 4. On the Inkplate, end to end
 

@@ -1,5 +1,0 @@
-@import url("../day.css");
-.page-day.five { grid-template-rows: 9cqh repeat(5, minmax(0, 1fr)) 6cqh; }
-.page-day.five .now .hero { font-size: 4.4cqw; }
-.page-day.five .now .label { font-size: 1.3cqw; margin-bottom: 0.3cqh; }
-.page-day.five .range { font-size: 1.7cqw; row-gap: 0.3cqh; }

@@ -182,3 +182,52 @@ def test_fmt_duration(seconds, text):
 def test_fmt_bytes():
     assert fmt_bytes(120000) == "117 KB"
     assert fmt_bytes(4194304) == "4.0 MB"
+
+
+# ---------- change over a window, meanings, altitude ----------
+
+from metrics import (change_over, classify_rate, co2_meaning, iaq_meaning, pm_meaning,  # noqa: E402
+                     pressure_meaning, rate_words, rh_meaning, sea_level_hpa, temp_meaning)
+
+
+def test_change_over_a_window():
+    history = [{"ts": 1000 + i * 60, "co2_ppm": 500 + i * 2} for i in range(60)]
+    latest = {"ts": 1000 + 60 * 60, "co2_ppm": 700}
+    assert change_over(history, latest, "co2_ppm", 0.25) == 700 - (500 + 45 * 2)
+    assert change_over(history, latest, "co2_ppm", 5) is None
+    assert change_over(history, {"ts": 5000}, "co2_ppm", 0.25) is None
+
+
+@pytest.mark.parametrize("delta, rate", [
+    (None, None), (150, "rising fast"), (50, "rising"), (10, "steady"), (-10, "steady"),
+    (-50, "falling"), (-150, "falling fast"),
+])
+def test_classify_rate(delta, rate):
+    assert classify_rate(delta, 40, 120) == rate
+
+
+def test_rate_words():
+    assert rate_words("rising fast") == "Rising fast."
+    assert rate_words("steady") == "Steady."
+    assert rate_words(None) == "No trend yet."
+
+
+def test_every_meaning_has_a_sentence_for_every_rate_and_level():
+    cases = [
+        (pressure_meaning, (990, 1005, 1020)), (co2_meaning, (500, 800, 1200)),
+        (temp_meaning, (17, 21, 26)), (rh_meaning, (30, 45, 70)),
+        (pm_meaning, (5, 30)), (iaq_meaning, (30, 120, 200)),
+    ]
+    for meaning, levels in cases:
+        for rate in ("rising fast", "rising", "steady", "falling", "falling fast"):
+            for level in levels:
+                text = meaning(rate, level)
+                assert text.endswith(".") and len(text) > 8, (meaning.__name__, rate, level)
+    assert co2_meaning("steady", 1200) != co2_meaning("steady", 500)
+    assert pressure_meaning("falling fast", 1000) == "A storm is coming. Wind within hours."
+
+
+def test_sea_level_correction_is_about_one_hpa_per_eight_metres():
+    assert sea_level_hpa(1019.4, 0) == 1019.4
+    assert sea_level_hpa(1019.4, 10) == pytest.approx(1020.6, abs=0.05)
+    assert sea_level_hpa(1000.0, 80) == pytest.approx(1009.5, abs=0.2)

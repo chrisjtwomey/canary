@@ -24,3 +24,9 @@ def source():
 def data(source):
     ds = source.datasets()
     return {"latest": ds["latest"](), "history_24h": ds["history_24h"]()}
+
+
+@pytest.fixture
+def data72(source):
+    ds = source.datasets()
+    return {"latest": ds["latest"](), "history_72h": ds["history_72h"]()}

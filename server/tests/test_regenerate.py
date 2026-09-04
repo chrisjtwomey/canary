@@ -27,8 +27,8 @@ def test_regenerate_writes_eight_grey_pngs_for_every_page(tmp_path, source, tz):
     rendered = regenerate(pages, source)
 
     assert [p.name for p in rendered] == [
-        "breathe", "comfort", "day", "dust", "air", "barometer", "diagnostics"]
-    assert [c[1:] for c in renderer.calls] == [(1280, 720)] * 7
+        "breathe", "comfort", "day", "dust", "air", "barometer-trace", "barometer-delta", "diagnostics"]
+    assert [c[1:] for c in renderer.calls] == [(1280, 720)] * 8
     for page in pages:
         html = (tmp_path / "static" / f"{page.name}.html").read_text()
         assert "charts.js" in html and f"page-{page.css_class}" in html

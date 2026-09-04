@@ -1,6 +1,6 @@
-"""Serve the pressure candidates to the board, one a minute, to see them on
-the panel. Every regular page is served too, so whatever URL the board
-holds still resolves.
+"""Serve the candidate pages to the board, one a minute, to see them on the
+panel. Every regular page is served too, so whatever URL the board holds
+still resolves.
 
     PYTHONPATH=. .venv/bin/python candidates/serve.py
 """
@@ -11,9 +11,7 @@ import time
 from epd_server import DisplayServer, align_process_timezone
 from epd_server.config import expand_interval_schedule, load_core_config, load_yaml
 
-from candidates.pressure import (BarographPage, ColumnPage, ComfortPressurePage, DayPressurePage,
-                                 TendencyPage)
-from pages.barometer import BarometerPage
+from candidates.pool import candidate_pages
 from server import make_pages, make_source
 from sources.status import DeviceReports
 
@@ -26,21 +24,14 @@ align_process_timezone(core.server.timezone)
 tz = core.server.timezone
 geometry = core.image.page_kwargs()
 
-candidates = [
-    BarometerPage("barometer-dial", tz=tz, **geometry),
-    BarographPage("barometer-barograph", tz=tz, **geometry),
-    TendencyPage("barometer-tendency", tz=tz, **geometry),
-    ColumnPage("barometer-column", tz=tz, **geometry),
-    DayPressurePage("day-pressure", tz=tz, **geometry),
-    ComfortPressurePage("comfort-pressure", tz=tz, **geometry),
-]
+candidates = candidate_pages(tz, **geometry)
 schedule = sorted(expand_interval_schedule(
     {"every": 60, "pages": [p.png_filename for p in candidates]}).items())
 
 reports = DeviceReports()
 DisplayServer(
     pages=make_pages(tz, **geometry) + candidates,
-    source=make_source(7, time.time, reports),
+    source=make_source(7, time.time, reports, altitude_m=10),
     schedule=schedule,
     tz=tz,
     regen_lead_seconds=20,

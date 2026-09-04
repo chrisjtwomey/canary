@@ -212,47 +212,6 @@
     }
   }
 
-  // An aneroid barometer's dial. The set needle is where the pressure was
-  // three hours ago, so the gap between the needles is the tendency.
-  function dial(canvas, s) {
-    var c = prepare(canvas);
-    var cx = c.w / 2, cy = c.h * 0.56;
-    var R = Math.min(c.w / 2, c.h * 0.56) - 14;
-    var a0 = 215, a1 = -35;
-    function ang(v) { return (a0 + (v - s.min) / (s.max - s.min) * (a1 - a0)) * Math.PI / 180; }
-    function pt(v, r) { var a = ang(v); return [cx + r * Math.cos(a), cy - r * Math.sin(a)]; }
-
-    var arc = [];
-    for (var i = 0; i <= 120; i++) arc.push(pt(s.min + (s.max - s.min) * i / 120, R));
-    c.rc.curve(arc, { stroke: G[0], strokeWidth: 2.5, roughness: 0.8, disableMultiStroke: true });
-
-    for (var t = s.min; t <= s.max; t += s.tick) {
-      var major = s.labels.indexOf(t) >= 0;
-      var p1 = pt(t, R), p2 = pt(t, R - (major ? 20 : 11));
-      c.rc.line(p1[0], p1[1], p2[0], p2[1], { stroke: G[0], strokeWidth: major ? 2 : 1.2, roughness: 0.5 });
-    }
-    s.labels.forEach(function (v) {
-      var p = pt(v, R - 44);
-      label(c.ctx, String(v), p[0], p[1] + 7, { size: 20, align: 'center' });
-    });
-    (s.legends || []).forEach(function (l) {
-      var p = pt(l[0], R - 100);
-      label(c.ctx, l[1], p[0], p[1] + 7, { size: 22, align: 'center', italic: true, color: G[2] });
-    });
-
-    if (s.set != null) {
-      var q = pt(s.set, R - 24);
-      c.rc.line(cx, cy, q[0], q[1], { stroke: G[3], strokeWidth: 2, roughness: 0.6, strokeLineDash: [7, 5] });
-      c.rc.circle(q[0], q[1], 14, { stroke: G[3], strokeWidth: 1.5, fill: 'none', roughness: 1 });
-    }
-    if (s.value != null) {
-      var n = pt(s.value, R - 24), tail = pt(s.value, -R * 0.16);
-      c.rc.line(tail[0], tail[1], n[0], n[1], { stroke: G[0], strokeWidth: 4, roughness: 0.5 });
-    }
-    dot(c.ctx, cx, cy, 10, G[0]);
-    dot(c.ctx, cx, cy, 4, G[7]);
-  }
-
   // A hatched fraction of a box.
   function meter(canvas, s) {
     var c = prepare(canvas);
@@ -278,23 +237,31 @@
     }
   }
 
-  // Days of pressure as a barograph trace: the dial's legends as faint
-  // bands, a rule at each midnight, the last hours drawn heavier.
-  function barograph(canvas, s) {
+  // Days of one measurement as a trace: thresholds as dashed lines, a rule
+  // at each midnight, the last hours drawn heavier, a companion series
+  // lighter on its own scale at the right.
+  function trace(canvas, s) {
     var c = prepare(canvas);
-    var m = { l: 64, r: 44, t: 16, b: 40 };
+    var m = { l: 64, r: s.points2 ? 64 : 44, t: 16, b: 40 };
     var X = linear(s.x.min, s.x.max, m.l, c.w - m.r);
     var Y = linear(s.y.min, s.y.max, c.h - m.b, m.t);
-    (s.zones || []).forEach(function (z) {
-      if (z.from > s.y.min && z.from < s.y.max) {
-        var y = Y(z.from);
-        c.rc.line(m.l, y, c.w - m.r, y, { stroke: G[4], strokeWidth: 1.5, roughness: 0.6, strokeLineDash: [9, 8] });
-      }
-      var mid = (Math.max(z.from, s.y.min) + Math.min(z.to, s.y.max)) / 2;
-      if (z.from < s.y.max && z.to > s.y.min) {
-        label(c.ctx, z.label, c.w - m.r - 6, Y(mid) + 6, { size: 17, italic: true, align: 'right', color: G[3] });
-      }
+    (s.guides || []).forEach(function (g) {
+      if (g.y <= s.y.min || g.y >= s.y.max) return;
+      var y = Y(g.y);
+      c.rc.line(m.l, y, c.w - m.r, y, { stroke: G[4], strokeWidth: 1.5, roughness: 0.6, strokeLineDash: [9, 8] });
+      label(c.ctx, g.label, m.l + 8, y - 6, { size: 17, italic: true, color: G[3] });
     });
+    if (s.points2) {
+      var Y2 = linear(s.y2.min, s.y2.max, c.h - m.b, m.t);
+      c.rc.curve(s.points2.map(function (p) { return [X(p[0]), Y2(p[1])]; }),
+        { stroke: G[4], strokeWidth: 2, roughness: 0.6, bowing: 0.3, disableMultiStroke: true });
+      var v2 = Math.ceil(s.y2.min / 5) * 5;
+      for (; v2 <= s.y2.max; v2 += 5) {
+        c.rc.line(c.w - m.r, Y2(v2), c.w - m.r + 6, Y2(v2), { stroke: G[4], strokeWidth: 1.2, roughness: 0.4 });
+        label(c.ctx, String(v2), c.w - m.r + 12, Y2(v2) + 6, { size: 15, color: G[4] });
+      }
+      if (s.label2) label(c.ctx, s.label2, c.w - m.r - 6, m.t + 14, { size: 15, italic: true, align: 'right', color: G[4] });
+    }
     (s.days || []).forEach(function (d) {
       var x = X(d.x);
       c.rc.line(x, m.t, x, c.h - m.b, { stroke: G[4], strokeWidth: 1.2, roughness: 0.5, strokeLineDash: [6, 6] });
@@ -317,28 +284,6 @@
     if (s.now) marker(c, X(s.now[0]), Y(s.now[1]));
   }
 
-  // The WMO pressure-tendency symbol: two legs, one per half of the window.
-  function tendency(canvas, s) {
-    var c = prepare(canvas);
-    var pad = 50, w = c.w - 2 * pad, h = c.h - 2 * pad - 30;
-    var lvl = { rising: 1, steady: 0, falling: -1 };
-    var l1 = lvl[s.first], l2 = lvl[s.second];
-    var x0 = pad, y0 = pad + h / 2 + (l1 + l2) * h / 6;
-    var p1 = [x0 + w / 2, y0 - l1 * h / 3];
-    var p2 = [p1[0] + w / 2, p1[1] - l2 * h / 3];
-    c.rc.linearPath([[x0, y0], p1, p2], { stroke: G[0], strokeWidth: 10, roughness: 1.2, bowing: 1 });
-    var dx = p2[0] - p1[0], dy = p2[1] - p1[1], L = Math.hypot(dx, dy);
-    dx /= L; dy /= L;
-    var a = 30;
-    c.rc.polygon([
-      [p2[0], p2[1]],
-      [p2[0] - a * dx + a * 0.55 * dy, p2[1] - a * dy - a * 0.55 * dx],
-      [p2[0] - a * dx - a * 0.55 * dy, p2[1] - a * dy + a * 0.55 * dx]
-    ], { fill: G[0], fillStyle: 'solid', stroke: G[0], roughness: 1 });
-    label(c.ctx, 'three hours ago', x0, c.h - 12, { size: 18, italic: true, color: G[3] });
-    label(c.ctx, 'now', p2[0], c.h - 12, { size: 18, italic: true, color: G[3], align: 'right' });
-  }
-
   // A vertical scale zoomed around now, a column up to the value, and
   // marks for where it was.
   function column(canvas, s) {
@@ -346,17 +291,14 @@
     var m = { l: 76, r: 20, t: 24, b: 24 };
     var Y = linear(s.min, s.max, c.h - m.b, m.t);
     var x = m.l, colW = 46;
-    (s.zones || []).forEach(function (z) {
-      if (z.from > s.min && z.from < s.max) {
-        var y = Y(z.from);
-        c.rc.line(x + colW + 12, y, c.w - m.r, y, { stroke: G[4], strokeWidth: 1.5, roughness: 0.6, strokeLineDash: [9, 8] });
-      }
-      var mid = (Math.max(z.from, s.min) + Math.min(z.to, s.max)) / 2;
-      if (z.from < s.max && z.to > s.min) {
-        label(c.ctx, z.label, c.w - m.r - 6, Y(mid) + 6, { size: 17, italic: true, align: 'right', color: G[3] });
-      }
+    (s.guides || []).forEach(function (g) {
+      if (g.y <= s.min || g.y >= s.max) return;
+      var y = Y(g.y);
+      c.rc.line(x + colW + 12, y, c.w - m.r, y, { stroke: G[4], strokeWidth: 1.5, roughness: 0.6, strokeLineDash: [9, 8] });
+      label(c.ctx, g.label, c.w - m.r - 6, y - 6, { size: 17, italic: true, align: 'right', color: G[3] });
     });
-    for (var v = Math.ceil(s.min / 5) * 5; v <= s.max; v += 5) {
+    var step = (s.max - s.min) > 200 ? 100 : (s.max - s.min) > 40 ? 10 : (s.max - s.min) > 12 ? 5 : 1;
+    for (var v = Math.ceil(s.min / step) * step; v <= s.max; v += step) {
       c.rc.line(x - 8, Y(v), x, Y(v), { stroke: G[2], strokeWidth: 1.5, roughness: 0.4 });
       label(c.ctx, String(v), x - 14, Y(v) + 7, { size: 18, align: 'right' });
     }
@@ -375,8 +317,8 @@
   }
 
   var KINDS = { sparkline: sparkline, comfort: comfort, ribbon: ribbon, axis: axis,
-                barograph: barograph, tendency: tendency, column: column,
-                dotcloud: dotcloud, scale: scale_, dial: dial, meter: meter, bars: bars };
+                trace: trace, column: column,
+                dotcloud: dotcloud, scale: scale_, meter: meter, bars: bars };
 
   function render(specs) {
     Promise.all([

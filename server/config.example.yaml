@@ -11,7 +11,8 @@ server:
 # page works too, as in the weather calendar.
 display_schedule:
   every: 300
-  pages: [breathe.png, comfort.png, day.png, dust.png, air.png, barometer.png, diagnostics.png]
+  pages: [breathe.png, comfort.png, day.png, dust.png, air.png,
+          barometer-trace.png, barometer-delta.png, diagnostics.png]
 
 image:
   width: 1280
@@ -20,6 +21,9 @@ image:
 source:
   kind: mock        # the simulated room; the readings store comes later
   seed: 7
+
+site:
+  altitude_m: 10    # pressure is reduced to sea level, as forecasts quote it
 
 mqtt:
   enabled: false

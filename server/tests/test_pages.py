@@ -159,9 +159,10 @@ class TestDay:
         assert all(b[0] - a[0] >= 300 for a, b in zip(pts, pts[1:-1]))
 
 
-from metrics import barometer_word, iaq_verdict, pm25_verdict, tendency_words, value_at  # noqa: E402
+from metrics import (barometer_word, classify_rate, iaq_verdict, pm25_verdict, pressure_meaning,  # noqa: E402
+                     rate_words, value_at)
 from pages.air import AirPage  # noqa: E402
-from pages.barometer import BarometerPage  # noqa: E402
+from pages.pool import PRESSURE, TEMP, DeltaPage, TracePage  # noqa: E402
 from pages.diagnostics import DiagnosticsPage  # noqa: E402
 from pages.dust import MAX_DOTS, DustPage  # noqa: E402
 
@@ -219,24 +220,51 @@ class TestAir:
         assert text(soup, "#iaq .cold-tag") == "heater warming up"
 
 
-class TestBarometer:
-    def test_hero_tendency_and_twin_needles(self, data, tz):
-        latest, history = data["latest"], data["history_24h"]
-        soup, specs = render(BarometerPage("barometer", tz=tz, width=WIDTH, height=HEIGHT), data)
-        assert text(soup, "#pressure .value") == f"{latest['pressure_hpa']:.1f}"
-        then = value_at(history, "pressure_hpa", latest["ts"] - 3 * 3600)
-        delta = latest["pressure_hpa"] - then
-        assert text(soup, ".verdict") == tendency_words(delta)
-        assert barometer_word(latest["pressure_hpa"]) in text(soup, ".detail")
-        (dial,) = specs
-        assert dial["kind"] == "dial" and dial["value"] == latest["pressure_hpa"] and dial["set"] == then
-        assert dial["min"] < then < dial["max"]
+class TestBarometerPool:
+    def test_trace_shows_three_days_with_the_legends_as_guides(self, data72, tz):
+        latest = data72["latest"]
+        soup, specs = render(TracePage("barometer-trace", PRESSURE, tz=tz, width=WIDTH, height=HEIGHT), data72)
+        assert text(soup, ".title") == "Barometer"
+        assert text(soup, "#now .value") == f"{latest['pressure_hpa']:.1f}"
+        assert text(soup, ".verdict") == barometer_word(latest["pressure_hpa"]) + "."
+        assert text(soup, ".detail").startswith("High of ")
+        (trace,) = specs
+        assert trace["kind"] == "trace" and trace["x"] == {"min": latest["ts"] - 3 * 86400, "max": latest["ts"]}
+        assert [g["label"] for g in trace["guides"]] == ["rain", "change", "fair", "very dry"]
+        assert [d["label"] for d in trace["dayLabels"]] == ["Tuesday", "Wednesday", "Thursday"]
+        assert trace["points"][-1] == [latest["ts"], latest["pressure_hpa"]]
+        assert trace["recent"][-1] == trace["points"][-1]
+        assert 250 <= len(trace["points"]) <= 300
 
-    def test_no_history_means_no_trend(self, data, tz):
-        soup, specs = render(BarometerPage("barometer", tz=tz, width=WIDTH, height=HEIGHT),
-                             dict(data, history_24h=[]))
-        assert text(soup, ".verdict") == "No trend yet."
-        assert specs[0]["set"] is None
+    def test_delta_is_the_hour_change_with_its_meaning(self, data, tz):
+        latest, history = data["latest"], data["history_24h"]
+        soup, specs = render(DeltaPage("barometer-delta", PRESSURE, tz=tz, width=WIDTH, height=HEIGHT), data)
+        delta = latest["pressure_hpa"] - value_at(history, "pressure_hpa", latest["ts"] - 3600)
+        assert text(soup, "#delta-pressure_hpa .value") == f"{delta:+.1f}"
+        assert text(soup, "#delta-pressure_hpa .unit") == "hPa in 1 h"
+        rate = classify_rate(delta, 0.6, 1.2)
+        assert text(soup, "#rate-pressure_hpa") == rate_words(rate)
+        assert text(soup, "#meaning-pressure_hpa") == pressure_meaning(rate, latest["pressure_hpa"])
+        (col,) = specs
+        assert col["kind"] == "column" and col["value"] == latest["pressure_hpa"]
+        assert col["max"] - col["min"] == 30
+        assert [mk["label"] for mk in col["marks"]] == ["1 h ago", "3 h ago"]
+
+    def test_comfort_delta_carries_humidity_as_a_second_block(self, data, tz):
+        soup, specs = render(DeltaPage("comfort-delta", TEMP, tz=tz, width=WIDTH, height=HEIGHT), data)
+        assert text(soup, "#delta-temp_c .unit") == "°C in 15 min"
+        assert text(soup, "#delta-rh_pct .unit") == "% in 15 min"
+        assert [c["canvas"] for c in specs] == ["#column", "#column2"]
+
+    def test_cold_sensor_on_both_shapes(self, data72, tz):
+        latest = {k: v for k, v in data72["latest"].items() if k != "pressure_hpa"}
+        latest["valid"] = dict(data72["latest"]["valid"], pressure=False)
+        soup, _ = render(TracePage("barometer-trace", PRESSURE, tz=tz, width=WIDTH, height=HEIGHT),
+                         dict(data72, latest=latest))
+        assert text(soup, "#now .cold-tag") == "no reading" and text(soup, ".verdict") == "Warming up."
+        soup, specs = render(DeltaPage("barometer-delta", PRESSURE, tz=tz, width=WIDTH, height=HEIGHT),
+                             {"latest": latest, "history_24h": data72["history_72h"]})
+        assert text(soup, "#delta-pressure_hpa .value") == "—" and specs[0]["value"] is None
 
 
 STATUS = {

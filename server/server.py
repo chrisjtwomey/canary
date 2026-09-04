@@ -19,12 +19,13 @@ from epd_server.config import ConfigError, get_prop_by_keys, load_core_config, l
 from epd_server.source import CompositeSource
 
 from pages.air import AirPage
-from pages.barometer import BarometerPage
 from pages.breathe import BreathePage
 from pages.comfort import ComfortPage
 from pages.day import DayPage
 from pages.diagnostics import DiagnosticsPage
 from pages.dust import DustPage
+from pages.pool import PRESSURE, DeltaPage, TracePage
+from sources.corrections import SeaLevelSource
 from sources.mock import MockReadingsSource
 from sources.status import DeviceReports, StatusSource
 
@@ -41,15 +42,18 @@ def make_pages(tz, **geometry) -> list:
         DayPage("day", tz=tz, **geometry),
         DustPage("dust", tz=tz, **geometry),
         AirPage("air", tz=tz, **geometry),
-        BarometerPage("barometer", tz=tz, **geometry),
+        # the barometer pool: the record, and the change with its meaning
+        TracePage("barometer-trace", PRESSURE, tz=tz, **geometry),
+        DeltaPage("barometer-delta", PRESSURE, tz=tz, **geometry),
         DiagnosticsPage("diagnostics", tz=tz, **geometry),
     ]
 
 
-def make_source(seed: int, clock, reports: DeviceReports) -> CompositeSource:
-    """The simulated room for the measurements, the board's own reports for
-    the diagnostics."""
-    return CompositeSource(MockReadingsSource(seed=seed, now=clock), StatusSource(reports))
+def make_source(seed: int, clock, reports: DeviceReports, altitude_m: float = 0.0) -> CompositeSource:
+    """The simulated room for the measurements, pressure reduced to sea
+    level, and the board's own reports for the diagnostics."""
+    room = SeaLevelSource(MockReadingsSource(seed=seed, now=clock), altitude_m)
+    return CompositeSource(room, StatusSource(reports))
 
 
 def parse_args():
@@ -74,7 +78,8 @@ def main():
         if kind != "mock":
             raise ConfigError(f"source.kind {kind!r} is not supported yet; use mock")
         seed = int(get_prop_by_keys(config, "source", "seed", default=7))
-    except (ConfigError, KeyError) as exc:
+        altitude_m = float(get_prop_by_keys(config, "site", "altitude_m", default=0))
+    except (ConfigError, KeyError, ValueError) as exc:
         logging.basicConfig()
         log.error(exc.args[0] if exc.args else str(exc))
         sys.exit(1)
@@ -91,7 +96,7 @@ def main():
         log.info("clock pinned to %s", args.at)
 
     reports = DeviceReports()
-    source = make_source(seed, clock, reports)
+    source = make_source(seed, clock, reports, altitude_m)
     pages = make_pages(tz, **core.image.page_kwargs())
 
     try:

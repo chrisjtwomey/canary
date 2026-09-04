@@ -1,0 +1,38 @@
+.page-delta .title { position: absolute; left: 4.2cqw; top: 6cqh; }
+.page-delta .stamp { position: absolute; right: 4.2cqw; top: 6cqh; }
+
+.page-delta .columns {
+  position: absolute;
+  left: 3cqw;
+  top: 12cqh;
+  width: 44cqw;
+  height: 82cqh;
+  display: flex;
+  gap: 2cqw;
+}
+
+.page-delta .column { flex: 1; position: relative; min-width: 0; }
+.page-delta .column canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+.page-delta .stats {
+  position: absolute;
+  left: 52cqw;
+  top: 16cqh;
+  width: 44cqw;
+}
+
+.page-delta .block.main .hero { font-size: 11cqw; }
+.page-delta .block.main .hero .unit { font-size: 0.2em; }
+.page-delta .block.main .verdict { font-size: 4.6cqw; margin-top: 3cqh; }
+.page-delta .block .detail { font-size: 2cqw; margin-top: 1.6cqh; }
+.page-delta .block .meaning {
+  font-size: 2.3cqw;
+  font-style: italic;
+  margin-top: 1.2cqh;
+  line-height: 1.3;
+}
+
+.page-delta .block.second { margin-top: 5cqh; }
+.page-delta .block.second .hero { font-size: 6cqw; }
+.page-delta .block.second .hero .unit { font-size: 0.3em; }
+.page-delta .block.second .verdict { font-size: 3cqw; margin-top: 1cqh; }

@@ -321,3 +321,145 @@ def fmt_bytes(n: float) -> str:
     if n >= 1024 * 1024:
         return f"{n / 1048576:.1f} MB"
     return f"{n / 1024:.0f} KB"
+
+
+# ── Change over a window, and what it could mean ──────────────────────────
+
+RATES = ("rising fast", "rising", "steady", "falling", "falling fast")
+
+
+def change_over(history: list[dict], latest: dict, key: str, hours: float):
+    """Change in ``key`` over the last ``hours``, or None without both ends."""
+    now = latest.get(key)
+    then = value_at(history, key, int(latest["ts"] - hours * 3600))
+    if now is None or then is None:
+        return None
+    return now - then
+
+
+def classify_rate(delta, slow: float, fast: float) -> str | None:
+    """One of RATES: ``slow`` is the change that counts as moving,
+    ``fast`` the change that counts as fast."""
+    if delta is None:
+        return None
+    if delta >= fast:
+        return "rising fast"
+    if delta >= slow:
+        return "rising"
+    if delta <= -fast:
+        return "falling fast"
+    if delta <= -slow:
+        return "falling"
+    return "steady"
+
+
+def rate_words(rate: str | None) -> str:
+    if rate is None:
+        return "No trend yet."
+    return rate[0].upper() + rate[1:] + "."
+
+
+# The meanings are what such a change usually means in a home. They are
+# wording, not forecasts.
+
+def pressure_meaning(rate: str, hpa: float) -> str:
+    return {
+        "rising fast": "Clearing quickly, with wind likely.",
+        "rising": "Improving. Fair weather is likely.",
+        "falling": "Rain or wind on the way, within a day.",
+        "falling fast": "A storm is coming. Wind within hours.",
+    }.get(rate) or (
+        "Settled. More of the same." if hpa >= 1015
+        else "Unsettled, and staying so." if hpa < 1000
+        else "No change coming yet."
+    )
+
+
+def co2_meaning(rate: str, ppm: float) -> str:
+    return {
+        "rising fast": "People in the room and no air moving. Stuffy within the hour.",
+        "rising": "Filling slowly. Ten minutes with a window open resets it.",
+        "falling": "Clearing. A window is open, or the room has emptied.",
+        "falling fast": "Aired. Fresh again in minutes.",
+    }.get(rate) or (
+        "Stale and staying stale. Air the room." if ppm >= 1000
+        else "Holding. Fine for now." if ppm >= 700
+        else "Fresh and staying fresh."
+    )
+
+
+def temp_meaning(rate: str, t: float) -> str:
+    return {
+        "rising fast": "Warming quickly. Sun on the room, or the heating just came on.",
+        "rising": "Warming up.",
+        "falling": "Cooling. The heating is off.",
+        "falling fast": "Cooling fast. A window or a door is open.",
+    }.get(rate) or (
+        "Warm and staying warm." if t > COMFORT_T[1]
+        else "Cool and staying cool." if t < COMFORT_T[0]
+        else "Holding comfortably."
+    )
+
+
+def rh_meaning(rate: str, rh: float) -> str:
+    return {
+        "rising fast": "Steam. Cooking, a shower, or clothes drying.",
+        "rising": "Getting damper. Moisture builds faster than it leaves.",
+        "falling": "Drying out.",
+        "falling fast": "Drying quickly. A window is open, or the heating is on.",
+    }.get(rate) or (
+        "Damp and staying damp. Watch the windows for condensation." if rh > COMFORT_RH[1]
+        else "Dry. Skin and throats notice this." if rh < COMFORT_RH[0]
+        else "Holding comfortably."
+    )
+
+
+def pm_meaning(rate: str, ug: float) -> str:
+    return {
+        "rising fast": "Something is frying or burning. Open a window, and the extractor.",
+        "rising": "Dust building. Cooking, candles, or a door to outside.",
+        "falling": "Settling.",
+        "falling fast": "Clearing fast. The air is moving.",
+    }.get(rate) or (
+        "Hanging in the air. Ventilate." if ug > 15
+        else "Clean and staying clean."
+    )
+
+
+def iaq_meaning(rate: str, iaq: float) -> str:
+    return {
+        "rising fast": "Something new in the air. Cleaning, paint, cooking, or perfume.",
+        "rising": "Building slowly. People, or something drying.",
+        "falling": "Clearing.",
+        "falling fast": "Clearing fast. A window is open.",
+    }.get(rate) or (
+        "Stale and staying stale. Air the room." if iaq >= 150
+        else "A little stale, and staying so." if iaq >= 100
+        else "Clean and staying clean."
+    )
+
+
+def temp_words(t: float) -> str:
+    if t > COMFORT_T[1]:
+        return "Warm."
+    if t < COMFORT_T[0]:
+        return "Cool."
+    return "Comfortable."
+
+
+def rh_words(rh: float) -> str:
+    if rh > COMFORT_RH[1]:
+        return "Humid."
+    if rh < COMFORT_RH[0]:
+        return "Dry."
+    return "Comfortable."
+
+
+# ── Altitude ──────────────────────────────────────────────────────────────
+
+def sea_level_hpa(hpa: float, altitude_m: float) -> float:
+    """Station pressure reduced to sea level with the standard atmosphere,
+    which is what forecasts and weather reports quote."""
+    if not altitude_m:
+        return hpa
+    return hpa * (1 - 0.0065 * altitude_m / (288.15 + 0.0065 * altitude_m)) ** -5.257

@@ -1,4 +1,4 @@
-"""Render the pressure candidates beside the current page.
+"""Render the candidate pages at one pinned time.
 
     PYTHONPATH=. .venv/bin/python candidates/render.py 2026-09-04T11:42
 """
@@ -7,23 +7,13 @@ import sys
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from candidates.pressure import (BarographPage, ColumnPage, ComfortPressurePage, DayPressurePage,
-                                 TendencyPage)
-from sources.mock import MockReadingsSource
+from candidates.pool import candidate_pages
+from epd_server import regenerate
+from server import make_source
+from sources.status import DeviceReports
 
 logging.basicConfig(level=logging.INFO)
 tz = ZoneInfo("Europe/Dublin")
 at = datetime.strptime(sys.argv[1], "%Y-%m-%dT%H:%M").replace(tzinfo=tz).timestamp()
-src = MockReadingsSource(seed=7, now=lambda: at)
-latest, h24, h72 = src.latest(), src.history(24), src.history(72)
-geometry = dict(tz=tz, width=1280, height=720)
-
-for page, data in (
-    (BarographPage("barometer-barograph", **geometry), dict(latest=latest, history_72h=h72)),
-    (TendencyPage("barometer-tendency", **geometry), dict(latest=latest, history_24h=h24)),
-    (ColumnPage("barometer-column", **geometry), dict(latest=latest, history_24h=h24)),
-    (DayPressurePage("day-pressure", **geometry), dict(latest=latest, history_24h=h24)),
-    (ComfortPressurePage("comfort-pressure", **geometry), dict(latest=latest, history_24h=h24)),
-):
-    page.template(**data)
-    page.save()
+source = make_source(7, lambda: at, DeviceReports(), altitude_m=10)
+regenerate(candidate_pages(tz, width=1280, height=720), source)
