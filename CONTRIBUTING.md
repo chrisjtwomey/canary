@@ -129,6 +129,46 @@ and restart the server; the board follows whatever it is told.
 forecasts quote it. The reading as measured stays under
 `pressure_station_hpa`.
 
+#### Firmware updates on the bench
+
+The board flashes itself from the server. To watch it happen:
+
+```sh
+mkdir -p server/firmware
+```
+
+```yaml
+firmware:
+  enabled: true
+  offer_dev_builds: true    # this project builds v0.1.0-dev, not a tag
+```
+
+Flash once over USB so the board stores its WiFi and server URL, then build
+an image that claims a different version and drop it in:
+
+```sh
+pio run -e esp32 -t upload                       # v0.1.0-dev, the running image
+cp src/defaults.cpp /tmp/defaults.real.cpp       # keep your credentials
+cp src/defaults.example.cpp src/defaults.cpp     # CI builds have placeholders
+sed -i "" 's/v0.1.0-dev/v0.2.0/' platformio.ini
+pio run -e esp32
+cp .pio/build/esp32/firmware.bin server/firmware/v0.2.0.bin
+sed -i "" 's/v0.2.0/v0.1.0-dev/' platformio.ini  # put it all back
+cp /tmp/defaults.real.cpp src/defaults.cpp
+```
+
+Press RST and watch the serial log: the offer, the progress, the restart,
+`trial boot of v0.2.0`, and `firmware v0.2.0 confirmed`. The server log then
+shows fetches carrying `v0.2.0`. The image had placeholder credentials, so
+a WiFi connection at all proves the board read its own store.
+
+`-DOTA_TRIAL_FAIL` builds an image whose fetches always fail. Offer one of
+those and the board takes it, fails three cycles, and boots the previous
+image again.
+
+Leave `offer_dev_builds: false` anywhere real, or a bench board is flashed
+back to the last release at its next fetch.
+
 ### 4. On the Inkplate, end to end
 
 The board fetches the pages from the server and draws them; the mocks stand

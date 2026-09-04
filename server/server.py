@@ -80,6 +80,7 @@ def main():
     try:
         core = load_core_config(config, default_display=DEFAULT_DISPLAY,
                                 default_firmware_product="inkplate5-env-monitor",
+                                base_dir=cwd,
                                 default_width=1280, default_height=720)
         kind = get_prop_by_keys(config, "source", "kind", default="mock")
         if kind != "mock":

@@ -9,3 +9,6 @@ server/config.yaml
 server/*.png
 server/static/*.html
 .DS_Store
+
+# Firmware images the board updates itself from
+server/firmware/
