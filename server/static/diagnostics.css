@@ -1,0 +1,79 @@
+.page-diagnostics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: 11cqh repeat(2, minmax(0, 1fr));
+  column-gap: 3cqw;
+  row-gap: 2.5cqh;
+  padding: 0 4.2cqw 3cqh 4.2cqw;
+  box-sizing: border-box;
+}
+
+.page-diagnostics .head {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding-bottom: 1.4cqh;
+}
+
+.page-diagnostics .head .title {
+  font-size: 2.6cqw;
+  color: var(--ink);
+}
+
+.page-diagnostics .card {
+  border-top: 2px solid var(--ink-faint);
+  padding-top: 1.2cqh;
+  min-height: 0;
+}
+
+.page-diagnostics .card .label {
+  font-size: 1.4cqw;
+  margin-bottom: 1cqh;
+}
+
+.page-diagnostics .kv {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 1.4cqw;
+  row-gap: 0.7cqh;
+  align-items: baseline;
+  font-size: 1.9cqw;
+}
+
+.page-diagnostics .k {
+  font-style: italic;
+  color: var(--ink-soft);
+}
+
+.page-diagnostics .v {
+  font-variant-numeric: tabular-nums;
+}
+
+.page-diagnostics .bars {
+  width: 8cqw;
+  height: 5cqh;
+  margin-top: 1.4cqh;
+}
+
+.page-diagnostics .meter {
+  height: 2.4cqh;
+  margin: 0.8cqh 0 1.4cqh 0;
+}
+
+.page-diagnostics .empty {
+  grid-column: 1 / -1;
+  grid-row: 2 / -1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.page-diagnostics .empty .verdict {
+  font-size: 5cqw;
+}
+
+.page-diagnostics .empty .detail {
+  font-size: 2.1cqw;
+  margin-top: 2cqh;
+}

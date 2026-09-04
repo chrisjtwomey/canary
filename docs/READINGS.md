@@ -45,6 +45,7 @@ thing unchanged.
 | `iaq`, `iaq_accuracy` | BME688 via BSEC | 0–500, 0–3 | absent until BSEC is integrated; the mock emits them |
 | `pressure_hpa` | BME688 | hPa | present whenever the chip answered, even on a cold plate |
 | `scd41.*`, `bme688.*` | those sensors | °C, % | their own T/RH, which run warm; kept for offset tuning, not for display |
+| `client` | firmware | object | object | the board's own state, see below |
 | `valid.*` | firmware | bool | false when that measurement was not trustworthy this cycle |
 
 Integers are integers; floats carry one decimal (temperatures, humidity,
@@ -73,3 +74,29 @@ first sample of every boot looks like this:
 no `gas_ohm`, no `iaq`, `pressure_hpa` present. `co2` is false because the
 SCD41's first five-second conversion has not landed, `particulates` because
 the PM fan needs thirty seconds before its counts mean anything.
+
+## The `client` object
+
+Beside the measurements, every posted document carries what the board
+knows about itself. None of it is a measurement of the room; the
+Diagnostics page shows it.
+
+```json
+"client": {
+  "board": "Inkplate5V2", "version": "v0.1.0-dev", "ip": "192.168.1.35", "rssi": -61,
+  "uptime_s": 8040,
+  "heap_free": 120000, "heap_size": 327680, "psram_free": 4000000, "psram_size": 4194304,
+  "panel_temp_c": 27, "width": 1280, "height": 720, "rotation": 0,
+  "mock_sensors": true,
+  "sensors": { "shtc3": true, "scd41": true, "pmsa003i": true, "bme688": true },
+  "fetch": { "next_url": "http://h:8080/day.png", "next_in_s": 120, "backoff_step": 0,
+             "ok": 12, "failed": 1 }
+}
+```
+
+`sensors.*` says which parts answered at start; `valid.*` says which are
+warm now. `panel_temp_c` is the e-paper power controller's sensor, which
+reads the board, not the air. `fetch` is the page loop's state.
+
+The server accepts the document at `POST /readings` and answers 204. It
+keeps only the newest until the readings store exists.

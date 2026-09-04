@@ -212,11 +212,11 @@ part. The tests then pin the corrected behaviour.
 ## 7. Order of work, if you agree
 
 1. Kit: `postJson`, `refresh_cycle()`, interval schedule, `ReadingsStore` + `IngestSource`, `POST /readings`. Tests for each. Weather-cal stays green.
-   *Status 2026-09-04: the interval schedule is in (`every` / `pages` under `display_schedule`). `refresh_cycle()` was not needed: the awake loop composes the kit's WiFi, download, draw and back-off helpers directly. `postJson`, `ReadingsStore`, `IngestSource` and `POST /readings` are open.*
+   *Status 2026-09-04: the interval schedule is in (`every` / `pages` under `display_schedule`). `refresh_cycle()` was not needed: the awake loop composes the kit's WiFi, download, draw and back-off helpers directly. `postJson` and the kit's `POST /<name>` ingest routes (`DisplayServer(ingest=...)`) are in. `ReadingsStore` and `IngestSource` are open; the server keeps only the newest posted document, for the Diagnostics page.*
 2. Env-monitor firmware scaffold: `platformio.ini`, `ISensor`, `EnvModel`, the four mocks, host tests. Builds for `esp32dev` with the mocks selected by a build flag.
 3. Env-monitor server: `MockReadingsSource`, one `now.png` page, `config.example.yaml`, `server.py`. Renders end to end with the mock.
 4. The awake loop in `main.cpp` against the mocks, posting to the local server. First full loop with no hardware.
-   *Status 2026-09-04: fetch and draw done, on the server's cadence, with `RefreshTimer` tested on the host. Posting waits on step 1.*
+   *Status 2026-09-04: done. Fetch and draw on the server's cadence, one readings document a minute posted to `/readings` with the board's `client` status beside it.*
 5. Real drivers when the parts arrive; correct the mocks.
 
 ## 8. Decisions needed from you

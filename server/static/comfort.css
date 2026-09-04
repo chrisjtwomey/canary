@@ -39,8 +39,9 @@
 }
 
 .page-comfort .detail {
-  font-size: 2.1cqw;
+  font-size: 1.9cqw;
   margin-top: 1cqh;
+  white-space: nowrap;
 }
 
 .page-comfort .verdict {

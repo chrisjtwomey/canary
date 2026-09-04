@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from airium import Airium
 
-from metrics import (ACCEPTABLE_RH, ACCEPTABLE_T, COMFORT_RH, COMFORT_T, comfort_verdict,
-                     dew_point_c, fmt_stamp, thin)
+from metrics import (ACCEPTABLE_RH, ACCEPTABLE_T, COMFORT_RH, COMFORT_T, abs_humidity_g_m3,
+                     comfort_verdict, dew_point_c, fmt_stamp, thin)
 from pages.base import EnvPage
 
 TRAIL_HOURS = 6
@@ -42,7 +42,9 @@ class ComfortPage(EnvPage):
                     a.span(klass="unit", _t="%")
                 a.div(klass="label", _t="Humidity")
             if valid:
-                a.div(klass="detail", _t=f"Dew point {dew_point_c(temp, rh):.1f}°")
+                a.div(klass="detail", _t=(
+                    f"Dew point {dew_point_c(temp, rh):.1f}°, "
+                    f"vapour {abs_humidity_g_m3(temp, rh):.1f} g/m³."))
             a.div(klass="verdict", _t=comfort_verdict(temp, rh) if valid else "Warming up.")
 
     def charts(self, latest: dict, history_24h: list[dict]) -> list[dict]:

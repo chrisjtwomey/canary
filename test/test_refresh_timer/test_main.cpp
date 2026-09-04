@@ -44,6 +44,16 @@ void test_failures_back_off_and_success_resets() {
     TEST_ASSERT_EQUAL_UINT32(60, t.failed(720000, doubling));
 }
 
+void test_seconds_until_due_rounds_up_and_floors_at_zero() {
+    RefreshTimer t(300);
+    TEST_ASSERT_EQUAL_UINT32(0, t.secondsUntilDue(0));
+    t.succeeded(1000, 120);
+    TEST_ASSERT_EQUAL_UINT32(120, t.secondsUntilDue(1000));
+    TEST_ASSERT_EQUAL_UINT32(119, t.secondsUntilDue(2500));
+    TEST_ASSERT_EQUAL_UINT32(1, t.secondsUntilDue(120999));
+    TEST_ASSERT_EQUAL_UINT32(0, t.secondsUntilDue(121000));
+}
+
 void test_millis_rollover_does_not_stall_the_loop() {
     RefreshTimer t(300);
     uint32_t nearEnd = 0xFFFFFFFFu - 1000;
@@ -59,6 +69,7 @@ int main(int, char**) {
     RUN_TEST(test_success_waits_the_seconds_the_server_sent);
     RUN_TEST(test_success_without_a_wait_uses_the_fallback);
     RUN_TEST(test_failures_back_off_and_success_resets);
+    RUN_TEST(test_seconds_until_due_rounds_up_and_floors_at_zero);
     RUN_TEST(test_millis_rollover_does_not_stall_the_loop);
     return UNITY_END();
 }

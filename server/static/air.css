@@ -1,0 +1,58 @@
+.page-air .title {
+  position: absolute;
+  left: 4.2cqw;
+  top: 6cqh;
+}
+
+.page-air .stamp {
+  position: absolute;
+  right: 4.2cqw;
+  top: 6cqh;
+}
+
+.page-air .hero {
+  position: absolute;
+  left: 3.6cqw;
+  top: 14cqh;
+  font-size: 20cqw;
+}
+
+.page-air .verdict {
+  position: absolute;
+  left: 4.2cqw;
+  top: 50cqh;
+  font-size: 5cqw;
+}
+
+.page-air .detail {
+  position: absolute;
+  left: 4.4cqw;
+  top: 63cqh;
+  width: 56cqw;
+  font-size: 2.1cqw;
+}
+
+.page-air .spark-label {
+  position: absolute;
+  right: 4.2cqw;
+  top: 12cqh;
+  font-size: 1.9cqw;
+  font-style: italic;
+  color: var(--ink-soft);
+}
+
+.page-air .spark {
+  position: absolute;
+  right: 4.2cqw;
+  top: 17cqh;
+  width: 33cqw;
+  height: 42cqh;
+}
+
+.page-air .scale {
+  position: absolute;
+  left: 4cqw;
+  right: 4cqw;
+  top: 74cqh;
+  height: 23cqh;
+}

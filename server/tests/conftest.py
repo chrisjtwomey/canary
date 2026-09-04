@@ -3,7 +3,8 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from sources.mock import MockReadingsSource
+from server import make_source
+from sources.status import DeviceReports
 
 TZ = ZoneInfo("Europe/Dublin")
 AT = int(datetime(2026, 9, 3, 21, 45, tzinfo=TZ).timestamp())
@@ -16,7 +17,7 @@ def tz():
 
 @pytest.fixture
 def source():
-    return MockReadingsSource(seed=7, now=lambda: AT)
+    return make_source(7, lambda: AT, DeviceReports(now=lambda: float(AT)))
 
 
 @pytest.fixture

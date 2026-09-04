@@ -1,5 +1,6 @@
 """Each page builds the DOM it promises and hands charts.js the specs it draws."""
 import json
+import re
 
 import pytest
 from bs4 import BeautifulSoup
@@ -72,6 +73,12 @@ class TestBreathe:
     def test_detail_says_when_now_is_the_days_high(self, data, tz):
         soup, _ = render(BreathePage("breathe", tz=tz, width=WIDTH, height=HEIGHT), data)
         assert text(soup, ".detail").startswith("Now at the day's high. Low of ")
+
+    def test_today_line_counts_stuffy_minutes_and_airings(self, data, tz):
+        soup, _ = render(BreathePage("breathe", tz=tz, width=WIDTH, height=HEIGHT), data)
+        line = text(soup, "#today")
+        assert line.startswith("Above 1,000 ppm for ")
+        assert re.search(r" today\. Aired at (08:59|09:0\d)\.$", line), line
 
     def test_cold_sensor_keeps_the_layout_and_says_so(self, data, tz):
         cold_data = dict(data, latest=cold(data["latest"]))
@@ -150,3 +157,133 @@ class TestDay:
         pts = specs[0]["points"]
         assert 280 <= len(pts) <= 292
         assert all(b[0] - a[0] >= 300 for a, b in zip(pts, pts[1:-1]))
+
+
+from metrics import barometer_word, iaq_verdict, pm25_verdict, tendency_words, value_at  # noqa: E402
+from pages.air import AirPage  # noqa: E402
+from pages.barometer import BarometerPage  # noqa: E402
+from pages.diagnostics import DiagnosticsPage  # noqa: E402
+from pages.dust import MAX_DOTS, DustPage  # noqa: E402
+
+
+class TestDust:
+    def test_hero_verdict_and_cloud(self, data, tz):
+        latest = data["latest"]
+        soup, specs = render(DustPage("dust", tz=tz, width=WIDTH, height=HEIGHT), data)
+        assert text(soup, "#pm25 .value") == fmt_int(latest["pm2_5"])
+        assert text(soup, ".verdict") == pm25_verdict(latest["pm2_5"])
+        assert text(soup, ".detail").startswith(f"PM1 {latest['pm1_0']} · PM10 {latest['pm10']}.")
+        (cloud,) = specs
+        assert cloud["kind"] == "dotcloud" and cloud["canvas"] == "#dust-cloud"
+        total = sum(d["n"] for d in cloud["dots"])
+        assert 0 < total <= MAX_DOTS
+        assert [d["rough"] for d in cloud["dots"]] == [False] * 5 + [True]
+
+    def test_fan_warming_up(self, data, tz):
+        latest = {k: v for k, v in data["latest"].items() if not k.startswith(("pm", "pc_"))}
+        latest["valid"] = dict(data["latest"]["valid"], particulates=False)
+        soup, specs = render(DustPage("dust", tz=tz, width=WIDTH, height=HEIGHT), dict(data, latest=latest))
+        assert text(soup, "#pm25 .value") == "—"
+        assert text(soup, "#pm25 .cold-tag") == "fan warming up"
+        assert text(soup, ".verdict") == "Warming up."
+        assert specs[0]["dots"] == []
+
+
+class TestAir:
+    def test_index_hero_scale_and_spark(self, data, tz):
+        latest = data["latest"]
+        soup, specs = render(AirPage("air", tz=tz, width=WIDTH, height=HEIGHT), data)
+        assert text(soup, "#iaq .value") == f"{latest['iaq']:.0f}"
+        assert text(soup, ".verdict") == iaq_verdict(latest["iaq"])
+        assert "accuracy high, 3 of 3" in text(soup, ".detail")
+        spark, scale = specs
+        assert spark["kind"] == "sparkline" and spark["points"][-1] == [latest["ts"], latest["iaq"]]
+        assert scale["kind"] == "scale" and scale["value"] == latest["iaq"]
+        assert [z["label"] for z in scale["zones"]] == [
+            "excellent", "good", "light", "moderate", "heavy", "severe", "extreme"]
+
+    def test_without_an_index_the_gas_resistance_is_the_hero(self, data, tz):
+        latest = {k: v for k, v in data["latest"].items() if k not in ("iaq", "iaq_accuracy")}
+        soup, specs = render(AirPage("air", tz=tz, width=WIDTH, height=HEIGHT), dict(data, latest=latest))
+        assert text(soup, "#iaq .value") == f"{latest['gas_ohm'] / 1000:.0f}"
+        assert text(soup, "#iaq .unit") == "kΩ"
+        assert text(soup, ".verdict") == "No index yet."
+        assert "BSEC" in text(soup, ".detail")
+        assert specs[1]["value"] is None
+
+    def test_heater_cold(self, data, tz):
+        latest = {k: v for k, v in data["latest"].items() if k not in ("iaq", "iaq_accuracy", "gas_ohm")}
+        latest["valid"] = dict(data["latest"]["valid"], gas=False)
+        soup, _ = render(AirPage("air", tz=tz, width=WIDTH, height=HEIGHT), dict(data, latest=latest))
+        assert text(soup, "#iaq .value") == "—"
+        assert text(soup, "#iaq .cold-tag") == "heater warming up"
+
+
+class TestBarometer:
+    def test_hero_tendency_and_twin_needles(self, data, tz):
+        latest, history = data["latest"], data["history_24h"]
+        soup, specs = render(BarometerPage("barometer", tz=tz, width=WIDTH, height=HEIGHT), data)
+        assert text(soup, "#pressure .value") == f"{latest['pressure_hpa']:.1f}"
+        then = value_at(history, "pressure_hpa", latest["ts"] - 3 * 3600)
+        delta = latest["pressure_hpa"] - then
+        assert text(soup, ".verdict") == tendency_words(delta)
+        assert barometer_word(latest["pressure_hpa"]) in text(soup, ".detail")
+        (dial,) = specs
+        assert dial["kind"] == "dial" and dial["value"] == latest["pressure_hpa"] and dial["set"] == then
+        assert dial["min"] < then < dial["max"]
+
+    def test_no_history_means_no_trend(self, data, tz):
+        soup, specs = render(BarometerPage("barometer", tz=tz, width=WIDTH, height=HEIGHT),
+                             dict(data, history_24h=[]))
+        assert text(soup, ".verdict") == "No trend yet."
+        assert specs[0]["set"] is None
+
+
+STATUS = {
+    "doc": {
+        "ts": 1788511219, "device": "inkplate5-env-monitor",
+        "valid": {"temp_humidity": True, "co2": True, "particulates": False, "pressure": True, "gas": True},
+        "client": {
+            "board": "Inkplate5V2", "version": "v0.1.0-dev", "ip": "192.168.1.35", "rssi": -61,
+            "uptime_s": 8040, "heap_free": 120000, "heap_size": 327680,
+            "psram_free": 4000000, "psram_size": 4194304, "panel_temp_c": 27,
+            "width": 1280, "height": 720, "rotation": 0, "mock_sensors": True,
+            "sensors": {"shtc3": True, "scd41": True, "pmsa003i": True, "bme688": False},
+            "fetch": {"next_url": "http://h:8080/day.png", "next_in_s": 120, "backoff_step": 0,
+                      "ok": 12, "failed": 1},
+        },
+    },
+    "age_s": 40,
+    "count": 3,
+}
+
+
+class TestDiagnostics:
+    def test_every_card_reads_the_report(self, tz):
+        soup, specs = render(DiagnosticsPage("diagnostics", tz=tz, width=WIDTH, height=HEIGHT),
+                             {"status": STATUS})
+        assert text(soup, ".title") == "Inkplate5V2"
+        assert text(soup, ".stamp") == "reported 40 s ago, report 3"
+        assert text(soup, "#version") == "v0.1.0-dev"
+        assert text(soup, "#uptime") == "2 h 14 min"
+        assert text(soup, "#mock") == "mocks"
+        assert text(soup, "#ip") == "192.168.1.35"
+        assert text(soup, "#rssi") == "-61 dBm, good"
+        assert text(soup, "#heap") == "117 KB free of 320 KB"
+        assert text(soup, "#panel-temp") == "27 °C"
+        assert text(soup, "#sensor-shtc3") == "ok"
+        assert text(soup, "#sensor-pmsa003i") == "warming up"
+        assert text(soup, "#sensor-bme688") == "missing"
+        assert text(soup, "#next-page") == "day.png"
+        assert text(soup, "#fetches") == "12 ok, 1 failed"
+        bars, heap, psram = specs
+        assert bars == {"kind": "bars", "canvas": "#rssi-bars", "filled": 3, "total": 4}
+        assert heap["fraction"] == pytest.approx((327680 - 120000) / 327680)
+        assert psram["canvas"] == "#psram-meter"
+
+    def test_no_report_yet(self, tz):
+        page = DiagnosticsPage("diagnostics", tz=tz, width=WIDTH, height=HEIGHT)
+        assert page.requires == ("status",)
+        soup, specs = render(page, {"status": None})
+        assert text(soup, ".empty .verdict") == "No report from the board yet."
+        assert specs == []

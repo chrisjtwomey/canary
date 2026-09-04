@@ -1,0 +1,40 @@
+.page-barometer .title {
+  position: absolute;
+  left: 4.2cqw;
+  top: 6cqh;
+}
+
+.page-barometer .stamp {
+  position: absolute;
+  right: 4.2cqw;
+  top: 6cqh;
+}
+
+.page-barometer .dial {
+  position: absolute;
+  left: 2cqw;
+  top: 9cqh;
+  width: 52cqw;
+  height: 88cqh;
+}
+
+.page-barometer .stats {
+  position: absolute;
+  left: 58cqw;
+  top: 20cqh;
+  width: 38cqw;
+}
+
+.page-barometer .stats .hero {
+  font-size: 13cqw;
+}
+
+.page-barometer .stats .verdict {
+  font-size: 5cqw;
+  margin-top: 5cqh;
+}
+
+.page-barometer .stats .detail {
+  font-size: 2.1cqw;
+  margin-top: 2.5cqh;
+}

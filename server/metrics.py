@@ -132,3 +132,192 @@ def night_spans(start: int, end: int, tz: tzinfo, dusk: int = 22, dawn: int = 7)
             out.append([int(lo), int(hi)])
         day += timedelta(days=1)
     return out
+
+
+# ── Particulates ──────────────────────────────────────────────────────────
+
+# WHO 2021 guideline for PM2.5 over 24 hours, 15 µg/m³, then its interim
+# targets at 25, 37.5, 50 and 75.
+PM25_BANDS = (
+    (15, "Clean air."),
+    (25, "Fine."),
+    (37.5, "Some dust."),
+    (50, "Dusty."),
+    (75, "Bad air."),
+)
+
+
+def pm25_verdict(ug_m3: float) -> str:
+    for limit, words in PM25_BANDS:
+        if ug_m3 <= limit:
+            return words
+    return "Very bad air."
+
+
+# ── VOCs ──────────────────────────────────────────────────────────────────
+
+# Bosch's IAQ index bands.
+IAQ_ZONES = (
+    (0, 50, "excellent"),
+    (50, 100, "good"),
+    (100, 150, "light"),
+    (150, 200, "moderate"),
+    (200, 250, "heavy"),
+    (250, 350, "severe"),
+    (350, 500, "extreme"),
+)
+IAQ_WORDS = {
+    "excellent": "Excellent air.",
+    "good": "Good air.",
+    "light": "A little stale.",
+    "moderate": "Polluted.",
+    "heavy": "Heavily polluted.",
+    "severe": "Severely polluted.",
+    "extreme": "Extremely polluted.",
+}
+IAQ_ACCURACY = ("calibrating", "low", "medium", "high")
+
+
+def iaq_zone(iaq: float) -> str:
+    for lo, hi, name in IAQ_ZONES:
+        if iaq < hi:
+            return name
+    return IAQ_ZONES[-1][2]
+
+
+def iaq_verdict(iaq: float) -> str:
+    return IAQ_WORDS[iaq_zone(iaq)]
+
+
+# ── Humidity ──────────────────────────────────────────────────────────────
+
+def abs_humidity_g_m3(temp_c: float, rh_pct: float) -> float:
+    """Water vapour per cubic metre, the inverse of the mock's rh_from_abs."""
+    es = 6.112 * math.exp(17.62 * temp_c / (243.12 + temp_c))
+    return 216.7 * (rh_pct / 100.0 * es) / (temp_c + 273.15)
+
+
+# ── Pressure ──────────────────────────────────────────────────────────────
+
+def value_at(history: list[dict], key: str, ts: int, slack_s: int = 600):
+    """The value of ``key`` in the newest document at or before ``ts``,
+    if one lies within ``slack_s`` of it."""
+    best = None
+    for d in history:
+        if d["ts"] <= ts and d.get(key) is not None and ts - d["ts"] <= slack_s:
+            if best is None or d["ts"] > best["ts"]:
+                best = d
+    return None if best is None else best[key]
+
+
+def pressure_tendency(history: list[dict], latest: dict, hours: int = 3):
+    """Change in hPa over the last ``hours``, or None without both ends."""
+    now = latest.get("pressure_hpa")
+    then = value_at(history, "pressure_hpa", latest["ts"] - hours * 3600)
+    if now is None or then is None:
+        return None
+    return now - then
+
+
+# WMO calls a three-hour change under 1.6 hPa slight, and over 3.5 hPa rapid.
+def tendency_words(delta) -> str:
+    if delta is None:
+        return "No trend yet."
+    if delta >= 3.5:
+        return "Rising fast."
+    if delta >= 1.6:
+        return "Rising."
+    if delta <= -3.5:
+        return "Falling fast."
+    if delta <= -1.6:
+        return "Falling."
+    return "Steady."
+
+
+# The legends printed on an aneroid barometer's dial.
+BAROMETER_LEGENDS = (
+    (980, "Stormy"),
+    (1000, "Rain"),
+    (1015, "Change"),
+    (1030, "Fair"),
+    (10000, "Very dry"),
+)
+
+
+def barometer_word(hpa: float) -> str:
+    for limit, word in BAROMETER_LEGENDS:
+        if hpa < limit:
+            return word
+    return BAROMETER_LEGENDS[-1][1]
+
+
+# ── CO2 over the day ──────────────────────────────────────────────────────
+
+def local_midnight(ts: int, tz: tzinfo) -> int:
+    return int(datetime.fromtimestamp(ts, tz).replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+
+
+def minutes_above(history: list[dict], key: str, threshold: float, since: int) -> int:
+    """Minutes with ``key`` above ``threshold`` from ``since`` on, counting one
+    per document of the per-minute history."""
+    return sum(1 for d in history if d["ts"] >= since and d.get(key) is not None and d[key] > threshold)
+
+
+def ventilation_events(history: list[dict], key: str = "co2_ppm", drop: float = 100.0,
+                       window_s: int = 900, gap_s: int = 2700) -> list[int]:
+    """Times the room was aired: ``key`` fell by ``drop`` within ``window_s``.
+    The time reported is where the fall is steepest over five minutes, which
+    is when the window opened. One event per ``gap_s``, since a window stays
+    open a while."""
+    pts = series(history, key, 60)
+    events: list[int] = []
+    j = 0
+    last = None
+    for i, (t, v) in enumerate(pts):
+        while j < len(pts) and pts[j][0] < t + window_s:
+            j += 1
+        if j >= len(pts):
+            break
+        if v - pts[j][1] < drop or (last is not None and t - last < gap_s):
+            continue
+        span = 5
+        steepest = max(range(i, max(i + 1, j - span)),
+                       key=lambda k: pts[k][1] - pts[min(k + span, len(pts) - 1)][1])
+        events.append(pts[steepest][0])
+        last = t
+    return events
+
+
+# ── The board ─────────────────────────────────────────────────────────────
+
+def rssi_quality(dbm: int) -> tuple[int, str]:
+    """Bars out of four, and a word, for a WiFi signal."""
+    if dbm >= -55:
+        return 4, "strong"
+    if dbm >= -65:
+        return 3, "good"
+    if dbm >= -75:
+        return 2, "fair"
+    if dbm >= -85:
+        return 1, "weak"
+    return 0, "none"
+
+
+def fmt_duration(seconds: float) -> str:
+    s = int(seconds)
+    if s < 60:
+        return f"{s} s"
+    m, s = divmod(s, 60)
+    if m < 60:
+        return f"{m} min"
+    h, m = divmod(m, 60)
+    if h < 24:
+        return f"{h} h {m} min" if m else f"{h} h"
+    d, h = divmod(h, 24)
+    return f"{d} d {h} h" if h else f"{d} d"
+
+
+def fmt_bytes(n: float) -> str:
+    if n >= 1024 * 1024:
+        return f"{n / 1048576:.1f} MB"
+    return f"{n / 1024:.0f} KB"

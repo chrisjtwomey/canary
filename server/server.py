@@ -16,11 +16,17 @@ from datetime import datetime
 
 from epd_server import DisplayServer, align_process_timezone
 from epd_server.config import ConfigError, get_prop_by_keys, load_core_config, load_yaml
+from epd_server.source import CompositeSource
 
+from pages.air import AirPage
+from pages.barometer import BarometerPage
 from pages.breathe import BreathePage
 from pages.comfort import ComfortPage
 from pages.day import DayPage
+from pages.diagnostics import DiagnosticsPage
+from pages.dust import DustPage
 from sources.mock import MockReadingsSource
+from sources.status import DeviceReports, StatusSource
 
 cwd = os.path.dirname(os.path.realpath(__file__))
 log = logging.getLogger("server")
@@ -33,7 +39,17 @@ def make_pages(tz, **geometry) -> list:
         BreathePage("breathe", tz=tz, **geometry),
         ComfortPage("comfort", tz=tz, **geometry),
         DayPage("day", tz=tz, **geometry),
+        DustPage("dust", tz=tz, **geometry),
+        AirPage("air", tz=tz, **geometry),
+        BarometerPage("barometer", tz=tz, **geometry),
+        DiagnosticsPage("diagnostics", tz=tz, **geometry),
     ]
+
+
+def make_source(seed: int, clock, reports: DeviceReports) -> CompositeSource:
+    """The simulated room for the measurements, the board's own reports for
+    the diagnostics."""
+    return CompositeSource(MockReadingsSource(seed=seed, now=clock), StatusSource(reports))
 
 
 def parse_args():
@@ -74,7 +90,8 @@ def main():
         clock = lambda: pinned  # noqa: E731
         log.info("clock pinned to %s", args.at)
 
-    source = MockReadingsSource(seed=seed, now=clock)
+    reports = DeviceReports()
+    source = make_source(seed, clock, reports)
     pages = make_pages(tz, **core.image.page_kwargs())
 
     try:
@@ -87,6 +104,7 @@ def main():
             port=core.server.port,
             mqtt=core.mqtt,
             mqtt_client_id="env-monitor-server",
+            ingest={"readings": reports.accept},
         )
     except ValueError as exc:
         log.error(str(exc))

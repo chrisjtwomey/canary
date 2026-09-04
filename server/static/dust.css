@@ -1,50 +1,52 @@
-.page-breathe .title {
+.page-dust .title {
   position: absolute;
   left: 4.2cqw;
   top: 6cqh;
 }
 
-.page-breathe .stamp {
+.page-dust .stamp {
   position: absolute;
   right: 4.2cqw;
   top: 6cqh;
 }
 
-.page-breathe .hero {
+.page-dust .hero {
   position: absolute;
   left: 3.6cqw;
   top: 16cqh;
   font-size: 20cqw;
 }
 
-.page-breathe .verdict {
+.page-dust .verdict {
   position: absolute;
   left: 4.2cqw;
-  top: 62cqh;
+  top: 58cqh;
   font-size: 5.4cqw;
 }
 
-.page-breathe .details {
+.page-dust .detail {
   position: absolute;
   left: 4.4cqw;
   top: 74cqh;
-  width: 56cqw;
+  width: 50cqw;
   font-size: 2.1cqw;
 }
 
-.page-breathe .spark {
+.page-dust .cloud {
   position: absolute;
-  right: 4.2cqw;
-  top: 20cqh;
-  width: 33cqw;
-  height: 46cqh;
+  right: 4cqw;
+  top: 12cqh;
+  width: 38cqw;
+  height: 74cqh;
 }
 
-.page-breathe .spark-label {
+.page-dust .caption {
   position: absolute;
-  right: 4.2cqw;
-  top: 14cqh;
-  font-size: 1.9cqw;
+  right: 4cqw;
+  bottom: 4cqh;
+  width: 38cqw;
+  text-align: center;
+  font-size: 1.8cqw;
   font-style: italic;
   color: var(--ink-soft);
 }

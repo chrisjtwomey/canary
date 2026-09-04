@@ -96,10 +96,16 @@ stylesheet in `static/` keyed on `.page-<css_class>`, and a slot in
 and height.
 
 Charts are drawn by `static/charts.js` with rough.js. A spec names its
-`canvas` and `kind` (`sparkline`, `comfort`, `ribbon`, `axis`) and carries
-plain data; the page computes everything time-zone or unit related in
-Python, where it is tested. `metrics.py` holds the derived values and the
-wording.
+`canvas` and `kind` (`sparkline`, `comfort`, `ribbon`, `axis`, `dotcloud`,
+`scale`, `dial`, `meter`, `bars`) and carries plain data; the page computes
+everything time-zone or unit related in Python, where it is tested.
+`metrics.py` holds the derived values and the wording.
+
+The pages: Breathe (CO₂), Comfort (temperature and humidity), Day (24 h
+ribbons), Dust (particulates), Air (the VOC index), Barometer (pressure and
+its tendency) and Diagnostics (the board's own report). The first six read
+the simulated room; Diagnostics reads the `status` dataset, which is the
+last document the board posted.
 
 ### 4. On the Inkplate, end to end
 
@@ -129,10 +135,12 @@ in for the sensors. Three things to set up.
 
 The log shows the boot banner and User-Agent, WiFi and NTP, then
 `downloading file at URL ...`, `drawing image from buffer` and
-`next refresh in N s`. The panel shows Breathe, Comfort and Day in turn,
-five minutes apart on the wall clock (:00, :05, ...). One readings document
-a minute prints from the mock sensors. A fetch that fails leaves the last
-image on the panel and backs off (`back-off step N`).
+`next refresh in N s`. The panel shows the seven pages in turn, five
+minutes apart on the wall clock (:00, :05, ...). Once a minute the board
+posts a readings document to the server's `/readings`, with a `client`
+object beside the measurements (`posted readings (204)`); the Diagnostics
+page is drawn from the last one. A fetch that fails leaves the last image
+on the panel and backs off (`back-off step N`).
 
 `kRotation` in `src/main.cpp` is 0. If the image is upside down for the way
 the board sits, set it to 2.

@@ -3,10 +3,12 @@ from __future__ import annotations
 
 from airium import Airium
 
-from metrics import co2_verdict, extremes, fmt_hm, fmt_int, fmt_stamp, hour_ticks, series, y_range
+from metrics import (co2_verdict, extremes, fmt_duration, fmt_hm, fmt_int, fmt_stamp, hour_ticks,
+                     local_midnight, minutes_above, series, ventilation_events, y_range)
 from pages.base import EnvPage
 
 SPARK_HOURS = 3
+STUFFY_PPM = 1000
 
 
 class BreathePage(EnvPage):
@@ -31,8 +33,10 @@ class BreathePage(EnvPage):
 
         a.div(klass="verdict", _t=co2_verdict(co2) if valid else "Warming up.")
 
-        if lo and hi:
-            a.div(klass="detail", _t=self._extremes_line(latest, lo, hi))
+        with a.div(klass="details"):
+            if lo and hi:
+                a.div(klass="detail", _t=self._extremes_line(latest, lo, hi))
+            a.div(klass="detail", id="today", _t=self._today_line(latest, history_24h))
 
         a.div(klass="spark-label", _t=f"last {SPARK_HOURS} hours")
         with a.div(klass="spark"):
@@ -43,6 +47,17 @@ class BreathePage(EnvPage):
             rh = latest.get("rh_pct")
             if temp is not None and rh is not None:
                 a.span(_t=f"{temp:.1f}° · {rh:.0f} %")
+
+    def _today_line(self, latest: dict, history: list[dict]) -> str:
+        since = local_midnight(latest["ts"], self.tz)
+        stuffy = minutes_above(history + [latest], "co2_ppm", STUFFY_PPM, since)
+        aired = [t for t in ventilation_events(history) if t >= since]
+        first = (f"Above {fmt_int(STUFFY_PPM)} ppm for {fmt_duration(stuffy * 60)} today."
+                 if stuffy else f"Not above {fmt_int(STUFFY_PPM)} ppm today.")
+        if not aired:
+            return f"{first} Not aired yet."
+        times = " and ".join(fmt_hm(t, self.tz) for t in aired)
+        return f"{first} Aired at {times}."
 
     def _extremes_line(self, latest: dict, lo: dict, hi: dict) -> str:
         high = f"High of {fmt_int(hi['co2_ppm'])} at {fmt_hm(hi['ts'], self.tz)}."

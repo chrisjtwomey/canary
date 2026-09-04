@@ -29,6 +29,12 @@ public:
 
     int step() const { return step_; }
 
+    // Whole seconds until the next fetch, rounded up; 0 when due.
+    uint32_t secondsUntilDue(uint32_t nowMs) const {
+        if (due(nowMs)) return 0;
+        return (dueMs_ - nowMs + 999) / 1000;
+    }
+
 private:
     void arm(uint32_t nowMs, uint32_t seconds) {
         dueMs_ = nowMs + seconds * 1000UL;

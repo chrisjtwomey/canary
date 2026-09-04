@@ -160,7 +160,126 @@
     });
   }
 
-  var KINDS = { sparkline: sparkline, comfort: comfort, ribbon: ribbon, axis: axis };
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  // Particle counts as a cloud: one dot each, bigger and darker for the
+  // larger size bins, denser towards the middle.
+  function dotcloud(canvas, s) {
+    var c = prepare(canvas);
+    var rnd = mulberry32(s.seed || SEED);
+    var cx = c.w / 2, cy = c.h / 2, rx = c.w / 2 - 14, ry = c.h / 2 - 14;
+    s.dots.forEach(function (d) {
+      for (var i = 0; i < d.n; i++) {
+        var u = rnd() + rnd() - 1, v = rnd() + rnd() - 1;
+        var x = cx + u * rx, y = cy + v * ry;
+        if (d.rough) {
+          c.rc.circle(x, y, d.r * 2, { stroke: d.color, strokeWidth: 1.5, fill: d.color,
+            fillStyle: 'hachure', hachureGap: 3, roughness: 1.2 });
+        } else {
+          dot(c.ctx, x, y, d.r, d.color);
+        }
+      }
+    });
+  }
+
+  // A banded scale with a marker: the IAQ index on Bosch's zones.
+  function scale_(canvas, s) {
+    var c = prepare(canvas);
+    var m = { l: 12, r: 12, t: 30, b: 46 };
+    var X = linear(s.min, s.max, m.l, c.w - m.r);
+    var y0 = m.t, h = c.h - m.t - m.b;
+    s.zones.forEach(function (z) {
+      c.rc.rectangle(X(z.from), y0, X(z.to) - X(z.from), h, { fill: z.color, fillStyle: 'hachure',
+        hachureGap: z.gap, hachureAngle: 45, fillWeight: 1, stroke: G[2], strokeWidth: 1.2, roughness: 1 });
+      label(c.ctx, z.label, (X(z.from) + X(z.to)) / 2, y0 + h + 40,
+        { size: 16, align: 'center', italic: true, color: G[3] });
+    });
+    (s.ticks || []).forEach(function (t) {
+      label(c.ctx, String(t), X(t), y0 + h + 20, { size: 15, align: 'center', color: G[3] });
+    });
+    if (s.value != null) {
+      var x = X(Math.max(s.min, Math.min(s.max, s.value)));
+      c.rc.polygon([[x, y0 - 3], [x - 11, y0 - 24], [x + 11, y0 - 24]],
+        { fill: G[0], fillStyle: 'solid', stroke: G[0], strokeWidth: 1.5, roughness: 1 });
+      c.rc.line(x, y0, x, y0 + h, { stroke: G[0], strokeWidth: 3, roughness: 0.6 });
+    }
+  }
+
+  // An aneroid barometer's dial. The set needle is where the pressure was
+  // three hours ago, so the gap between the needles is the tendency.
+  function dial(canvas, s) {
+    var c = prepare(canvas);
+    var cx = c.w / 2, cy = c.h * 0.56;
+    var R = Math.min(c.w / 2, c.h * 0.56) - 14;
+    var a0 = 215, a1 = -35;
+    function ang(v) { return (a0 + (v - s.min) / (s.max - s.min) * (a1 - a0)) * Math.PI / 180; }
+    function pt(v, r) { var a = ang(v); return [cx + r * Math.cos(a), cy - r * Math.sin(a)]; }
+
+    var arc = [];
+    for (var i = 0; i <= 120; i++) arc.push(pt(s.min + (s.max - s.min) * i / 120, R));
+    c.rc.curve(arc, { stroke: G[0], strokeWidth: 2.5, roughness: 0.8, disableMultiStroke: true });
+
+    for (var t = s.min; t <= s.max; t += s.tick) {
+      var major = s.labels.indexOf(t) >= 0;
+      var p1 = pt(t, R), p2 = pt(t, R - (major ? 20 : 11));
+      c.rc.line(p1[0], p1[1], p2[0], p2[1], { stroke: G[0], strokeWidth: major ? 2 : 1.2, roughness: 0.5 });
+    }
+    s.labels.forEach(function (v) {
+      var p = pt(v, R - 44);
+      label(c.ctx, String(v), p[0], p[1] + 7, { size: 20, align: 'center' });
+    });
+    (s.legends || []).forEach(function (l) {
+      var p = pt(l[0], R - 100);
+      label(c.ctx, l[1], p[0], p[1] + 7, { size: 22, align: 'center', italic: true, color: G[2] });
+    });
+
+    if (s.set != null) {
+      var q = pt(s.set, R - 24);
+      c.rc.line(cx, cy, q[0], q[1], { stroke: G[3], strokeWidth: 2, roughness: 0.6, strokeLineDash: [7, 5] });
+      c.rc.circle(q[0], q[1], 14, { stroke: G[3], strokeWidth: 1.5, fill: 'none', roughness: 1 });
+    }
+    if (s.value != null) {
+      var n = pt(s.value, R - 24), tail = pt(s.value, -R * 0.16);
+      c.rc.line(tail[0], tail[1], n[0], n[1], { stroke: G[0], strokeWidth: 4, roughness: 0.5 });
+    }
+    dot(c.ctx, cx, cy, 10, G[0]);
+    dot(c.ctx, cx, cy, 4, G[7]);
+  }
+
+  // A hatched fraction of a box.
+  function meter(canvas, s) {
+    var c = prepare(canvas);
+    var m = 3, w = c.w - 2 * m, h = c.h - 2 * m;
+    c.rc.rectangle(m, m, w, h, { stroke: G[2], strokeWidth: 1.5, roughness: 1, fill: 'none' });
+    var f = Math.max(0, Math.min(1, s.fraction));
+    if (f > 0) {
+      c.rc.rectangle(m, m, w * f, h, { fill: G[2], fillStyle: 'hachure', hachureGap: 6,
+        fillWeight: 1.2, stroke: 'none', roughness: 1 });
+    }
+  }
+
+  // Signal strength as rising bars, the first `filled` of them solid.
+  function bars(canvas, s) {
+    var c = prepare(canvas);
+    var n = s.total, gap = 6, bw = (c.w - gap * (n - 1)) / n;
+    for (var i = 0; i < n; i++) {
+      var bh = c.h * (0.35 + 0.65 * i / (n - 1));
+      var x = i * (bw + gap), y = c.h - bh;
+      c.rc.rectangle(x, y, bw, bh, i < s.filled
+        ? { fill: G[0], fillStyle: 'solid', stroke: G[0], roughness: 0.8 }
+        : { fill: 'none', stroke: G[4], strokeWidth: 1.2, roughness: 0.8 });
+    }
+  }
+
+  var KINDS = { sparkline: sparkline, comfort: comfort, ribbon: ribbon, axis: axis,
+                dotcloud: dotcloud, scale: scale_, dial: dial, meter: meter, bars: bars };
 
   function render(specs) {
     Promise.all([
