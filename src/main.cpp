@@ -70,6 +70,9 @@ IShtc3 / IScd41 / IPmsa003i / IBme688 interfaces and wire them up here."
 static const uint8_t  kRotation = 0;             // landscape; 2 turns it round
 static const uint32_t kSampleIntervalMs = 5000;
 static const uint32_t kReportIntervalMs = 60000;
+// Buffer size when the server sends no Content-Length. An eight-grey
+// 1280x720 PNG is under 200 KB.
+static const int32_t  kDownloadFallbackBytes = 512 * 1024;
 
 static ArduinoClock wallClock;
 static SensorSuite  sensors(wallClock, shtc3Impl, scd41Impl, pmImpl, bmeImpl);
@@ -107,7 +110,7 @@ static void fetchAndDraw() {
 
     const char* url = nextURL[0] ? nextURL : serverURL;
     uint32_t waitSeconds = 0;
-    int32_t len = board.getWidth() * board.getHeight() * 8 + 100;
+    int32_t len = kDownloadFallbackBytes;
     uint8_t* buf = downloadFile(url, clientUserAgent(board.deviceName()),
                                 &waitSeconds, &len, nextURL, sizeof(nextURL));
     if (!buf) {

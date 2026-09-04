@@ -83,7 +83,7 @@ def test_reading_quirks_match_the_firmware_mocks():
 def test_source_datasets_and_history_shape():
     src = MockReadingsSource(seed=7, now=lambda: at(21) + 30)
     ds = src.datasets()
-    assert set(ds) == {"latest", "history_24h"}
+    assert set(ds) == {"latest", "history_24h", "history_72h"}
     latest = ds["latest"]()
     assert latest["ts"] == at(21) + 30
     hist = ds["history_24h"]()
