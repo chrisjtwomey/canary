@@ -101,21 +101,27 @@ Charts are drawn by `static/charts.js` with rough.js. A spec names its
 everything time-zone or unit related in Python, where it is tested.
 `metrics.py` holds the derived values and the wording.
 
-The pages: Breathe (CO₂), Comfort (temperature and humidity), Day (24 h
-ribbons), Dust (particulates), Air (the VOC index), the barometer pool, and
-Diagnostics (the board's own report). All but Diagnostics read the simulated
-room; Diagnostics reads the `status` dataset, the last document the board
-posted.
+The pages: Breathe (CO₂), Comfort (temperature and humidity), Dust
+(particulates), Air (the VOC index), a trace and a delta page for each of
+those and for pressure, Day (24 h ribbons), and Diagnostics (the board's
+own report). All but Diagnostics read the simulated room; Diagnostics reads
+the `status` dataset, the last document the board posted.
 
-A metric's *pool* is two pages of the same two shapes, both in
-`pages/pool.py` and driven by a `Metric` spec: `TracePage`, the value now
-with three days behind it and the thresholds as dashed lines; and
-`DeltaPage`, the change over a short window, a column showing where the
-value stood, and a sentence on what such a change usually means. The
-barometer pool is in the rotation. `candidates/pool.py` holds the same two
-shapes for CO₂, comfort, dust and air, rendered by `candidates/render.py`
-and served to the board one a minute by `candidates/serve.py`, until they
-are chosen into pools too.
+A metric's *pool* is its main page plus two pages of the same two shapes,
+both in `pages/pool.py` and driven by a `Metric` spec: `TracePage`, the
+value now with three days behind it and the thresholds as dashed lines;
+and `DeltaPage`, the change over a short window, a column showing where
+the value stood, and a sentence on what such a change usually means.
+
+`display_schedule.pools` in `config.yaml` names the pools in order. The
+server visits them round-robin, one page per slot, and reads each pool
+round-robin on its own count from a random start, so a pass is never all
+of one shape; the starts move every `reshuffle_hours`. The randomness is
+seeded from the clock, so a restart changes nothing. Day and Diagnostics
+ride along as pools of one; drop a line to leave a page out.
+
+To review pages on the panel quickly, set `every: 20` in `config.yaml`
+and restart the server; the board follows whatever it is told.
 
 `site.altitude_m` in `config.yaml` reduces the pressure to sea level, as
 forecasts quote it. The reading as measured stays under

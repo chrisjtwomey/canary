@@ -24,7 +24,7 @@ from pages.comfort import ComfortPage
 from pages.day import DayPage
 from pages.diagnostics import DiagnosticsPage
 from pages.dust import DustPage
-from pages.pool import PRESSURE, DeltaPage, TracePage
+from pages.pool import CO2, IAQ, PM25, PRESSURE, TEMP, DeltaPage, TracePage
 from sources.corrections import SeaLevelSource
 from sources.mock import MockReadingsSource
 from sources.status import DeviceReports, StatusSource
@@ -36,17 +36,21 @@ DEFAULT_SCHEDULE = {"07:00:00": "breathe.png"}
 
 
 def make_pages(tz, **geometry) -> list:
-    return [
+    """Every page the server can serve. Which ones show, and in what order,
+    is display_schedule's business; see config.example.yaml."""
+    pages = [
         BreathePage("breathe", tz=tz, **geometry),
         ComfortPage("comfort", tz=tz, **geometry),
-        DayPage("day", tz=tz, **geometry),
         DustPage("dust", tz=tz, **geometry),
         AirPage("air", tz=tz, **geometry),
-        # the barometer pool: the record, and the change with its meaning
-        TracePage("barometer-trace", PRESSURE, tz=tz, **geometry),
-        DeltaPage("barometer-delta", PRESSURE, tz=tz, **geometry),
+        DayPage("day", tz=tz, **geometry),
         DiagnosticsPage("diagnostics", tz=tz, **geometry),
     ]
+    for stem, metric in (("co2", CO2), ("comfort", TEMP), ("dust", PM25), ("air", IAQ),
+                         ("barometer", PRESSURE)):
+        pages.append(TracePage(f"{stem}-trace", metric, tz=tz, **geometry))
+        pages.append(DeltaPage(f"{stem}-delta", metric, tz=tz, **geometry))
+    return pages
 
 
 def make_source(seed: int, clock, reports: DeviceReports, altitude_m: float = 0.0) -> CompositeSource:
