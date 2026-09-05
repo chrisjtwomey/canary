@@ -10,10 +10,9 @@
 #include <WiFi.h>
 #include <ezTime.h>
 
-#include "IBoard.h"
+#include "epd.h"
 #include "InkplateBoard.h"
 #include "backoff.h"
-#include "defaults.h"
 #include "display_utils.h"
 #include "log_utils.h"
 #include "network_utils.h"
@@ -31,8 +30,11 @@
 #include "sensors/Readings.h"
 #include "sensors/SensorSuite.h"
 
+// The settings this image was built with, from src/defaults.cpp. epd declares
+// no settings symbols of its own, so this one is the project's.
+ClientConfig compiledDefaults();
+
 static InkplateBoard inkplateBoard;
-IBoard& board = inkplateBoard;   // EpdClient's helpers draw and log through this
 
 // ─── The only part that knows which sensor implementation is in use ───────
 
@@ -79,7 +81,9 @@ static const int32_t  kDownloadFallbackBytes = 512 * 1024;
 
 static ArduinoClock wallClock;
 static SensorSuite  sensors(wallClock, shtc3Impl, scd41Impl, pmImpl, bmeImpl);
-static RefreshTimer refresh(serverDefaultRefreshSeconds);
+// The fallback interval is a compiled-in constant, so it can be read before
+// setup() resolves the rest of the config against the board's own store.
+static RefreshTimer refresh(compiledDefaults().defaultRefreshSeconds);
 
 static ClientConfig config;          // this board's own server URL and wifi
 static char     nextURL[256];        // from X-Next-URL; empty means the server URL
@@ -102,7 +106,7 @@ static char     ipText[16];
 // UTC seconds: network time once NTP has answered, the RTC until then.
 static uint32_t epochNow() {
     if (timeStatus() != timeNotSet) return (uint32_t)now();
-    return (uint32_t)board.rtcGetEpoch();
+    return (uint32_t)epdBoard().rtcGetEpoch();
 }
 
 // Mains power and no schedule to keep, so there is nothing to do but wait
@@ -143,7 +147,7 @@ static void fetchAndDraw() {
     page.length = kDownloadFallbackBytes;
     const char* url = nextURL[0] ? nextURL : config.serverURL;
 
-    if (!fetchPage(url, clientUserAgent(board.deviceName()), 0, &page, &errMsg)) {
+    if (!fetchPage(url, clientUserAgent(epdBoard().deviceName()), 0, &page, &errMsg)) {
         failedFetch(errMsg);
         return;
     }
@@ -173,13 +177,13 @@ static void fetchAndDraw() {
     }
 
     // Mains power, so no battery to wait for.
-    takeOfferedUpdate(page.response, clientUserAgent(board.deviceName()), 100, 0);
+    takeOfferedUpdate(page.response, clientUserAgent(epdBoard().deviceName()), 100, 0);
 }
 
 static ClientStatus clientStatus(uint32_t nowMs) {
     strncpy(ipText, WiFi.localIP().toString().c_str(), sizeof(ipText) - 1);
     ClientStatus s = {};
-    s.board = board.deviceName();
+    s.board = epdBoard().deviceName();
     s.version = CLIENT_VERSION;
     s.ip = ipText;
     s.rssi = WiFi.RSSI();
@@ -188,9 +192,9 @@ static ClientStatus clientStatus(uint32_t nowMs) {
     s.heapSize = ESP.getHeapSize();
     s.psramFree = ESP.getFreePsram();
     s.psramSize = ESP.getPsramSize();
-    s.panelTempC = board.readPanelTemperature();
-    s.width = board.getWidth();
-    s.height = board.getHeight();
+    s.panelTempC = epdBoard().readPanelTemperature();
+    s.width = epdBoard().getWidth();
+    s.height = epdBoard().getHeight();
     s.rotation = kRotation;
     s.mockSensors = kMockSensors;
     s.shtc3 = sensors.shtc3Present();
@@ -214,7 +218,7 @@ static void postReadings(const Readings& r, uint32_t nowMs) {
     }
     log(LOG_DEBUG, body);
     if (!readingsURL[0]) return;
-    int code = postJson(readingsURL, clientUserAgent(board.deviceName()), body);
+    int code = postJson(readingsURL, clientUserAgent(epdBoard().deviceName()), body);
     if (code == 204 || code == 200) {
         logf(LOG_INFO, "posted readings (%d)", code);
     } else {
@@ -233,15 +237,16 @@ static void sampleSensors(uint32_t nowMs) {
 }
 
 void setup() {
+    epdBegin(inkplateBoard);
     startBoard(kRotation);
 
-    logf(LOG_NOTICE, "##### %s boot #####", board.deviceName());
+    logf(LOG_NOTICE, "##### %s boot #####", epdBoard().deviceName());
     logf(LOG_NOTICE, "Client version: %s", CLIENT_VERSION);
-    logf(LOG_INFO, "User-Agent: %s", clientUserAgent(board.deviceName()));
+    logf(LOG_INFO, "User-Agent: %s", clientUserAgent(epdBoard().deviceName()));
 
     onTrial = otaTrialPending();
     if (onTrial) logf(LOG_NOTICE, "trial boot of %s", CLIENT_VERSION);
-    config = loadConfig();
+    config = loadConfig(compiledDefaults());
 
     connectNetworkForever();
     if (urlOrigin(config.serverURL, readingsURL, sizeof(readingsURL) - 10)) {
