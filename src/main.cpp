@@ -13,7 +13,7 @@
 #include "epd.h"
 #include "InkplateBoard.h"
 #include "backoff.h"
-#include "display_utils.h"
+#include "image.h"
 #include "log_utils.h"
 #include "network_utils.h"
 #include "ota.h"
