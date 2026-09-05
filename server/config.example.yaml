@@ -36,6 +36,15 @@ source:
 site:
   altitude_m: 10    # pressure is reduced to sea level, as forecasts quote it
 
+firmware:           # server-driven updates; the board flashes itself
+  enabled: false
+  dir: firmware     # a directory of <version>.bin, newest wins
+  offer_dev_builds: false   # true offers to boards not built from a tag
+  # source:                 # optional: fill dir from a repository's releases
+  #   github: chrisjtwomey/inkplate5-env-monitor
+  #   asset: firmware.bin
+  #   token: ""             # private repo; prefer FIRMWARE_SOURCE_TOKEN
+
 mqtt:
   enabled: false
 
