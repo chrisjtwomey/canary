@@ -162,9 +162,16 @@ Press RST and watch the serial log: the offer, the progress, the restart,
 shows fetches carrying `v0.2.0`. The image had placeholder credentials, so
 a WiFi connection at all proves the board read its own store.
 
-`-DOTA_TRIAL_FAIL` builds an image whose fetches always fail. Offer one of
-those and the board takes it, fails three cycles, and boots the previous
-image again.
+To watch a bad image roll back, give the trial image a server it cannot
+reach: set `serverURL` to `http://192.0.2.1:8080/breathe.png` before
+building it. That address is reserved for documentation and never answers,
+so every fetch fails. The board takes the image, fails three cycles, and
+boots the previous one again.
+
+It then refuses that version for good, so the next fetch logs `firmware
+v0.3.0 is offered again; this board rolled back from it` rather than
+looping. To try the same version number again, erase the board with
+`pio run -e esp32 -t erase`, or build under a new one.
 
 Leave `offer_dev_builds: false` anywhere real, or a bench board is flashed
 back to the last release at its next fetch.

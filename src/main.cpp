@@ -131,15 +131,6 @@ static void failedFetch(const char* why) {
 }
 
 static void fetchAndDraw() {
-#ifdef OTA_TRIAL_FAIL
-    // A build that cannot fetch, to prove the roll-back path on the bench.
-    // It retries in seconds, so the three failures do not take an hour.
-    log(LOG_WARNING, "OTA_TRIAL_FAIL: failing this fetch on purpose");
-    ++fetchFailed;
-    refresh.succeeded(millis(), 5);
-    abandonTrialAfterRepeatedFailures("OTA_TRIAL_FAIL");
-    return;
-#endif
     if (WiFi.status() != WL_CONNECTED) {
         log(LOG_WARNING, "wifi down; reconnecting");
         configureWiFi(config.wifiSSID, config.wifiPass, config.wifiRetries);
