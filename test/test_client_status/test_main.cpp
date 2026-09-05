@@ -8,7 +8,7 @@
 
 static ClientStatus status() {
     ClientStatus s = {};
-    s.board = "Inkplate5V2"; s.version = "v0.1.0"; s.ip = "192.168.1.35";
+    s.board = "Inkplate5V2"; s.version = "v0.1.0"; s.ip = "192.168.1.42";
     s.rssi = -61; s.uptimeS = 8040;
     s.heapFree = 120000; s.heapSize = 327680; s.psramFree = 4000000; s.psramSize = 4194304;
     s.panelTempC = 27; s.width = 1280; s.height = 720; s.rotation = 0;
@@ -62,8 +62,8 @@ void test_splice_rejects_non_objects_and_small_buffers() {
 
 void test_url_origin_keeps_scheme_host_and_port() {
     char out[64];
-    TEST_ASSERT_EQUAL_UINT(25, urlOrigin("http://192.168.1.113:8080/breathe.png", out, sizeof(out)));
-    TEST_ASSERT_EQUAL_STRING("http://192.168.1.113:8080", out);
+    TEST_ASSERT_EQUAL_UINT(24, urlOrigin("http://192.168.1.20:8080/breathe.png", out, sizeof(out)));
+    TEST_ASSERT_EQUAL_STRING("http://192.168.1.20:8080", out);
     urlOrigin("https://epd.local", out, sizeof(out));
     TEST_ASSERT_EQUAL_STRING("https://epd.local", out);
     TEST_ASSERT_EQUAL_UINT(0, urlOrigin("no-scheme/x.png", out, sizeof(out)));

@@ -83,7 +83,7 @@ Diagnostics page shows it.
 
 ```json
 "client": {
-  "board": "Inkplate5V2", "version": "v0.1.0-dev", "ip": "192.168.1.35", "rssi": -61,
+  "board": "Inkplate5V2", "version": "v0.1.0-dev", "ip": "192.168.1.42", "rssi": -61,
   "uptime_s": 8040,
   "heap_free": 120000, "heap_size": 327680, "psram_free": 4000000, "psram_size": 4194304,
   "panel_temp_c": 27, "width": 1280, "height": 720, "rotation": 0,

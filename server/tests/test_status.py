@@ -45,7 +45,7 @@ def test_a_posted_report_reaches_the_diagnostics_page(tmp_path, tz):
 
     rsp = client.post("/readings", json={
         "ts": AT, "device": "inkplate5-env-monitor", "valid": {"co2": True},
-        "client": {"board": "Inkplate5V2", "ip": "192.168.1.35", "rssi": -61,
+        "client": {"board": "Inkplate5V2", "ip": "192.168.1.42", "rssi": -61,
                    "sensors": {"scd41": True}},
     })
     assert rsp.status_code == 204
@@ -53,7 +53,7 @@ def test_a_posted_report_reaches_the_diagnostics_page(tmp_path, tz):
     diag = next(p for p in pages if p.name == "diagnostics")
     diag.template(status=source.datasets()["status"]())
     soup = BeautifulSoup(str(diag.airium), "html.parser")
-    assert soup.select_one("#ip").get_text() == "192.168.1.35"
+    assert soup.select_one("#ip").get_text() == "192.168.1.42"
     assert soup.select_one("#rssi").get_text() == "-61 dBm, good"
     assert soup.select_one("#sensor-scd41").get_text() == "ok"
     assert soup.select_one("#sensor-shtc3").get_text() == "missing"

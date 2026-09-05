@@ -272,7 +272,7 @@ STATUS = {
         "ts": 1788511219, "device": "inkplate5-env-monitor",
         "valid": {"temp_humidity": True, "co2": True, "particulates": False, "pressure": True, "gas": True},
         "client": {
-            "board": "Inkplate5V2", "version": "v0.1.0-dev", "ip": "192.168.1.35", "rssi": -61,
+            "board": "Inkplate5V2", "version": "v0.1.0-dev", "ip": "192.168.1.42", "rssi": -61,
             "uptime_s": 8040, "heap_free": 120000, "heap_size": 327680,
             "psram_free": 4000000, "psram_size": 4194304, "panel_temp_c": 27,
             "width": 1280, "height": 720, "rotation": 0, "mock_sensors": True,
@@ -295,7 +295,7 @@ class TestDiagnostics:
         assert text(soup, "#version") == "v0.1.0-dev"
         assert text(soup, "#uptime") == "2 h 14 min"
         assert text(soup, "#mock") == "mocks"
-        assert text(soup, "#ip") == "192.168.1.35"
+        assert text(soup, "#ip") == "192.168.1.42"
         assert text(soup, "#rssi") == "-61 dBm, good"
         assert text(soup, "#heap") == "117 KB free of 320 KB"
         assert text(soup, "#panel-temp") == "27 °C"
