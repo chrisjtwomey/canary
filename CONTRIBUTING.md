@@ -138,9 +138,10 @@ mkdir -p server/firmware
 ```
 
 ```yaml
-firmware:
-  enabled: true
-  offer_dev_builds: true    # this project builds v0.1.0-dev, not a tag
+client:
+  firmware:
+    enabled: true
+    offer_dev_builds: true  # this project builds v0.1.0-dev, not a tag
 ```
 
 Flash once over USB so the board stores its WiFi and server URL, then build
