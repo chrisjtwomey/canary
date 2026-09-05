@@ -16,8 +16,10 @@ int wifiRetries = 10;
 char ntpHost[] = "pool.ntp.org";
 char ntpTimezone[] = "Europe/Dublin";
 
+// Kept on the board: a CI image has only the placeholder below, so leaving
+// the broker as XXXX makes this block come from the store.
 bool mqttLoggerEnabled = false;
-char mqttLoggerBroker[] = "localhost";
+char mqttLoggerBroker[] = "XXXX";
 int mqttLoggerPort = 1883;
 char mqttLoggerClientID[] = "inkplate5-env-monitor";
 char mqttLoggerTopic[] = "mqtt/env-monitor-client";
