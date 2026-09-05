@@ -19,6 +19,7 @@
 #include "network_utils.h"
 #include "ota.h"
 #include "settings.h"
+#include "wake.h"
 #include "time_utils.h"
 #include "user_agent.h"
 #include "version.h"
@@ -80,11 +81,12 @@ static ArduinoClock wallClock;
 static SensorSuite  sensors(wallClock, shtc3Impl, scd41Impl, pmImpl, bmeImpl);
 static RefreshTimer refresh(serverDefaultRefreshSeconds);
 
-static Settings settings;            // this board's own server URL and wifi
+static ClientConfig config;          // this board's own server URL and wifi
 static char     nextURL[256];        // from X-Next-URL; empty means the server URL
 // True until this boot proves a freshly written image works.
 static bool     onTrial = false;
 static int      trialFailures = 0;
+
 // Three failures in a row is enough to call a new image broken.
 static const int kTrialFailureLimit = 3;
 static char     readingsURL[300];    // the server's /readings; empty disables posting
@@ -103,8 +105,10 @@ static uint32_t epochNow() {
     return (uint32_t)board.rtcGetEpoch();
 }
 
-static void connectWiFi() {
-    while (configureWiFi(settings.wifiSSID, settings.wifiPass, wifiRetries) != ESP_OK) {
+// Mains power and no schedule to keep, so there is nothing to do but wait
+// for the network to come back.
+static void connectNetworkForever() {
+    while (connectNetwork(config) != ESP_OK) {
         log(LOG_ERROR, "wifi connect timeout; trying again in 30 s");
         delay(30000);
     }
@@ -118,52 +122,57 @@ static void abandonTrialAfterRepeatedFailures(const char* why) {
     otaRollback(why);   // reboots into the previous image
 }
 
+// Count the failure, arm the next try, and give up on an image on trial.
+static void failedFetch(const char* why) {
+    ++fetchFailed;
+    uint32_t wait = refresh.failed(millis(), computeBackoffSeconds);
+    logf(LOG_ERROR, "%s (back-off step %d): next try in %u s", why, refresh.step(), wait);
+    abandonTrialAfterRepeatedFailures(why);
+}
+
 static void fetchAndDraw() {
 #ifdef OTA_TRIAL_FAIL
     // A build that cannot fetch, to prove the roll-back path on the bench.
+    // It retries in seconds, so the three failures do not take an hour.
     log(LOG_WARNING, "OTA_TRIAL_FAIL: failing this fetch on purpose");
     ++fetchFailed;
-    refresh.failed(millis(), computeBackoffSeconds);
+    refresh.succeeded(millis(), 5);
     abandonTrialAfterRepeatedFailures("OTA_TRIAL_FAIL");
     return;
 #endif
     if (WiFi.status() != WL_CONNECTED) {
         log(LOG_WARNING, "wifi down; reconnecting");
-        configureWiFi(settings.wifiSSID, settings.wifiPass, wifiRetries);
+        configureWiFi(config.wifiSSID, config.wifiPass, config.wifiRetries);
     }
 
-    const char* url = nextURL[0] ? nextURL : settings.serverURL;
-    int32_t len = kDownloadFallbackBytes;
-    PageResponse rsp = {};
-    uint8_t* buf = downloadFile(url, clientUserAgent(board.deviceName()), &len, &rsp);
-    if (!buf) {
-        ++fetchFailed;
-        uint32_t wait = refresh.failed(millis(), computeBackoffSeconds);
-        logf(LOG_ERROR, "download failed (back-off step %d): next try in %u s",
-             refresh.step(), wait);
-        abandonTrialAfterRepeatedFailures("download failed");
-        return;
-    }
-    if (rsp.nextURL[0]) snprintf(nextURL, sizeof(nextURL), "%s", rsp.nextURL);
+    // One try each time round: the loop comes back on its own, and there is
+    // no sleep to get right.
+    const char* errMsg = nullptr;
+    PageFetch page = {};
+    page.length = kDownloadFallbackBytes;
+    const char* url = nextURL[0] ? nextURL : config.serverURL;
 
-    board.clearDisplay();
-    esp_err_t err = loadImage(buf, len);
-    free(buf);
-    if (err != ESP_OK) {
-        ++fetchFailed;
-        uint32_t wait = refresh.failed(millis(), computeBackoffSeconds);
-        logf(LOG_ERROR, "image draw failed (back-off step %d): next try in %u s",
-             refresh.step(), wait);
-        abandonTrialAfterRepeatedFailures("image draw failed");
+    if (!fetchPage(url, clientUserAgent(board.deviceName()), 0, &page, &errMsg)) {
+        failedFetch(errMsg);
         return;
     }
-    board.display();
+    if (page.response.nextURL[0])
+        snprintf(nextURL, sizeof(nextURL), "%s", page.response.nextURL);
+
+    // Nothing over the page: this board has no battery to report.
+    bool drawn = drawPage(page, nullptr, 0, nullptr, &errMsg);
+    free(page.data);
+    if (!drawn) {
+        failedFetch(errMsg);
+        return;
+    }
 
     ++fetchOk;
     trialFailures = 0;
-    refresh.succeeded(millis(), rsp.nextRefreshSeconds);
+    refresh.succeeded(millis(), page.response.nextRefreshSeconds);
     logf(LOG_INFO, "next refresh in %u s",
-         rsp.nextRefreshSeconds ? rsp.nextRefreshSeconds : serverDefaultRefreshSeconds);
+         page.response.nextRefreshSeconds ? page.response.nextRefreshSeconds
+                                          : config.defaultRefreshSeconds);
 
     // A page is on the panel, so a freshly written image has proved itself.
     // Confirming it also frees the idle slot for the next update.
@@ -172,11 +181,8 @@ static void fetchAndDraw() {
         onTrial = false;
     }
 
-    if (updateOffered(CLIENT_VERSION, rsp.firmwareVersion, rsp.firmwareURL)) {
-        // Restarts into the new image, so this returns only on failure.
-        applyFirmwareUpdate(rsp.firmwareURL, rsp.firmwareVersion,
-                            clientUserAgent(board.deviceName()));
-    }
+    // Mains power, so no battery to wait for.
+    takeOfferedUpdate(page.response, clientUserAgent(board.deviceName()), 100, 0);
 }
 
 static ClientStatus clientStatus(uint32_t nowMs) {
@@ -200,7 +206,7 @@ static ClientStatus clientStatus(uint32_t nowMs) {
     s.scd41 = sensors.scd41Present();
     s.pm = sensors.pmPresent();
     s.bme688 = sensors.bme688Present();
-    s.nextUrl = nextURL[0] ? nextURL : settings.serverURL;
+    s.nextUrl = nextURL[0] ? nextURL : config.serverURL;
     s.nextInS = refresh.secondsUntilDue(nowMs);
     s.backoffStep = refresh.step();
     s.fetchOk = fetchOk;
@@ -236,11 +242,7 @@ static void sampleSensors(uint32_t nowMs) {
 }
 
 void setup() {
-    Serial.begin(115200);
-    board.begin();
-    board.setRotation(kRotation);
-    board.rtcGetData();
-    setTime(board.rtcGetEpoch());
+    startBoard(kRotation);
 
     logf(LOG_NOTICE, "##### %s boot #####", board.deviceName());
     logf(LOG_NOTICE, "Client version: %s", CLIENT_VERSION);
@@ -248,22 +250,14 @@ void setup() {
 
     onTrial = otaTrialPending();
     if (onTrial) logf(LOG_NOTICE, "trial boot of %s", CLIENT_VERSION);
-    settings = loadSettings();
+    config = loadConfig();
 
-    connectWiFi();
-    if (urlOrigin(settings.serverURL, readingsURL, sizeof(readingsURL) - 10)) {
+    connectNetworkForever();
+    if (urlOrigin(config.serverURL, readingsURL, sizeof(readingsURL) - 10)) {
         strcat(readingsURL, "/readings");
         logf(LOG_INFO, "posting readings to %s", readingsURL);
     } else {
         log(LOG_WARNING, "the server URL has no host; readings stay on the serial log");
-    }
-    if (configureTime(ntpHost, ntpTimezone) != ESP_OK) {
-        log(LOG_WARNING, "NTP sync failed; running on the RTC");
-    }
-    if (mqttLoggerEnabled &&
-        configureMQTT(mqttLoggerBroker, mqttLoggerPort, mqttLoggerTopic,
-                      mqttLoggerClientID, mqttLoggerRetries) != ESP_OK) {
-        log(LOG_WARNING, "remote logging unavailable; serial only");
     }
 
     advanceSimulation(epochNow());
