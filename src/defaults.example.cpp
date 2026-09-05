@@ -6,7 +6,7 @@
 // what lets an image built by CI, carrying only placeholders, still connect.
 #include "settings.h"
 
-ClientConfig compiledDefaults() {
+ClientConfig builtInSettings() {
     ClientConfig cfg = {};
 
     cfg.serverURL = "http://YOUR_SERVER_HOST:8080/breathe.png";

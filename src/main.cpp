@@ -32,7 +32,7 @@
 
 // The settings this image was built with, from src/defaults.cpp. epd declares
 // no settings symbols of its own, so this one is the project's.
-ClientConfig compiledDefaults();
+ClientConfig builtInSettings();
 
 static InkplateBoard inkplateBoard;
 
@@ -83,7 +83,7 @@ static ArduinoClock wallClock;
 static SensorSuite  sensors(wallClock, shtc3Impl, scd41Impl, pmImpl, bmeImpl);
 // The fallback interval is a compiled-in constant, so it can be read before
 // setup() resolves the rest of the config against the board's own store.
-static RefreshTimer refresh(compiledDefaults().defaultRefreshSeconds);
+static RefreshTimer refresh(builtInSettings().defaultRefreshSeconds);
 
 static ClientConfig config;          // this board's own server URL and wifi
 static char     nextURL[256];        // from X-Next-URL; empty means the server URL
@@ -246,7 +246,7 @@ void setup() {
 
     onTrial = otaTrialPending();
     if (onTrial) logf(LOG_NOTICE, "trial boot of %s", CLIENT_VERSION);
-    config = loadConfig(compiledDefaults());
+    config = loadConfig(builtInSettings());
 
     connectNetworkForever();
     if (urlOrigin(config.serverURL, readingsURL, sizeof(readingsURL) - 10)) {
