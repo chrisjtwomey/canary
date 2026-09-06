@@ -1,24 +1,28 @@
 // Copy to src/defaults.cpp and fill in. That file is gitignored so your
-// credentials stay local. Definitions for the symbols EpdClient's
-// defaults.h declares.
-#include <stdint.h>
+// credentials stay local.
+//
+// The server URL, the WiFi credentials and the MQTT block are also kept on
+// the board, and a real value here is written there as it passes. That is
+// what lets an image built by CI, carrying only placeholders, still connect.
+#include "settings.h"
 
-// The first page to fetch. After that the server names the next one.
-char serverURL[] = "http://YOUR_SERVER_HOST:8080/breathe.png";
-int serverRetries = 3;
-// Seconds between fetches when the server does not say.
-uint32_t serverDefaultRefreshSeconds = 300;
+ClientConfig builtInSettings() {
+    ClientConfig cfg = {};
 
-char wifiSSID[] = "XXXX";
-char wifiPass[] = "XXXX";
-int wifiRetries = 10;
+    cfg.serverURL = "http://YOUR_SERVER_HOST:8080/breathe.png";
+    cfg.serverRetries = 3;
+    cfg.defaultRefreshSeconds = 300;
+    cfg.wifiSSID = "XXXX";
+    cfg.wifiPass = "XXXX";
+    cfg.wifiRetries = 10;
+    cfg.ntpHost = "pool.ntp.org";
+    cfg.ntpTimezone = "Europe/Dublin";
+    cfg.mqttEnabled = false;
+    cfg.mqttBroker = "XXXX";
+    cfg.mqttPort = 1883;
+    cfg.mqttClientID = "inkplate5-env-monitor";
+    cfg.mqttTopic = "mqtt/env-monitor-client";
+    cfg.mqttRetries = 3;
 
-char ntpHost[] = "pool.ntp.org";
-char ntpTimezone[] = "Europe/Dublin";
-
-bool mqttLoggerEnabled = false;
-char mqttLoggerBroker[] = "localhost";
-int mqttLoggerPort = 1883;
-char mqttLoggerClientID[] = "inkplate5-env-monitor";
-char mqttLoggerTopic[] = "mqtt/env-monitor-client";
-int mqttLoggerRetries = 3;
+    return cfg;
+}
