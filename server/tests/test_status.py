@@ -2,6 +2,8 @@
 import pytest
 from bs4 import BeautifulSoup
 
+from tests.html import one
+
 from epd_server import DisplayServer
 from server import make_pages, make_source
 from sources.status import DeviceReports, StatusSource
@@ -53,7 +55,7 @@ def test_a_posted_report_reaches_the_diagnostics_page(tmp_path, tz):
     diag = next(p for p in pages if p.name == "diagnostics")
     diag.template(status=source.datasets()["status"]())
     soup = BeautifulSoup(str(diag.airium), "html.parser")
-    assert soup.select_one("#ip").get_text() == "192.168.1.42"
-    assert soup.select_one("#rssi").get_text() == "-61 dBm, good"
-    assert soup.select_one("#sensor-scd41").get_text() == "ok"
-    assert soup.select_one("#sensor-shtc3").get_text() == "missing"
+    assert one(soup, "#ip").get_text() == "192.168.1.42"
+    assert one(soup, "#rssi").get_text() == "-61 dBm, good"
+    assert one(soup, "#sensor-scd41").get_text() == "ok"
+    assert one(soup, "#sensor-shtc3").get_text() == "missing"

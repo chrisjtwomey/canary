@@ -31,7 +31,11 @@ class BreathePage(EnvPage):
             if not valid:
                 a.span(klass="cold-tag", _t="warming up")
 
-        a.div(klass="verdict", _t=co2_verdict(co2) if valid else "Warming up.")
+        if valid:
+            assert co2 is not None   # which is part of what valid means
+            a.div(klass="verdict", _t=co2_verdict(co2))
+        else:
+            a.div(klass="verdict", _t="Warming up.")
 
         with a.div(klass="details"):
             if lo and hi:

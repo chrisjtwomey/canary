@@ -19,7 +19,12 @@ SENSORS = (
 
 def kv(a: Airium, key: str, value: str, id: str | None = None) -> None:
     a.span(klass="k", _t=key)
-    a.span(klass="v", id=id, _t=value)
+    # Airium writes a None attribute as id="null", so an unnamed row would
+    # carry an id, and every unnamed row would carry the same one.
+    if id is None:
+        a.span(klass="v", _t=value)
+    else:
+        a.span(klass="v", id=id, _t=value)
 
 
 class DiagnosticsPage(EnvPage):

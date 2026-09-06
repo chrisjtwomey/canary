@@ -6,6 +6,7 @@ import pytest
 from bs4 import BeautifulSoup
 
 from metrics import co2_verdict, comfort_verdict, fmt_int
+from tests.html import attr, one
 from pages.breathe import BreathePage
 from pages.comfort import ComfortPage
 from pages.day import DayPage
@@ -17,7 +18,7 @@ WIDTH, HEIGHT = 1280, 720
 def render(page, data):
     page.template(**data)
     soup = BeautifulSoup(str(page.airium), "html.parser")
-    specs = json.loads(soup.find("script", id="charts").string)
+    specs = json.loads(one(soup, "script#charts").get_text())
     return soup, specs
 
 
@@ -49,8 +50,8 @@ def test_page_css_hook_follows_the_class_not_the_instance_name(data, tz):
 def test_scaffold_loads_rough_and_charts_and_sets_the_layout(data, tz):
     soup, _ = render(BreathePage("breathe", tz=tz, width=WIDTH, height=HEIGHT), data)
     assert [s["src"] for s in soup.find_all("script", src=True)] == ["rough.iife.min.js", "charts.js"]
-    assert "--outer-width:1280px" in soup.body["style"]
-    assert "Charts.render" in soup.find_all("script")[-1].string
+    assert "--outer-width:1280px" in attr(one(soup, "body"), "style")
+    assert "Charts.render" in soup.find_all("script")[-1].get_text()
 
 
 class TestBreathe:
@@ -145,7 +146,7 @@ class TestDay:
     def test_each_row_names_the_days_high_and_low(self, data, tz):
         latest, history = data["latest"], data["history_24h"]
         soup, _ = render(DayPage("day", tz=tz, width=WIDTH, height=HEIGHT), data)
-        rng = soup.select_one("#range-co2_ppm")
+        rng = one(soup, "#range-co2_ppm")
         assert [t.get_text() for t in rng.select(".tag")] == ["high", "low"]
         values = [d["co2_ppm"] for d in history + [latest]]
         assert [v.get_text() for v in rng.select(".v")] == [fmt_int(max(values)), fmt_int(min(values))]
@@ -243,6 +244,7 @@ class TestBarometerPool:
         assert text(soup, "#delta-pressure_hpa .value") == f"{delta:+.1f}"
         assert text(soup, "#delta-pressure_hpa .unit") == "hPa in 1 h"
         rate = classify_rate(delta, 0.6, 1.2)
+        assert rate is not None   # the fixture moves the pressure
         assert text(soup, "#rate-pressure_hpa") == rate_words(rate)
         assert text(soup, "#meaning-pressure_hpa") == pressure_meaning(rate, latest["pressure_hpa"])
         (col,) = specs

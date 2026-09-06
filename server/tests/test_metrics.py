@@ -55,6 +55,7 @@ def test_series_skips_documents_without_the_key():
 def test_extremes_returns_the_documents_and_handles_nothing():
     history = [{"ts": 1, "v": 5}, {"ts": 2, "v": 9}, {"ts": 3, "v": 2}]
     lo, hi = extremes(history, "v")
+    assert lo is not None and hi is not None
     assert (lo["ts"], hi["ts"]) == (3, 2)
     assert extremes([{"ts": 1}], "v") == (None, None)
 

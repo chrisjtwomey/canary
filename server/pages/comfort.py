@@ -41,14 +41,17 @@ class ComfortPage(EnvPage):
                     a.span(klass="value", _t=f"{rh:.0f}" if rh is not None else "—")
                     a.span(klass="unit", _t="%")
                 a.div(klass="label", _t="Humidity")
+            verdict = "Warming up."
             if valid:
+                assert temp is not None and rh is not None   # what valid means
                 a.div(klass="detail", _t=(
                     f"Dew point {dew_point_c(temp, rh):.1f}°, "
                     f"vapour {abs_humidity_g_m3(temp, rh):.1f} g/m³."))
+                verdict = comfort_verdict(temp, rh)
             extra = self.extra_detail(latest, history_24h)
             if extra:
                 a.div(klass="detail", _t=extra)
-            a.div(klass="verdict", _t=comfort_verdict(temp, rh) if valid else "Warming up.")
+            a.div(klass="verdict", _t=verdict)
 
     def extra_detail(self, latest: dict, history_24h: list[dict]) -> str | None:
         return None

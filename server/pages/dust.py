@@ -53,7 +53,11 @@ class DustPage(EnvPage):
             if not valid:
                 a.span(klass="cold-tag", _t="fan warming up")
 
-        a.div(klass="verdict", _t=pm25_verdict(pm25) if valid else "Warming up.")
+        if valid:
+            assert pm25 is not None   # which is part of what valid means
+            a.div(klass="verdict", _t=pm25_verdict(pm25))
+        else:
+            a.div(klass="verdict", _t="Warming up.")
 
         parts = []
         if valid:
