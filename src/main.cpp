@@ -36,6 +36,7 @@
 ClientConfig builtInSettings();
 
 static InkplateBoard inkplateBoard;
+static ArduinoClock  wallClock;
 
 // ─── The only part that knows which sensor implementation is in use ───────
 
@@ -62,13 +63,34 @@ static void advanceSimulation(uint32_t epoch) {
     }
     room.advanceTo(epoch);
 }
-static const char* kBanner = "mock sensors up; PM fan warming up for 30 s";
-static const bool  kMockSensors = true;
+static void logSensorBanner() {
+    log(LOG_INFO, "mock sensors up; PM fan warming up for 30 s");
+}
+static const bool kMockSensors = true;
 
 #else
-#error "No real sensor drivers yet. Build with -DUSE_MOCK_SENSORS, or add \
-Shtc3Driver / Scd41Driver / Pmsa003iDriver / Bme688Driver implementing the \
-IShtc3 / IScd41 / IPmsa003i / IBme688 interfaces and wire them up here."
+#include "sensors/Bme688Driver.h"
+#include "sensors/II2cBus.h"
+#include "sensors/Pmsa003iDriver.h"
+#include "sensors/Scd41Driver.h"
+#include "sensors/Shtc3Driver.h"
+
+static ArduinoI2cBus  i2cBus;          // Wire, which Inkplate::begin() started
+static Shtc3Driver    shtc3Impl(i2cBus, wallClock);
+static Scd41Driver    scd41Impl(i2cBus, wallClock);
+static Bme688Driver   bmeImpl(i2cBus, wallClock);
+// The PM fan's SET line is not wired. docs/HARDWARE.md 8 reserves expander
+// P1_3 for it; when that wire goes in, pass a function that writes the pin
+// here and the driver can stop and start the fan.
+static Pmsa003iDriver pmImpl(i2cBus, wallClock, nullptr);
+
+// The readings come from the room itself, so there is nothing to advance.
+static void advanceSimulation(uint32_t) {}
+static void logSensorBanner() {
+    logf(LOG_INFO, "sensors up; PM fan SET line %s",
+         pmImpl.setLineWired() ? "wired" : "not wired, so the fan runs from power-on");
+}
+static const bool kMockSensors = false;
 #endif
 
 // ─── Everything below is implementation-agnostic ──────────────────────────
@@ -80,8 +102,7 @@ static const uint32_t kReportIntervalMs = 60000;
 // 1280x720 PNG is under 200 KB.
 static const int32_t  kDownloadFallbackBytes = 512 * 1024;
 
-static ArduinoClock wallClock;
-static SensorSuite  sensors(wallClock, shtc3Impl, scd41Impl, pmImpl, bmeImpl);
+static SensorSuite sensors(wallClock, shtc3Impl, scd41Impl, pmImpl, bmeImpl);
 // The fallback interval is a compiled-in constant, so it can be read before
 // setup() resolves the rest of the config against the board's own store.
 static RefreshTimer refresh(builtInSettings().defaultRefreshSeconds);
@@ -264,7 +285,7 @@ void setup() {
              sensors.shtc3Present(), sensors.scd41Present(),
              sensors.pmPresent(), sensors.bme688Present());
     }
-    log(LOG_INFO, kBanner);
+    logSensorBanner();
 }
 
 void loop() {

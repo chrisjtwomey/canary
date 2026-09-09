@@ -1,0 +1,15 @@
+{
+  "name": "bme68x",
+  "version": "4.4.8",
+  "description": "Bosch Sensortec BME68x Sensor API. Plain C with read/write/delay function pointers, so it builds for the host tests as well as the ESP32.",
+  "keywords": "bme688, gas, sensor",
+  "license": "BSD-3-Clause",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/boschsensortec/BME68x_SensorAPI.git"
+  },
+  "build": {
+    "srcDir": "src",
+    "includeDir": "src"
+  }
+}

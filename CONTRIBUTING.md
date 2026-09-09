@@ -53,7 +53,7 @@ warms up and between the SCD41's five-second conversions.
 ### 2. Host tests
 
 ```sh
-pio test -e native            # room model, sensor mocks, SensorSuite protocol
+pio test -e native            # room model, sensor mocks, drivers, SensorSuite protocol
 ```
 
 ### 3. The pages
@@ -179,8 +179,11 @@ back to the last release at its next fetch.
 
 ### 4. On the Inkplate, end to end
 
-The board fetches the pages from the server and draws them; the mocks stand
-in for the sensors. Three things to set up.
+The board fetches the pages from the server, draws them, and reads the four
+sensors over I2C. Three things to set up. See
+[docs/HARDWARE.md](docs/HARDWARE.md) §8 for the wiring; `pio run -e
+esp32-mock -t upload` builds the same firmware with the simulated room in
+place of the sensors, for a board with nothing attached.
 
 1. **Credentials.** Copy `src/defaults.example.cpp` to `src/defaults.cpp`
    (gitignored) and fill in the WiFi SSID and password. Point `serverURL`
@@ -220,9 +223,30 @@ on the panel and backs off (`back-off step N`).
 `kRotation` in `src/main.cpp` is 0. If the image is upside down for the way
 the board sits, set it to 2.
 
-Swapping in real hardware means writing four drivers against the `IShtc3` /
-`IScd41` / `IPmsa003i` / `IBme688` interfaces and clearing
-`-DUSE_MOCK_SENSORS`; building without that flag is an `#error` naming them.
+#### Which sensors answered
+
+`sensor start incomplete: shtc3=1 scd41=0 pm=1 bme688=1` names the parts
+that did not start, and the Diagnostics page carries the same flags. A zero
+is one of three things: the part is not on the bus, its address is taken, or
+it answered something that is not that part — the SHTC3 and the BME688 both
+check what they are talking to before saying yes.
+
+Readings are dropped, not invented, so the first minute after a boot looks
+sparse on purpose: the SCD41's first five-second conversion has not landed,
+and the PM counts mean nothing until the fan has run for thirty seconds. The
+PM fan's SET line is not wired, so the fan runs from power-on and that thirty
+seconds is counted from boot; the boot log says which case the board is in.
+
+`iaq` and `iaq_accuracy` stay absent. They need BSEC, which is not
+integrated; `gas_ohm` is the raw plate resistance and is there.
+
+#### Swapping the mocks for the sensors, in code
+
+`src/main.cpp` names a concrete sensor type in one `#if` block and nowhere
+else. The drivers take an `II2cBus` and an `IClock`, so they are host-tested
+in `test/test_drivers` against parts that answer the bus the way their
+datasheets describe. The BME688's compensation is Bosch's own C API, in
+`lib/bme68x`.
 
 ## Setup
 

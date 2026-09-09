@@ -112,7 +112,8 @@ firmware/                      PlatformIO project (or src/ at root, like weather
     SensorSuite.cpp            the sampling protocol, written once against the interfaces
     Pmsa003iFrame.cpp          the 32-byte frame decoder, shared by every driver
     ReadingsJson.cpp           the wire format in docs/READINGS.md
-    Shtc3Driver.cpp  Scd41Driver.cpp  ...          the real parts (not written yet)
+    II2cBus.h  SensirionI2c.{h,cpp}                the bus seam, and what the two Sensirion parts share
+    Shtc3Driver.cpp  Scd41Driver.cpp  Pmsa003iDriver.cpp  Bme688Driver.cpp
     mock/
       EnvModel.{h,cpp}         one simulated room driving all four mocks coherently
       MockScd41.h  MockPmsa003i.h  MockBme688.h  MockShtc3.h
@@ -147,8 +148,24 @@ ESP32, so WiFi keeps running. If that ever becomes a problem the interfaces
 already return false-when-not-ready, so `sample()` can become a state machine
 without touching the drivers.
 
-Building without `-DUSE_MOCK_SENSORS` is a `#error` naming the four drivers to
-write, not a link failure.
+`-DUSE_MOCK_SENSORS` picks the mocks; without it the drivers talk to the
+parts. The `esp32` and `esp32-mock` environments are that one flag apart.
+
+The drivers reach the bus through `II2cBus`, for the reason `IClock` exists:
+the command sequences, the CRCs and the conversions are what a driver gets
+wrong, and a host test cannot drive `Wire`. `ArduinoI2cBus` wraps the `Wire`
+instance `Inkplate::begin()` has already started; `test/test_drivers` drives
+the same code against parts that answer the bus the way their datasheets
+describe.
+
+The BME688 is the exception to writing the registers here. Its compensation
+reads twenty calibration coefficients out of the part and the failure mode
+is a plausible wrong number, so Bosch's own C API does that arithmetic
+(`lib/bme68x`, v4.4.8, BSD-3-Clause). It reaches the bus through function
+pointers, so it sits behind `II2cBus` like everything else, and it has no
+Arduino dependency, so it builds for the host tests too. IAQ needs BSEC,
+which is not integrated: `iaq` and `iaqAccuracy` are zero, and
+[READINGS.md](READINGS.md) already says those keys are absent until then.
 
 ## 6. Mocks — what "as close as possible" means
 
@@ -218,10 +235,14 @@ part. The tests then pin the corrected behaviour.
 4. The awake loop in `main.cpp` against the mocks, posting to the local server. First full loop with no hardware.
    *Status 2026-09-04: done. Fetch and draw on the server's cadence, one readings document a minute posted to `/readings` with the board's `client` status beside it.*
 5. Real drivers when the parts arrive; correct the mocks.
+   *Status 2026-09-09: the four drivers are in, behind `II2cBus`, with host
+   tests. The mocks are not corrected yet — that needs a log of the real
+   parts. Open: BSEC for IAQ, and the PM fan's SET line, which is not wired.*
 
 ## 8. Decisions needed from you
 
 1. **HTTP POST** for readings, with MQTT republish later — or MQTT from the start?
 2. **Fan always on** (datasheet's active mode, better accuracy) or duty-cycled via the SET wire (less power and dust)? Default: always on; wire SET anyway so it can change in software.
 3. **Which SCD41 breakout** was ordered? HARDWARE.md assumes Adafruit 5190.
+   *Answered 2026-09-09: Adafruit 5190, inventory item 92.*
 4. Firmware layout: `firmware/` subdirectory, or `src/` at the repo root like weather-cal? Default: root, to match.
