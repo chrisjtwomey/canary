@@ -14,12 +14,12 @@
 
 .page-trace .stats .hero { font-size: 9cqw; }
 .page-trace .stats .verdict { font-size: 4.4cqw; }
-.page-trace .stats .detail { flex-basis: 100%; font-size: 2cqw; margin-top: -1cqh; }
+.page-trace .stats .detail { flex-basis: 100%; font-size: 2cqw; margin-top: 1.5cqh; }
 
 .page-trace .chart {
   position: absolute;
   left: 3cqw;
   right: 3cqw;
-  top: 34cqh;
-  height: 60cqh;
+  top: 37cqh;
+  height: 57cqh;
 }
