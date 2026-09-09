@@ -17,7 +17,9 @@ class ComfortPage(EnvPage):
     css_class = "comfort"
     requires = ("latest", "history_24h")
 
-    def body(self, a: Airium, latest: dict, history_24h: list[dict]) -> None:
+    def body(self, a: Airium, **data) -> None:
+        latest: dict = data["latest"]
+        history_24h: list[dict] = data["history_24h"]
         temp = latest.get("temp_c")
         rh = latest.get("rh_pct")
         valid = bool(latest.get("valid", {}).get("temp_humidity")) and temp is not None and rh is not None
@@ -56,7 +58,9 @@ class ComfortPage(EnvPage):
     def extra_detail(self, latest: dict, history_24h: list[dict]) -> str | None:
         return None
 
-    def charts(self, latest: dict, history_24h: list[dict]) -> list[dict]:
+    def charts(self, **data) -> list[dict]:
+        latest: dict = data["latest"]
+        history_24h: list[dict] = data["history_24h"]
         end = latest["ts"]
         start = end - TRAIL_HOURS * 3600
         docs = [d for d in thin(history_24h, TRAIL_STEP_S)

@@ -33,7 +33,8 @@ class DiagnosticsPage(EnvPage):
     css_class = "diagnostics"
     requires = ("status",)
 
-    def body(self, a: Airium, status: dict | None) -> None:
+    def body(self, a: Airium, **data) -> None:
+        status: dict | None = data["status"]
         if status is None:
             with a.div(klass="head"):
                 a.div(klass="title label", _t="Inkplate")
@@ -112,7 +113,8 @@ class DiagnosticsPage(EnvPage):
                 step = fetch.get("backoff_step", 0)
                 kv(a, "back-off", f"step {step}" if step else "none")
 
-    def charts(self, status: dict | None) -> list[dict]:
+    def charts(self, **data) -> list[dict]:
+        status: dict | None = data["status"]
         if status is None:
             return []
         c = status["doc"].get("client") or {}

@@ -25,7 +25,9 @@ class DayPage(EnvPage):
     requires = ("latest", "history_24h")
     rows = ROWS
 
-    def body(self, a: Airium, latest: dict, history_24h: list[dict]) -> None:
+    def body(self, a: Airium, **data) -> None:
+        latest: dict = data["latest"]
+        history_24h: list[dict] = data["history_24h"]
         with a.div(klass="head-now"):
             a.div(klass="label", _t="Current")
         with a.div(klass="head-hist"):
@@ -54,7 +56,9 @@ class DayPage(EnvPage):
             with a.div(klass="chart"):
                 a.canvas(id="rib-axis")
 
-    def charts(self, latest: dict, history_24h: list[dict]) -> list[dict]:
+    def charts(self, **data) -> list[dict]:
+        latest: dict = data["latest"]
+        history_24h: list[dict] = data["history_24h"]
         end = latest["ts"]
         start = end - WINDOW_HOURS * 3600
         window = {"min": start, "max": end}

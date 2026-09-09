@@ -39,7 +39,9 @@ class DustPage(EnvPage):
     css_class = "dust"
     requires = ("latest", "history_24h")
 
-    def body(self, a: Airium, latest: dict, history_24h: list[dict]) -> None:
+    def body(self, a: Airium, **data) -> None:
+        latest: dict = data["latest"]
+        history_24h: list[dict] = data["history_24h"]
         pm25 = latest.get("pm2_5")
         valid = bool(latest.get("valid", {}).get("particulates")) and pm25 is not None
         lo, hi = extremes(history_24h + [latest], "pm2_5")
@@ -75,7 +77,9 @@ class DustPage(EnvPage):
         elif not valid:
             a.div(klass="caption", _t="the fan needs thirty seconds before the counts mean anything")
 
-    def charts(self, latest: dict, history_24h: list[dict]) -> list[dict]:
+    def charts(self, **data) -> list[dict]:
+        latest: dict = data["latest"]
+        history_24h: list[dict] = data["history_24h"]
         valid = bool(latest.get("valid", {}).get("particulates"))
         return [{
             "kind": "dotcloud",
