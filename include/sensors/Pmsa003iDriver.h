@@ -25,9 +25,9 @@ public:
     void setEnabled(bool on, uint32_t nowMs) override;
     bool readFrame(uint32_t nowMs, uint8_t out[32]) override;
     bool stable(uint32_t nowMs) const override;
+    bool setLineWired() const override { return setLine_ != nullptr; }
 
     bool enabled() const { return enabled_; }
-    bool setLineWired() const { return setLine_ != nullptr; }
 
     static const uint8_t kAddress = 0x12;
 

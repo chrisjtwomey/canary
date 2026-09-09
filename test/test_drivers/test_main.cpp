@@ -275,6 +275,27 @@ void test_scd41_single_shot_is_refused_while_periodic_runs() {
     delete drv;
 }
 
+// The low-power reading the validation routine takes: idle, one shot, and a
+// five-second wait the caller may not shorten.
+void test_scd41_single_shot_yields_one_measurement_after_five_seconds() {
+    FakeScd41 part;
+    Scd41Driver* drv = startedScd41(part);
+    TEST_ASSERT_TRUE(drv->stopPeriodicMeasurement(clk->now));
+    clk->advance(Scd41Driver::kStopBusyMs);
+
+    uint32_t t = clk->now;
+    TEST_ASSERT_TRUE(drv->measureSingleShot(t));
+    TEST_ASSERT_EQUAL_INT(1, part.singleShots);
+
+    Scd41Data data = {};
+    TEST_ASSERT_FALSE(drv->readMeasurement(t + Scd41Driver::kSingleShotMs - 1, data));
+
+    clk->advance(Scd41Driver::kSingleShotMs);
+    TEST_ASSERT_TRUE(drv->readMeasurement(clk->now, data));
+    TEST_ASSERT_EQUAL_UINT16(800, data.co2Ppm);
+    delete drv;
+}
+
 void test_scd41_wake_up_is_never_acked_so_the_serial_number_proves_it() {
     FakeScd41 part;
     part.poweredDown = true;
@@ -553,6 +574,7 @@ int main(int, char**) {
     RUN_TEST(test_scd41_temperature_offset_is_refused_while_measuring);
     RUN_TEST(test_scd41_stop_leaves_the_part_busy_for_half_a_second);
     RUN_TEST(test_scd41_single_shot_is_refused_while_periodic_runs);
+    RUN_TEST(test_scd41_single_shot_yields_one_measurement_after_five_seconds);
     RUN_TEST(test_scd41_wake_up_is_never_acked_so_the_serial_number_proves_it);
     RUN_TEST(test_scd41_power_down_is_refused_while_measuring);
 

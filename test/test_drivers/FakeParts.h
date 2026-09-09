@@ -64,6 +64,7 @@ public:
     int      stopsAccepted = 0;
     int      stopsRefused = 0;
     int      wakeUps = 0;
+    int      singleShots = 0;
 
     bool write(const uint8_t* data, size_t len) override {
         if (len < 2) return false;
@@ -82,6 +83,10 @@ public:
             case 0x21AC:   // start low-power periodic
                 if (periodic) return false;
                 periodic = true;
+                // The part converts on its own interval. With no clock here
+                // that collapses to "a reading is always waiting", which is
+                // what a caller polling data-ready sees.
+                dataReady = true;
                 return true;
             case 0x3F86:   // stop periodic
                 if (!periodic) { ++stopsRefused; return false; }
@@ -90,7 +95,10 @@ public:
                 dataReady = false;
                 return true;
             case 0x219D:   // single shot
-                return !periodic;
+                if (periodic) return false;
+                ++singleShots;
+                dataReady = true;
+                return true;
             case 0xE4B8: {
                 // The top five bits are reserved and carry whatever they
                 // carry; a reader that does not mask them sees data that is
@@ -103,7 +111,7 @@ public:
                 if (!dataReady) return false;
                 uint16_t words[3] = {co2Ppm, rawTemp(), rawRh()};
                 queue(words, 3);
-                dataReady = false;
+                dataReady = periodic;
                 return true;
             }
             case 0xE000:
@@ -210,6 +218,47 @@ public:
         return true;
     }
 
+    // Calibration and a raw conversion, so the compensated values Bosch's
+    // API returns are inside the ranges docs/HARDWARE.md 4 gives the part.
+    // The coefficients are a real unit's; the ADC counts are chosen to land
+    // near room conditions.
+    void loadCalibration(uint32_t tempAdc = kTempAdc, uint32_t presAdc = kPresAdc,
+                         uint16_t humAdc = kHumAdc) {
+        put16le(0x8A, (uint16_t)26543);            // par_t2
+        regs[0x8C] = (uint8_t)(int8_t)3;           // par_t3
+        put16le(0xE9, 26060);                      // par_t1
+        put16le(0x8E, 36160);                      // par_p1
+        put16le(0x90, (uint16_t)(int16_t)-10559);  // par_p2
+        regs[0x92] = (uint8_t)(int8_t)88;          // par_p3
+        put16le(0x94, (uint16_t)(int16_t)7480);    // par_p4
+        put16le(0x96, (uint16_t)(int16_t)-140);    // par_p5
+        regs[0x98] = (uint8_t)(int8_t)41;          // par_p7
+        regs[0x99] = (uint8_t)(int8_t)30;          // par_p6
+        put16le(0x9C, (uint16_t)(int16_t)-3568);   // par_p8
+        put16le(0x9E, (uint16_t)(int16_t)-2745);   // par_p9
+        regs[0xA0] = 30;                           // par_p10
+        regs[0xE1] = 0x3F;                         // par_h2 high bits
+        regs[0xE2] = 0x20;                         // par_h2 low nibble, par_h1 low nibble
+        regs[0xE3] = 0x33;                         // par_h1 high bits
+        regs[0xE4] = 0;                            // par_h3
+        regs[0xE5] = 45;                           // par_h4
+        regs[0xE6] = 20;                           // par_h5
+        regs[0xE7] = 120;                          // par_h6
+        regs[0xE8] = (uint8_t)(int8_t)-100;        // par_h7
+
+        putAdc20(0x1F, presAdc);
+        putAdc20(0x22, tempAdc);
+        regs[0x25] = (uint8_t)(humAdc >> 8);
+        regs[0x26] = (uint8_t)humAdc;
+        // A gas reading in a middle range, so the resistance is non-zero.
+        regs[0x2C] = 0x80;
+        regs[0x2D] = (uint8_t)(0x20 | 0x10 | 0x05);
+    }
+
+    static const uint32_t kTempAdc = 500000;
+    static const uint32_t kPresAdc = 360000;
+    static const uint16_t kHumAdc  = 25000;
+
     static const uint8_t kRegChipId    = 0xD0;
     static const uint8_t kRegVariantId = 0xF0;
     static const uint8_t kRegField0    = 0x1D;
@@ -219,4 +268,15 @@ public:
     static const uint8_t kRegCtrlGas1  = 0x71;
     static const uint8_t kRegResHeat0  = 0x5A;
     static const uint8_t kRegGasWait0  = 0x64;
+
+private:
+    void put16le(uint8_t reg, uint16_t v) {
+        regs[reg] = (uint8_t)v;
+        regs[reg + 1] = (uint8_t)(v >> 8);
+    }
+    void putAdc20(uint8_t reg, uint32_t adc) {
+        regs[reg] = (uint8_t)(adc >> 12);
+        regs[reg + 1] = (uint8_t)(adc >> 4);
+        regs[reg + 2] = (uint8_t)((adc & 0x0F) << 4);
+    }
 };
