@@ -24,7 +24,7 @@ jobs:
           path: epd
           # The same version the server core is pinned to in
           # server/requirements.txt; the two share the header contract.
-          ref: v0.3.1
+          ref: v0.4.0
       - uses: actions/cache@v5
         with:
           path: |
@@ -42,7 +42,8 @@ jobs:
 
       # Both sensor paths, plus the bench routine that runs instead of the
       # awake loop: the drivers the board runs, the mocks that stand in when
-      # nothing is attached, and the wiring check.
+      # nothing is attached, and the wiring check. The validation image needs
+      # epd 0.4.0 for writeExpanderPin() and enableWakeOnTimer().
       - name: Build firmware
         run: pio run -e esp32 -e esp32-mock -e esp32-validate
 
