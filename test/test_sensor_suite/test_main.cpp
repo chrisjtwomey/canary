@@ -56,6 +56,7 @@ public:
     bool begin(uint32_t) override { return true; }
     void setEnabled(bool, uint32_t) override {}
     bool stable(uint32_t) const override { return true; }
+    bool setLineWired() const override { return true; }
     bool readFrame(uint32_t, uint8_t out[32]) override {
         ++reads;
         for (int i = 0; i < 32; ++i) out[i] = 0;

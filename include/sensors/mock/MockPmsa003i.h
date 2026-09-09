@@ -19,6 +19,8 @@ public:
     void setEnabled(bool on, uint32_t nowMs) override;
     bool readFrame(uint32_t nowMs, uint8_t out[32]) override;
     bool stable(uint32_t nowMs) const override;
+    // The simulated line is always connected; SET low really does stop it.
+    bool setLineWired() const override { return true; }
 
     bool enabled() const { return enabled_; }
 

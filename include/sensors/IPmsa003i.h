@@ -20,4 +20,7 @@ public:
     static bool parseFrame(const uint8_t frame[32], PmData& out);
     // True once the fan has run long enough for the data to be trusted.
     virtual bool stable(uint32_t nowMs) const = 0;
+    // Whether SET is connected. False means the fan runs whenever the board
+    // has power and setEnabled() cannot change that.
+    virtual bool setLineWired() const = 0;
 };
