@@ -17,7 +17,9 @@ class BreathePage(EnvPage):
     css_class = "breathe"
     requires = ("latest", "history_24h")
 
-    def body(self, a: Airium, latest: dict, history_24h: list[dict]) -> None:
+    def body(self, a: Airium, **data) -> None:
+        latest: dict = data["latest"]
+        history_24h: list[dict] = data["history_24h"]
         co2 = latest.get("co2_ppm")
         valid = bool(latest.get("valid", {}).get("co2")) and co2 is not None
         lo, hi = extremes(history_24h + [latest], "co2_ppm")
@@ -31,7 +33,11 @@ class BreathePage(EnvPage):
             if not valid:
                 a.span(klass="cold-tag", _t="warming up")
 
-        a.div(klass="verdict", _t=co2_verdict(co2) if valid else "Warming up.")
+        if valid:
+            assert co2 is not None   # which is part of what valid means
+            a.div(klass="verdict", _t=co2_verdict(co2))
+        else:
+            a.div(klass="verdict", _t="Warming up.")
 
         with a.div(klass="details"):
             if lo and hi:
@@ -68,7 +74,9 @@ class BreathePage(EnvPage):
             return f"Now at the day's low. {high}"
         return f"{high} {low}"
 
-    def charts(self, latest: dict, history_24h: list[dict]) -> list[dict]:
+    def charts(self, **data) -> list[dict]:
+        latest: dict = data["latest"]
+        history_24h: list[dict] = data["history_24h"]
         end = latest["ts"]
         start = end - SPARK_HOURS * 3600
         pts = [p for p in series(history_24h, "co2_ppm", 120) if p[0] >= start]

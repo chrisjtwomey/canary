@@ -98,7 +98,9 @@ class TracePage(EnvPage):
         self.metric = metric
         self.title = metric.title
 
-    def body(self, a: Airium, latest: dict, history_72h: list[dict]) -> None:
+    def body(self, a: Airium, **data) -> None:
+        latest: dict = data["latest"]
+        history_72h: list[dict] = data["history_72h"]
         m = self.metric
         ok = _valid(latest, m)
         a.div(klass="title label", _t=m.title)
@@ -140,7 +142,9 @@ class TracePage(EnvPage):
             hi = max(m.ceil, hi)
         return {"min": lo, "max": hi}
 
-    def charts(self, latest: dict, history_72h: list[dict]) -> list[dict]:
+    def charts(self, **data) -> list[dict]:
+        latest: dict = data["latest"]
+        history_72h: list[dict] = data["history_72h"]
         m = self.metric
         end = latest["ts"]
         start = end - self.DAYS * 86400
@@ -208,7 +212,9 @@ class DeltaPage(EnvPage):
             if rate is not None:
                 a.div(klass="meaning", id=f"meaning-{m.key}", _t=m.meaning(rate, latest[m.key]))
 
-    def body(self, a: Airium, latest: dict, history_24h: list[dict]) -> None:
+    def body(self, a: Airium, **data) -> None:
+        latest: dict = data["latest"]
+        history_24h: list[dict] = data["history_24h"]
         m = self.metric
         a.div(klass="title label", _t=m.title)
         a.div(klass="stamp", _t=fmt_stamp(latest["ts"], self.tz))
@@ -240,7 +246,9 @@ class DeltaPage(EnvPage):
                 "unit": m.unit, "guides": [{"y": g, "label": label} for g, label in m.guides],
                 "marks": marks}
 
-    def charts(self, latest: dict, history_24h: list[dict]) -> list[dict]:
+    def charts(self, **data) -> list[dict]:
+        latest: dict = data["latest"]
+        history_24h: list[dict] = data["history_24h"]
         m = self.metric
         specs = [self._column(latest, history_24h, m, "#column")]
         if m.second is not None:

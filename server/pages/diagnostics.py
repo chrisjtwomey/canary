@@ -19,7 +19,12 @@ SENSORS = (
 
 def kv(a: Airium, key: str, value: str, id: str | None = None) -> None:
     a.span(klass="k", _t=key)
-    a.span(klass="v", id=id, _t=value)
+    # Airium writes a None attribute as id="null", so an unnamed row would
+    # carry an id, and every unnamed row would carry the same one.
+    if id is None:
+        a.span(klass="v", _t=value)
+    else:
+        a.span(klass="v", id=id, _t=value)
 
 
 class DiagnosticsPage(EnvPage):
@@ -28,7 +33,8 @@ class DiagnosticsPage(EnvPage):
     css_class = "diagnostics"
     requires = ("status",)
 
-    def body(self, a: Airium, status: dict | None) -> None:
+    def body(self, a: Airium, **data) -> None:
+        status: dict | None = data["status"]
         if status is None:
             with a.div(klass="head"):
                 a.div(klass="title label", _t="Inkplate")
@@ -107,7 +113,8 @@ class DiagnosticsPage(EnvPage):
                 step = fetch.get("backoff_step", 0)
                 kv(a, "back-off", f"step {step}" if step else "none")
 
-    def charts(self, status: dict | None) -> list[dict]:
+    def charts(self, **data) -> list[dict]:
+        status: dict | None = data["status"]
         if status is None:
             return []
         c = status["doc"].get("client") or {}

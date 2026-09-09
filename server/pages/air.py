@@ -27,7 +27,9 @@ class AirPage(EnvPage):
     css_class = "air"
     requires = ("latest", "history_24h")
 
-    def body(self, a: Airium, latest: dict, history_24h: list[dict]) -> None:
+    def body(self, a: Airium, **data) -> None:
+        latest: dict = data["latest"]
+        history_24h: list[dict] = data["history_24h"]
         valid = bool(latest.get("valid", {}).get("gas"))
         iaq = latest.get("iaq") if valid else None
         gas = latest.get("gas_ohm") if valid else None
@@ -73,7 +75,9 @@ class AirPage(EnvPage):
         with a.div(klass="scale"):
             a.canvas(id="iaq-scale")
 
-    def charts(self, latest: dict, history_24h: list[dict]) -> list[dict]:
+    def charts(self, **data) -> list[dict]:
+        latest: dict = data["latest"]
+        history_24h: list[dict] = data["history_24h"]
         end = latest["ts"]
         start = end - SPARK_HOURS * 3600
         valid = bool(latest.get("valid", {}).get("gas"))
