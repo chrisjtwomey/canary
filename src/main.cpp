@@ -17,6 +17,7 @@
 #include "log_utils.h"
 #include "network_utils.h"
 #include "ota.h"
+#include "sd_config.h"
 #include "settings.h"
 #include "wake.h"
 #include "time_utils.h"
@@ -247,6 +248,7 @@ void setup() {
     onTrial = otaTrialPending();
     if (onTrial) logf(LOG_NOTICE, "trial boot of %s", CLIENT_VERSION);
     config = loadConfig(builtInSettings());
+    applySdConfig(&config);
 
     connectNetworkForever();
     if (urlOrigin(config.serverURL, readingsURL, sizeof(readingsURL) - 10)) {

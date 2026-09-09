@@ -1,0 +1,30 @@
+# An example config.yaml for the root of the board's SD card.
+#
+# The board reads this after its built-in settings and its own store, so
+# anything here wins. Without a card, or with a key missing, the board keeps
+# what it already had. The five keys marked required must all be present or
+# the file is ignored whole.
+server:
+  # Required. The first page the board fetches. The server names the next one
+  # in its X-Next-URL header, so this is only the way in.
+  url: http://YOUR_SERVER_HOST:8080/breathe.png
+  # How many times to retry a fetch before the wake gives up.
+  retries: 3
+  # How long to wait when the server sends no X-Next-Refresh-Seconds.
+  default_refresh_seconds: 300
+wifi:
+  ssid: XXXX          # required
+  pass: XXXX          # required
+  retries: 10
+ntp:
+  host: pool.ntp.org  # required
+  # Required. The timezone in "Olson" format.
+  timezone: Europe/Dublin
+mqtt_logger:
+  # Set to true to publish the board's logs to a broker.
+  enabled: false
+  broker: XXXX
+  port: 1883
+  clientId: inkplate5-env-monitor
+  topic: mqtt/env-monitor-client
+  retries: 3
