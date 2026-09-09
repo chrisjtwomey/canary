@@ -40,14 +40,15 @@ jobs:
       - name: Create defaults.cpp from example
         run: cp src/defaults.example.cpp src/defaults.cpp
 
-      # Both sensor paths: the drivers the board runs, and the mocks that
-      # stand in when nothing is attached.
+      # Both sensor paths, plus the bench routine that runs instead of the
+      # awake loop: the drivers the board runs, the mocks that stand in when
+      # nothing is attached, and the wiring check.
       - name: Build firmware
-        run: pio run -e esp32 -e esp32-mock
+        run: pio run -e esp32 -e esp32-mock -e esp32-validate
 
       # This project's own logic, on the host: the room model, the sensor
       # mocks, the drivers against a fake I2C bus, the suite that reads
-      # them, and the loop's timing.
+      # them, the validation pass, and the loop's timing.
       - name: Run host tests
         run: pio test -e native
 

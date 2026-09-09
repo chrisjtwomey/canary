@@ -248,6 +248,52 @@ in `test/test_drivers` against parts that answer the bus the way their
 datasheets describe. The BME688's compensation is Bosch's own C API, in
 `lib/bme68x`.
 
+### 5. Validating the wiring
+
+A separate image that runs the bench routine instead of the awake loop. Use
+it when the hardware is new or has been re-wired, and to take a current
+capture: it has no network and no panel, so what the log shows is the
+sensors and nothing else.
+
+```sh
+pio run -e esp32-validate -t upload
+pio device monitor -b 115200
+```
+
+Every wake it scans the bus, checks each sensor running and in its low-power
+state, takes one reading set, puts everything to sleep and deep-sleeps for
+ten seconds. Then it does it again, so a capture can bracket the same
+sequence as often as you like. A pass looks like this:
+
+```
+wakeup caused by external signal using RTC_IO.
+##### Inkplate5V2 hardware validation #####
+battery voltage: 4.09v   panel 27 C
+i2c scan: 0x12 0x20 0x48 0x51 0x62 0x70 0x76 (7 devices)
+[validate]       0 ms  phase 1: probing the bus
+[validate] shtc3 present
+...
+[validate] summary: 0 failures, 0 warnings in 42000 ms
+arming deep sleep timer wakeup in 15 seconds
+sleeping for 10 seconds (RTC alarm at epoch 1757443210)
+```
+
+The phase markers carry milliseconds so a PPK2 trace lines up with the phase
+it was taken in; [docs/BATTERY.md](docs/BATTERY.md) §10 says which capture
+replaces which estimate. Three things worth knowing when it does not pass:
+
+- **A sensor is absent.** Its address is missing from the scan and it counts
+  as a failure. The rest of the pass still runs.
+- **The PM fan's SET line.** `PM still answers with SET low; SET wire not
+  connected` is a warning, not a failure — the fan is simply not
+  controllable, and every PM reading is still valid. docs/HARDWARE.md §8
+  puts that wire on expander P1_3.
+- **The RTC alarm.** The next boot should say `wakeup caused by external
+  signal using RTC_IO` about ten seconds later. `wakeup caused by timer`
+  after fifteen means the alarm did not reach GPIO 39, which Soldered does
+  not guarantee on this board; the timer is armed as a backstop so the loop
+  carries on either way.
+
 ## Setup
 
 epd must be checked out beside this repo. Then:
