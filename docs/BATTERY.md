@@ -41,7 +41,7 @@ section links its sources. Facts are from the datasheet unless marked
 | BME688 | BSEC LP 3 s | **BSEC ULP 300 s**, state saved across sleep |
 | SHTC3 | polled | one reading per wake |
 | Extra wires | optional SET | SET (required), nothing else |
-| Board changes | cut JP5, JP2 | same, plus optional LED and regulator trims (§3) |
+| Board changes | none | optional LED and regulator trims (§3) |
 
 **What sets battery life, in order:** the PM fan (~60 % of the budget), the
 ESP32 wake (25–65 %, unmeasured), everything else (< 10 %). The four sensors'
@@ -173,9 +173,9 @@ parts. These are not in HARDWARE.md and none has been measured.
 | | green LED, 10 kΩ series *(schematic)* | ~120 µA *(derived)* | **yes — cut SJ3** |
 | Adafruit 4632 (PMSA003I) | AP2112K regulator | 55 µA typ | no |
 | | green LED, 10 kΩ series *(schematic)* | ~120 µA *(derived)* | desolder D1 or R1 — no jumper |
-| Soldered 333203 (BME688) | regulator, part unknown | ~50 µA *(assumed)* | **yes — cut JP3, bridge the bypass jumper** *(HARDWARE.md §4; verify)* |
+| Soldered 333203 (BME688) | regulator, part unknown | ~50 µA *(assumed)* | **yes — cut JP3, bridge JP2** *(HARDWARE.md §4; verify before cutting)* |
 | | LED? | unknown | look at the board |
-| Soldered 333032 (SHTC3) | regulator, part unknown | ~50 µA *(assumed)* | **yes — cut JP3, bridge JP4** |
+| Soldered 333032 (SHTC3) | regulator, part unknown | ~50 µA *(assumed)* | **yes — cut JP3, bridge JP4** *(inferred from the board layout; verify before cutting)* |
 | | LED? | unknown | look at the board |
 
 Board overhead: **~450 µA untrimmed, ~110 µA with the LEDs and Soldered
@@ -393,7 +393,7 @@ day on USB (§1).
 Design constraints, not code. The mains loop in `main.cpp` is not the starting
 point; weather-cal's sleep loop is.
 
-- **Two wake sources.** Wake A → B is the ESP32 timer (`esp_sleep_enable_timer_wakeup`, 30 s). Wake B → next A/B is the RTC alarm (`rtcSetAlarmEpoch`, `enableWakeOnRtcAlarm`), so cycles land on 300 s marks regardless of how long wake B took. A cycle counter in RTC memory decides whether the next wake is A or B.
+- **Two wake sources.** Wake A → B is the ESP32 timer (`esp_sleep_enable_timer_wakeup`, 30 s). Wake B → next A/B is the RTC alarm (`rtcSetAlarmEpoch`, `enableWakeOnRtcAlarm`), so cycles land on 300 s marks regardless of how long wake B took. A cycle counter in RTC memory decides whether the next wake is A or B. Both are proven on this board *(measured 2026-09-09)*: the validation build arms the alarm and the timer together and wakes on `ESP_SLEEP_WAKEUP_EXT0`, so the design above no longer rests on an untested wake path.
 - **`Inkplate::begin()` drives P1_3–P1_7 LOW** *(HARDWARE.md §1)*. Wake B must re-assert SET high before reading the PM sensor, or the fan stops the moment the board boots. Confirm what `begin()` does to the expander on wake.
 - **SCD41: never `power_down`.** One `measure_single_shot` per wake. `set_ambient_pressure` each wake from the BME688 (RAM). `set_temperature_offset` and ASC period once, then `persist_settings` once. **Never `persist_settings` per wake** — the EEPROM is rated 2000 writes, which is a week at 5-minute cycles.
 - **BSEC:** config `generic_33v_300s_4d`, ULP. State blob (238 B, HARDWARE.md §4) in RTC slow memory every cycle and in NVS every ~6 h; restore from RTC memory on wake, from NVS on cold boot. Timestamps in ns from the RTC epoch, never from `millis()`, so they stay monotonic across sleep.
@@ -466,15 +466,20 @@ nothing is rewired between mains and battery use.
 
 | Board | Do | Effort |
 |---|---|---|
-| BME688 (Soldered) | cut JP5 | knife, as in HARDWARE.md |
-| SHTC3 (Soldered) | cut JP2 | knife, as in HARDWARE.md |
 | SCD41 (Adafruit 5190) | cut SJ3 — kills the power LED | knife |
 | PMSA003I (Adafruit 4632) | desolder the green LED (D1) | iron, optional |
-| BME688, SHTC3 | cut JP3, bridge the bypass jumper — removes each board's regulator | knife + solder blob, optional |
+| BME688 (Soldered) | cut JP3, bridge JP2 — removes the board's regulator | knife + solder blob, optional |
+| SHTC3 (Soldered) | cut JP3, bridge JP4 — removes the board's regulator *(inferred; verify)* | knife + solder blob, optional |
 
-The first two are the mains build. The rest together save ~8 mAh/day — 5 % at
-the primary cadence. Do the cheap ones; skip the iron work until capture 1
-shows it matters.
+None of this is needed for the mains build, which cuts nothing (HARDWARE.md
+§6). Together they save ~8 mAh/day — 5 % at the primary cadence. Do the cheap
+ones; skip the iron work until capture 1 shows it matters.
+
+The pull-up jumpers are deliberately absent from this list. Cutting JP5 or JP2
+removes a 10 kΩ pull-up, and a pull-up passes current only while something
+holds the line low. With the rail on and the bus idle high, they cost nothing,
+so they buy no battery life. They are a bus rise-time choice, and only above
+100 kHz.
 
 ### What the code does
 

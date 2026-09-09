@@ -100,7 +100,7 @@ No conflict with 0x12, 0x62, 0x70, 0x76/0x77.
 
 ### Deep sleep and wake
 
-- RTC INT → JP2 (default INT) → **GPIO39** with 10 k pull-up *(schematic)*. Library example: `setAlarmEpoch(..., RTC_ALARM_MATCH_DHHMMSS); esp_sleep_enable_ext0_wakeup(GPIO_NUM_39, 0);` — the example carries the comment "GPIO39 is NOT guaranteed for Inkplate 5v2". Matches what `EpdBoardInkplate::enableWakeOnRtcAlarm()` does.
+- RTC INT → JP2 (default INT) → **GPIO39** with 10 k pull-up *(schematic)*. Library example: `setAlarmEpoch(..., RTC_ALARM_MATCH_DHHMMSS); esp_sleep_enable_ext0_wakeup(GPIO_NUM_39, 0);` — the example carries the comment "GPIO39 is NOT guaranteed for Inkplate 5v2". Matches what `EpdBoardInkplate::enableWakeOnRtcAlarm()` does. **It works on this board** *(measured 2026-09-09)*: the validation build sets a 10 s alarm and every wake logs `ESP_SLEEP_WAKEUP_EXT0` on time. Soldered's warning stands for the family, not for this unit.
 - Wake button SW3 → GPIO36, active low. Expander INT → GPIO34.
 - **easyC 3V3 stays on in deep sleep.** It is the unswitched LDO output the ESP32 itself runs from. Only microSD and RTC rails are switched. Cutting sensor power needs an external load switch on a free expander pin.
 - Free GPIO: expander P1_3–P1_7 on the bottom header; `gpioInit()` sets them OUTPUT LOW. Use `display.expander1.pinMode/digitalWrite(IO_PIN_B3..B7, ...)`. Do not use P0_x.
@@ -284,7 +284,7 @@ Sources: [Bosch datasheet rev 1.3](https://www.bosch-sensortec.com/media/boschse
 - VDD 1.71–3.6 V, optimised for 1.8 V (the Soldered board runs it at 3.3 V; heat scales with supply).
 - Sleep 0.15 µA. Forced T/P/H ~3.7 µA at 1 Hz. **Heater 12 mA typ, 17 mA peak.** BSEC averages: ULP 0.09 mA, LP 0.9 mA.
 - I²C **0x76** (SDO low) default on Soldered; JP1 → 0x77. Up to 3.4 MHz.
-- Soldered board: onboard regulator, VCC 3.3–5 V; JP3 regulator enable (NC), JP2 bypass (NO); **JP5 (NC) 3.3 V pull-ups, JP4 (NC) 5 V pull-ups — cut to disable.** Value not published (assume 10 k; §11).
+- Soldered board: onboard regulator, VCC 3.3–5 V; JP3 regulator enable (NC), JP2 bypass (NO); **JP5 (NC) 3.3 V pull-ups, JP4 (NC) 5 V pull-ups — cut to disable.** 10 k, from the `103` marking on the board.
 
 ### Interface (forced mode, the sequence we need)
 
@@ -333,7 +333,7 @@ Recommended operating range 5–60 °C, 20–80 % RH; long exposure > 80 % gives
 
 - VDD 1.62–3.6 V. Sleep **0.3 µA**, idle 45 µA, measuring 430 µA (normal) / 270 µA (low-power). 15.4 µJ per normal reading.
 - I²C **0x70, fixed**. Up to 1 MHz. Clock stretching supported; prefer the no-stretch commands on ESP32.
-- Soldered board: regulator, VCC 3.3–5 V; **JP2 (NC) 3.3 V pull-ups, JP1 (NC) 5 V pull-ups — cut to disable.** 10 kΩ per the mirrored schematic *(unverified)*. Level shifter between the header and the easyC side.
+- Soldered board: regulator, VCC 3.3–5 V; **JP2 (NC) 3.3 V pull-ups, JP1 (NC) 5 V pull-ups — cut to disable.** 10 kΩ, from the `103` marking on the board. Level shifter between the header and the easyC side. JP3 and JP4 sit beside the regulator; by analogy with the BME688 board, JP3 is the enable (NC) and JP4 the bypass (NO) *(inferred from the layout, unverified)*. The component side carries JP1–JP4 and no JP5.
 
 ### Commands
 
@@ -383,10 +383,10 @@ easyC, Qwiic and STEMMA QT are all **JST SH 1.0 mm 4-pin, same order: black GND,
 | Inkplate host | 10 k | no |
 | Adafruit SCD41 | 10 k | no jumper |
 | Adafruit PMSA003I | 10 k (connector side) | no jumper |
-| Soldered BME688 | 10 k *(assumed)* | JP5 |
-| Soldered SHTC3 | 10 k *(unverified)* | JP2 |
+| Soldered BME688 | 10 k *(marked 103)* | JP5 |
+| Soldered SHTC3 | 10 k *(marked 103)* | JP2 |
 
-Parallel total **2.0 kΩ** per line; sink 1.65 mA at 3.3 V. Spec minimum 967 Ω (3 mA sink) — **within spec**. At 100 kHz (Inkplate default) the rise-time budget is comfortable. At 400 kHz, 2.0 kΩ allows only ~177 pF of bus, marginal with four cables. Recommendation: **cut JP5 (BME688) and JP2 (SHTC3)** → 3.3 kΩ, and stay at 100 kHz.
+Parallel total **2.0 kΩ** per line; sink 1.65 mA at 3.3 V. Spec minimum 967 Ω (3 mA sink) — **within spec**. At 100 kHz (Inkplate default) the rise-time budget is comfortable. At 400 kHz, 2.0 kΩ allows only ~177 pF of bus, marginal with four cables. Recommendation: **stay at 100 kHz and cut nothing.** Cutting JP5 (BME688) and JP2 (SHTC3) would give 3.3 kΩ, which buys headroom only at 400 kHz.
 
 ### Length
 
@@ -438,7 +438,7 @@ Inkplate 5GEN2 (3V3/GND/SDA/SCL) → BME688 → SHTC3 → SCD41 → PMSA003I
 | Electrical order | Irrelevant on I²C; any order works. |
 | Connectors | All JST-SH, same pinout. Fine. |
 | Addresses | No conflicts. Fine. |
-| Pull-ups | 2.0 kΩ total, in spec; trim to 3.3 kΩ by cutting JP5 and JP2. |
+| Pull-ups | 2.0 kΩ total, in spec at 100 kHz. Nothing to cut. |
 | **Power** | **Not OK.** 3V3 through the chain from the Inkplate's shared 500 mA LDO; noisy for the SCD41; the two heavy loads (PMSA003I, SCD41) sit at the far end where cable drop is worst. |
 | **SHTC3 placement** | **Not OK.** The T/RH reference is chained between the BME688 heater and the SCD41, and nothing says where it sits physically. It must be the coolest, most exposed point. |
 | PMSA003I control | SET pin unused → fan runs continuously. Fine on mains; optional GPIO for duty-cycling. |
@@ -450,27 +450,72 @@ Inkplate 5GEN2 (3V3/GND/SDA/SCL) → BME688 → SHTC3 → SCD41 → PMSA003I
     │
     ▼
  Inkplate 5 Gen2
-    ├─ VIN pad (≈5 V on USB) ──► [3.3 V LDO, ≥ 600 mA] ──► 3V3 into the first sensor's VIN header pin
-    │                                                          (the chain's red wire carries it onward)
-    └─ easyC K3
-         cable 1: GND · SDA · SCL only — red 3V3 wire removed
-         │
-         ▼
-   ┌─ PMSA003I  (Adafruit 4632)   0x12   heaviest load first; fan continuous; SET → expander P1_3 (optional)
-   │     cable 2: all four wires
+    │
+    ├─ VIN pad ─────────────────► [3.3 V LDO ≥ 600 mA] ──┬──► PMSA003I header VIN   (power in)
+    ├─ GND (bottom header) ─────►         GND            └──► PMSA003I header GND   (return)
+    │
+    ├─ expander P1_3 ───────────────────────────────────────► PMSA003I header SET   (fan control)
+    │
+    └─ easyC K3 ──cable 1: SDA · SCL only───────────────────► PMSA003I header SDA, SCL (bus only)
+
+   ┌─ PMSA003I  (Adafruit 4632)   0x12   heaviest load first; power and ground enter here
+   │     cable 2: all four wires          easyC   ──►
    │     ▼
    ├─ SCD41     (Adafruit 5190)   0x62   second heaviest; gets BME688 pressure each cycle
-   │     cable 3
+   │     cable 3: all four wires
    │     ▼
-   ├─ BME688    (Soldered)        0x76   cut JP5 (3.3 V pull-ups)
-   │     cable 4
+   ├─ BME688    (Soldered)        0x76   JP1 moves it to 0x77 if 0x76 is ever taken
+   │     cable 4: all four wires
    │     ▼
-   └─ SHTC3     (Soldered)        0x70   cut JP2; LAST — at the enclosure edge, upstream of the fan, away from the heater and the Inkplate
+   └─ SHTC3     (Soldered)        0x70   LAST — at the enclosure edge, upstream of the fan,
+                                         away from the heater and the Inkplate. Second socket unused.
 ```
 
-Chain order is chosen for **cable voltage drop** (heavy loads nearest the injection point) and **heat** (reference sensor farthest from everything warm). Power enters at the PMSA003I's header VIN pin; every board's two connectors pass 3V3 straight through, so the rest of the chain is fed from there. All grounds are common through the chain and the Inkplate.
+### What connects to what
 
-Optional wires from the Inkplate header: **SET** (PMSA003I fan) to expander **P1_3**; nothing else is needed.
+Build it in this order. Nothing after step 1 carries mains-level current, but
+getting step 1 wrong is what browns the board out under load.
+
+| # | From | To | Wire |
+|---|---|---|---|
+| 1 | Inkplate **VIN pad** | AMS1117 **IN** | Dupont at the AMS1117 — see below |
+| 2 | Inkplate **GND** (bottom header) | AMS1117 **GND** | Dupont both ends |
+| 3 | AMS1117 **OUT** | PMSA003I header **VIN** | Dupont both ends |
+| 4 | AMS1117 **GND** | PMSA003I header **GND** | Dupont both ends — see below |
+| 5 | Inkplate easyC **K3** | PMSA003I header **SDA**, **SCL** | cable 1: **SDA and SCL only**, Dupont at the PM |
+| 6 | PMSA003I **either easyC socket** | SCD41 either socket | cable 2: all four |
+| 7 | SCD41 other socket | BME688 either socket | cable 3: all four |
+| 8 | BME688 other socket | SHTC3 either socket | cable 4: all four |
+| 9 | Inkplate expander **P1_3** | PMSA003I header **SET** | Dupont both ends |
+
+Every sensor board has two easyC sockets wired in parallel, so "either" is
+literal: in and out are interchangeable. The SHTC3 is last, so one of its two
+sockets stays empty. The PM board's 7-pin header is VIN, 3Vo, GND, SCL, SDA,
+RST, SET; you use VIN, GND, SDA, SCL and SET and leave 3Vo and RST alone. The
+bus reaches the PM board through the header and leaves it through an easyC
+socket.
+
+Every connection can be unplugged. The Inkplate's expander pads, the PM
+header and the AMS1117 pins take female Dupont housings; the expander pads are
+0.8 mm drills, so their header needs round machined pins. Cable 1 is an easyC
+cable with its JST-SH plug kept at the Inkplate end and only **positions 3
+(SDA) and 4 (SCL)** wired. Positions are 1 GND, 2 3V3, 3 SDA, 4 SCL.
+
+The VIN pad is a 4 × 4 mm surface pad with no hole (PAD3 in Soldered's KiCad
+board). The wire unplugs at the AMS1117 end.
+
+### Why the ground wire in step 4
+
+Power enters at the PMSA003I's header VIN pin, and every board's two sockets
+pass 3V3 straight through, so the rest of the chain is fed from there. The
+return, up to roughly **410 mA** (the PM board's ~200 mA plus the SCD41's
+175–205 mA peak plus the other two), goes back to the regulator through step
+4 and on to the Inkplate through step 2. Cable 1 carries no ground, so steps
+2 and 4 are also the signal reference for SDA and SCL. Leave either out and
+the chain has no ground in common with the Inkplate.
+
+Chain order is chosen for **cable voltage drop** (heavy loads nearest the
+injection point) and **heat** (reference sensor farthest from everything warm).
 
 ### Every board runs at 3.3 V
 
@@ -534,7 +579,8 @@ Allow ~15 mm beyond each JST-SH socket for the cable plug.
 ## 11. Open questions
 
 1. **Which SCD41 breakout?** Soldered sells no SCD41 (their CO₂ board is the SCD43). This doc assumes **Adafruit 5190**. If it is a bare Sensirion module or another board, §2's board section and the pull-up count change.
-2. **Soldered pull-up values** for the BME688 and SHTC3 are not published. Measure once the boards arrive; 10 kΩ assumed.
+2. ~~**Soldered pull-up values** for the BME688 and SHTC3 are not published.~~ Answered 2026-09-10: both boards carry `103` resistors beside their pull-up jumpers, so 10 kΩ, and the §6 total of 2.0 kΩ stands.
 3. **SHTC3 board size**: Soldered's text says 22 × 22 mm, their own drawing shows ~38 × 22 mm. Measure.
 4. **PMSA003I input current at 3.3 V** is derived from the charge-pump datasheet, not measured. Measure; it sets the LDO rating.
 5. **Inkplate awake / Wi-Fi / refresh currents** are unpublished. Measure the whole device on USB to confirm it sits under the 500 mA VBUS fuse.
+6. ~~**Does the RTC alarm wake this board?** Soldered say GPIO39 is not guaranteed on the 5 Gen2.~~ Answered 2026-09-09: yes. `pio run -e esp32-validate` sleeps 10 s on the alarm and wakes on `ESP_SLEEP_WAKEUP_EXT0` every cycle, with an ESP32 timer armed at 15 s as a backstop that has never had to fire.
