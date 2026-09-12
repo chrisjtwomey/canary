@@ -3,8 +3,9 @@ from __future__ import annotations
 
 from airium import Airium
 
-from metrics import (co2_verdict, extremes, fmt_duration, fmt_hm, fmt_int, fmt_stamp, hour_ticks,
-                     local_midnight, minutes_above, series, ventilation_events, y_range)
+from metrics import (NO_SENSOR_TAG, NO_SENSOR_VERDICT, co2_verdict, extremes, fmt_duration, fmt_hm,
+                     fmt_int, fmt_stamp, hour_ticks, local_midnight, minutes_above, sensor_absent,
+                     series, ventilation_events, y_range)
 from pages.base import EnvPage
 
 SPARK_HOURS = 3
@@ -15,13 +16,14 @@ class BreathePage(EnvPage):
     title = "Breathe"
     stylesheet = "breathe.css"
     css_class = "breathe"
-    requires = ("latest", "history_24h")
+    requires = ("latest", "history_24h", "status")
 
     def body(self, a: Airium, **data) -> None:
         latest: dict = data["latest"]
         history_24h: list[dict] = data["history_24h"]
         co2 = latest.get("co2_ppm")
         valid = bool(latest.get("valid", {}).get("co2")) and co2 is not None
+        absent = sensor_absent(data.get("status"), "scd41")
         lo, hi = extremes(history_24h + [latest], "co2_ppm")
 
         a.div(klass="title label", _t="Carbon dioxide")
@@ -31,13 +33,13 @@ class BreathePage(EnvPage):
             a.span(klass="value", _t=fmt_int(co2) if co2 is not None else "—")
             a.span(klass="unit", _t="ppm")
             if not valid:
-                a.span(klass="cold-tag", _t="warming up")
+                a.span(klass="cold-tag", _t=NO_SENSOR_TAG if absent else "warming up")
 
         if valid:
             assert co2 is not None   # which is part of what valid means
             a.div(klass="verdict", _t=co2_verdict(co2))
         else:
-            a.div(klass="verdict", _t="Warming up.")
+            a.div(klass="verdict", _t=NO_SENSOR_VERDICT if absent else "Warming up.")
 
         with a.div(klass="details"):
             if lo and hi:

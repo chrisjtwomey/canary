@@ -12,10 +12,10 @@ from typing import Callable
 
 from airium import Airium
 
-from metrics import (barometer_word, change_over, classify_rate, co2_meaning, co2_verdict,
-                     extremes, fmt_hm, fmt_int, fmt_stamp, iaq_meaning, iaq_verdict, pm25_verdict,
-                     pm_meaning, pressure_meaning, rate_words, rh_meaning, rh_words, series,
-                     temp_meaning, temp_words, value_at)
+from metrics import (NO_SENSOR_TAG, NO_SENSOR_VERDICT, barometer_word, change_over, classify_rate,
+                     co2_meaning, co2_verdict, extremes, fmt_hm, fmt_int, fmt_stamp, iaq_meaning,
+                     iaq_verdict, pm25_verdict, pm_meaning, pressure_meaning, rate_words, rh_meaning,
+                     rh_words, sensor_absent, series, temp_meaning, temp_words, value_at)
 from pages.base import EnvPage
 
 
@@ -38,6 +38,7 @@ class Metric:
     pad: float = 0.0
     second: "Metric | None" = None   # drawn lighter beside this one on the trace
     cold_tag: str = "warming up"
+    sensor: str = ""                 # its key in the board's client.sensors block
 
 
 def _f1(v):
@@ -51,35 +52,42 @@ def _f0(v):
 # The delta windows are short: a room changes in minutes. Pressure gets an
 # hour, since it moves in hours. slow and fast are changes over that window.
 RH = Metric("rh_pct", "Humidity", "%", _f0, "temp_humidity", 0.25, 3, 8,
-            ((35, "dry"), (60, "humid")), 20, rh_words, rh_meaning, pad=5)
+            ((35, "dry"), (60, "humid")), 20, rh_words, rh_meaning, pad=5, sensor="shtc3")
 TEMP = Metric("temp_c", "Temperature", "°C", _f1, "temp_humidity", 0.25, 0.3, 0.8,
-              ((19, "cool"), (24, "warm")), 5, temp_words, temp_meaning, pad=1, second=RH)
+              ((19, "cool"), (24, "warm")), 5, temp_words, temp_meaning, pad=1, second=RH,
+              sensor="shtc3")
 CO2 = Metric("co2_ppm", "Carbon dioxide", "ppm", fmt_int, "co2", 0.25, 40, 120,
              ((700, "fresh"), (1000, "stuffy")), 400, co2_verdict, co2_meaning,
-             floor=400, ceil=1200, pad=50)
+             floor=400, ceil=1200, pad=50, sensor="scd41")
 PM25 = Metric("pm2_5", "Fine dust", "µg/m³", fmt_int, "particulates", 0.25, 3, 15,
               ((15, "WHO guideline"),), 30, pm25_verdict, pm_meaning,
-              floor=0, ceil=20, pad=5, cold_tag="fan warming up")
+              floor=0, ceil=20, pad=5, cold_tag="fan warming up", sensor="pmsa003i")
 IAQ = Metric("iaq", "Air quality", "IAQ", _f0, "gas", 0.25, 8, 25,
              ((50, "good"), (150, "stale")), 100, iaq_verdict, iaq_meaning,
-             floor=0, ceil=200, pad=20, cold_tag="heater warming up")
+             floor=0, ceil=200, pad=20, cold_tag="heater warming up", sensor="bme688")
 PRESSURE = Metric("pressure_hpa", "Barometer", "hPa", _f1, "pressure", 1, 0.6, 1.2,
                   ((980, "rain"), (1000, "change"), (1015, "fair"), (1030, "very dry")), 15,
-                  lambda v: barometer_word(v) + ".", pressure_meaning, pad=3, cold_tag="no reading")
+                  lambda v: barometer_word(v) + ".", pressure_meaning, pad=3, cold_tag="no reading",
+                  sensor="bme688")
 
 
 def _valid(latest: dict, m: Metric) -> bool:
     return bool(latest.get("valid", {}).get(m.valid_flag)) and latest.get(m.key) is not None
 
 
-def _hero(a: Airium, latest: dict, m: Metric, id: str) -> None:
+def _cold_words(m: Metric, absent: bool) -> tuple[str, str]:
+    """The tag beside the dash, and the verdict, when there is no valid reading."""
+    return (NO_SENSOR_TAG, NO_SENSOR_VERDICT) if absent else (m.cold_tag, "Warming up.")
+
+
+def _hero(a: Airium, latest: dict, m: Metric, id: str, absent: bool) -> None:
     v = latest.get(m.key)
     ok = _valid(latest, m)
     with a.div(klass="hero" + ("" if ok else " cold"), id=id):
         a.span(klass="value", _t=m.fmt(v) if v is not None else "—")
         a.span(klass="unit", _t=m.unit)
         if not ok:
-            a.span(klass="cold-tag", _t=m.cold_tag)
+            a.span(klass="cold-tag", _t=_cold_words(m, absent)[0])
 
 
 def _window_words(hours: float) -> str:
@@ -90,7 +98,7 @@ class TracePage(EnvPage):
     """The value now, three days behind it, the thresholds as dashed lines."""
     stylesheet = "trace.css"
     css_class = "trace"
-    requires = ("latest", "history_72h")
+    requires = ("latest", "history_72h", "status")
     DAYS = 3
 
     def __init__(self, name: str, metric: Metric, **kwargs):
@@ -103,11 +111,13 @@ class TracePage(EnvPage):
         history_72h: list[dict] = data["history_72h"]
         m = self.metric
         ok = _valid(latest, m)
+        absent = sensor_absent(data.get("status"), m.sensor)
         a.div(klass="title label", _t=m.title)
         a.div(klass="stamp", _t=fmt_stamp(latest["ts"], self.tz))
         with a.div(klass="stats"):
-            _hero(a, latest, m, "now")
-            a.div(klass="verdict", _t=m.level_words(latest[m.key]) if ok else "Warming up.")
+            _hero(a, latest, m, "now", absent)
+            a.div(klass="verdict",
+                  _t=m.level_words(latest[m.key]) if ok else _cold_words(m, absent)[1])
             lo, hi = extremes(history_72h + [latest], m.key)
             if lo and hi:
                 a.div(klass="detail", _t=(
@@ -188,14 +198,15 @@ class DeltaPage(EnvPage):
     """The change over a window, where the value stood, and what it may mean."""
     stylesheet = "delta.css"
     css_class = "delta"
-    requires = ("latest", "history_24h")
+    requires = ("latest", "history_24h", "status")
 
     def __init__(self, name: str, metric: Metric, **kwargs):
         super().__init__(name, **kwargs)
         self.metric = metric
         self.title = metric.title
 
-    def _block(self, a: Airium, latest: dict, history: list[dict], m: Metric, main: bool) -> None:
+    def _block(self, a: Airium, latest: dict, history: list[dict], m: Metric, main: bool,
+               absent: bool) -> None:
         ok = _valid(latest, m)
         delta = change_over(history, latest, m.key, m.window_h) if ok else None
         rate = classify_rate(delta, m.slow, m.fast)
@@ -205,8 +216,9 @@ class DeltaPage(EnvPage):
             a.span(klass="value", _t=f"{shown:+.{decimals}f}" if shown is not None else "—")
             a.span(klass="unit", _t=f"{m.unit} in {_window_words(m.window_h)}")
             if not ok:
-                a.span(klass="cold-tag", _t=m.cold_tag)
-        a.div(klass="verdict", _t=rate_words(rate) if ok else "Warming up.", id=f"rate-{m.key}")
+                a.span(klass="cold-tag", _t=_cold_words(m, absent)[0])
+        a.div(klass="verdict", _t=rate_words(rate) if ok else _cold_words(m, absent)[1],
+              id=f"rate-{m.key}")
         if ok:
             a.div(klass="detail", _t=f"{m.fmt(latest[m.key])} {m.unit} now. {m.level_words(latest[m.key])}")
             if rate is not None:
@@ -216,6 +228,7 @@ class DeltaPage(EnvPage):
         latest: dict = data["latest"]
         history_24h: list[dict] = data["history_24h"]
         m = self.metric
+        status = data.get("status")
         a.div(klass="title label", _t=m.title)
         a.div(klass="stamp", _t=fmt_stamp(latest["ts"], self.tz))
         with a.div(klass="columns" + (" two" if m.second else "")):
@@ -226,10 +239,11 @@ class DeltaPage(EnvPage):
                     a.canvas(id="column2")
         with a.div(klass="stats"):
             with a.div(klass="block main"):
-                self._block(a, latest, history_24h, m, True)
+                self._block(a, latest, history_24h, m, True, sensor_absent(status, m.sensor))
             if m.second is not None:
                 with a.div(klass="block second"):
-                    self._block(a, latest, history_24h, m.second, False)
+                    self._block(a, latest, history_24h, m.second, False,
+                                sensor_absent(status, m.second.sensor))
 
     def _column(self, latest: dict, history: list[dict], m: Metric, canvas: str) -> dict:
         v = latest.get(m.key) if _valid(latest, m) else None

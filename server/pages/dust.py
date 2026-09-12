@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from airium import Airium
 
-from metrics import extremes, fmt_hm, fmt_int, fmt_stamp, pm25_verdict
+from metrics import (NO_SENSOR_TAG, NO_SENSOR_VERDICT, extremes, fmt_hm, fmt_int, fmt_stamp,
+                     pm25_verdict, sensor_absent)
 from pages.base import EnvPage
 
 # key, size label, dots per particle counted, dot radius, shade, hand-drawn
@@ -37,13 +38,14 @@ class DustPage(EnvPage):
     title = "Dust"
     stylesheet = "dust.css"
     css_class = "dust"
-    requires = ("latest", "history_24h")
+    requires = ("latest", "history_24h", "status")
 
     def body(self, a: Airium, **data) -> None:
         latest: dict = data["latest"]
         history_24h: list[dict] = data["history_24h"]
         pm25 = latest.get("pm2_5")
         valid = bool(latest.get("valid", {}).get("particulates")) and pm25 is not None
+        absent = sensor_absent(data.get("status"), "pmsa003i")
         lo, hi = extremes(history_24h + [latest], "pm2_5")
 
         a.div(klass="title label", _t="Fine dust")
@@ -53,13 +55,13 @@ class DustPage(EnvPage):
             a.span(klass="value", _t=fmt_int(pm25) if pm25 is not None else "—")
             a.span(klass="unit", _t="µg/m³")
             if not valid:
-                a.span(klass="cold-tag", _t="fan warming up")
+                a.span(klass="cold-tag", _t=NO_SENSOR_TAG if absent else "fan warming up")
 
         if valid:
             assert pm25 is not None   # which is part of what valid means
             a.div(klass="verdict", _t=pm25_verdict(pm25))
         else:
-            a.div(klass="verdict", _t="Warming up.")
+            a.div(klass="verdict", _t=NO_SENSOR_VERDICT if absent else "Warming up.")
 
         parts = []
         if valid:
@@ -74,7 +76,7 @@ class DustPage(EnvPage):
         if valid and latest.get("pc_0_3") is not None:
             a.div(klass="caption", _t=(
                 f"{fmt_int(latest['pc_0_3'])} particles over 0.3 µm in a tenth of a litre"))
-        elif not valid:
+        elif not valid and not absent:
             a.div(klass="caption", _t="the fan needs thirty seconds before the counts mean anything")
 
     def charts(self, **data) -> list[dict]:
