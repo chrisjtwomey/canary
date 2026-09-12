@@ -571,6 +571,7 @@ find later.
 | Soldered BME688 board | none published | Block out **38 × 22 × ~1.6 mm**, M3 holes at the corners, JST-SH on both short edges |
 | Soldered SHTC3 board | none published | Block out **38 × 22 × ~1.6 mm**, M3 holes at ~32 × 16 mm pitch, JST-SH on both short edges |
 | 3.3 V LDO module | vendor-specific | typical breakout ~15 × 10 mm |
+| This enclosure | [`hardware/enclosure/v1/`](../hardware/enclosure/v1/README.md) — `enclosure.py` (Fusion generator), `stl/`, `step/` | Display head (tray + back cover) in a 20° cradle on a sensor base (chassis + shell). The layout in §9 as built. |
 
 Allow ~15 mm beyond each JST-SH socket for the cable plug.
 

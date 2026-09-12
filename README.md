@@ -27,6 +27,7 @@ battery life. See [docs/HARDWARE.md](docs/HARDWARE.md) §7.
 | [docs/HARDWARE.md](docs/HARDWARE.md) | Every datasheet distilled: wiring, commands, timing, currents, gotchas, 3D files. The reference to reach for instead of searching. |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How this departs from the weather calendar's model, what [epd](https://github.com/chrisjtwomey/epd) must gain, and the order of work. |
 | [docs/READINGS.md](docs/READINGS.md) | The JSON the firmware posts. |
+| [hardware/enclosure/v1/](hardware/enclosure/v1/README.md) | The printed desk enclosure (display head + sensor base): Fusion generator, STL and STEP, sensor layout and wiring. |
 
 ## Build and test
 
