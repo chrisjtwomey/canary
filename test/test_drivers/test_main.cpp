@@ -526,7 +526,7 @@ void test_bme_carries_the_gas_and_heater_status_bits() {
     TEST_ASSERT_TRUE(drv.fetchData(t + drv.measurementMs(), d));
     TEST_ASSERT_TRUE(d.gasValid);
     TEST_ASSERT_TRUE(d.heatStable);
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, d.iaqAccuracy, "IAQ needs BSEC, which is not integrated");
+    TEST_ASSERT_FALSE_MESSAGE(d.hasIaq, "IAQ needs BSEC, which is not integrated");
 
     // A plate that has not reached its target: the resistance is still there
     // and still meaningless.

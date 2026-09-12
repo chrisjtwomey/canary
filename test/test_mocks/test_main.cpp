@@ -291,6 +291,7 @@ void test_bme_iaq_accuracy_climbs_with_cycles() {
     for (int i = 0; i < 120; ++i) { b.startForced(i * 1000); b.fetchData(i * 1000 + 200, d); seen[d.iaqAccuracy] = 1; }
     TEST_ASSERT_TRUE(seen[0] && seen[1] && seen[2] && seen[3]);
     TEST_ASSERT_EQUAL(3, d.iaqAccuracy);
+    TEST_ASSERT_TRUE(d.hasIaq);
     TEST_ASSERT_TRUE(d.iaq >= 0 && d.iaq <= 500);
 }
 
@@ -302,7 +303,7 @@ void test_json_matches_readings_md() {
     r.shtc3 = {21.34f, 44.06f}; r.shtc3Valid = true;
     r.scd41 = {812, 25.2f, 36.0f}; r.scd41Valid = true;
     r.pm = {4, 6, 8, 4, 6, 8, 900, 250, 40, 4, 1, 0, 0x97, 0}; r.pmValid = true;
-    r.bme688 = {22.8f, 1011.2f, 40.2f, 132000.0f, true, true, 63.4f, 2}; r.bme688Valid = true;
+    r.bme688 = {22.8f, 1011.2f, 40.2f, 132000.0f, true, true, 63.4f, 2, true}; r.bme688Valid = true;
     char buf[640];
     size_t n = readingsToJson(r, "inkplate5-env-monitor", buf, sizeof(buf));
     TEST_ASSERT_TRUE(n > 0);
@@ -355,6 +356,22 @@ void test_json_drops_gas_when_the_conversion_was_a_dummy_slot() {
     TEST_ASSERT_NOT_NULL(strstr(buf, "\"pressure\":true"));
 }
 
+// Without BSEC the driver has no index. The resistance still goes out, so a
+// page shows it instead of an index of zero.
+void test_json_leaves_the_index_out_when_the_driver_has_none() {
+    Readings r = {};
+    r.ts = 5;
+    r.bme688 = {22.8f, 1011.2f, 40.2f, 132000.0f, true, true, 0.0f, 0, /*hasIaq=*/false};
+    r.bme688Valid = true;
+    char buf[400];
+    TEST_ASSERT_TRUE(readingsToJson(r, "x", buf, sizeof(buf)) > 0);
+    TEST_ASSERT_EQUAL_STRING(
+        "{\"ts\":5,\"device\":\"x\",\"gas_ohm\":132000,\"pressure_hpa\":1011.2"
+        ",\"bme688\":{\"temp_c\":22.8,\"rh_pct\":40.2}"
+        ",\"valid\":{\"temp_humidity\":false,\"co2\":false,\"particulates\":false"
+        ",\"pressure\":true,\"gas\":true}}", buf);
+}
+
 void test_json_too_small_buffer_returns_zero_and_empty() {
     Readings r = {};
     r.ts = 1; r.shtc3Valid = true;
@@ -389,6 +406,7 @@ int main(int, char**) {
     RUN_TEST(test_json_omits_invalid_sensors_and_flags_them);
     RUN_TEST(test_json_keeps_pressure_but_drops_gas_when_the_heater_is_cold);
     RUN_TEST(test_json_drops_gas_when_the_conversion_was_a_dummy_slot);
+    RUN_TEST(test_json_leaves_the_index_out_when_the_driver_has_none);
     RUN_TEST(test_json_too_small_buffer_returns_zero_and_empty);
     return UNITY_END();
 }

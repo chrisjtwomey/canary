@@ -38,9 +38,10 @@ size_t readingsToJson(const Readings& r, const char* device, char* buf, size_t l
         if (!addI(",\"pc_2_5\":%lu,\"pc_5_0\":%lu", r.pm.pc2_5, r.pm.pc5_0)) goto fail;
         if (!addI(",\"pc_10\":%lu", r.pm.pc10, 0)) goto fail;
     }
-    if (gasTrusted) {
-        if (!add(",\"gas_ohm\":%.0f,\"iaq\":%.0f", r.bme688.gasOhm, r.bme688.iaq)) goto fail;
-        if (!add(",\"iaq_accuracy\":%.0f", (double)r.bme688.iaqAccuracy, 0.0)) goto fail;
+    if (gasTrusted && !add(",\"gas_ohm\":%.0f", r.bme688.gasOhm, 0.0)) goto fail;
+    if (gasTrusted && r.bme688.hasIaq) {
+        if (!add(",\"iaq\":%.0f,\"iaq_accuracy\":%.0f", r.bme688.iaq,
+                 (double)r.bme688.iaqAccuracy)) goto fail;
     }
     if (r.bme688Valid && !add(",\"pressure_hpa\":%.1f", r.bme688.pressureHpa, 0.0)) goto fail;
     if (r.scd41Valid && !add(",\"scd41\":{\"temp_c\":%.1f,\"rh_pct\":%.1f}", r.scd41.tempC, r.scd41.rhPct)) goto fail;

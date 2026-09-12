@@ -122,5 +122,6 @@ bool Bme688Driver::fetchData(uint32_t nowMs, Bme688Data& out) {
     out.heatStable = (data.status & BME68X_HEAT_STAB_MSK) != 0;
     out.iaq = 0.0f;
     out.iaqAccuracy = 0;
+    out.hasIaq = false;
     return true;
 }
