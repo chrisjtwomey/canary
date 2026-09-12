@@ -251,10 +251,27 @@ static void postReadings(const Readings& r, uint32_t nowMs) {
     }
 }
 
+static bool sensorsRunning[4] = {false, false, false, false};
+
+// Logs each sensor that has stopped, or started, since the last call.
+static void logSensorChanges() {
+    static const char* const names[4] = {"shtc3", "scd41", "pmsa003i", "bme688"};
+    const bool running[4] = {sensors.shtc3Present(), sensors.scd41Present(),
+                             sensors.pmPresent(), sensors.bme688Present()};
+    for (int i = 0; i < 4; ++i) {
+        if (running[i] == sensorsRunning[i]) continue;
+        sensorsRunning[i] = running[i];
+        logf(running[i] ? LOG_NOTICE : LOG_WARNING, "sensor %s %s", names[i],
+             running[i] ? "running" : "stopped; starting it again");
+    }
+}
+
 static void sampleSensors(uint32_t nowMs) {
     uint32_t epoch = epochNow();
     advanceSimulation(epoch);
+    sensors.restartFailed();
     Readings r = sensors.sample(epoch);
+    logSensorChanges();
 
     if (nowMs - lastReportMs < kReportIntervalMs) return;
     lastReportMs = nowMs;
@@ -290,6 +307,7 @@ void setup() {
              sensors.shtc3Present(), sensors.scd41Present(),
              sensors.pmPresent(), sensors.bme688Present());
     }
+    logSensorChanges();
     logSensorBanner();
 }
 

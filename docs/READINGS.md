@@ -94,8 +94,9 @@ Diagnostics page shows it.
 }
 ```
 
-`sensors.*` says which parts answered at start; `valid.*` says which are
-warm now. `panel_temp_c` is the e-paper power controller's sensor, which
+`sensors.*` says which parts are running: a flag goes false when its part
+stops giving readings, and true again when a restart brings it back.
+`valid.*` says which are warm now. `panel_temp_c` is the e-paper power controller's sensor, which
 reads the board, not the air. `fetch` is the page loop's state.
 
 The server accepts the document at `POST /readings` and answers 204. It

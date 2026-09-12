@@ -411,6 +411,22 @@ void test_pm_set_line_stops_the_fan_and_restarts_the_warm_up() {
     TEST_ASSERT_TRUE(drv.stable(restarted + Pmsa003iDriver::kWarmupMs));
 }
 
+void test_pm_begin_restarts_the_warm_up_for_a_module_back_from_a_power_cut() {
+    FakePmsa003i part;
+    bus->attach(Pmsa003iDriver::kAddress, &part);
+    Pmsa003iDriver drv(*bus, *clk, setFanLine);
+    TEST_ASSERT_TRUE(drv.begin(clk->now));
+    clk->advance(Pmsa003iDriver::kWarmupMs);
+    TEST_ASSERT_TRUE(drv.stable(clk->now));
+
+    clk->advance(60000);   // the cable went back in; the fan starts from rest
+    uint32_t back = clk->now;
+    TEST_ASSERT_TRUE(drv.begin(back));
+    TEST_ASSERT_FALSE_MESSAGE(drv.stable(back + Pmsa003iDriver::kWarmupMs - 1),
+                              "the warm-up runs again from the new start");
+    TEST_ASSERT_TRUE(drv.stable(back + Pmsa003iDriver::kWarmupMs));
+}
+
 void test_pm_reports_nothing_while_the_module_boots() {
     FakePmsa003i part;
     bus->attach(Pmsa003iDriver::kAddress, &part);
@@ -551,6 +567,30 @@ void test_bme_reports_nothing_when_the_part_has_no_new_data() {
     TEST_ASSERT_FALSE(drv.fetchData(t + drv.measurementMs(), d));
 }
 
+void test_bme_notices_a_part_that_lost_its_settings() {
+    FakeBme688 part;
+    bus->attach(Bme688Driver::kAddress, &part);
+    Bme688Driver drv(*bus, *clk);
+    TEST_ASSERT_TRUE(drv.begin(0));
+
+    Bme688Data d;
+    uint32_t t = clk->now;
+    TEST_ASSERT_TRUE(drv.startForced(t));
+    TEST_ASSERT_TRUE(drv.fetchData(t + drv.measurementMs(), d));
+
+    part.powerCycle();
+    t += 5000;
+    TEST_ASSERT_TRUE(drv.startForced(t));
+    TEST_ASSERT_FALSE_MESSAGE(drv.fetchData(t + drv.measurementMs(), d),
+                              "a cycle on the reset settings is not a reading");
+    TEST_ASSERT_FALSE_MESSAGE(drv.startForced(t + 5000), "no cycle until it is started again");
+
+    TEST_ASSERT_TRUE(drv.begin(t + 5000));
+    t = clk->now + 5000;
+    TEST_ASSERT_TRUE(drv.startForced(t));
+    TEST_ASSERT_TRUE(drv.fetchData(t + drv.measurementMs(), d));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_sensirion_crc_matches_the_datasheet_vector);
@@ -584,6 +624,7 @@ int main(int, char**) {
     RUN_TEST(test_pm_frame_parses_into_the_atmospheric_values);
     RUN_TEST(test_pm_without_a_set_line_the_fan_has_run_since_power_on);
     RUN_TEST(test_pm_set_line_stops_the_fan_and_restarts_the_warm_up);
+    RUN_TEST(test_pm_begin_restarts_the_warm_up_for_a_module_back_from_a_power_cut);
     RUN_TEST(test_pm_reports_nothing_while_the_module_boots);
 
     RUN_TEST(test_bme_begin_rejects_a_wrong_chip_id);
@@ -595,5 +636,6 @@ int main(int, char**) {
     RUN_TEST(test_bme_refuses_a_second_cycle_while_one_runs);
     RUN_TEST(test_bme_carries_the_gas_and_heater_status_bits);
     RUN_TEST(test_bme_reports_nothing_when_the_part_has_no_new_data);
+    RUN_TEST(test_bme_notices_a_part_that_lost_its_settings);
     return UNITY_END();
 }

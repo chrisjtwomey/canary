@@ -231,6 +231,14 @@ is one of three things: the part is not on the bus, its address is taken, or
 it answered something that is not that part — the SHTC3 and the BME688 both
 check what they are talking to before saying yes.
 
+A part that did not start is tried again 30 s later, then after twice the
+last wait each time, up to ten minutes, so plugging it in brings it up
+without a restart. A part that misses three samples in a row, over at least
+15 s, has stopped — unplugged, or back from a power cut without its
+settings — and is started again the same way. The log says `sensor scd41
+stopped; starting it again`, then `sensor scd41 running`, and the
+Diagnostics page follows.
+
 Readings are dropped, not invented, so the first minute after a boot looks
 sparse on purpose: the SCD41's first five-second conversion has not landed,
 and the PM counts mean nothing until the fan has run for thirty seconds. The

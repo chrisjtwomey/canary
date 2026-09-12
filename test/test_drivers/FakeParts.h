@@ -16,6 +16,9 @@ public:
     bool     asleep = true;
     int      measures = 0;
 
+    // Power back after a cut: the part comes up idle, not asleep.
+    void powerCycle() { asleep = false; }
+
     bool write(const uint8_t* data, size_t len) override {
         if (len != 2) return false;
         uint16_t cmd = command(data);
@@ -65,6 +68,13 @@ public:
     int      stopsRefused = 0;
     int      wakeUps = 0;
     int      singleShots = 0;
+
+    // Power back after a cut: the part comes up idle, with nothing measured.
+    void powerCycle() {
+        periodic = false;
+        dataReady = false;
+        poweredDown = false;
+    }
 
     bool write(const uint8_t* data, size_t len) override {
         if (len < 2) return false;
@@ -204,6 +214,14 @@ public:
         regs[kRegVariantId] = 0x01;      // BME688; a BME680 answers 0x00
         regs[kRegField0] = 0x80;         // new data
         regs[kRegGasStatus] = 0x20 | 0x10;   // gas valid, heater stable
+    }
+
+    // Power back after a cut: the heater and control registers are at their
+    // reset value, zero. The identity and the calibration live in the part's
+    // own memory and survive.
+    void powerCycle() {
+        for (int reg = 0x50; reg <= 0x75; ++reg) regs[reg] = 0;
+        forcedCycles = 0;
     }
 
     // Bosch writes register and value in pairs, the first address arriving

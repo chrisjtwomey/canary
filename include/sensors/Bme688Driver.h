@@ -40,6 +40,7 @@ private:
     static uint8_t oversamplingCode(uint8_t multiplier);
 
     bool applyConfig();
+    bool settingsHeld();
 
     II2cBus& bus_;
     IClock&  clock_;

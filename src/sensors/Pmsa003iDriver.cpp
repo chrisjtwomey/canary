@@ -1,10 +1,13 @@
 #include "sensors/Pmsa003iDriver.h"
 
 bool Pmsa003iDriver::begin(uint32_t nowMs) {
-    if (setLine_) setEnabled(true, nowMs);
-
-    uint32_t running = nowMs - enabledAtMs_;
-    if (running < kBootMs) clock_.waitMs(kBootMs - running);
+    // This also starts a module that has just had its power back, so the boot
+    // and the warm-up count from here, whether or not the fan was meant to be
+    // running already.
+    if (setLine_) setLine_(true);
+    enabled_ = true;
+    enabledAtMs_ = nowMs;
+    clock_.waitMs(kBootMs);
 
     uint8_t frame[32];
     PmData discarded;
