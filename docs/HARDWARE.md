@@ -284,7 +284,7 @@ Sources: [Bosch datasheet rev 1.3](https://www.bosch-sensortec.com/media/boschse
 - VDD 1.71–3.6 V, optimised for 1.8 V (the Soldered board runs it at 3.3 V; heat scales with supply).
 - Sleep 0.15 µA. Forced T/P/H ~3.7 µA at 1 Hz. **Heater 12 mA typ, 17 mA peak.** BSEC averages: ULP 0.09 mA, LP 0.9 mA.
 - I²C **0x76** (SDO low) default on Soldered; JP1 → 0x77. Up to 3.4 MHz.
-- Soldered board: onboard regulator, VCC 3.3–5 V; JP3 regulator enable (NC), JP2 bypass (NO); **JP5 (NC) 3.3 V pull-ups, JP4 (NC) 5 V pull-ups — cut to disable.** 10 k, from the `103` marking on the board.
+- Soldered board: onboard regulator, VCC 3.3–5 V; JP3 regulator enable (NC); JP2 (NO) is not a bypass: Soldered's docs say "when connected, the voltage regulator is powered by 5V". What JP2 joins is unverified, because no schematic is published; check it with a meter before bridging it. **JP5 (NC) 3.3 V pull-ups, JP4 (NC) 5 V pull-ups — cut to disable.** 10 k, from the `103` marking on the board.
 
 ### Interface (forced mode, the sequence we need)
 
@@ -333,7 +333,7 @@ Recommended operating range 5–60 °C, 20–80 % RH; long exposure > 80 % gives
 
 - VDD 1.62–3.6 V. Sleep **0.3 µA**, idle 45 µA, measuring 430 µA (normal) / 270 µA (low-power). 15.4 µJ per normal reading.
 - I²C **0x70, fixed**. Up to 1 MHz. Clock stretching supported; prefer the no-stretch commands on ESP32.
-- Soldered board: regulator, VCC 3.3–5 V; **JP2 (NC) 3.3 V pull-ups, JP1 (NC) 5 V pull-ups — cut to disable.** 10 kΩ, from the `103` marking on the board. Level shifter between the header and the easyC side. JP3 and JP4 sit beside the regulator; by analogy with the BME688 board, JP3 is the enable (NC) and JP4 the bypass (NO) *(inferred from the layout, unverified)*. The component side carries JP1–JP4 and no JP5.
+- Soldered board: regulator, VCC 3.3–5 V; **JP2 (NC) 3.3 V pull-ups, JP1 (NC) 5 V pull-ups — cut to disable.** 10 kΩ, from the `103` marking on the board. Level shifter between the header and the easyC side. JP3 (NC) feeds the regulator and JP4 (NO) bypasses it; Soldered's docs say "Ensure JP3 is disconnected if JP4 is connected". The component side carries JP1–JP4 and no JP5.
 
 ### Commands
 
@@ -571,6 +571,7 @@ find later.
 | Soldered BME688 board | none published | Block out **38 × 22 × ~1.6 mm**, M3 holes at the corners, JST-SH on both short edges |
 | Soldered SHTC3 board | none published | Block out **38 × 22 × ~1.6 mm**, M3 holes at ~32 × 16 mm pitch, JST-SH on both short edges |
 | 3.3 V LDO module | vendor-specific | typical breakout ~15 × 10 mm |
+| This enclosure | [`hardware/enclosure/v1/`](../hardware/enclosure/v1/README.md) — `enclosure.py` (Fusion generator), `stl/`, `step/` | Display head (tray + back cover) in a 20° cradle on a sensor base (chassis + shell). The layout in §9 as built. |
 
 Allow ~15 mm beyond each JST-SH socket for the cable plug.
 

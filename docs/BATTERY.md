@@ -173,9 +173,9 @@ parts. These are not in HARDWARE.md and none has been measured.
 | | green LED, 10 kΩ series *(schematic)* | ~120 µA *(derived)* | **yes — cut SJ3** |
 | Adafruit 4632 (PMSA003I) | AP2112K regulator | 55 µA typ | no |
 | | green LED, 10 kΩ series *(schematic)* | ~120 µA *(derived)* | desolder D1 or R1 — no jumper |
-| Soldered 333203 (BME688) | regulator, part unknown | ~50 µA *(assumed)* | **yes — cut JP3, bridge JP2** *(HARDWARE.md §4; verify before cutting)* |
+| Soldered 333203 (BME688) | regulator, part unknown | ~50 µA *(assumed)* | **unknown** — JP2 is not a bypass; Soldered's docs say it powers the regulator from 5 V. Find a bypass with a meter first (HARDWARE.md §4) |
 | | LED? | unknown | look at the board |
-| Soldered 333032 (SHTC3) | regulator, part unknown | ~50 µA *(assumed)* | **yes — cut JP3, bridge JP4** *(inferred from the board layout; verify before cutting)* |
+| Soldered 333032 (SHTC3) | regulator, part unknown | ~50 µA *(assumed)* | **yes — cut JP3, bridge JP4** *(Soldered's docs)* |
 | | LED? | unknown | look at the board |
 
 Board overhead: **~450 µA untrimmed, ~110 µA with the LEDs and Soldered
@@ -468,8 +468,8 @@ nothing is rewired between mains and battery use.
 |---|---|---|
 | SCD41 (Adafruit 5190) | cut SJ3 — kills the power LED | knife |
 | PMSA003I (Adafruit 4632) | desolder the green LED (D1) | iron, optional |
-| BME688 (Soldered) | cut JP3, bridge JP2 — removes the board's regulator | knife + solder blob, optional |
-| SHTC3 (Soldered) | cut JP3, bridge JP4 — removes the board's regulator *(inferred; verify)* | knife + solder blob, optional |
+| BME688 (Soldered) | nothing yet: JP2 is not a bypass (HARDWARE.md §4), so find one with a meter first | — |
+| SHTC3 (Soldered) | cut JP3, bridge JP4 — removes the board's regulator | knife + solder blob, optional |
 
 None of this is needed for the mains build, which cuts nothing (HARDWARE.md
 §6). Together they save ~8 mAh/day — 5 % at the primary cadence. Do the cheap
