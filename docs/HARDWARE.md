@@ -296,6 +296,8 @@ Chip ID 0xD0 = 0x61; variant 0xF0 = 0x01. Set osrs_h (0x72), then osrs_t/osrs_p 
 - Sample rates: **LP 3 s** (0.9 mA) or **ULP 300 s** (0.09 mA). Calibration: accuracy 0 for ~5 min (LP) / ~20 min (ULP), then hours to reach 3; needs both clean and polluted air exposure.
 - **State blob 238 bytes** must be saved and restored or calibration restarts. Config blob (~1.9 kB, pick the 3.3 V / 3 s or 300 s / 4 d or 28 d variant) is re-applied each boot. BSEC needs a monotonic clock (`Bsec2::begin` takes a millis function).
 - Mains-powered and always awake, LP mode with the state kept in RAM and checkpointed to NVS every few hours is the well-trodden path. Deep-sleep BSEC setups are where the forum failures live.
+- The firmware links BSEC2 1.10.2610's `libalgobsec` without Bosch's Arduino wrapper, whose sources need a second copy of the BME68x API; `scripts/bsec.py` adds the headers, the config blobs and the binary. It uses `bme688_sel_33v_3s_4d`, subscribes to the IAQ outputs at the LP rate, and runs in a FreeRTOS task of its own. The Arduino package has no BME688 configuration named for IAQ, so whether `sel` gives a sound index is for the bench to show.
+- BSEC's header gives its pressure input in Pa, but Bosch's own BSEC2 wrapper converts the sensor's Pa to hPa before handing it over. The firmware follows the wrapper; a wrong unit would show as a value-limit error from `bsec_do_steps`.
 
 ### Self-heating
 

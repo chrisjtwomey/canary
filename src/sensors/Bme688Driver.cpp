@@ -82,8 +82,10 @@ bool Bme688Driver::applyConfig() {
     conf_.odr     = BME68X_ODR_NONE;
     if (bme68x_set_conf(&conf_, &dev_) != BME68X_OK) return false;
 
+    // A profile of zero turns the heater off: BSEC asks for that when it
+    // wants a cycle without a gas conversion.
     struct bme68x_heatr_conf heater = bme68x_heatr_conf();
-    heater.enable = BME68X_ENABLE;
+    heater.enable = heaterC_ && heaterMs_ ? BME68X_ENABLE : BME68X_DISABLE;
     heater.heatr_temp = heaterC_;
     heater.heatr_dur = heaterMs_;
     if (bme68x_set_heatr_conf(BME68X_FORCED_MODE, &heater, &dev_) != BME68X_OK) return false;

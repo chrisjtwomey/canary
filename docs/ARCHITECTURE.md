@@ -163,10 +163,10 @@ reads twenty calibration coefficients out of the part and the failure mode
 is a plausible wrong number, so Bosch's own C API does that arithmetic
 (`lib/bme68x`, v4.4.8, BSD-3-Clause). It reaches the bus through function
 pointers, so it sits behind `II2cBus` like everything else, and it has no
-Arduino dependency, so it builds for the host tests too. IAQ needs BSEC,
-which is not integrated: the driver reports no index, and the posted
-document leaves `iaq` and `iaq_accuracy` out, as [READINGS.md](READINGS.md)
-says.
+Arduino dependency, so it builds for the host tests too. IAQ comes from
+BSEC, which drives the part through the same driver from a task of its
+own; `BsecBme688` hands `SensorSuite` the newest cycle BSEC ran, so the
+suite's sequence is the same with BSEC as without it.
 
 ## 6. Mocks — what "as close as possible" means
 

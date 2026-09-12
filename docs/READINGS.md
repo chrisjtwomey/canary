@@ -42,7 +42,7 @@ thing unchanged.
 | `pc_*` | PMSA003I | count per 0.1 L | particles larger than 0.3 … 10 µm |
 | `gas_ohm` | BME688 | Ω | raw heater-plate resistance; lower = more VOC |
 | `pressure_hpa` | BME688 | hPa | |
-| `iaq`, `iaq_accuracy` | BME688 via BSEC | 0–500, 0–3 | absent until BSEC is integrated; the mock emits them |
+| `iaq`, `iaq_accuracy` | BME688 via BSEC | 0–500, 0–3 | absent until BSEC has produced an index; the mock emits them |
 | `pressure_hpa` | BME688 | hPa | present whenever the chip answered, even on a cold plate |
 | `scd41.*`, `bme688.*` | those sensors | °C, % | their own T/RH, which run warm; kept for offset tuning, not for display |
 | `client` | firmware | object | object | the board's own state, see below |
@@ -91,7 +91,8 @@ Diagnostics page shows it.
   "sensors": { "shtc3": true, "scd41": true, "pmsa003i": true, "bme688": true },
   "fetch": { "next_url": "http://h:8080/day.png", "next_in_s": 120, "backoff_step": 0,
              "ok": 12, "failed": 1 },
-  "backlog": { "held": 0, "store": "psram" }
+  "backlog": { "held": 0, "store": "psram" },
+  "bsec": { "running": true, "restored": true, "accuracy": 2, "late": 0, "saved": 1757443200 }
 }
 ```
 
@@ -102,7 +103,10 @@ reads the board, not the air. `fetch` is the page loop's state. `backlog`
 is how many readings wait to be posted again, and where they wait: `sd`,
 `psram`, or empty when the board has nowhere to keep them. A held reading
 goes out later as its own document, without the `client` object, so the
-server keeps the report with the highest `ts` as the newest.
+server keeps the report with the highest `ts` as the newest. `bsec` is
+BSEC's own state: whether it runs, whether it took a saved state when it
+started, the accuracy of its index, how many of its samples were late, and
+when it last saved its state this boot (0 for not yet).
 
 The server accepts the document at `POST /readings` and answers 204. The
 newest document, whole, feeds the Diagnostics page. With `source.kind:

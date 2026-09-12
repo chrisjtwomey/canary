@@ -40,6 +40,11 @@ ClientConfig builtInSettings();
 static InkplateBoard inkplateBoard;
 static ArduinoClock  wallClock;
 
+// UTC seconds at boot, once NTP has answered; 0 until then. The loop sets it
+// once, and the BSEC task reads it to stamp the state it saves.
+static volatile uint32_t bootEpoch = 0;
+static uint32_t syncedEpoch() { return bootEpoch ? bootEpoch + millis() / 1000 : 0; }
+
 // ─── The only part that knows which sensor implementation is in use ───────
 
 #if defined(USE_MOCK_SENSORS)
@@ -69,9 +74,16 @@ static void logSensorBanner() {
     log(LOG_INFO, "mock sensors up; PM fan warming up for 30 s");
 }
 static const bool kMockSensors = true;
+// The mock models BSEC's output itself.
+static void startBsec() {}
+static void fillBsecStatus(ClientStatus&) {}
 
 #else
+#include <Preferences.h>
+
 #include "sensors/Bme688Driver.h"
+#include "sensors/BsecLibrary.h"
+#include "sensors/BsecRunner.h"
 #include "sensors/II2cBus.h"
 #include "sensors/Pmsa003iDriver.h"
 #include "sensors/Scd41Driver.h"
@@ -86,8 +98,69 @@ static void setPmFanLine(bool high) { epdBoard().writeExpanderPin(kPmSetPin, hig
 static ArduinoI2cBus  i2cBus;          // Wire, which Inkplate::begin() started
 static Shtc3Driver    shtc3Impl(i2cBus, wallClock);
 static Scd41Driver    scd41Impl(i2cBus, wallClock);
-static Bme688Driver   bmeImpl(i2cBus, wallClock);
+static Bme688Driver   bmeDriver(i2cBus, wallClock);
 static Pmsa003iDriver pmImpl(i2cBus, wallClock, setPmFanLine);
+
+// BSEC's state in NVS, which keeps it across power cuts, OTA updates and USB
+// uploads.
+static const char kBsecNamespace[] = "bsec";
+class NvsBsecStore : public IBsecStateStore {
+public:
+    bool load(BsecState& out) override {
+        Preferences prefs;
+        if (!prefs.begin(kBsecNamespace, true)) return false;
+        out = BsecState();
+        out.len = prefs.getBytes("state", out.blob, sizeof(out.blob));
+        out.accuracy = prefs.getUChar("accuracy", 0);
+        out.savedEpoch = prefs.getULong("saved", 0);
+        prefs.end();
+        return out.len > 0;
+    }
+    bool save(const BsecState& state) override {
+        Preferences prefs;
+        if (!prefs.begin(kBsecNamespace, false)) return false;
+        const bool ok = prefs.putBytes("state", state.blob, state.len) == state.len;
+        prefs.putUChar("accuracy", state.accuracy);
+        prefs.putULong("saved", state.savedEpoch);
+        prefs.end();
+        return ok;
+    }
+};
+
+static BsecLibrary  bsecLibrary;
+static NvsBsecStore bsecStore;
+static BsecRunner   bsecRunner(bsecLibrary, bmeDriver, wallClock, bsecStore, syncedEpoch);
+static BsecBme688   bmeImpl(bsecRunner);
+
+// Above the loop's priority, so a page download or a draw cannot make a
+// sample late. Wire locks each transaction, so the task and the loop share
+// the bus without a lock of their own.
+static const uint32_t    kBsecStackBytes = 8192;
+static const UBaseType_t kBsecPriority = 2;
+
+static void bsecTask(void*) {
+    for (;;) {
+        const uint32_t waitMs = bsecRunner.step();
+        vTaskDelay(pdMS_TO_TICKS(waitMs ? waitMs : 1));
+    }
+}
+
+static void startBsec() {
+    BsecState stored;
+    if (!bsecRunner.begin(&stored)) log(LOG_WARNING, "BSEC did not start; trying again every 3 s");
+    logf(LOG_INFO, "BSEC %s", bsecRunner.status().restored ? "resumes from the state in NVS"
+                                                          : "starts from nothing");
+    xTaskCreatePinnedToCore(bsecTask, "bsec", kBsecStackBytes, nullptr, kBsecPriority, nullptr, 1);
+}
+
+static void fillBsecStatus(ClientStatus& s) {
+    const BsecRunner::Status bsec = bsecRunner.status();
+    s.bsecRunning = bsec.running;
+    s.bsecRestored = bsec.restored;
+    s.iaqAccuracy = bsec.accuracy;
+    s.bsecLateCalls = bsec.lateCalls;
+    s.bsecSavedEpoch = bsec.savedEpoch;
+}
 
 // The readings come from the room itself, so there is nothing to advance.
 static void advanceSimulation(uint32_t) {}
@@ -125,8 +198,9 @@ static uint32_t lastReportMs = 0;
 static uint32_t fetchOk = 0;
 static uint32_t fetchFailed = 0;
 static char     json[FileBacklog::kMaxDoc];
-static char     clientJson[640];
-static char     body[1300];
+// Room for a next URL of up to 256 characters.
+static char     clientJson[768];
+static char     body[1500];
 static char     ipText[16];
 
 // Readings the server did not take, sent again once it answers.
@@ -290,6 +364,7 @@ static ClientStatus clientStatus(uint32_t nowMs) {
     s.fetchFailed = fetchFailed;
     s.backlogHeld = backlog ? backlog->count() : 0;
     s.backlogStore = backlog ? backlog->where() : "";
+    fillBsecStatus(s);
     return s;
 }
 
@@ -378,6 +453,8 @@ void setup() {
     openBacklog();
 
     advanceSimulation(epochNow());
+    // Before the suite, which asks the BSEC side whether the BME688 is running.
+    startBsec();
     if (!sensors.begin()) {
         logf(LOG_WARNING, "sensor start incomplete: shtc3=%d scd41=%d pm=%d bme688=%d",
              sensors.shtc3Present(), sensors.scd41Present(),
@@ -390,6 +467,7 @@ void setup() {
 void loop() {
     events();   // ezTime: periodic NTP re-sync
     uint32_t nowMs = millis();
+    if (!bootEpoch && timeStatus() != timeNotSet) bootEpoch = (uint32_t)now() - nowMs / 1000;
 
     if (refresh.due(nowMs)) fetchAndDraw();
 
