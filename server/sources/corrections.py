@@ -39,6 +39,8 @@ class SeaLevelSource(DataSource):
     def _wrap(self, fetch: Fetcher) -> Fetcher:
         def corrected():
             data = fetch()
+            if data is None:
+                return None
             if isinstance(data, list):
                 return [self.correct(d) for d in data]
             return self.correct(data)

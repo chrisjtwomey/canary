@@ -104,8 +104,11 @@ everything time-zone or unit related in Python, where it is tested.
 The pages: Breathe (CO₂), Comfort (temperature and humidity), Dust
 (particulates), Air (the VOC index), a trace and a delta page for each of
 those and for pressure, Day (24 h ribbons), and Diagnostics (the board's
-own report). All but Diagnostics read the simulated room; Diagnostics reads
-the `status` dataset, the last document the board posted.
+own report). All but Diagnostics read the measurements: the simulated room
+by default, or what the board has posted with `source.kind: store` in
+`config.yaml`, which keeps them in `server/readings.db`. Before the first
+reading, every one of those pages says "No readings yet." Diagnostics
+reads the `status` dataset, the last document the board posted.
 
 A metric's *pool* is its main page plus two pages of the same two shapes,
 both in `pages/pool.py` and driven by a `Metric` spec: `TracePage`, the

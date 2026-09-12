@@ -104,5 +104,9 @@ is how many readings wait to be posted again, and where they wait: `sd`,
 goes out later as its own document, without the `client` object, so the
 server keeps the report with the highest `ts` as the newest.
 
-The server accepts the document at `POST /readings` and answers 204. It
-keeps only the newest until the readings store exists.
+The server accepts the document at `POST /readings` and answers 204. The
+newest document, whole, feeds the Diagnostics page. With `source.kind:
+store` in `config.yaml`, every document also goes into the readings store,
+without its `client` object, and the other pages draw from the store. A
+document is stored by its own `ts`, and a second copy of the same device
+and `ts` is ignored.
