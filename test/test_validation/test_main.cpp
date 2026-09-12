@@ -180,6 +180,15 @@ void test_bme688_without_a_stable_heater_is_a_warning() {
     TEST_ASSERT_EQUAL_UINT8(0, r.failures);
 }
 
+void test_bme688_first_cycle_after_start_is_thrown_away() {
+    Bench b;
+    b.bmePart.firstCycleCold = true;
+    SensorValidation::Report r = b.run();
+    TEST_ASSERT_EQUAL_INT(SensorValidation::PASS, r.bme688.normal);
+    TEST_ASSERT_EQUAL_INT(SensorValidation::PASS, r.bme688.lowPower);
+    TEST_ASSERT_EQUAL_UINT8(0, r.warnings);
+}
+
 // ---------------- The PM fan's SET line ----------------
 
 void test_set_line_low_silences_the_pm_module() {
@@ -309,6 +318,7 @@ int main(int argc, char** argv) {
     RUN_TEST(test_shtc3_sleeps_before_its_low_power_reading);
     RUN_TEST(test_bme688_runs_a_fresh_forced_cycle_after_an_idle_gap);
     RUN_TEST(test_bme688_without_a_stable_heater_is_a_warning);
+    RUN_TEST(test_bme688_first_cycle_after_start_is_thrown_away);
 
     RUN_TEST(test_set_line_low_silences_the_pm_module);
     RUN_TEST(test_pm_that_answers_with_set_low_warns_and_does_not_fail);

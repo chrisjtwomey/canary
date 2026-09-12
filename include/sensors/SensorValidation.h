@@ -101,6 +101,7 @@ private:
 
     bool waitForScd41Data();
     bool pmAnswers();
+    bool runBmeCycle(Bme688Data& out);
 
     IClock&     clock_;
     II2cBus&    bus_;

@@ -214,13 +214,21 @@ void SensorValidation::checkScd41(Report& r) {
         (unsigned)lowPower.co2Ppm, outcomeName(r.scd41.lowPower));
 }
 
+bool SensorValidation::runBmeCycle(Bme688Data& out) {
+    if (!bme_.startForced(clock_.millis())) return false;
+    clock_.waitMs(bme_.measurementMs());
+    return bme_.fetchData(clock_.millis(), out);
+}
+
 void SensorValidation::checkBme688(Report& r) {
+    // The first forced cycle after the part starts never reports a stable
+    // heater, so it is thrown away rather than counted as a warning.
+    Bme688Data first = {};
+    runBmeCycle(first);
+    clock_.waitMs(kBmeIdleGapMs);
+
     Bme688Data data = {};
-    bool ok = bme_.startForced(clock_.millis());
-    if (ok) {
-        clock_.waitMs(bme_.measurementMs());
-        ok = bme_.fetchData(clock_.millis(), data);
-    }
+    bool ok = runBmeCycle(data);
     r.bme688.normal = record(r, ok ? check(data) : FAIL);
     say(kLogNotice, "[validate] bme688 normal %.1f hPa gas %.0f ohm %s", data.pressureHpa,
         data.gasOhm, outcomeName(r.bme688.normal));
@@ -230,11 +238,7 @@ void SensorValidation::checkBme688(Report& r) {
     clock_.waitMs(kBmeIdleGapMs);
 
     Bme688Data lowPower = {};
-    ok = bme_.startForced(clock_.millis());
-    if (ok) {
-        clock_.waitMs(bme_.measurementMs());
-        ok = bme_.fetchData(clock_.millis(), lowPower);
-    }
+    ok = runBmeCycle(lowPower);
     r.bme688.lowPower = record(r, ok ? check(lowPower) : FAIL);
     say(kLogNotice, "[validate] bme688 low power (sleep + forced) %.1f hPa %s",
         lowPower.pressureHpa, outcomeName(r.bme688.lowPower));
