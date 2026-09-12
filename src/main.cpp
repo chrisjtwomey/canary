@@ -27,6 +27,7 @@
 #include "net/ClientStatus.h"
 #include "net/RefreshTimer.h"
 #include "net/Url.h"
+#include "sensors/II2cBus.h"
 #include "sensors/IClock.h"
 #include "sensors/Readings.h"
 #include "sensors/SensorSuite.h"
@@ -263,6 +264,8 @@ static void sampleSensors(uint32_t nowMs) {
 void setup() {
     epdBegin(inkplateBoard);
     startBoard(kRotation);
+    // A sensor that drops off the bus would otherwise slow every sample.
+    Wire.setTimeOut(ArduinoI2cBus::kTimeoutMs);
 
     logf(LOG_NOTICE, "##### %s boot #####", epdBoard().deviceName());
     logf(LOG_NOTICE, "Client version: %s", CLIENT_VERSION);

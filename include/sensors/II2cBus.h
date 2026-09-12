@@ -25,6 +25,11 @@ public:
 // Wire, which Inkplate::begin() has already started at 100 kHz.
 class ArduinoI2cBus : public II2cBus {
 public:
+    // How long a transfer may wait on the bus before it gives up. The core's
+    // default is also 50 ms, but a read to an address with nothing on it
+    // measured nearly a second, so both images set it with Wire.setTimeOut().
+    static const uint16_t kTimeoutMs = 50;
+
     explicit ArduinoI2cBus(TwoWire& wire = Wire) : wire_(wire) {}
 
     bool write(uint8_t addr, const uint8_t* data, size_t len) override {
