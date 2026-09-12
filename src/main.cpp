@@ -25,6 +25,7 @@
 #include "version.h"
 
 #include "net/Backlog.h"
+#include "net/Calibration.h"
 #include "net/ClientStatus.h"
 #include "net/RefreshTimer.h"
 #include "net/Url.h"
@@ -44,6 +45,8 @@ static ArduinoClock  wallClock;
 // once, and the BSEC task reads it to stamp the state it saves.
 static volatile uint32_t bootEpoch = 0;
 static uint32_t syncedEpoch() { return bootEpoch ? bootEpoch + millis() / 1000 : 0; }
+
+static char calibrationURL[310];   // the server's /calibration; empty when there is no server
 
 // ─── The only part that knows which sensor implementation is in use ───────
 
@@ -74,9 +77,11 @@ static void logSensorBanner() {
     log(LOG_INFO, "mock sensors up; PM fan warming up for 30 s");
 }
 static const bool kMockSensors = true;
-// The mock models BSEC's output itself.
+// The mock models BSEC's output itself, and has no state to keep.
 static void startBsec() {}
 static void fillBsecStatus(ClientStatus&) {}
+static size_t calibrationBlock(char*, size_t) { return 0; }
+static void restoreFromServer() {}
 
 #else
 #include <Preferences.h>
@@ -145,9 +150,11 @@ static void bsecTask(void*) {
     }
 }
 
+// The state NVS gave BSEC at boot, to weigh against the server's copy.
+static BsecState nvsState;
+
 static void startBsec() {
-    BsecState stored;
-    if (!bsecRunner.begin(&stored)) log(LOG_WARNING, "BSEC did not start; trying again every 3 s");
+    if (!bsecRunner.begin(&nvsState)) log(LOG_WARNING, "BSEC did not start; trying again every 3 s");
     logf(LOG_INFO, "BSEC %s", bsecRunner.status().restored ? "resumes from the state in NVS"
                                                           : "starts from nothing");
     xTaskCreatePinnedToCore(bsecTask, "bsec", kBsecStackBytes, nullptr, kBsecPriority, nullptr, 1);
@@ -160,6 +167,54 @@ static void fillBsecStatus(ClientStatus& s) {
     s.iaqAccuracy = bsec.accuracy;
     s.bsecLateCalls = bsec.lateCalls;
     s.bsecSavedEpoch = bsec.savedEpoch;
+}
+
+// The state as of BSEC's last copy, for the calibration block of the POST.
+static size_t calibrationBlock(char* buf, size_t len) {
+    BsecState state;
+    if (!bsecRunner.current(state)) return 0;
+    return calibrationJson(state.blob, state.len, state.accuracy, state.savedEpoch, buf, len);
+}
+
+// Asked once a boot, after the server has taken a readings POST, so a failed
+// request means the server holds no copy, not that it is down.
+static bool askedServerForState = false;
+
+static void restoreFromServer() {
+    if (askedServerForState || !bootEpoch || !calibrationURL[0]) return;
+    askedServerForState = true;
+
+    char url[360];
+    snprintf(url, sizeof(url), "%s?device=%s&before=%lu", calibrationURL, CLIENT_NAME,
+             (unsigned long)bootEpoch);
+    int32_t size = 1024;
+    uint8_t* answer = downloadFile(url, clientUserAgent(epdBoard().deviceName()), &size, nullptr);
+    if (!answer) {
+        log(LOG_INFO, "the server holds no BSEC state from before this boot");
+        return;
+    }
+    char text[1024];
+    const size_t n = size > 0 && (size_t)size < sizeof(text) ? (size_t)size : sizeof(text) - 1;
+    memcpy(text, answer, n);
+    text[n] = '\0';
+    free(answer);
+
+    BsecState theirs = {};
+    if (!parseBme688Calibration(text, theirs.blob, sizeof(theirs.blob), theirs.len,
+                                theirs.accuracy, theirs.savedEpoch)) {
+        log(LOG_WARNING, "the server's BSEC state does not parse; going on with NVS's");
+        return;
+    }
+    const SavedCopy ours = {nvsState.len > 0, nvsState.accuracy, nvsState.savedEpoch};
+    const SavedCopy server = {true, theirs.accuracy, theirs.savedEpoch};
+    if (!preferServerCopy(ours, server)) {
+        logf(LOG_INFO, "keeping NVS's BSEC state over the server's (accuracy %u, saved %lu)",
+             (unsigned)theirs.accuracy, (unsigned long)theirs.savedEpoch);
+        return;
+    }
+    logf(LOG_NOTICE, "restarting BSEC on the server's state (accuracy %u, saved %lu)",
+         (unsigned)theirs.accuracy, (unsigned long)theirs.savedEpoch);
+    bsecRunner.restartWith(theirs);
 }
 
 // The readings come from the room itself, so there is nothing to advance.
@@ -200,7 +255,10 @@ static uint32_t fetchFailed = 0;
 static char     json[FileBacklog::kMaxDoc];
 // Room for a next URL of up to 256 characters.
 static char     clientJson[768];
-static char     body[1500];
+// BSEC's state as base64 is about 380 bytes of calibration block.
+static char     calibration[400];
+static char     withCalibration[FileBacklog::kMaxDoc + 400];
+static char     body[FileBacklog::kMaxDoc + 400 + 768 + 32];
 static char     ipText[16];
 
 // Readings the server did not take, sent again once it answers.
@@ -369,9 +427,19 @@ static ClientStatus clientStatus(uint32_t nowMs) {
 }
 
 static void postReadings(const Readings& r, uint32_t nowMs) {
-    if (!readingsToJson(r, CLIENT_NAME, json, sizeof(json)) ||
-        !clientStatusJson(clientStatus(nowMs), clientJson, sizeof(clientJson)) ||
-        !withClientStatus(json, clientJson, body, sizeof(body))) {
+    if (!readingsToJson(r, CLIENT_NAME, json, sizeof(json))) {
+        log(LOG_WARNING, "readings document too large to post");
+        return;
+    }
+    // Only the live POST carries the calibration block: a held reading goes
+    // out later, when this state is no longer the current one.
+    const char* live = json;
+    if (calibrationBlock(calibration, sizeof(calibration)) &&
+        withMember(json, "calibration", calibration, withCalibration, sizeof(withCalibration))) {
+        live = withCalibration;
+    }
+    if (!clientStatusJson(clientStatus(nowMs), clientJson, sizeof(clientJson)) ||
+        !withClientStatus(live, clientJson, body, sizeof(body))) {
         log(LOG_WARNING, "readings document too large to post");
         return;
     }
@@ -387,6 +455,7 @@ static void postReadings(const Readings& r, uint32_t nowMs) {
                 logf(LOG_INFO, "sent %u held readings; %u still held", (unsigned)sent,
                      (unsigned)backlog->count());
             }
+            restoreFromServer();
             break;
         case REFUSED:
             logf(LOG_ERROR, "the server refused the readings (%d)", code);
@@ -445,6 +514,7 @@ void setup() {
 
     connectNetworkForever();
     if (urlOrigin(config.serverURL, readingsURL, sizeof(readingsURL) - 10)) {
+        snprintf(calibrationURL, sizeof(calibrationURL), "%s/calibration", readingsURL);
         strcat(readingsURL, "/readings");
         logf(LOG_INFO, "posting readings to %s", readingsURL);
     } else {

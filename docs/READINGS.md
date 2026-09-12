@@ -115,7 +115,29 @@ without its `client` object and its `calibration` block, and the other pages
 draw from the store. A document is stored by its own `ts`, and a second
 copy of the same device and `ts` is ignored.
 
+## The `calibration` block
+
+The live POST carries BSEC's learned state beside the measurements, so the
+server holds a copy that is never more than a minute old:
+
+```json
+"calibration": {
+  "bme688": { "state": "<320 characters of base64>", "accuracy": 3, "saved": 1757443200 }
+}
+```
+
+`state` is BSEC's 238-byte state, `accuracy` the IAQ accuracy when it was
+taken, and `saved` when it was taken, in UTC seconds, or 0 before NTP set
+the clock. A held reading goes out without it. The block is keyed by
+sensor so that other sensors can join it; only the BME688 has learned
+state the board can back up.
+
 A `calibration` block goes to the calibration store, whatever the source
 kind. Every copy is kept for `calibration.keep_days`, and
 `GET /calibration?device=<device>&before=<epoch>` answers with the newest
 copy saved before that time, one at accuracy 3 first, or a 404.
+
+After a boot, once the server has taken a POST, the board asks for the
+server's copy with `GET /calibration?device=<device>&before=<boot time>`,
+and restarts BSEC on it when it is better than the copy NVS gave it: more
+accurate, or as accurate and more than an hour newer.
