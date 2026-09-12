@@ -16,7 +16,9 @@ log = logging.getLogger("readings")
 
 
 class DeviceReports:
-    """Keeps the newest document POSTed to /readings."""
+    """Keeps the newest document POSTed to /readings: the one with the
+    highest ``ts``, so a reading the board held while the server was down
+    does not replace its live report when it arrives late."""
 
     def __init__(self, now: Callable[[], float] = time.time):
         self.now = now
@@ -28,9 +30,13 @@ class DeviceReports:
         ts = doc.get("ts")
         if isinstance(ts, bool) or not isinstance(ts, int):
             raise ValueError("ts must be an integer epoch")
+        self.count += 1
+        if self.latest is not None and ts < self.latest["ts"]:
+            log.info("report %d from %s: a held reading from %d", self.count,
+                     doc.get("device", "?"), ts)
+            return
         self.latest = doc
         self.received = self.now()
-        self.count += 1
         client = doc.get("client") or {}
         log.info("report %d from %s at %s", self.count, doc.get("device", "?"), client.get("ip", "?"))
 

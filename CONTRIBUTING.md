@@ -220,6 +220,13 @@ object beside the measurements (`posted readings (204)`); the Diagnostics
 page is drawn from the last one. A fetch that fails leaves the last image
 on the panel and backs off (`back-off step N`).
 
+A reading the server does not take waits on the SD card, or in PSRAM when
+there is no card, and goes out again once the server answers: oldest first,
+five after each live reading (`posting readings failed (-1); 12 held`, then
+`sent 5 held readings; 7 still held`). The card holds two weeks of readings
+and keeps them across a restart; PSRAM holds about 40 hours and loses them
+to a power cut. The Diagnostics page shows the count as `unsent`.
+
 `kRotation` in `src/main.cpp` is 0. If the image is upside down for the way
 the board sits, set it to 2.
 

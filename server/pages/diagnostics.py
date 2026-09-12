@@ -48,6 +48,7 @@ class DiagnosticsPage(EnvPage):
         valid = doc.get("valid") or {}
         present = c.get("sensors") or {}
         fetch = c.get("fetch") or {}
+        backlog = c.get("backlog")
 
         with a.div(klass="head"):
             a.div(klass="title label", _t=c.get("board", "Inkplate"))
@@ -112,6 +113,10 @@ class DiagnosticsPage(EnvPage):
                 kv(a, "fetched", f"{fetch.get('ok', 0)} ok, {fetch.get('failed', 0)} failed", id="fetches")
                 step = fetch.get("backoff_step", 0)
                 kv(a, "back-off", f"step {step}" if step else "none")
+                if backlog is not None:
+                    held = backlog.get("held", 0)
+                    store = backlog.get("store") or "nowhere"
+                    kv(a, "unsent", f"{held}, in {store}" if held else "none", id="backlog")
 
     def charts(self, **data) -> list[dict]:
         status: dict | None = data["status"]

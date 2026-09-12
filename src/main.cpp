@@ -24,6 +24,7 @@
 #include "user_agent.h"
 #include "version.h"
 
+#include "net/Backlog.h"
 #include "net/ClientStatus.h"
 #include "net/RefreshTimer.h"
 #include "net/Url.h"
@@ -123,10 +124,66 @@ static uint32_t lastSampleMs = 0;
 static uint32_t lastReportMs = 0;
 static uint32_t fetchOk = 0;
 static uint32_t fetchFailed = 0;
-static char     json[640];
-static char     clientJson[512];
-static char     body[1200];
+static char     json[FileBacklog::kMaxDoc];
+static char     clientJson[640];
+static char     body[1300];
 static char     ipText[16];
+
+// Readings the server did not take, sent again once it answers.
+static IBacklog* backlog = nullptr;
+// PSRAM for them when there is no card: about 2,400 readings, 40 hours.
+static const size_t   kBacklogBytes = 1024 * 1024;
+// Sent after each live reading, so a long backlog does not hold up the page.
+static const uint32_t kBacklogPerPass = 5;
+static char heldJson[FileBacklog::kMaxDoc];
+
+class ReadingsPoster : public IPoster {
+public:
+    int post(const char* doc) override {
+        return postJson(readingsURL, clientUserAgent(epdBoard().deviceName()), doc);
+    }
+};
+static ReadingsPoster readingsPoster;
+
+#if defined(USE_SDCARD)
+// The board's SD card, a whole file at a time.
+class BoardFiles : public IFileStore {
+public:
+    bool write(const char* path, const uint8_t* data, size_t len) override {
+        return epdBoard().sdWriteFile(path, data, len);
+    }
+    size_t read(const char* path, uint8_t* buf, size_t maxLen) override {
+        return epdBoard().sdReadFile(path, buf, maxLen);
+    }
+};
+#endif
+
+// The card when there is one, so held readings survive a restart; PSRAM when
+// there is not, where a power cut while the server is down loses them.
+static void openBacklog() {
+#if defined(USE_SDCARD)
+    static BoardFiles card;
+    char* work = epdBoard().sdCardInit() ? (char*)ps_malloc(FileBacklog::kWorkBytes) : nullptr;
+    if (work) {
+        static FileBacklog onCard(card, work, FileBacklog::kWorkBytes);
+        onCard.load();
+        backlog = &onCard;
+    }
+#endif
+    if (!backlog) {
+        uint8_t* mem = (uint8_t*)ps_malloc(kBacklogBytes);
+        if (mem) {
+            static RingBacklog inPsram(mem, kBacklogBytes, "psram");
+            backlog = &inPsram;
+        }
+    }
+    if (backlog) {
+        logf(LOG_INFO, "readings the server misses wait in %s; %u held", backlog->where(),
+             (unsigned)backlog->count());
+    } else {
+        log(LOG_WARNING, "no room to hold readings the server misses; they are lost");
+    }
+}
 
 // UTC seconds: network time once NTP has answered, the RTC until then.
 static uint32_t epochNow() {
@@ -231,6 +288,8 @@ static ClientStatus clientStatus(uint32_t nowMs) {
     s.backoffStep = refresh.step();
     s.fetchOk = fetchOk;
     s.fetchFailed = fetchFailed;
+    s.backlogHeld = backlog ? backlog->count() : 0;
+    s.backlogStore = backlog ? backlog->where() : "";
     return s;
 }
 
@@ -244,10 +303,26 @@ static void postReadings(const Readings& r, uint32_t nowMs) {
     log(LOG_DEBUG, body);
     if (!readingsURL[0]) return;
     int code = postJson(readingsURL, clientUserAgent(epdBoard().deviceName()), body);
-    if (code == 204 || code == 200) {
-        logf(LOG_INFO, "posted readings (%d)", code);
-    } else {
-        logf(LOG_ERROR, "posting readings failed (%d)", code);
+    switch (postResult(code)) {
+        case POSTED:
+            logf(LOG_INFO, "posted readings (%d)", code);
+            if (backlog && backlog->count()) {
+                uint32_t sent = drainBacklog(*backlog, readingsPoster, kBacklogPerPass, heldJson,
+                                             sizeof(heldJson));
+                logf(LOG_INFO, "sent %u held readings; %u still held", (unsigned)sent,
+                     (unsigned)backlog->count());
+            }
+            break;
+        case REFUSED:
+            logf(LOG_ERROR, "the server refused the readings (%d)", code);
+            break;
+        case TRY_LATER:
+            // The held copy leaves out the client object: the board's state
+            // then is not news when it finally arrives.
+            if (backlog) backlog->push(json, strlen(json));
+            logf(LOG_ERROR, "posting readings failed (%d); %u held", code,
+                 (unsigned)(backlog ? backlog->count() : 0));
+            break;
     }
 }
 
@@ -300,6 +375,7 @@ void setup() {
     } else {
         log(LOG_WARNING, "the server URL has no host; readings stay on the serial log");
     }
+    openBacklog();
 
     advanceSimulation(epochNow());
     if (!sensors.begin()) {

@@ -21,6 +21,8 @@ struct ClientStatus {
     uint32_t    nextInS;
     int         backoffStep;
     uint32_t    fetchOk, fetchFailed;
+    uint32_t    backlogHeld;     // readings waiting to be posted again
+    const char* backlogStore;    // where they wait: "sd", "psram", or "" for nowhere
 };
 
 // Encodes the "client" object. Returns the length written, or 0 if the

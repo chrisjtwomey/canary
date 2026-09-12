@@ -281,6 +281,7 @@ STATUS = {
             "sensors": {"shtc3": True, "scd41": True, "pmsa003i": True, "bme688": False},
             "fetch": {"next_url": "http://h:8080/day.png", "next_in_s": 120, "backoff_step": 0,
                       "ok": 12, "failed": 1},
+            "backlog": {"held": 7, "store": "psram"},
         },
     },
     "age_s": 40,
@@ -306,6 +307,7 @@ class TestDiagnostics:
         assert text(soup, "#sensor-bme688") == "missing"
         assert text(soup, "#next-page") == "day.png"
         assert text(soup, "#fetches") == "12 ok, 1 failed"
+        assert text(soup, "#backlog") == "7, in psram"
         bars, heap, psram = specs
         assert bars == {"kind": "bars", "canvas": "#rssi-bars", "filled": 3, "total": 4}
         assert heap["fraction"] == pytest.approx((327680 - 120000) / 327680)
