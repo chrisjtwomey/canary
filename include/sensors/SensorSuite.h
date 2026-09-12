@@ -28,10 +28,19 @@ public:
     // came up; the per-sensor flags say which did.
     bool begin();
 
-    bool shtc3Present()  const { return shtc3Ok_; }
-    bool scd41Present()  const { return scd41Ok_; }
-    bool pmPresent()     const { return pmOk_; }
-    bool bme688Present() const { return bmeOk_; }
+    // Start again each sensor that did not start, or that has stopped giving
+    // readings, when its retry is due. A restart waits as a start does: 3 s
+    // for the PM module to boot, half a second for the SCD41.
+    void restartFailed();
+
+    // Whether each sensor is running: started, and still giving readings.
+    bool shtc3Present()  const { return shtc3State_.running; }
+    bool scd41Present()  const { return scd41State_.running; }
+    bool pmPresent()     const { return pmState_.running; }
+    bool bme688Present() const { return bmeState_.running; }
+
+    // Starts tried by restartFailed(), whether or not they worked.
+    uint32_t restarts() const { return restarts_; }
 
     // One reading set, stamped with `epoch`. Sensors that fail or are not
     // ready leave their `*Valid` flag false rather than filling in stale or
@@ -56,7 +65,35 @@ public:
     // A PM frame read can land on a bus glitch; one retry covers it.
     static const int kPmReadAttempts = 2;
 
+    // A running sensor that has missed this many samples in a row, over at
+    // least kStoppedAfterMs, has stopped: unplugged, or back from a power cut
+    // without its settings. Both bounds, so neither a loop that samples fast
+    // nor one that stalled for a while takes a healthy sensor for a stopped one.
+    static const uint8_t  kMissedLimit = 3;
+    static const uint32_t kStoppedAfterMs = 15000;
+    // A start that fails is tried again after this, then after twice the last
+    // wait each time, up to kRetryMaxMs.
+    static const uint32_t kRetryFirstMs = 30000;
+    static const uint32_t kRetryMaxMs = 600000;
+
 private:
+    struct SensorState {
+        bool     running = false;
+        uint8_t  missed = 0;           // samples in a row with no reading where one was due
+        uint32_t lastReadingMs = 0;    // or the last start
+        uint32_t retryAtMs = 0;
+        uint32_t retryWaitMs = kRetryFirstMs;
+    };
+    typedef bool (SensorSuite::*StartFn)();
+
+    bool startShtc3();
+    bool startScd41();
+    bool startPm();
+    bool startBme688();
+    void started(SensorState& s, bool ok);
+    void retry(SensorState& s, StartFn start);
+    void track(SensorState& s, bool due, bool valid);
+
     void sampleShtc3(Readings& r);
     void sampleBme688(Readings& r);
     void sampleScd41(Readings& r);
@@ -68,8 +105,9 @@ private:
     IPmsa003i& pm_;
     IBme688&   bme_;
 
-    bool shtc3Ok_ = false;
-    bool scd41Ok_ = false;
-    bool pmOk_ = false;
-    bool bmeOk_ = false;
+    SensorState shtc3State_;
+    SensorState scd41State_;
+    SensorState pmState_;
+    SensorState bmeState_;
+    uint32_t    restarts_ = 0;
 };

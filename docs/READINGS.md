@@ -90,13 +90,19 @@ Diagnostics page shows it.
   "mock_sensors": true,
   "sensors": { "shtc3": true, "scd41": true, "pmsa003i": true, "bme688": true },
   "fetch": { "next_url": "http://h:8080/day.png", "next_in_s": 120, "backoff_step": 0,
-             "ok": 12, "failed": 1 }
+             "ok": 12, "failed": 1 },
+  "backlog": { "held": 0, "store": "psram" }
 }
 ```
 
-`sensors.*` says which parts answered at start; `valid.*` says which are
-warm now. `panel_temp_c` is the e-paper power controller's sensor, which
-reads the board, not the air. `fetch` is the page loop's state.
+`sensors.*` says which parts are running: a flag goes false when its part
+stops giving readings, and true again when a restart brings it back.
+`valid.*` says which are warm now. `panel_temp_c` is the e-paper power controller's sensor, which
+reads the board, not the air. `fetch` is the page loop's state. `backlog`
+is how many readings wait to be posted again, and where they wait: `sd`,
+`psram`, or empty when the board has nowhere to keep them. A held reading
+goes out later as its own document, without the `client` object, so the
+server keeps the report with the highest `ts` as the newest.
 
 The server accepts the document at `POST /readings` and answers 204. It
 keeps only the newest until the readings store exists.

@@ -38,11 +38,6 @@ static const uint32_t kSleepSeconds = 10;
 // The RTC alarm reaches the SoC on GPIO 39, which Soldered does not guarantee
 // on this board. The timer is what brings it back if the alarm does not.
 static const uint32_t kTimerBackstopSeconds = 15;
-// A read to an address with nothing on it costs this much before it gives up,
-// and a bench with three sensors missing pays it a dozen times. The core's
-// default is 50 ms, but a failed read here measured nearer a second, so the
-// bound is set explicitly and the effective value logged.
-static const uint16_t kI2cTimeoutMs = 50;
 
 static ArduinoClock   wallClock;
 static ArduinoI2cBus  i2cBus;
@@ -87,7 +82,9 @@ void setup() {
     logf(LOG_INFO, "battery voltage: %sv   panel %d C",
          String(epdBoard().readBattery(), 2).c_str(), epdBoard().readPanelTemperature());
 
-    Wire.setTimeOut(kI2cTimeoutMs);
+    // A bench with three sensors missing pays the timeout a dozen times, so
+    // the effective value is logged.
+    Wire.setTimeOut(ArduinoI2cBus::kTimeoutMs);
     logf(LOG_INFO, "i2c timeout %u ms", Wire.getTimeOut());
 
     scanBus();

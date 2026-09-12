@@ -290,6 +290,22 @@ def ventilation_events(history: list[dict], key: str = "co2_ppm", drop: float = 
 
 # ── The board ─────────────────────────────────────────────────────────────
 
+NO_SENSOR_TAG = "no sensor"
+NO_SENSOR_VERDICT = "No sensor."
+
+
+def sensor_absent(status: dict | None, sensor: str) -> bool:
+    """True when the board's last report says ``sensor`` is not running.
+
+    ``sensor`` is a key of the report's ``client.sensors`` block. No report,
+    or one that does not name the sensor, counts as present, so a page keeps
+    saying it is warming up until the board says otherwise.
+    """
+    doc = (status or {}).get("doc") or {}
+    sensors = (doc.get("client") or {}).get("sensors") or {}
+    return sensors.get(sensor) is False
+
+
 def rssi_quality(dbm: int) -> tuple[int, str]:
     """Bars out of four, and a word, for a WiFi signal."""
     if dbm >= -55:

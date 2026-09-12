@@ -281,6 +281,7 @@ STATUS = {
             "sensors": {"shtc3": True, "scd41": True, "pmsa003i": True, "bme688": False},
             "fetch": {"next_url": "http://h:8080/day.png", "next_in_s": 120, "backoff_step": 0,
                       "ok": 12, "failed": 1},
+            "backlog": {"held": 7, "store": "psram"},
         },
     },
     "age_s": 40,
@@ -306,6 +307,7 @@ class TestDiagnostics:
         assert text(soup, "#sensor-bme688") == "missing"
         assert text(soup, "#next-page") == "day.png"
         assert text(soup, "#fetches") == "12 ok, 1 failed"
+        assert text(soup, "#backlog") == "7, in psram"
         bars, heap, psram = specs
         assert bars == {"kind": "bars", "canvas": "#rssi-bars", "filled": 3, "total": 4}
         assert heap["fraction"] == pytest.approx((327680 - 120000) / 327680)
@@ -317,3 +319,84 @@ class TestDiagnostics:
         soup, specs = render(page, {"status": None})
         assert text(soup, ".empty .verdict") == "No report from the board yet."
         assert specs == []
+
+
+from metrics import NO_SENSOR_TAG, NO_SENSOR_VERDICT, sensor_absent  # noqa: E402
+from pages.pool import CO2, IAQ, PM25, RH  # noqa: E402
+
+
+def absent(sensor):
+    """A board report naming ``sensor`` as not running."""
+    sensors = {"shtc3": True, "scd41": True, "pmsa003i": True, "bme688": True}
+    sensors[sensor] = False
+    return {"doc": {"ts": 0, "client": {"sensors": sensors}}, "age_s": 5, "count": 1}
+
+
+class TestAbsentSensor:
+    def test_no_report_or_no_sensors_block_counts_as_present(self):
+        assert not sensor_absent(None, "scd41")
+        assert not sensor_absent({"doc": {"ts": 1}}, "scd41")
+        assert not sensor_absent({"doc": {"client": {"sensors": {}}}}, "scd41")
+        assert sensor_absent(absent("scd41"), "scd41")
+        assert not sensor_absent(absent("scd41"), "shtc3")
+
+    def test_every_metric_names_a_sensor_the_board_reports(self):
+        for m in (TEMP, RH, CO2, PM25, IAQ, PRESSURE):
+            assert m.sensor in {"shtc3", "scd41", "pmsa003i", "bme688"}, m.key
+
+    def test_breathe_says_no_sensor_instead_of_warming_up(self, data, tz):
+        soup, _ = render(BreathePage("breathe", tz=tz, width=WIDTH, height=HEIGHT),
+                         dict(data, latest=cold(data["latest"]), status=absent("scd41")))
+        assert text(soup, "#co2 .cold-tag") == NO_SENSOR_TAG
+        assert text(soup, ".verdict") == NO_SENSOR_VERDICT
+
+    def test_a_report_about_another_sensor_leaves_warming_up(self, data, tz):
+        soup, _ = render(BreathePage("breathe", tz=tz, width=WIDTH, height=HEIGHT),
+                         dict(data, latest=cold(data["latest"]), status=absent("shtc3")))
+        assert text(soup, "#co2 .cold-tag") == "warming up"
+        assert text(soup, ".verdict") == "Warming up."
+
+    def test_a_valid_reading_is_shown_whatever_the_report_says(self, data, tz):
+        soup, _ = render(BreathePage("breathe", tz=tz, width=WIDTH, height=HEIGHT),
+                         dict(data, status=absent("scd41")))
+        assert soup.select_one("#co2.cold") is None
+        assert text(soup, ".verdict") == co2_verdict(data["latest"]["co2_ppm"])
+
+    def test_comfort(self, data, tz):
+        latest = {k: v for k, v in data["latest"].items() if k not in ("temp_c", "rh_pct")}
+        latest["valid"] = dict(data["latest"]["valid"], temp_humidity=False)
+        soup, _ = render(ComfortPage("comfort", tz=tz, width=WIDTH, height=HEIGHT),
+                         dict(data, latest=latest, status=absent("shtc3")))
+        assert text(soup, "#temp .cold-tag") == NO_SENSOR_TAG
+        assert text(soup, ".verdict") == NO_SENSOR_VERDICT
+
+    def test_dust_drops_the_warm_up_caption(self, data, tz):
+        latest = {k: v for k, v in data["latest"].items() if not k.startswith(("pm", "pc_"))}
+        latest["valid"] = dict(data["latest"]["valid"], particulates=False)
+        soup, _ = render(DustPage("dust", tz=tz, width=WIDTH, height=HEIGHT),
+                         dict(data, latest=latest, status=absent("pmsa003i")))
+        assert text(soup, "#pm25 .cold-tag") == NO_SENSOR_TAG
+        assert text(soup, ".verdict") == NO_SENSOR_VERDICT
+        assert soup.select_one(".caption") is None
+
+    def test_air(self, data, tz):
+        latest = {k: v for k, v in data["latest"].items()
+                  if k not in ("iaq", "iaq_accuracy", "gas_ohm")}
+        latest["valid"] = dict(data["latest"]["valid"], gas=False)
+        soup, _ = render(AirPage("air", tz=tz, width=WIDTH, height=HEIGHT),
+                         dict(data, latest=latest, status=absent("bme688")))
+        assert text(soup, "#iaq .cold-tag") == NO_SENSOR_TAG
+        assert text(soup, ".verdict") == NO_SENSOR_VERDICT
+
+    def test_trace_and_delta(self, data72, tz):
+        latest = {k: v for k, v in data72["latest"].items() if k != "pressure_hpa"}
+        latest["valid"] = dict(data72["latest"]["valid"], pressure=False)
+        soup, _ = render(TracePage("barometer-trace", PRESSURE, tz=tz, width=WIDTH, height=HEIGHT),
+                         dict(data72, latest=latest, status=absent("bme688")))
+        assert text(soup, "#now .cold-tag") == NO_SENSOR_TAG
+        assert text(soup, ".verdict") == NO_SENSOR_VERDICT
+        soup, _ = render(DeltaPage("barometer-delta", PRESSURE, tz=tz, width=WIDTH, height=HEIGHT),
+                         {"latest": latest, "history_24h": data72["history_72h"],
+                          "status": absent("bme688")})
+        assert text(soup, "#delta-pressure_hpa .cold-tag") == NO_SENSOR_TAG
+        assert text(soup, "#rate-pressure_hpa") == NO_SENSOR_VERDICT

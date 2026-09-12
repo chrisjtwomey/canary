@@ -16,11 +16,13 @@ struct ClientStatus {
     int16_t     width, height;
     uint8_t     rotation;
     bool        mockSensors;
-    bool        shtc3, scd41, pm, bme688;   // answered at start
+    bool        shtc3, scd41, pm, bme688;   // running now
     const char* nextUrl;
     uint32_t    nextInS;
     int         backoffStep;
     uint32_t    fetchOk, fetchFailed;
+    uint32_t    backlogHeld;     // readings waiting to be posted again
+    const char* backlogStore;    // where they wait: "sd", "psram", or "" for nowhere
 };
 
 // Encodes the "client" object. Returns the length written, or 0 if the

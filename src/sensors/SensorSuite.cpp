@@ -1,27 +1,77 @@
 #include "sensors/SensorSuite.h"
 
 bool SensorSuite::begin() {
-    shtc3Ok_ = shtc3_.begin(clock_.millis());
+    started(shtc3State_, startShtc3());
+    started(scd41State_, startScd41());
+    started(pmState_, startPm());
+    started(bmeState_, startBme688());
+    return shtc3State_.running && scd41State_.running && pmState_.running && bmeState_.running;
+}
 
-    scd41Ok_ = scd41_.begin(clock_.millis());
-    if (scd41Ok_) {
-        clock_.waitMs(kScd41WakeMs);
-        scd41Ok_ = scd41_.startPeriodicMeasurement(clock_.millis());
+bool SensorSuite::startShtc3() { return shtc3_.begin(clock_.millis()); }
+
+bool SensorSuite::startScd41() {
+    if (!scd41_.begin(clock_.millis())) return false;
+    clock_.waitMs(kScd41WakeMs);
+    return scd41_.startPeriodicMeasurement(clock_.millis());
+}
+
+bool SensorSuite::startPm() { return pm_.begin(clock_.millis()); }
+
+bool SensorSuite::startBme688() {
+    if (!bme_.begin(clock_.millis())) return false;
+    bme_.setOversampling(kBmeOsT, kBmeOsP, kBmeOsH);
+    bme_.setHeaterProfile(kBmeHeaterC, kBmeHeaterMs);
+    return true;
+}
+
+void SensorSuite::started(SensorState& s, bool ok) {
+    uint32_t now = clock_.millis();
+    s.running = ok;
+    s.missed = 0;
+    s.lastReadingMs = now;
+    if (ok) {
+        s.retryWaitMs = kRetryFirstMs;
+        return;
     }
+    s.retryAtMs = now + s.retryWaitMs;
+    s.retryWaitMs = s.retryWaitMs > kRetryMaxMs / 2 ? kRetryMaxMs : s.retryWaitMs * 2;
+}
 
-    pmOk_ = pm_.begin(clock_.millis());
+void SensorSuite::restartFailed() {
+    retry(shtc3State_, &SensorSuite::startShtc3);
+    retry(scd41State_, &SensorSuite::startScd41);
+    retry(pmState_, &SensorSuite::startPm);
+    retry(bmeState_, &SensorSuite::startBme688);
+}
 
-    bmeOk_ = bme_.begin(clock_.millis());
-    if (bmeOk_) {
-        bme_.setOversampling(kBmeOsT, kBmeOsP, kBmeOsH);
-        bme_.setHeaterProfile(kBmeHeaterC, kBmeHeaterMs);
+void SensorSuite::retry(SensorState& s, StartFn start) {
+    if (s.running || (int32_t)(clock_.millis() - s.retryAtMs) < 0) return;
+    ++restarts_;
+    started(s, (this->*start)());
+}
+
+// `due` says a reading was expected this sample. A sensor that stops is
+// started again straight away, so the first retry comes at the next
+// restartFailed().
+void SensorSuite::track(SensorState& s, bool due, bool valid) {
+    if (!s.running) return;
+    uint32_t now = clock_.millis();
+    if (valid) {
+        s.missed = 0;
+        s.lastReadingMs = now;
+        return;
     }
-
-    return shtc3Ok_ && scd41Ok_ && pmOk_ && bmeOk_;
+    if (!due) return;
+    if (s.missed < kMissedLimit) ++s.missed;
+    if (s.missed < kMissedLimit || now - s.lastReadingMs < kStoppedAfterMs) return;
+    s.running = false;
+    s.retryAtMs = now;
+    s.retryWaitMs = kRetryFirstMs;
 }
 
 void SensorSuite::setFanEnabled(bool on) {
-    if (pmOk_) pm_.setEnabled(on, clock_.millis());
+    if (pmState_.running) pm_.setEnabled(on, clock_.millis());
 }
 
 Readings SensorSuite::sample(uint32_t epoch) {
@@ -31,11 +81,17 @@ Readings SensorSuite::sample(uint32_t epoch) {
     sampleBme688(r);
     sampleScd41(r);
     samplePm(r);
+
+    track(shtc3State_, true, r.shtc3Valid);
+    track(bmeState_, true, r.bme688Valid);
+    track(scd41State_, true, r.scd41Valid);
+    // During the fan's warm-up no frame is read, so none is missed.
+    track(pmState_, pm_.stable(clock_.millis()), r.pmValid);
     return r;
 }
 
 void SensorSuite::sampleShtc3(Readings& r) {
-    if (!shtc3Ok_) return;
+    if (!shtc3State_.running) return;
     if (!shtc3_.wakeup(clock_.millis())) return;
     if (shtc3_.measure(clock_.millis(), false)) {
         clock_.waitMs(kShtc3MeasureMs);
@@ -45,14 +101,14 @@ void SensorSuite::sampleShtc3(Readings& r) {
 }
 
 void SensorSuite::sampleBme688(Readings& r) {
-    if (!bmeOk_) return;
+    if (!bmeState_.running) return;
     if (!bme_.startForced(clock_.millis())) return;
     clock_.waitMs(bme_.measurementMs());
     r.bme688Valid = bme_.fetchData(clock_.millis(), r.bme688);
 }
 
 void SensorSuite::sampleScd41(Readings& r) {
-    if (!scd41Ok_) return;
+    if (!scd41State_.running) return;
     // NDIR absorption scales with gas density, so the SCD41 needs the real
     // ambient pressure to convert correctly. The BME688 has just measured it.
     if (r.bme688Valid) {
@@ -66,7 +122,7 @@ void SensorSuite::sampleScd41(Readings& r) {
 void SensorSuite::samplePm(Readings& r) {
     // Before the fan has run for 30 s the counts are still ramping up, so a
     // frame read now would be believable and wrong.
-    if (!pmOk_ || !pm_.stable(clock_.millis())) return;
+    if (!pmState_.running || !pm_.stable(clock_.millis())) return;
     uint8_t frame[32];
     for (int attempt = 0; attempt < kPmReadAttempts && !r.pmValid; ++attempt) {
         if (pm_.readFrame(clock_.millis(), frame)) {

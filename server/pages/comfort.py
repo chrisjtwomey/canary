@@ -3,8 +3,9 @@ from __future__ import annotations
 
 from airium import Airium
 
-from metrics import (ACCEPTABLE_RH, ACCEPTABLE_T, COMFORT_RH, COMFORT_T, abs_humidity_g_m3,
-                     comfort_verdict, dew_point_c, fmt_stamp, thin)
+from metrics import (ACCEPTABLE_RH, ACCEPTABLE_T, COMFORT_RH, COMFORT_T, NO_SENSOR_TAG,
+                     NO_SENSOR_VERDICT, abs_humidity_g_m3, comfort_verdict, dew_point_c, fmt_stamp,
+                     sensor_absent, thin)
 from pages.base import EnvPage
 
 TRAIL_HOURS = 6
@@ -15,7 +16,7 @@ class ComfortPage(EnvPage):
     title = "Comfort"
     stylesheet = "comfort.css"
     css_class = "comfort"
-    requires = ("latest", "history_24h")
+    requires = ("latest", "history_24h", "status")
 
     def body(self, a: Airium, **data) -> None:
         latest: dict = data["latest"]
@@ -23,6 +24,7 @@ class ComfortPage(EnvPage):
         temp = latest.get("temp_c")
         rh = latest.get("rh_pct")
         valid = bool(latest.get("valid", {}).get("temp_humidity")) and temp is not None and rh is not None
+        absent = sensor_absent(data.get("status"), "shtc3")
 
         a.div(klass="title label", _t="Comfort")
         a.div(klass="stamp", _t=fmt_stamp(latest["ts"], self.tz))
@@ -36,14 +38,14 @@ class ComfortPage(EnvPage):
                     a.span(klass="value", _t=f"{temp:.1f}" if temp is not None else "—")
                     a.span(klass="unit", _t="°C")
                     if not valid:
-                        a.span(klass="cold-tag", _t="warming up")
+                        a.span(klass="cold-tag", _t=NO_SENSOR_TAG if absent else "warming up")
                 a.div(klass="label", _t="Temperature")
             with a.div(klass="stat"):
                 with a.div(klass="hero" + ("" if valid else " cold"), id="rh"):
                     a.span(klass="value", _t=f"{rh:.0f}" if rh is not None else "—")
                     a.span(klass="unit", _t="%")
                 a.div(klass="label", _t="Humidity")
-            verdict = "Warming up."
+            verdict = NO_SENSOR_VERDICT if absent else "Warming up."
             if valid:
                 assert temp is not None and rh is not None   # what valid means
                 a.div(klass="detail", _t=(

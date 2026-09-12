@@ -164,8 +164,9 @@ is a plausible wrong number, so Bosch's own C API does that arithmetic
 (`lib/bme68x`, v4.4.8, BSD-3-Clause). It reaches the bus through function
 pointers, so it sits behind `II2cBus` like everything else, and it has no
 Arduino dependency, so it builds for the host tests too. IAQ needs BSEC,
-which is not integrated: `iaq` and `iaqAccuracy` are zero, and
-[READINGS.md](READINGS.md) already says those keys are absent until then.
+which is not integrated: the driver reports no index, and the posted
+document leaves `iaq` and `iaq_accuracy` out, as [READINGS.md](READINGS.md)
+says.
 
 ## 6. Mocks — what "as close as possible" means
 

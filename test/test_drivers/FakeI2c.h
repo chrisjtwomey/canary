@@ -28,7 +28,15 @@ public:
         if (count_ >= kMaxDevices) return;
         addrs_[count_] = addr;
         devices_[count_] = device;
+        present_[count_] = true;
         ++count_;
+    }
+
+    // Unplug a part, or plug it back in.
+    void setPresent(uint8_t addr, bool present) {
+        for (size_t i = 0; i < count_; ++i) {
+            if (addrs_[i] == addr) present_[i] = present;
+        }
     }
 
     bool write(uint8_t addr, const uint8_t* data, size_t len) override {
@@ -57,13 +65,14 @@ public:
 private:
     FakeDevice* find(uint8_t addr) {
         for (size_t i = 0; i < count_; ++i) {
-            if (addrs_[i] == addr) return devices_[i];
+            if (addrs_[i] == addr) return present_[i] ? devices_[i] : nullptr;
         }
         return nullptr;   // nobody home: the address is not ACKed
     }
 
     uint8_t     addrs_[kMaxDevices] = {0};
     FakeDevice* devices_[kMaxDevices] = {nullptr};
+    bool        present_[kMaxDevices] = {false};
     size_t      count_ = 0;
 };
 

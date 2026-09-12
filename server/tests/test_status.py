@@ -18,6 +18,14 @@ def test_accept_keeps_the_newest_and_counts():
     assert reports.count == 2 and reports.received == 1000.0
 
 
+def test_a_held_reading_arriving_late_does_not_replace_the_newest():
+    reports = DeviceReports(now=lambda: 1000.0)
+    reports.accept({"ts": 10, "client": {"ip": "192.168.1.42"}})
+    reports.accept({"ts": 5, "co2_ppm": 700})
+    assert reports.latest == {"ts": 10, "client": {"ip": "192.168.1.42"}}
+    assert reports.count == 2
+
+
 @pytest.mark.parametrize("doc", [{}, {"ts": "x"}, {"ts": True}, {"ts": 1.5}])
 def test_accept_rejects_a_missing_or_wrong_ts(doc):
     with pytest.raises(ValueError, match="ts"):

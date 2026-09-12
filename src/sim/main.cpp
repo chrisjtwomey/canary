@@ -103,7 +103,7 @@ void printRow(const Readings& r) {
     if (r.scd41Valid) snprintf(co2, sizeof(co2), "%5u", r.scd41.co2Ppm);
     if (r.pmValid) snprintf(pm, sizeof(pm), "%5u", r.pm.pm2_5);
     if (r.bme688Valid) {
-        snprintf(iaq, sizeof(iaq), "%4.0f", r.bme688.iaq);
+        if (r.bme688.hasIaq) snprintf(iaq, sizeof(iaq), "%4.0f", r.bme688.iaq);
         snprintf(gas, sizeof(gas), "%8.1f", r.bme688.gasOhm / 1000.0f);
         snprintf(press, sizeof(press), "%6.1f", r.bme688.pressureHpa);
     }

@@ -31,8 +31,9 @@ struct Bme688Data {
     float    gasOhm;
     bool     gasValid;     // a real gas conversion took place
     bool     heatStable;   // the heater reached its target; gasOhm is trustworthy only if true
-    float    iaq;          // 0–500; only meaningful with BSEC
-    uint8_t  iaqAccuracy;  // 0–3
+    float    iaq;          // 0–500, when hasIaq
+    uint8_t  iaqAccuracy;  // 0–3, when hasIaq
+    bool     hasIaq;       // the index came with this reading; false without BSEC
 };
 
 struct Readings {

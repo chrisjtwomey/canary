@@ -60,5 +60,6 @@ bool MockBme688::fetchData(uint32_t nowMs, Bme688Data& out) {
     if (iaq > 500) iaq = 500;
     out.iaq = iaq;
     out.iaqAccuracy = cycles_ < 5 ? 0 : (cycles_ < 20 ? 1 : (cycles_ < 100 ? 2 : 3));
+    out.hasIaq = true;
     return true;
 }

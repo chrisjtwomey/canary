@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from airium import Airium
 
-from metrics import (IAQ_ACCURACY, IAQ_ZONES, fmt_stamp, hour_ticks, iaq_verdict, series,
-                     y_range)
+from metrics import (IAQ_ACCURACY, IAQ_ZONES, NO_SENSOR_TAG, NO_SENSOR_VERDICT, fmt_stamp,
+                     hour_ticks, iaq_verdict, sensor_absent, series, y_range)
 from pages.base import EnvPage
 
 SPARK_HOURS = 12
@@ -25,12 +25,13 @@ class AirPage(EnvPage):
     title = "Air"
     stylesheet = "air.css"
     css_class = "air"
-    requires = ("latest", "history_24h")
+    requires = ("latest", "history_24h", "status")
 
     def body(self, a: Airium, **data) -> None:
         latest: dict = data["latest"]
         history_24h: list[dict] = data["history_24h"]
         valid = bool(latest.get("valid", {}).get("gas"))
+        absent = sensor_absent(data.get("status"), "bme688")
         iaq = latest.get("iaq") if valid else None
         gas = latest.get("gas_ohm") if valid else None
         accuracy = latest.get("iaq_accuracy")
@@ -49,14 +50,14 @@ class AirPage(EnvPage):
                 a.span(klass="value", _t="—")
                 a.span(klass="unit", _t="IAQ")
             if not valid:
-                a.span(klass="cold-tag", _t="heater warming up")
+                a.span(klass="cold-tag", _t=NO_SENSOR_TAG if absent else "heater warming up")
 
         if iaq is not None:
             a.div(klass="verdict", _t=iaq_verdict(iaq))
         elif gas is not None:
             a.div(klass="verdict", _t="No index yet.")
         else:
-            a.div(klass="verdict", _t="Warming up.")
+            a.div(klass="verdict", _t=NO_SENSOR_VERDICT if absent else "Warming up.")
 
         parts = []
         if gas is not None and iaq is not None:

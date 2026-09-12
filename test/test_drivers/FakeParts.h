@@ -16,6 +16,9 @@ public:
     bool     asleep = true;
     int      measures = 0;
 
+    // Power back after a cut: the part comes up idle, not asleep.
+    void powerCycle() { asleep = false; }
+
     bool write(const uint8_t* data, size_t len) override {
         if (len != 2) return false;
         uint16_t cmd = command(data);
@@ -65,6 +68,13 @@ public:
     int      stopsRefused = 0;
     int      wakeUps = 0;
     int      singleShots = 0;
+
+    // Power back after a cut: the part comes up idle, with nothing measured.
+    void powerCycle() {
+        periodic = false;
+        dataReady = false;
+        poweredDown = false;
+    }
 
     bool write(const uint8_t* data, size_t len) override {
         if (len < 2) return false;
@@ -193,6 +203,11 @@ public:
     // compensation is Bosch's and is not what these tests are about.
     uint8_t regs[256] = {0};
     bool    answering = true;
+    // As the bench shows the part: the first forced cycle after a reset
+    // reports heat_stab clear. Off by default, so a test that sets the status
+    // register itself keeps what it set.
+    bool    firstCycleCold = false;
+    int     forcedCycles = 0;   // since the last soft reset
 
     FakeBme688() {
         regs[kRegChipId] = 0x61;
@@ -201,11 +216,22 @@ public:
         regs[kRegGasStatus] = 0x20 | 0x10;   // gas valid, heater stable
     }
 
+    // Power back after a cut: the heater and control registers are at their
+    // reset value, zero. The identity and the calibration live in the part's
+    // own memory and survive.
+    void powerCycle() {
+        for (int reg = 0x50; reg <= 0x75; ++reg) regs[reg] = 0;
+        forcedCycles = 0;
+    }
+
     // Bosch writes register and value in pairs, the first address arriving
     // ahead of the rest of the buffer.
     bool write(const uint8_t* data, size_t len) override {
         if (!answering || len < 2) return false;
-        for (size_t i = 0; i + 1 < len; i += 2) regs[data[i]] = data[i + 1];
+        for (size_t i = 0; i + 1 < len; i += 2) {
+            regs[data[i]] = data[i + 1];
+            noteWrite(data[i], data[i + 1]);
+        }
         return true;
     }
 
@@ -268,8 +294,19 @@ public:
     static const uint8_t kRegCtrlGas1  = 0x71;
     static const uint8_t kRegResHeat0  = 0x5A;
     static const uint8_t kRegGasWait0  = 0x64;
+    static const uint8_t kRegSoftReset = 0xE0;
+    static const uint8_t kHeatStab     = 0x10;
 
 private:
+    void noteWrite(uint8_t reg, uint8_t value) {
+        if (reg == kRegSoftReset && value == 0xB6) forcedCycles = 0;
+        if (reg != kRegCtrlMeas || (value & 0x03) != 0x01) return;   // forced mode
+        ++forcedCycles;
+        if (!firstCycleCold) return;
+        if (forcedCycles == 1) regs[kRegGasStatus] &= (uint8_t)~kHeatStab;
+        else regs[kRegGasStatus] |= kHeatStab;
+    }
+
     void put16le(uint8_t reg, uint16_t v) {
         regs[reg] = (uint8_t)v;
         regs[reg + 1] = (uint8_t)(v >> 8);

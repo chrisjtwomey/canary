@@ -96,6 +96,15 @@ bool Bme688Driver::applyConfig() {
     return true;
 }
 
+// ctrl_meas carries the temperature oversampling in bits 7:5 and the
+// pressure oversampling in 4:2.
+bool Bme688Driver::settingsHeld() {
+    uint8_t ctrlMeas = 0;
+    if (bme68x_get_regs(BME68X_REG_CTRL_MEAS, &ctrlMeas, 1, &dev_) != BME68X_OK) return false;
+    uint8_t expected = (uint8_t)(conf_.os_temp << 5 | conf_.os_pres << 2);
+    return (ctrlMeas & 0xFC) == expected;
+}
+
 bool Bme688Driver::startForced(uint32_t nowMs) {
     if (!configured_) return false;
     if (running_ && nowMs < doneAtMs_) return false;
@@ -113,6 +122,13 @@ bool Bme688Driver::fetchData(uint32_t nowMs, Bme688Data& out) {
     uint8_t fields = 0;
     if (bme68x_get_data(BME68X_FORCED_MODE, &data, &fields, &dev_) != BME68X_OK) return false;
     if (fields == 0) return false;
+    // A part that lost power between two cycles comes back with its settings
+    // at zero and measures nothing useful, so a cycle counts only if they
+    // held. Until begin() runs again, no cycle starts.
+    if (!settingsHeld()) {
+        configured_ = false;
+        return false;
+    }
 
     out.tempC = data.temperature;
     out.pressureHpa = data.pressure / 100.0f;
@@ -122,5 +138,6 @@ bool Bme688Driver::fetchData(uint32_t nowMs, Bme688Data& out) {
     out.heatStable = (data.status & BME68X_HEAT_STAB_MSK) != 0;
     out.iaq = 0.0f;
     out.iaqAccuracy = 0;
+    out.hasIaq = false;
     return true;
 }

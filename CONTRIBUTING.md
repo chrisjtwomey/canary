@@ -220,6 +220,13 @@ object beside the measurements (`posted readings (204)`); the Diagnostics
 page is drawn from the last one. A fetch that fails leaves the last image
 on the panel and backs off (`back-off step N`).
 
+A reading the server does not take waits on the SD card, or in PSRAM when
+there is no card, and goes out again once the server answers: oldest first,
+five after each live reading (`posting readings failed (-1); 12 held`, then
+`sent 5 held readings; 7 still held`). The card holds two weeks of readings
+and keeps them across a restart; PSRAM holds about 40 hours and loses them
+to a power cut. The Diagnostics page shows the count as `unsent`.
+
 `kRotation` in `src/main.cpp` is 0. If the image is upside down for the way
 the board sits, set it to 2.
 
@@ -231,11 +238,20 @@ is one of three things: the part is not on the bus, its address is taken, or
 it answered something that is not that part — the SHTC3 and the BME688 both
 check what they are talking to before saying yes.
 
+A part that did not start is tried again 30 s later, then after twice the
+last wait each time, up to ten minutes, so plugging it in brings it up
+without a restart. A part that misses three samples in a row, over at least
+15 s, has stopped — unplugged, or back from a power cut without its
+settings — and is started again the same way. The log says `sensor scd41
+stopped; starting it again`, then `sensor scd41 running`, and the
+Diagnostics page follows.
+
 Readings are dropped, not invented, so the first minute after a boot looks
 sparse on purpose: the SCD41's first five-second conversion has not landed,
 and the PM counts mean nothing until the fan has run for thirty seconds. The
-PM fan's SET line is not wired, so the fan runs from power-on and that thirty
-seconds is counted from boot; the boot log says which case the board is in.
+board drives the fan's SET line high when it starts the sensors, and the
+thirty seconds count from then. Without a wire on SET the fan has run since
+power-on, so the wait is longer than it needs to be, never shorter.
 
 `iaq` and `iaq_accuracy` stay absent. They need BSEC, which is not
 integrated; `gas_ohm` is the raw plate resistance and is there.
