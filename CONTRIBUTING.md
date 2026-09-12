@@ -234,8 +234,9 @@ check what they are talking to before saying yes.
 Readings are dropped, not invented, so the first minute after a boot looks
 sparse on purpose: the SCD41's first five-second conversion has not landed,
 and the PM counts mean nothing until the fan has run for thirty seconds. The
-PM fan's SET line is not wired, so the fan runs from power-on and that thirty
-seconds is counted from boot; the boot log says which case the board is in.
+board drives the fan's SET line high when it starts the sensors, and the
+thirty seconds count from then. Without a wire on SET the fan has run since
+power-on, so the wait is longer than it needs to be, never shorter.
 
 `iaq` and `iaq_accuracy` stay absent. They need BSEC, which is not
 integrated; `gas_ohm` is the raw plate resistance and is there.

@@ -75,20 +75,22 @@ static const bool kMockSensors = true;
 #include "sensors/Scd41Driver.h"
 #include "sensors/Shtc3Driver.h"
 
+// docs/HARDWARE.md 8: the PM module's SET line goes to expander P1_3. The
+// Inkplate library drives that pin low at boot, which stops the fan, so the
+// driver is given the pin. With no wire on it the write does nothing.
+static const uint8_t kPmSetPin = 11;
+static void setPmFanLine(bool high) { epdBoard().writeExpanderPin(kPmSetPin, high); }
+
 static ArduinoI2cBus  i2cBus;          // Wire, which Inkplate::begin() started
 static Shtc3Driver    shtc3Impl(i2cBus, wallClock);
 static Scd41Driver    scd41Impl(i2cBus, wallClock);
 static Bme688Driver   bmeImpl(i2cBus, wallClock);
-// The PM fan's SET line is not wired. docs/HARDWARE.md 8 reserves expander
-// P1_3 for it; when that wire goes in, pass a function that writes the pin
-// here and the driver can stop and start the fan.
-static Pmsa003iDriver pmImpl(i2cBus, wallClock, nullptr);
+static Pmsa003iDriver pmImpl(i2cBus, wallClock, setPmFanLine);
 
 // The readings come from the room itself, so there is nothing to advance.
 static void advanceSimulation(uint32_t) {}
 static void logSensorBanner() {
-    logf(LOG_INFO, "sensors up; PM fan SET line %s",
-         pmImpl.setLineWired() ? "wired" : "not wired, so the fan runs from power-on");
+    log(LOG_INFO, "sensors up; PM fan SET line driven high on expander P1_3");
 }
 static const bool kMockSensors = false;
 #endif
