@@ -107,6 +107,11 @@ server keeps the report with the highest `ts` as the newest.
 The server accepts the document at `POST /readings` and answers 204. The
 newest document, whole, feeds the Diagnostics page. With `source.kind:
 store` in `config.yaml`, every document also goes into the readings store,
-without its `client` object, and the other pages draw from the store. A
-document is stored by its own `ts`, and a second copy of the same device
-and `ts` is ignored.
+without its `client` object and its `calibration` block, and the other pages
+draw from the store. A document is stored by its own `ts`, and a second
+copy of the same device and `ts` is ignored.
+
+A `calibration` block goes to the calibration store, whatever the source
+kind. Every copy is kept for `calibration.keep_days`, and
+`GET /calibration?device=<device>&before=<epoch>` answers with the newest
+copy saved before that time, one at accuracy 3 first, or a 404.

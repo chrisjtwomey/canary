@@ -13,6 +13,7 @@ from typing import Callable
 
 from epd_server import ReadingsStore
 
+from sources.calibration import CalibrationStore
 from sources.status import DeviceReports
 
 # Keys of a posted document that describe the board, not the room.
@@ -25,19 +26,25 @@ def measurements(doc: dict) -> dict:
 
 
 class ReadingsIngest:
-    """The /readings handler: the newest report for Diagnostics, every
-    reading into the store, and readings older than ``keep_days`` deleted.
-    Without a store it only keeps the newest report."""
+    """The /readings handler: the newest report for Diagnostics, the
+    calibration block to its own store, every reading into the readings
+    store, and readings older than ``keep_days`` deleted. Without a readings
+    store it keeps the newest report and the calibration only."""
 
     def __init__(self, reports: DeviceReports, store: ReadingsStore | None = None,
-                 keep_days: float = 0, now: Callable[[], float] = time.time):
+                 keep_days: float = 0, now: Callable[[], float] = time.time,
+                 calibration: CalibrationStore | None = None):
         self.reports = reports
         self.store = store
         self.keep_days = keep_days
         self.now = now
+        self.calibration = calibration
 
     def accept(self, doc: dict) -> None:
         self.reports.accept(doc)
+        block = doc.get("calibration")
+        if self.calibration is not None and isinstance(block, dict):
+            self.calibration.add(str(doc.get("device", "")), block)
         if self.store is None:
             return
         self.store.add(measurements(doc))

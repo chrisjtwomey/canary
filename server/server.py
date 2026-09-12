@@ -25,6 +25,7 @@ from pages.day import DayPage
 from pages.diagnostics import DiagnosticsPage
 from pages.dust import DustPage
 from pages.pool import CO2, IAQ, PM25, PRESSURE, TEMP, DeltaPage, TracePage
+from sources.calibration import CalibrationStore
 from sources.corrections import SeaLevelSource
 from sources.mock import MockReadingsSource
 from sources.readings import ReadingsIngest
@@ -98,6 +99,9 @@ def main():
         seed = int(get_prop_by_keys(config, "source", "seed", default=7))
         store_path = str(get_prop_by_keys(config, "source", "path", default="readings.db"))
         keep_days = float(get_prop_by_keys(config, "source", "keep_days", default=0))
+        calibration_path = str(get_prop_by_keys(config, "calibration", "path",
+                                                default="calibration.db"))
+        calibration_days = float(get_prop_by_keys(config, "calibration", "keep_days", default=3))
         altitude_m = float(get_prop_by_keys(config, "site", "altitude_m", default=0))
     except (ConfigError, KeyError, ValueError) as exc:
         logging.basicConfig()
@@ -121,7 +125,8 @@ def main():
         store = ReadingsStore(os.path.join(cwd, store_path))
         log.info("readings from %s, %d held", store.path, store.count())
     source = make_source(seed, clock, reports, altitude_m, store)
-    ingest = ReadingsIngest(reports, store, keep_days)
+    calibration = CalibrationStore(os.path.join(cwd, calibration_path), keep_days=calibration_days)
+    ingest = ReadingsIngest(reports, store, keep_days, calibration=calibration)
     pages = make_pages(tz, **core.image.page_kwargs())
 
     try:
@@ -135,6 +140,7 @@ def main():
             mqtt=core.mqtt,
             mqtt_client_id="env-monitor-server",
             ingest={"readings": ingest.accept},
+            queries={"calibration": calibration.answer},
             firmware=core.firmware,
         )
     except ValueError as exc:
