@@ -14,9 +14,9 @@ import sys
 import time
 from datetime import datetime
 
-from epd_server import DisplayServer, align_process_timezone
+from epd_server import DisplayServer, ReadingsStore, align_process_timezone
 from epd_server.config import ConfigError, get_prop_by_keys, load_core_config, load_yaml
-from epd_server.source import CompositeSource
+from epd_server.source import CompositeSource, IngestSource
 
 from pages.air import AirPage
 from pages.breathe import BreathePage
@@ -25,8 +25,10 @@ from pages.day import DayPage
 from pages.diagnostics import DiagnosticsPage
 from pages.dust import DustPage
 from pages.pool import CO2, IAQ, PM25, PRESSURE, TEMP, DeltaPage, TracePage
+from sources.calibration import CalibrationStore
 from sources.corrections import SeaLevelSource
 from sources.mock import MockReadingsSource
+from sources.readings import ReadingsIngest
 from sources.status import DeviceReports, StatusSource
 
 cwd = os.path.dirname(os.path.realpath(__file__))
@@ -35,6 +37,10 @@ log = logging.getLogger("server")
 # One page an hour when config.yaml has no display block.
 DEFAULT_DISPLAY = {"pools": {"co2": ["breathe.png"]},
                    "schedule": {"type": "interval", "every": 3600}}
+
+SOURCE_KINDS = ("mock", "store")
+# The history windows the pages ask for, as history_24h and history_72h.
+HISTORY_HOURS = (24, 72)
 
 
 def make_pages(tz, **geometry) -> list:
@@ -55,11 +61,16 @@ def make_pages(tz, **geometry) -> list:
     return pages
 
 
-def make_source(seed: int, clock, reports: DeviceReports, altitude_m: float = 0.0) -> CompositeSource:
-    """The simulated room for the measurements, pressure reduced to sea
-    level, and the board's own reports for the diagnostics."""
-    room = SeaLevelSource(MockReadingsSource(seed=seed, now=clock), altitude_m)
-    return CompositeSource(room, StatusSource(reports))
+def make_source(seed: int, clock, reports: DeviceReports, altitude_m: float = 0.0,
+                store: ReadingsStore | None = None) -> CompositeSource:
+    """The measurements, pressure reduced to sea level, and the board's own
+    reports for the diagnostics. The measurements are what the board posted
+    when there is a store, and the simulated room when there is not."""
+    if store is not None:
+        readings = IngestSource(store, hours=HISTORY_HOURS, now=clock)
+    else:
+        readings = MockReadingsSource(seed=seed, now=clock)
+    return CompositeSource(SeaLevelSource(readings, altitude_m), StatusSource(reports))
 
 
 def parse_args():
@@ -83,9 +94,14 @@ def main():
                                 base_dir=cwd,
                                 default_width=1280, default_height=720)
         kind = get_prop_by_keys(config, "source", "kind", default="mock")
-        if kind != "mock":
-            raise ConfigError(f"source.kind {kind!r} is not supported yet; use mock")
+        if kind not in SOURCE_KINDS:
+            raise ConfigError(f"source.kind {kind!r} is not one of {', '.join(SOURCE_KINDS)}")
         seed = int(get_prop_by_keys(config, "source", "seed", default=7))
+        store_path = str(get_prop_by_keys(config, "source", "path", default="readings.db"))
+        keep_days = float(get_prop_by_keys(config, "source", "keep_days", default=0))
+        calibration_path = str(get_prop_by_keys(config, "calibration", "path",
+                                                default="calibration.db"))
+        calibration_days = float(get_prop_by_keys(config, "calibration", "keep_days", default=3))
         altitude_m = float(get_prop_by_keys(config, "site", "altitude_m", default=0))
     except (ConfigError, KeyError, ValueError) as exc:
         logging.basicConfig()
@@ -104,7 +120,13 @@ def main():
         log.info("clock pinned to %s", args.at)
 
     reports = DeviceReports()
-    source = make_source(seed, clock, reports, altitude_m)
+    store = None
+    if kind == "store":
+        store = ReadingsStore(os.path.join(cwd, store_path))
+        log.info("readings from %s, %d held", store.path, store.count())
+    source = make_source(seed, clock, reports, altitude_m, store)
+    calibration = CalibrationStore(os.path.join(cwd, calibration_path), keep_days=calibration_days)
+    ingest = ReadingsIngest(reports, store, keep_days, calibration=calibration)
     pages = make_pages(tz, **core.image.page_kwargs())
 
     try:
@@ -117,7 +139,8 @@ def main():
             port=core.server.port,
             mqtt=core.mqtt,
             mqtt_client_id="env-monitor-server",
-            ingest={"readings": reports.accept},
+            ingest={"readings": ingest.accept},
+            queries={"calibration": calibration.answer},
             firmware=core.firmware,
         )
     except ValueError as exc:

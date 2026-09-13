@@ -5,7 +5,7 @@ import os
 
 from airium import Airium
 
-from metrics import fmt_bytes, fmt_duration, rssi_quality
+from metrics import IAQ_ACCURACY, fmt_bytes, fmt_duration, rssi_quality
 from pages.base import EnvPage
 
 # key in client.sensors, its name, and the valid flag that says it is warm
@@ -103,6 +103,10 @@ class DiagnosticsPage(EnvPage):
                     else:
                         state = "warming up"
                     kv(a, name, state, id=f"sensor-{key}")
+                bsec = c.get("bsec") or {}
+                if bsec.get("running"):
+                    word = IAQ_ACCURACY[max(0, min(3, int(bsec.get("accuracy", 0))))]
+                    kv(a, "index", f"{word} accuracy, {bsec.get('late', 0)} late", id="bsec")
 
         with a.div(klass="card"):
             a.div(klass="label", _t="Fetch")

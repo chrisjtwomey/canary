@@ -163,10 +163,10 @@ reads twenty calibration coefficients out of the part and the failure mode
 is a plausible wrong number, so Bosch's own C API does that arithmetic
 (`lib/bme68x`, v4.4.8, BSD-3-Clause). It reaches the bus through function
 pointers, so it sits behind `II2cBus` like everything else, and it has no
-Arduino dependency, so it builds for the host tests too. IAQ needs BSEC,
-which is not integrated: the driver reports no index, and the posted
-document leaves `iaq` and `iaq_accuracy` out, as [READINGS.md](READINGS.md)
-says.
+Arduino dependency, so it builds for the host tests too. IAQ comes from
+BSEC, which drives the part through the same driver from a task of its
+own; `BsecBme688` hands `SensorSuite` the newest cycle BSEC ran, so the
+suite's sequence is the same with BSEC as without it.
 
 ## 6. Mocks — what "as close as possible" means
 
@@ -231,6 +231,7 @@ part. The tests then pin the corrected behaviour.
 
 1. Kit: `postJson`, `refresh_cycle()`, interval schedule, `ReadingsStore` + `IngestSource`, `POST /readings`. Tests for each. Weather-cal stays green.
    *Status 2026-09-04: the kit's `display` block is in: `pools` of images and a `schedule` of type `times` or `interval` (round-robin over pools, round-robin within, random starts reshuffled every few hours). The calendar uses `times` with one image per pool. `refresh_cycle()` was not needed: the awake loop composes the kit's WiFi, download, draw and back-off helpers directly. `postJson` and the kit's `POST /<name>` ingest routes (`DisplayServer(ingest=...)`) are in. `ReadingsStore` and `IngestSource` are open; the server keeps only the newest posted document, for the Diagnostics page.*
+   *Status 2026-09-12: `ReadingsStore` and `IngestSource` are in the kit from 0.5.0. `source.kind: store` serves them to the pages.*
 2. Env-monitor firmware scaffold: `platformio.ini`, `ISensor`, `EnvModel`, the four mocks, host tests. Builds for `esp32dev` with the mocks selected by a build flag.
 3. Env-monitor server: `MockReadingsSource`, one `now.png` page, `config.example.yaml`, `server.py`. Renders end to end with the mock.
 4. The awake loop in `main.cpp` against the mocks, posting to the local server. First full loop with no hardware.

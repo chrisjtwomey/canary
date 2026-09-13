@@ -11,8 +11,8 @@
 // twenty calibration coefficients out of the part; that arithmetic is the
 // vendor's, and this class is the bus and the lifecycle around it.
 //
-// IAQ needs BSEC, which is not integrated, so `hasIaq` comes back false and
-// the posted document leaves `iaq` and `iaq_accuracy` out.
+// The part has no index of its own, so `hasIaq` comes back false; BsecRunner
+// adds BSEC's.
 class Bme688Driver : public IBme688 {
 public:
     Bme688Driver(II2cBus& bus, IClock& clock, uint8_t addr = kAddress)

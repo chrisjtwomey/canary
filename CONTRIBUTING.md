@@ -104,8 +104,11 @@ everything time-zone or unit related in Python, where it is tested.
 The pages: Breathe (CO₂), Comfort (temperature and humidity), Dust
 (particulates), Air (the VOC index), a trace and a delta page for each of
 those and for pressure, Day (24 h ribbons), and Diagnostics (the board's
-own report). All but Diagnostics read the simulated room; Diagnostics reads
-the `status` dataset, the last document the board posted.
+own report). All but Diagnostics read the measurements: the simulated room
+by default, or what the board has posted with `source.kind: store` in
+`config.yaml`, which keeps them in `server/readings.db`. Before the first
+reading, every one of those pages says "No readings yet." Diagnostics
+reads the `status` dataset, the last document the board posted.
 
 A metric's *pool* is its main page plus two pages of the same two shapes,
 both in `pages/pool.py` and driven by a `Metric` spec: `TracePage`, the
@@ -253,8 +256,14 @@ board drives the fan's SET line high when it starts the sensors, and the
 thirty seconds count from then. Without a wire on SET the fan has run since
 power-on, so the wait is longer than it needs to be, never shorter.
 
-`iaq` and `iaq_accuracy` stay absent. They need BSEC, which is not
-integrated; `gas_ohm` is the raw plate resistance and is there.
+`iaq` and `iaq_accuracy` come from BSEC, Bosch's closed-source library,
+which runs in a task of its own and takes a sample every 3 s. Its accuracy
+starts at 0 and reached 3 in about 40 minutes on the bench. What it has
+learned is saved to NVS when the accuracy first reaches 3 and every six
+hours after, so a restart resumes from there (`[bsec] start: NVS state
+(accuracy 3)`). Every BSEC line in the log starts with `[bsec]`. The
+Diagnostics page shows the accuracy and the count of late samples;
+`gas_ohm` is the raw plate resistance either way.
 
 #### Swapping the mocks for the sensors, in code
 

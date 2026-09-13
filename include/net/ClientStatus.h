@@ -23,6 +23,11 @@ struct ClientStatus {
     uint32_t    fetchOk, fetchFailed;
     uint32_t    backlogHeld;     // readings waiting to be posted again
     const char* backlogStore;    // where they wait: "sd", "psram", or "" for nowhere
+    bool        bsecRunning;     // BSEC started, and the BME688 answering
+    bool        bsecRestored;    // BSEC took a saved state at its last start
+    uint8_t     iaqAccuracy;     // 0-3
+    uint32_t    bsecLateCalls;   // times BSEC was asked later than it wanted
+    uint32_t    bsecSavedEpoch;  // its last state save this boot; 0 for none
 };
 
 // Encodes the "client" object. Returns the length written, or 0 if the

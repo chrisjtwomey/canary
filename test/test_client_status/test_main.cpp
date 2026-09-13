@@ -17,6 +17,8 @@ static ClientStatus status() {
     s.nextUrl = "http://h:8080/day.png"; s.nextInS = 120; s.backoffStep = 0;
     s.fetchOk = 12; s.fetchFailed = 1;
     s.backlogHeld = 7; s.backlogStore = "psram";
+    s.bsecRunning = true; s.bsecRestored = true; s.iaqAccuracy = 2;
+    s.bsecLateCalls = 3; s.bsecSavedEpoch = 1757443200;
     return s;
 }
 
@@ -24,7 +26,7 @@ void setUp() {}
 void tearDown() {}
 
 void test_client_json_carries_every_field() {
-    char buf[512];
+    char buf[768];
     size_t n = clientStatusJson(status(), buf, sizeof(buf));
     TEST_ASSERT_EQUAL_UINT(strlen(buf), n);
     TEST_ASSERT_NOT_NULL(strstr(buf, "\"board\":\"Inkplate5V2\""));
@@ -36,6 +38,8 @@ void test_client_json_carries_every_field() {
     TEST_ASSERT_NOT_NULL(strstr(buf, "\"sensors\":{\"shtc3\":true,\"scd41\":true,\"pmsa003i\":false,\"bme688\":true}"));
     TEST_ASSERT_NOT_NULL(strstr(buf, "\"fetch\":{\"next_url\":\"http://h:8080/day.png\",\"next_in_s\":120,\"backoff_step\":0,\"ok\":12,\"failed\":1}"));
     TEST_ASSERT_NOT_NULL(strstr(buf, "\"backlog\":{\"held\":7,\"store\":\"psram\"}"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "\"bsec\":{\"running\":true,\"restored\":true,\"accuracy\":2"
+                                     ",\"late\":3,\"saved\":1757443200}"));
     TEST_ASSERT_EQUAL_CHAR('{', buf[0]);
     TEST_ASSERT_EQUAL_CHAR('}', buf[n - 1]);
 }

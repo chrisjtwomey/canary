@@ -157,3 +157,22 @@ canvas {
   font-size: 2cqw;
   color: var(--ink-soft);
 }
+
+/* Any page before the board has posted a reading. */
+.page-waiting {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 6cqw;
+  box-sizing: border-box;
+}
+
+.page-waiting .verdict {
+  font-size: 5cqw;
+  margin-top: 2cqh;
+}
+
+.page-waiting .detail {
+  font-size: 2.1cqw;
+  margin-top: 2cqh;
+}

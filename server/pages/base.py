@@ -49,7 +49,14 @@ class EnvPage(_Page):
     def local(self, ts: int) -> datetime:
         return datetime.fromtimestamp(ts, self.tz)
 
+    def waiting(self, a: Airium) -> None:
+        """The page before the board has posted a reading."""
+        a.div(klass="title label", _t=self.title or self.name)
+        a.div(klass="verdict", _t="No readings yet.")
+        a.div(klass="detail", _t="The board posts to /readings once a minute after it connects.")
+
     def template(self, **data):
+        waiting = "latest" in self.requires and data.get("latest") is None
         self.airium = Airium()
         a = self.airium
         a("<!DOCTYPE html>")
@@ -66,8 +73,12 @@ class EnvPage(_Page):
             with a.body(style=self.layout_css_variables()):
                 with a.div(klass="inner-canvas-outer"):
                     with a.div(klass="inner-canvas"):
-                        with a.div(klass=f"inner-canvas-content page page-{self.css_class or self.name}"):
-                            self.body(a, **data)
-                specs = json.dumps(self.charts(**data)).replace("<", "\\u003c")
+                        hook = "waiting" if waiting else self.css_class or self.name
+                        with a.div(klass=f"inner-canvas-content page page-{hook}"):
+                            if waiting:
+                                self.waiting(a)
+                            else:
+                                self.body(a, **data)
+                specs = json.dumps([] if waiting else self.charts(**data)).replace("<", "\\u003c")
                 a.script(type="application/json", id="charts", _t=specs)
                 a.script(_t="Charts.render(JSON.parse(document.getElementById('charts').textContent));")

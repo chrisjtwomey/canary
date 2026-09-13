@@ -486,6 +486,18 @@ void test_bme_applies_the_oversampling_and_the_heater_profile() {
     TEST_ASSERT_BITS_HIGH_MESSAGE(0x20, part.regs[FakeBme688::kRegCtrlGas1], "run_gas");
 }
 
+void test_bme_heater_profile_of_zero_turns_the_heater_off() {
+    FakeBme688 part;
+    bus->attach(Bme688Driver::kAddress, &part);
+    Bme688Driver drv(*bus, *clk);
+    TEST_ASSERT_TRUE(drv.begin(0));
+
+    drv.setHeaterProfile(0, 0);
+    TEST_ASSERT_BITS_LOW_MESSAGE(0x20, part.regs[FakeBme688::kRegCtrlGas1], "run_gas");
+    drv.setHeaterProfile(300, 100);
+    TEST_ASSERT_BITS_HIGH(0x20, part.regs[FakeBme688::kRegCtrlGas1]);
+}
+
 void test_bme_measurement_time_covers_the_conversion_and_the_heater() {
     FakeBme688 part;
     bus->attach(Bme688Driver::kAddress, &part);
@@ -631,6 +643,7 @@ int main(int, char**) {
     RUN_TEST(test_bme_begin_rejects_a_bme680);
     RUN_TEST(test_bme_begin_fails_when_nothing_answers);
     RUN_TEST(test_bme_applies_the_oversampling_and_the_heater_profile);
+    RUN_TEST(test_bme_heater_profile_of_zero_turns_the_heater_off);
     RUN_TEST(test_bme_measurement_time_covers_the_conversion_and_the_heater);
     RUN_TEST(test_bme_forced_cycle_is_not_ready_until_the_measurement_time);
     RUN_TEST(test_bme_refuses_a_second_cycle_while_one_runs);
