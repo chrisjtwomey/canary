@@ -209,13 +209,26 @@ void test_a_state_bsec_refuses_means_starting_from_nothing() {
 void test_bsec_that_will_not_start_is_tried_again() {
     bsec->initResult = -33;   // BSEC_E_CONFIG_FAIL
     TEST_ASSERT_FALSE(runner->begin());
+    TEST_ASSERT_FALSE(runner->status().started);
     TEST_ASSERT_FALSE(runner->status().running);
     TEST_ASSERT_EQUAL_UINT32(BsecRunner::kRetryMs, runner->step());
 
     bsec->initResult = IBsec::kOk;
     runFor(10000);
+    TEST_ASSERT_TRUE(runner->status().started);
     TEST_ASSERT_TRUE(runner->status().running);
     TEST_ASSERT_TRUE(bsec->steps > 0);
+}
+
+void test_bsec_starts_while_the_sensor_is_missing() {
+    bme->present = false;
+    TEST_ASSERT_FALSE(runner->begin());
+    TEST_ASSERT_TRUE_MESSAGE(runner->status().started, "BSEC took its configuration");
+    TEST_ASSERT_FALSE(runner->status().running);
+
+    bme->present = true;
+    runFor(10000);
+    TEST_ASSERT_TRUE(runner->status().running);
 }
 
 // ─── Cycles ──────────────────────────────────────────────────────────────
@@ -365,6 +378,7 @@ int main(int, char**) {
     RUN_TEST(test_begin_without_a_stored_state_starts_from_nothing);
     RUN_TEST(test_a_state_bsec_refuses_means_starting_from_nothing);
     RUN_TEST(test_bsec_that_will_not_start_is_tried_again);
+    RUN_TEST(test_bsec_starts_while_the_sensor_is_missing);
     RUN_TEST(test_a_step_runs_the_cycle_bsec_asks_for_and_keeps_the_index);
     RUN_TEST(test_bsec_is_not_asked_before_the_time_it_gave);
     RUN_TEST(test_a_late_call_is_counted_and_the_cycle_still_runs);

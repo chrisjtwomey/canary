@@ -114,29 +114,58 @@ void test_an_answer_without_a_usable_bme688_entry_is_refused() {
 
 static const uint32_t T = 1757443200;
 
+static bool prefer(const SavedCopy& nvs, const SavedCopy& server) {
+    return chooseCopy(nvs, server).takeServer;
+}
+
+static std::string why(const SavedCopy& nvs, const SavedCopy& server) {
+    char buf[80];
+    const size_t n = describeChoice(nvs, server, chooseCopy(nvs, server), buf, sizeof(buf));
+    return std::string(buf, n);
+}
+
 void test_the_servers_copy_wins_when_nvs_has_none() {
-    TEST_ASSERT_TRUE(preferServerCopy({false, 0, 0}, {true, 1, T}));
+    TEST_ASSERT_TRUE(prefer({false, 0, 0}, {true, 1, T}));
 }
 
 void test_there_is_nothing_to_weigh_without_a_server_copy() {
-    TEST_ASSERT_FALSE(preferServerCopy({false, 0, 0}, {false, 0, 0}));
+    TEST_ASSERT_FALSE(prefer({false, 0, 0}, {false, 0, 0}));
 }
 
 void test_a_more_accurate_copy_wins_and_a_less_accurate_one_never_does() {
-    TEST_ASSERT_TRUE(preferServerCopy({true, 2, T}, {true, 3, T - 86400}));
-    TEST_ASSERT_FALSE(preferServerCopy({true, 3, T - 86400}, {true, 2, T}));
+    TEST_ASSERT_TRUE(prefer({true, 2, T}, {true, 3, T - 86400}));
+    TEST_ASSERT_FALSE(prefer({true, 3, T - 86400}, {true, 2, T}));
 }
 
 void test_at_the_same_accuracy_only_a_copy_over_an_hour_newer_wins() {
-    TEST_ASSERT_TRUE(preferServerCopy({true, 3, T}, {true, 3, T + kNewerByS + 1}));
-    TEST_ASSERT_FALSE(preferServerCopy({true, 3, T}, {true, 3, T + kNewerByS}));
-    TEST_ASSERT_FALSE(preferServerCopy({true, 3, T}, {true, 3, T - 60}));
+    TEST_ASSERT_TRUE(prefer({true, 3, T}, {true, 3, T + kNewerByS + 1}));
+    TEST_ASSERT_FALSE(prefer({true, 3, T}, {true, 3, T + kNewerByS}));
+    TEST_ASSERT_FALSE(prefer({true, 3, T}, {true, 3, T - 60}));
 }
 
 void test_a_copy_with_no_time_counts_as_the_older() {
-    TEST_ASSERT_TRUE(preferServerCopy({true, 3, 0}, {true, 3, T}));
-    TEST_ASSERT_FALSE(preferServerCopy({true, 3, T}, {true, 3, 0}));
-    TEST_ASSERT_FALSE(preferServerCopy({true, 3, 0}, {true, 3, 0}));
+    TEST_ASSERT_TRUE(prefer({true, 3, 0}, {true, 3, T}));
+    TEST_ASSERT_FALSE(prefer({true, 3, T}, {true, 3, 0}));
+    TEST_ASSERT_FALSE(prefer({true, 3, 0}, {true, 3, 0}));
+}
+
+void test_the_log_says_which_state_was_selected_and_why() {
+    TEST_ASSERT_EQUAL_STRING("NVS selected (server state not found)", why({true, 3, T}, {false, 0, 0}).c_str());
+    TEST_ASSERT_EQUAL_STRING("none selected (server state not found)", why({false, 0, 0}, {false, 0, 0}).c_str());
+    TEST_ASSERT_EQUAL_STRING("server selected (no NVS state)", why({false, 0, 0}, {true, 1, T}).c_str());
+    TEST_ASSERT_EQUAL_STRING("server selected (more accurate: 3 vs 1)", why({true, 1, T}, {true, 3, T}).c_str());
+    TEST_ASSERT_EQUAL_STRING("NVS selected (server less accurate: 1 vs 3)", why({true, 3, T}, {true, 1, T}).c_str());
+    TEST_ASSERT_EQUAL_STRING("server selected (same accuracy, 2 h newer)", why({true, 3, T}, {true, 3, T + 7200}).c_str());
+    TEST_ASSERT_EQUAL_STRING("NVS selected (same accuracy, only 11 min newer)", why({true, 3, T}, {true, 3, T + 660}).c_str());
+    TEST_ASSERT_EQUAL_STRING("NVS selected (same accuracy, not newer)", why({true, 3, T}, {true, 3, T - 60}).c_str());
+    TEST_ASSERT_EQUAL_STRING("server selected (NVS state has no time)", why({true, 3, 0}, {true, 3, T}).c_str());
+    TEST_ASSERT_EQUAL_STRING("NVS selected (server state has no time)", why({true, 3, T}, {true, 3, 0}).c_str());
+}
+
+void test_a_choice_that_does_not_fit_writes_nothing() {
+    char buf[8];
+    const SavedCopy nvs = {true, 3, T}, server = {true, 1, T};
+    TEST_ASSERT_EQUAL_UINT(0, describeChoice(nvs, server, chooseCopy(nvs, server), buf, sizeof(buf)));
 }
 
 int main(int, char**) {
@@ -153,5 +182,7 @@ int main(int, char**) {
     RUN_TEST(test_a_more_accurate_copy_wins_and_a_less_accurate_one_never_does);
     RUN_TEST(test_at_the_same_accuracy_only_a_copy_over_an_hour_newer_wins);
     RUN_TEST(test_a_copy_with_no_time_counts_as_the_older);
+    RUN_TEST(test_the_log_says_which_state_was_selected_and_why);
+    RUN_TEST(test_a_choice_that_does_not_fit_writes_nothing);
     return UNITY_END();
 }

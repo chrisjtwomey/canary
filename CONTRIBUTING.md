@@ -259,11 +259,12 @@ power-on, so the wait is longer than it needs to be, never shorter.
 
 `iaq` and `iaq_accuracy` come from BSEC, Bosch's closed-source library,
 which runs in a task of its own and takes a sample every 3 s. Its accuracy
-starts at 0 and needs hours of clean and stale air to reach 3. What it has
+starts at 0 and reached 3 in about 40 minutes on the bench. What it has
 learned is saved to NVS when the accuracy first reaches 3 and every six
-hours after, so a restart resumes from there (`BSEC resumes from the state
-in NVS`). The Diagnostics page shows the accuracy and the count of late
-samples; `gas_ohm` is the raw plate resistance either way.
+hours after, so a restart resumes from there (`[bsec] start: NVS state
+(accuracy 3)`). Every BSEC line in the log starts with `[bsec]`. The
+Diagnostics page shows the accuracy and the count of late samples;
+`gas_ohm` is the raw plate resistance either way.
 
 #### Swapping the mocks for the sensors, in code
 

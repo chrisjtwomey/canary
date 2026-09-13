@@ -33,9 +33,31 @@ struct SavedCopy {
     uint32_t savedEpoch;
 };
 
+// Which branch of the rule decided: one value for each.
+enum class CopyReason : uint8_t {
+    NoServerCopy,
+    NoNvsCopy,
+    MoreAccurate,
+    LessAccurate,
+    ServerHasNoTime,
+    NvsHasNoTime,
+    Newer,           // same accuracy, more than kNewerByS newer
+    NotNewEnough,    // same accuracy, older or at most kNewerByS newer
+};
+
+struct CopyChoice {
+    bool       takeServer;
+    CopyReason reason;
+};
+
 // Whether BSEC should restart on the server's copy rather than go on with the
-// one it took from NVS. Never for a less accurate copy; always for a more
-// accurate one; at the same accuracy, only for one more than kNewerByS newer,
-// where a copy with no time counts as the older.
-bool preferServerCopy(const SavedCopy& nvs, const SavedCopy& server);
+// one it took from NVS, and why. Never for a less accurate copy; always for a
+// more accurate one; at the same accuracy, only for one more than kNewerByS
+// newer, where a copy with no time counts as the older.
+CopyChoice chooseCopy(const SavedCopy& nvs, const SavedCopy& server);
 static const uint32_t kNewerByS = 3600;
+
+// The choice as the log gives it, e.g. "server selected (more accurate: 3 vs
+// 1)". Returns the length written, or 0 when it does not fit.
+size_t describeChoice(const SavedCopy& nvs, const SavedCopy& server, const CopyChoice& choice,
+                      char* buf, size_t len);

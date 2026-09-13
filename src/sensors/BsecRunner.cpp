@@ -20,6 +20,10 @@ int64_t BsecRunner::nowMs64() {
 bool BsecRunner::startBsec(const BsecState* state) {
     bool fromState = state != nullptr && state->len > 0;
     started_ = false;
+    {
+        std::lock_guard<std::mutex> guard(lock_);
+        status_.started = false;
+    }
     if (bsec_.init() != IBsec::kOk) return false;
     if (fromState && bsec_.setState(state->blob, state->len) != IBsec::kOk) {
         fromState = false;
@@ -29,6 +33,7 @@ bool BsecRunner::startBsec(const BsecState* state) {
     started_ = true;
     nextCallNs_ = 0;
     std::lock_guard<std::mutex> guard(lock_);
+    status_.started = true;
     status_.restored = fromState;
     status_.accuracy = fromState ? state->accuracy : 0;
     return true;

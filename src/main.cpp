@@ -154,9 +154,18 @@ static void bsecTask(void*) {
 static BsecState nvsState;
 
 static void startBsec() {
-    if (!bsecRunner.begin(&nvsState)) log(LOG_WARNING, "BSEC did not start; trying again every 3 s");
-    logf(LOG_INFO, "BSEC %s", bsecRunner.status().restored ? "resumes from the state in NVS"
-                                                          : "starts from nothing");
+    const bool running = bsecRunner.begin(&nvsState);
+    const BsecRunner::Status bsec = bsecRunner.status();
+    if (!bsec.started) {
+        log(LOG_WARNING, "[bsec] start: failed; retry in 3 s");
+    } else {
+        if (bsec.restored) {
+            logf(LOG_INFO, "[bsec] start: NVS state (accuracy %u)", (unsigned)nvsState.accuracy);
+        } else {
+            log(LOG_INFO, "[bsec] start: no saved state");
+        }
+        if (!running) log(LOG_WARNING, "[bsec] BME688: not answering; retry in 3 s");
+    }
     xTaskCreatePinnedToCore(bsecTask, "bsec", kBsecStackBytes, nullptr, kBsecPriority, nullptr, 1);
 }
 
@@ -189,8 +198,13 @@ static void restoreFromServer() {
              (unsigned long)bootEpoch);
     int32_t size = 1024;
     uint8_t* answer = downloadFile(url, clientUserAgent(epdBoard().deviceName()), &size, nullptr);
+    const SavedCopy ours = {nvsState.len > 0, nvsState.accuracy, nvsState.savedEpoch};
+    char why[80];
     if (!answer) {
-        log(LOG_INFO, "the server holds no BSEC state from before this boot");
+        const SavedCopy none = {};
+        if (describeChoice(ours, none, chooseCopy(ours, none), why, sizeof(why))) {
+            logf(LOG_INFO, "[bsec] state: %s", why);
+        }
         return;
     }
     char text[1024];
@@ -202,19 +216,15 @@ static void restoreFromServer() {
     BsecState theirs = {};
     if (!parseBme688Calibration(text, theirs.blob, sizeof(theirs.blob), theirs.len,
                                 theirs.accuracy, theirs.savedEpoch)) {
-        log(LOG_WARNING, "the server's BSEC state does not parse; going on with NVS's");
+        logf(LOG_WARNING, "[bsec] state: %s selected (server state unreadable)", ours.present ? "NVS" : "none");
         return;
     }
-    const SavedCopy ours = {nvsState.len > 0, nvsState.accuracy, nvsState.savedEpoch};
     const SavedCopy server = {true, theirs.accuracy, theirs.savedEpoch};
-    if (!preferServerCopy(ours, server)) {
-        logf(LOG_INFO, "keeping NVS's BSEC state over the server's (accuracy %u, saved %lu)",
-             (unsigned)theirs.accuracy, (unsigned long)theirs.savedEpoch);
-        return;
+    const CopyChoice choice = chooseCopy(ours, server);
+    if (describeChoice(ours, server, choice, why, sizeof(why))) {
+        logf(choice.takeServer ? LOG_NOTICE : LOG_INFO, "[bsec] state: %s", why);
     }
-    logf(LOG_NOTICE, "restarting BSEC on the server's state (accuracy %u, saved %lu)",
-         (unsigned)theirs.accuracy, (unsigned long)theirs.savedEpoch);
-    bsecRunner.restartWith(theirs);
+    if (choice.takeServer) bsecRunner.restartWith(theirs);
 }
 
 // The readings come from the room itself, so there is nothing to advance.

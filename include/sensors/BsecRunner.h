@@ -33,6 +33,7 @@ public:
     typedef uint32_t (*EpochFn)();   // UTC seconds, or 0 before NTP has set the clock
 
     struct Status {
+        bool     started;      // BSEC took its configuration, whether or not the sensor answers
         bool     running;      // BSEC started, and the sensor answering
         bool     restored;     // BSEC took a saved state, not starting from nothing
         uint8_t  accuracy;     // of the last index, 0-3

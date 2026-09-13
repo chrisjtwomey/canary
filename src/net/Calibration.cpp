@@ -139,11 +139,54 @@ bool parseBme688Calibration(const char* json, uint8_t* state, uint32_t max, uint
     return true;
 }
 
-bool preferServerCopy(const SavedCopy& nvs, const SavedCopy& server) {
-    if (!server.present) return false;
-    if (!nvs.present) return true;
-    if (server.accuracy != nvs.accuracy) return server.accuracy > nvs.accuracy;
-    if (server.savedEpoch == 0) return false;
-    if (nvs.savedEpoch == 0) return true;
-    return server.savedEpoch > nvs.savedEpoch && server.savedEpoch - nvs.savedEpoch > kNewerByS;
+CopyChoice chooseCopy(const SavedCopy& nvs, const SavedCopy& server) {
+    if (!server.present) return {false, CopyReason::NoServerCopy};
+    if (!nvs.present) return {true, CopyReason::NoNvsCopy};
+    if (server.accuracy != nvs.accuracy) {
+        return server.accuracy > nvs.accuracy ? CopyChoice{true, CopyReason::MoreAccurate}
+                                              : CopyChoice{false, CopyReason::LessAccurate};
+    }
+    if (server.savedEpoch == 0) return {false, CopyReason::ServerHasNoTime};
+    if (nvs.savedEpoch == 0) return {true, CopyReason::NvsHasNoTime};
+    if (server.savedEpoch > nvs.savedEpoch && server.savedEpoch - nvs.savedEpoch > kNewerByS) {
+        return {true, CopyReason::Newer};
+    }
+    return {false, CopyReason::NotNewEnough};
+}
+
+size_t describeChoice(const SavedCopy& nvs, const SavedCopy& server, const CopyChoice& choice,
+                      char* buf, size_t len) {
+    const char* picked = choice.takeServer ? "server" : nvs.present ? "NVS" : "none";
+    const unsigned long newerS =
+        server.savedEpoch > nvs.savedEpoch ? (unsigned long)(server.savedEpoch - nvs.savedEpoch) : 0;
+    const unsigned ours = nvs.accuracy, theirs = server.accuracy;
+    int n = 0;
+    switch (choice.reason) {
+    case CopyReason::NoServerCopy:
+        n = snprintf(buf, len, "%s selected (server state not found)", picked);
+        break;
+    case CopyReason::NoNvsCopy:
+        n = snprintf(buf, len, "%s selected (no NVS state)", picked);
+        break;
+    case CopyReason::MoreAccurate:
+        n = snprintf(buf, len, "%s selected (more accurate: %u vs %u)", picked, theirs, ours);
+        break;
+    case CopyReason::LessAccurate:
+        n = snprintf(buf, len, "%s selected (server less accurate: %u vs %u)", picked, theirs, ours);
+        break;
+    case CopyReason::ServerHasNoTime:
+        n = snprintf(buf, len, "%s selected (server state has no time)", picked);
+        break;
+    case CopyReason::NvsHasNoTime:
+        n = snprintf(buf, len, "%s selected (NVS state has no time)", picked);
+        break;
+    case CopyReason::Newer:
+        n = snprintf(buf, len, "%s selected (same accuracy, %lu h newer)", picked, newerS / 3600);
+        break;
+    case CopyReason::NotNewEnough:
+        n = newerS ? snprintf(buf, len, "%s selected (same accuracy, only %lu min newer)", picked, newerS / 60)
+                   : snprintf(buf, len, "%s selected (same accuracy, not newer)", picked);
+        break;
+    }
+    return n > 0 && (size_t)n < len ? (size_t)n : 0;
 }
