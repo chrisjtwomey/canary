@@ -28,6 +28,9 @@ const uint8_t kOutputs[] = {
     BSEC_OUTPUT_BREATH_VOC_EQUIVALENT,
     BSEC_OUTPUT_STABILIZATION_STATUS,
     BSEC_OUTPUT_RUN_IN_STATUS,
+    // Unused here, but without it BSEC asks for no pressure conversion, and
+    // the posted pressure_hpa comes from that same cycle.
+    BSEC_OUTPUT_RAW_PRESSURE,
 };
 const uint8_t kOutputCount = sizeof(kOutputs) / sizeof(kOutputs[0]);
 
