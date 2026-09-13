@@ -13,3 +13,6 @@ server/static/*.html
 
 # Firmware images the board updates itself from
 server/firmware/
+
+# Renders and drafts the Claude app saves into this folder
+Claude outputs/
