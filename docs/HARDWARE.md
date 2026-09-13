@@ -372,7 +372,7 @@ Sources: [NXP UM10204](https://www.nxp.com/docs/en/user-guide/UM10204.pdf) ·
 
 ### Connectors
 
-easyC, Qwiic and STEMMA QT are all **JST SH 1.0 mm 4-pin, same order: black GND, red 3V3, blue SDA, yellow SCL**. A stock cable chains a Soldered board to an Adafruit board. Every sensor board here has two connectors in parallel (pass-through); the Inkplate has one. Cable 28 AWG; SparkFun's conservative cable limit **226 mA**, JST contact rating 1 A. STEMMA (non-QT, JST PH 2 mm) is a different thing.
+easyC, Qwiic and STEMMA QT are all **JST SH 1.0 mm 4-pin, same order: black GND, red 3V3, blue SDA, yellow SCL**. A stock cable chains a Soldered board to an Adafruit board. Every sensor board here has two connectors in parallel (pass-through); the Inkplate has one. Cable 28 AWG; SparkFun's conservative cable limit **226 mA**, JST contact rating 1 A. The 226 mA is a bundled, long-run derating for 28 AWG — a single short conductor in free air is good to ~1 A, which is also the contact limit. §8's cable 1 carries the whole chain's ground return, up to ~470 mA at peak, on that basis; it is the most heavily loaded Qwiic conductor in the build and the reason the second return (step 9) exists. STEMMA (non-QT, JST PH 2 mm) is a different thing.
 
 ### Addresses
 
@@ -445,7 +445,7 @@ Inkplate 5GEN2 (3V3/GND/SDA/SCL) → BME688 → SHTC3 → SCD41 → PMSA003I
 | **SHTC3 placement** | **Not OK.** The T/RH reference is chained between the BME688 heater and the SCD41, and nothing says where it sits physically. It must be the coolest, most exposed point. |
 | PMSA003I control | SET pin unused → fan runs continuously. Fine on mains; optional GPIO for duty-cycling. |
 
-### Corrected
+### Corrected *(revised 2026-09-13 — one wire per crimp, ground starred at the Inkplate, cable 1 lands on the PM header)*
 
 ```
  USB-C 5 V
@@ -453,21 +453,24 @@ Inkplate 5GEN2 (3V3/GND/SDA/SCL) → BME688 → SHTC3 → SCD41 → PMSA003I
     ▼
  Inkplate 5 Gen2
     │
-    ├─ VIN pad ─────────────────► [3.3 V LDO ≥ 600 mA] ──┬──► PMSA003I header VIN   (power in)
-    ├─ GND (bottom header) ─────►         GND            └──► PMSA003I header GND   (return)
+    ├─ VIN pad ─────────────────────► AMS1117-3.3  IN
+    ├─ expander-group GND ──────────► AMS1117-3.3  GND       regulator's reference only, a few mA
+    │                                 AMS1117-3.3  OUT ─────► PMSA003I header VIN    3.3 V for the whole chain
     │
-    ├─ expander P1_3 ───────────────────────────────────────► PMSA003I header SET   (fan control)
+    ├─ expander P1_3 ───────────────────────────────────────► PMSA003I header SET    fan control
     │
-    └─ easyC K3 ──cable 1: SDA · SCL only───────────────────► PMSA003I header SDA, SCL (bus only)
+    ├─ easyC K3 ── cable 1: GND · SDA · SCL, 3V3 cut ───────► PMSA003I header GND · SDA · SCL   bus in, chain's ground return out
+    │
+    └─ ESP32-group GND ── step 9 ───────────────────────────► SCD41 header GND        second ground return, from the sensitive board
 
-   ┌─ PMSA003I  (Adafruit 4632)   0x12   heaviest load first; power and ground enter here
-   │     cable 2: all four wires          easyC   ──►
+   ┌─ PMSA003I  (Adafruit 4632)   0x12   heaviest load first: power enters at its header, ground leaves by cable 1
+   │     cable 2: stock, from socket B (socket A faces the wall)
    │     ▼
-   ├─ SCD41     (Adafruit 5190)   0x62   second heaviest; gets BME688 pressure each cycle
-   │     cable 3: all four wires
+   ├─ SCD41     (Adafruit 5190)   0x62   second heaviest; gets BME688 pressure each cycle; carries step 9's return
+   │     cable 3: stock
    │     ▼
    ├─ BME688    (Soldered)        0x76   JP1 moves it to 0x77 if 0x76 is ever taken
-   │     cable 4: all four wires
+   │     cable 4: stock
    │     ▼
    └─ SHTC3     (Soldered)        0x70   LAST — at the enclosure edge, upstream of the fan,
                                          away from the heater and the Inkplate. Second socket unused.
@@ -475,46 +478,108 @@ Inkplate 5GEN2 (3V3/GND/SDA/SCL) → BME688 → SHTC3 → SCD41 → PMSA003I
 
 ### What connects to what
 
-Build it in this order. Nothing after step 1 carries mains-level current, but
-getting step 1 wrong is what browns the board out under load.
-
 | # | From | To | Wire |
 |---|---|---|---|
-| 1 | Inkplate **VIN pad** | AMS1117 **IN** | Dupont at the AMS1117 — see below |
-| 2 | Inkplate **GND** (bottom header) | AMS1117 **GND** | Dupont both ends |
-| 3 | AMS1117 **OUT** | PMSA003I header **VIN** | Dupont both ends |
-| 4 | AMS1117 **GND** | PMSA003I header **GND** | Dupont both ends — see below |
-| 5 | Inkplate easyC **K3** | PMSA003I header **SDA**, **SCL** | cable 1: **SDA and SCL only**, Dupont at the PM |
-| 6 | PMSA003I **either easyC socket** | SCD41 either socket | cable 2: all four |
-| 7 | SCD41 other socket | BME688 either socket | cable 3: all four |
-| 8 | BME688 other socket | SHTC3 either socket | cable 4: all four |
-| 9 | Inkplate expander **P1_3** | PMSA003I header **SET** | Dupont both ends |
+| 1 | Inkplate **VIN pad** | AMS1117 **IN** | 28 AWG jumper, Dupont at the AMS1117 end |
+| 2 | Inkplate **expander-group GND** | AMS1117 **GND** | 28 AWG jumper, Dupont both ends |
+| 3 | AMS1117 **OUT** | PMSA003I header **VIN** | 28 AWG jumper, Dupont both ends |
+| 4 | Inkplate **expander P1_3** | PMSA003I header **SET** | 28 AWG jumper, Dupont both ends |
+| 5 | Inkplate **easyC K3** | PMSA003I header **GND, SDA, SCL** | cable 1: a Qwiic cable with its plug kept at the Inkplate end, the other end cut and re-terminated with three Dupont crimps; **3V3 conductor removed** |
+| 6 | PMSA003I **easyC socket B** | SCD41 either socket | cable 2: stock, 45 mm |
+| 7 | SCD41 other socket | BME688 either socket | cable 3: stock, 30 mm |
+| 8 | BME688 other socket | SHTC3 either socket | cable 4: stock, 40–45 mm |
+| 9 | Inkplate **ESP32-group GND** | SCD41 header **GND** | 28 AWG jumper, Dupont both ends — a second ground return in parallel with cable 1's, see below |
 
 Every sensor board has two easyC sockets wired in parallel, so "either" is
-literal: in and out are interchangeable. The SHTC3 is last, so one of its two
-sockets stays empty. The PM board's 7-pin header is VIN, 3Vo, GND, SCL, SDA,
-RST, SET; you use VIN, GND, SDA, SCL and SET and leave 3Vo and RST alone. The
-bus reaches the PM board through the header and leaves it through an easyC
-socket.
+literal. The SHTC3 is last, so one of its sockets stays empty. The PM board's
+7-pin header is VIN, 3Vo, GND, SCL, SDA, RST, SET: you use **VIN, GND, SCL,
+SDA and SET** (five housings standing on the header) and leave 3Vo and RST
+empty. The bus arrives at the header, not at a socket, because in the
+enclosure the PM board's socket A faces the left wall 2.9 mm away — no plug
+fits — and socket B is taken by cable 2.
 
-Every connection can be unplugged. The Inkplate's expander pads, the PM
-header and the AMS1117 pins take female Dupont housings; the expander pads are
-0.8 mm drills, so their header needs round machined pins. Cable 1 is an easyC
-cable with its JST-SH plug kept at the Inkplate end and only **positions 3
-(SDA) and 4 (SCL)** wired. Positions are 1 GND, 2 3V3, 3 SDA, 4 SCL.
+On the Inkplate, the two expander-group pads (GND and P1_3) sit five
+positions apart, so one 5-pin right-angle header spanning GND…P1_3 serves
+both, with a Dupont housing on each end pin; step 9 takes a second, 2-pin
+right-angle header on the ESP32 group, using its GND. The header pads are
+0.8 mm drills, so both headers need round machined pins. The Inkplate's four
+plain GND pads — panel, ESP32, I²C and expander groups — are the same net and
+interchangeable; **AGND** in the panel group is not, leave it alone.
 
 The VIN pad is a 4 × 4 mm surface pad with no hole (PAD3 in Soldered's KiCad
 board). The wire unplugs at the AMS1117 end.
 
-### Why the ground wire in step 4
+**Cable 1** keeps its JST-SH plug at the Inkplate end only. Cut the other
+plug off, strip GND, SDA and SCL and crimp a Dupont on each (three single
+housings, or one 1×3 if the pins line up — on the PM header they are
+GND · SCL · SDA in a row, so they do). The 3V3 conductor is cut back and
+insulated, not crimped. On a standard cable that is the **red** wire (black
+GND, red 3V3, blue SDA, yellow SCL); on a cable with other colours, find 3V3
+by position against the socket's silkscreen or with a meter before cutting.
+Leave red in and you parallel the Inkplate's 500 mA regulator with the
+AMS1117, which is the fault this whole section exists to avoid.
 
-Power enters at the PMSA003I's header VIN pin, and every board's two sockets
-pass 3V3 straight through, so the rest of the chain is fed from there. The
-return, up to roughly **410 mA** (the PM board's ~200 mA plus the SCD41's
-175–205 mA peak plus the other two), goes back to the regulator through step
-4 and on to the Inkplate through step 2. Cable 1 carries no ground, so steps
-2 and 4 are also the signal reference for SDA and SCL. Leave either out and
-the chain has no ground in common with the Inkplate.
+**Step 9** needs a header on the SCD41 board: five machined round pins
+soldered to its VIN · 3Vo · GND · SCL · SDA row, with a single Dupont housing
+on GND and the other four empty. The housing stands upright inside the SCD41
+compartment; the enclosure is sized for it (§9). Which edge of the Adafruit
+5190 carries that row decides how the wire runs — the model assumes the
+right-hand edge as the board sits in its compartment; check yours before
+soldering.
+
+### Ground: one wire per crimp
+
+Ground has four endpoints on this device — the Inkplate's ground plane, the
+AMS1117's single GND pin, the PM header and the SCD41 header — and a Dupont
+housing takes one crimp, so any scheme that chains them (Inkplate → AMS1117 →
+PM) puts two wires on the regulator's GND pin. The earlier draft did exactly
+that. Instead each endpoint gets its own wire back to the Inkplate's ground
+plane (**star grounding**), each on its own Inkplate GND pad:
+
+- the AMS1117's GND pin by step 2 (expander-group GND), carrying only the
+  regulator's own few mA,
+- the PM board, and through it the whole chain, by cable 1's GND conductor
+  (easyC K3),
+- the SCD41 by step 9 (ESP32-group GND), a second return in parallel with
+  cable 1's that starts at the board whose supply matters most.
+
+The chain's return current — up to ~470 mA at peak — therefore flows down
+cable 1 straight to the Inkplate, not through the regulator's ground wire. The
+regulator's reference stays clean and nothing needs double-crimping. Unplug
+the AMS1117 and the bus still has its ground.
+
+### Current in each wire
+
+| Wire | typ / peak | Carrier | Margin |
+|---|---|---|---|
+| 1 · VIN → AMS IN | 220 / 475 mA | 28 AWG, Dupont | fine — 28 AWG is ~1.4 A in free air, Dupont ≥ 1 A |
+| 2 · GND → AMS GND | ~5 mA | 28 AWG | — |
+| 3 · AMS OUT → PM VIN | 215 / 470 mA | 28 AWG, Dupont | fine |
+| 5 · cable 1 GND (chain return) | 215 / 470 mA, less whatever step 9 takes | 28 AWG, JST-SH 1 A/contact, Dupont | fine |
+| 9 · SCD41 GND → Inkplate | share of the SCD41's 15 / 205 mA | 28 AWG, Dupont | — |
+| 4, 5 · SET, SDA, SCL | < 1 mA | — | — |
+| 6 · PM → SCD41 | 16 / 225 mA | 28 AWG, JST-SH | fine |
+| 7, 8 · onward | 1.3 / 18 mA · 0.4 / 0.9 mA | — | — |
+
+Ampacity is not the constraint anywhere; a Dupont jumper only *looks* heavier
+than a Qwiic conductor because its insulation is thicker — the copper is the
+same 28 AWG.
+
+**Voltage drop is the one thing to watch, and it is mostly contacts.** The
+SCD41's own 175 mA measurement pulse goes out AMS OUT → PM header → socket B →
+cable 2 → SCD41, and comes back either the same way to cable 1, or straight
+down step 9. With the lengths as built — cable 2 45 mm, cable 1 ~90 mm,
+jumpers 50–90 mm — the copper is only a few tens of mΩ; the crimp and plug
+contacts at 10–20 mΩ each are what add up. Without step 9 the loop crosses
+eight of them (~130–210 mΩ, **25–35 mV** at the sensor during its pulse, on
+the line of Sensirion's 30 mV ripple guidance in §2). With step 9 the return
+half is two Dupont contacts in parallel with the four-contact path back
+through the PM board, and the loop falls to roughly 90–140 mΩ, **≈ 15–25 mV**.
+That guidance is a ripple figure, not an operating limit (the part runs from
+2.4–5.5 V), so this is margin, not a fault; clean crimps matter more than
+cable length. Two returns landing on the same ground plane a few centimetres
+apart is not a ground loop. Cable lengths: cable 2 45 mm, cable 3 30 mm,
+cable 4 40–45 mm, all jumpers 50–90 mm.
 
 Chain order is chosen for **cable voltage drop** (heavy loads nearest the
 injection point) and **heat** (reference sensor farthest from everything warm).
@@ -541,7 +606,9 @@ any individual board:
 - The Inkplate's 3.3 V rail is 500 mA and already carries the ESP32, the
   panel PMIC and Wi-Fi bursts. Sensor peaks alone reach ~470 mA (§7).
 - ~200 mA for the PM board would flow through every upstream board's
-  connectors. SparkFun's conservative figure for a Qwiic cable is 226 mA.
+  connectors and three cables' worth of contacts and copper before reaching
+  it. The drop, not the ampacity, is the problem: SparkFun's conservative
+  figure for a Qwiic cable is 226 mA, but the contacts are rated 1 A.
 
 Hence the separate regulator and the heaviest-load-first order above. The
 symptom if you skip it is an intermittent brown-out when the fan, an SCD41
@@ -558,6 +625,32 @@ find later.
 - **BME688**: anywhere with air access; its heater is a heat source for the others, so not adjacent to the SHTC3.
 - **Inkplate**: the ESP32, LDO and panel PMIC are the warmest parts; the sensors go on the opposite side or in a ventilated bay.
 - Vent the sensor bay on two sides so air moves through rather than pooling.
+- **Standing Dupont housings set the base height.** The PMSA003I's straight header carries five housings and the
+  SCD41's header one, all upright. A housing is 14 mm tall and the jumper needs ~3.7 mm above it to turn, so each
+  header block wants **17.7 mm clear** above it *(measured 2026-09-13)* — which is what makes the shell 30.5 mm
+  high at the front and 25 mm at the rear.
+
+### Fasteners
+
+For the enclosure in [`hardware/enclosure/v1/`](../hardware/enclosure/v1/README.md). Six brass heat-set inserts carry the two joints that get opened and that hold weight; everything else threads straight into printed plastic.
+
+| Fastener | Qty | Where | Hole |
+|---|---|---|---|
+| M3 heat-set insert (≈ 5.7 long, 4.6 OD) | 2 | Head tray, bottom wall | Ø 4.0 × 7.5 deep |
+| M3 heat-set insert, same | 4 | Base shell, internal pillars | Ø 4.0 × 6.0 deep |
+| M3 × 12 socket cap | 2 | Head → base, up through the cradle block | Ø 3.4 clearance, Ø 6.4 × 3.5 counterbore |
+| M3 × 8 countersunk, 90° | 4 | Shell → chassis, up from underneath | Ø 3.4 clearance, Ø 6.2 × 1.4 cone |
+| M2.5 × 6 self-tapping, pan head | 4 | Head back cover → tray bosses | Ø 2.9 clearance + Ø 5.2 × 0.8 recess; Ø 2.1 pilot, 5.0 deep |
+| M2 × 4 self-tapping, pan head | 8 | PMSA003I and SCD41, 4 each | Ø 2.1 pilot, 3 mm deep |
+| M2.5 × 4 self-tapping | 8 | BME688 and SHTC3, 4 each | Ø 2.6 pilot, 3 mm deep |
+| M3 × 6 machine screw *(optional)* | 4 | Back cover → the Inkplate's own brass standoffs | Ø 3.4 clearance |
+
+- Board pilots are blind: 3 mm of engagement with 1 mm of floor left under them, so no screw breaks the desk face. Two screws per sensor board carry a few grams comfortably; all four holes are there if wanted.
+- **Board screws are one nominal size under their pilot** *(measured 2026-09-12, PLA+ print)*, for two separate reasons. The PMSA003I's board holes are 2.5 mm (§3), so an M2.5 screw cannot physically pass through one — M2 is the only option there, and the SCD41 takes the same screw for consistency though its 3.0 mm holes would also accept M2.5. The Soldered boards' 3.2 mm holes would pass M3 happily; what rules M3 out is the printed pilot, since Ø 2.6 nominal finishes nearer 2.4 on an FDM print and a thread-former that tight in PLA+ splits the boss. Do not re-cut the pilots to suit the smaller screws: they are sized for how the hole prints, not for how it reads in CAD.
+- Every self-tapper is sized to stop **short of the blind end of its pilot**, not to fill the material: a tapered tip driven into the last millimetre wedges the boss open. Board 1.57 mm + 3 mm of pilot = 4.6 mm available, hence 4 mm screws; the cover has 1.2 mm of plate below its recess + 5.0 mm of pilot = 6.2 mm, hence 6 mm. Engagement is then 2.4 mm at the boards and 4 mm at the cover — short of the usual 2 × diameter, but these are five-gram boards.
+- The shell screw cannot go past 8 mm either — that insert bottoms at 7.7. Its countersink is Ø 6.2, not the Ø 6.6 first drawn: an ISO 7046 M3 head is 5.5 across (5.6 max), and the four holes sit close enough to the chassis edge that 0.4 mm of wall matters — see the enclosure README.
+- The **AMS1117 module has no mounting holes**. It drops into a walled pocket in the chassis 0.5 mm clear of the board on every side (9.1 mm — the board plus 0.3 a side — is tighter than an FDM print can be trusted to hold), pins toward the head, chip underneath. It rests on a pad under the two solder domes at the front (1.2 mm below the PCB) and on two solid corners at the rear beside the SOT-223, with an open passage under the board between them so the regulator has air on both faces; a Ø4 post under the shell's skin traps it when the shell goes on. It is not captive until then.
+- Self-tapping into PLA or PETG holds fine for a one-time build. If boards will come in and out repeatedly, those pilots strip after a handful of cycles and want inserts instead — which means taller, wider bosses.
 
 ---
 
@@ -575,7 +668,9 @@ find later.
 | 3.3 V LDO module | vendor-specific | typical breakout ~15 × 10 mm |
 | This enclosure | [`hardware/enclosure/v1/`](../hardware/enclosure/v1/README.md) — `enclosure.py` (Fusion generator), `stl/`, `step/` | Display head (tray + back cover) in a 20° cradle on a sensor base (chassis + shell). The layout in §9 as built. |
 
-Allow ~15 mm beyond each JST-SH socket for the cable plug.
+A **mated** JST-SH plug stands only about **2 mm** proud of its socket — the housing sits inside it — so the
+clearance to allow beyond a socket is set by the cable turning, not by the plug: ~6 mm is comfortable, and the
+6.8 × 2.7 mm housing section is what every cable passage has to be sized around *(measured 2026-09-12)*.
 
 ---
 
