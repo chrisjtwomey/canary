@@ -331,13 +331,28 @@ pip install -r server/requirements-dev.txt
 ```
 
 Install the local `epd` checkout **editable**, and first. `requirements.txt`
-pulls `epd-server` from GitHub at `@main`, which is right for a deployment
-and wrong while developing both repos at once.
+pins `epd-server` to a tagged release on GitHub, which is right for a
+deployment and for the server image, and wrong while developing both repos
+at once.
 
 `pyrightconfig.json` at the repo root points the editor at that virtualenv
 and adds `server/` and `../epd/server` to the import path, so Pylance
 resolves `epd_server` and `sources.*`. Without it both show as unresolved
 even though the tests pass, because Pylance does not read `pytest.ini`.
+
+## Releases
+
+Publishing a GitHub release runs `.github/workflows/release.yaml`. It builds
+`server/` into `ghcr.io/chrisjtwomey/inkplate5-env-monitor-server`, tagged
+with the release's version (`0.2.0` and `0.2` for `v0.2.0`) and `latest`. No
+release carries a firmware image: the firmware links Bosch's BSEC binary,
+which this project does not hand out.
+
+The image runs `python server.py` with the example config on port 8080.
+Mount your own `config.yaml` at `/app/config.yaml`, and volumes at
+`/app/data` and `/app/firmware` to keep the stores and the OTA images; point
+`source.path` and `calibration.path` at `data/readings.db` and
+`data/calibration.db`.
 
 ## Making Changes
 
