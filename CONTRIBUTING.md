@@ -320,18 +320,21 @@ it was taken in. Three things worth knowing when it does not pass:
 
 ## Setup
 
-epd must be checked out beside this repo. Then:
+epd must be checked out beside this repo. Then, in this order:
 
 ```sh
 python3 -m venv server/.venv && source server/.venv/bin/activate
-pip install -e ../epd/server        # the local kit, not the pushed branch
-pip install -r server/requirements-dev.txt
+pip install -r server/requirements-dev.txt   # the tools, and epd-server at its pinned tag
+pip install -e ../epd/server                 # then the local kit, editable, on top
 ```
 
-Install the local `epd` checkout **editable**, and first. `requirements.txt`
-pins `epd-server` to a tagged release on GitHub, which is right for a
-deployment and for the server image, and wrong while developing both repos
-at once.
+`requirements.txt` pins `epd-server` to a release tag on GitHub, which is
+right for a deployment and for the server image, and wrong while developing
+both repos at once. The order matters: pip treats that pin as a direct
+reference, so any `pip install -r` replaces an editable epd with the tagged
+release, whatever the two versions are. Install the checkout last, and again
+after any later `pip install -r`. `pip freeze | grep epd` shows which one is
+in: a line starting `-e` is the checkout.
 
 `pyrightconfig.json` at the repo root points the editor at that virtualenv
 and adds `server/` and `../epd/server` to the import path, so Pylance

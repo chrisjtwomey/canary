@@ -41,7 +41,7 @@ pio run -e esp32       # firmware with the sensor drivers; -e esp32-mock uses th
 cd server
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
-pip install -e ../../epd/server     # develop against a local kit checkout
+pip install -e ../../epd/server     # the local kit, last: CONTRIBUTING.md, Setup, says why
 pytest
 ```
 
