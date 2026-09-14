@@ -1,8 +1,8 @@
 # Architecture — where the env monitor departs from the kit, and how
 
-Status: **proposal, 2026-09-03.** Nothing here is built. It reads
-[HARDWARE.md](HARDWARE.md) for the numbers and the extraction plan for what
-`epd` provides today.
+How this device differs from the weather calendar that [epd](https://github.com/chrisjtwomey/epd)
+came out of, and what it builds on the kit. [HARDWARE.md](HARDWARE.md) has the numbers; the
+[Decision Log](#decision-log) has the history.
 
 ## 1. What the kit assumes
 
@@ -18,112 +18,93 @@ server decides *when* (`X-Next-Refresh-Seconds`) and *what*
 |---|---|---|
 | Power | LiPo, years | **USB mains** (HARDWARE §7) |
 | Data origin | server fetches from APIs | **the client holds the sensors** |
-| Cadence | 7 wakes a day | readings every seconds, display every few minutes |
+| Cadence | 7 wakes a day | readings every few seconds, display every few minutes |
 | Client between refreshes | deep sleep | **awake**: sensors need it (SCD41 periodic mode with ASC, BSEC calibration state, PM fan warm-up) |
 | Panel | Inkplate 10, 4 greys used | Inkplate 5 Gen2, **8 greys** |
 
 Three of those change the design. The panel is one config line.
 
-## 3. Three decisions
+## 3. Three differences in the design
 
 ### 3.1 The firmware runs an awake loop, not `run_app()`
 
-`run_app()` is the deep-sleep state machine. Keeping the ESP32 awake is not
-a tweak to it; it is a different program:
+`run_app()` is epd's deep-sleep state machine. Keeping the ESP32 awake is not
+a tweak to it; it is a different program, and `src/main.cpp` owns it:
 
 ```
 setup:  board.begin(); wifi; ntp; sensors.begin()
-loop:   every 5 s     sensors.poll()            (SCD41 periodic, BME688 via BSEC LP, PMSA003I frames, SHTC3)
-        every 60 s    POST /readings {json}     to the server
-        every 5 min   GET /now.png → draw       (on the server's X-Next-Refresh-Seconds cadence)
-        every N hours checkpoint BSEC state to NVS
+loop:   every 5 s                        sensors.sample()     (SCD41 periodic, BME688 via BSEC, PMSA003I frames, SHTC3)
+        every 60 s                       POST /readings       one JSON document, with the board's own status beside it
+        when X-Next-Refresh-Seconds ends GET the named page → draw; a failed fetch keeps the old image and backs off
+BSEC:   a FreeRTOS task of its own; its state goes to NVS when accuracy first reaches 3 and every six hours after
 ```
 
-**Kit impact — small.** `EpdClient` already has the pieces this loop needs
-as free functions: `configureWiFi`, `configureTime`, `downloadFile`,
-`loadImage`, the logger, `IBoard`. It gains:
-
-- `postJson(url, body) -> esp_err_t` in `network_utils` (there is only a GET today).
-- A `refresh_cycle()` helper that does GET → draw → return the next-refresh seconds, so both programs share the image path and the header parsing.
-- Nothing removed. `run_app()` and the weather calendar are untouched.
-
-The env-monitor's `main.cpp` owns the loop. The kit stays a library, not a
-framework: it does not need to know what a sensor is.
+The loop composes epd's WiFi, time, download, `postJson`, image and back-off
+helpers, the logger and `IBoard`. The kit stays a library, not a framework:
+it does not need to know what a sensor is.
 
 ### 3.2 Readings travel client → server by HTTP POST
 
-Two candidates: **HTTP POST** to the display server, or **MQTT publish** to a
-broker the server subscribes to.
+The board posts one document a minute to `/readings`, in the layout of
+[READINGS.md](READINGS.md). epd's `DisplayServer(ingest=...)` hands it to
+`ReadingsIngest`, which keeps the newest document for the Diagnostics page
+and, with `source.kind: store`, appends it to epd's `ReadingsStore` (SQLite).
+`IngestSource` serves the store to the pages as the datasets `latest`,
+`history_24h` and `history_72h`, and `SeaLevelSource` reduces the pressure on
+the way. With `source.kind: mock`, `MockReadingsSource` serves the simulated
+room under the same names. The Diagnostics page reads `status`.
 
-| | HTTP POST `/readings` | MQTT |
-|---|---|---|
-| Moving parts | none new | a broker (one probably exists: the kit's log relay uses one) |
-| Home Assistant | server can republish to MQTT later | native |
-| Firmware | `postJson`, 20 lines | PubSubClient is already linked for logging |
-| Testing | Flask test client, no infra | needs a broker or a fake |
-| Failure mode | server down → readings lost until retry | broker down → same |
-
-**Recommendation: HTTP POST now.** It is one route in `DisplayServer` and
-testable with what the kit already has. Add an MQTT republish on the server
-side when Home Assistant enters the picture; the firmware never changes.
-
-**Kit impact:**
-
-- `DisplayServer` gains `POST /readings`: validate JSON, hand it to a `ReadingsStore`.
-- `epd_server/store.py` — `ReadingsStore`: SQLite, one table, append and range queries. Survives server restarts, which an in-memory ring would not.
-- `epd_server/source.py` — `IngestSource(DataSource)` over the store: datasets `latest` and `history(hours=…)`. Pages declare `requires = ("latest", "history_24h")` exactly as the weather pages do.
-
-The reading schema is the project's (`co2_ppm`, `pm25_ugm3`, `iaq`, `temp_c`, …); the kit stores a timestamped JSON document and does not interpret it.
+The reading schema is the project's (`co2_ppm`, `pm2_5`, `iaq`, `temp_c`, …);
+the kit stores a timestamped JSON document and does not interpret it. BSEC's
+learned state rides along in a `calibration` block, which `CalibrationStore`
+keeps and `GET /calibration` hands back after the board restarts.
 
 ### 3.3 The schedule is an interval, not a list of times
 
-`display_schedule` is `{"08:00:00": today.png, …}`. "Every five minutes"
-would be 288 entries. The kit gains an interval schedule:
+"Every five minutes" as a list of wall-clock times would be 288 entries. epd's
+`display` block has `pools` of images and a `schedule` of `type: times` or
+`type: interval`. This device uses `interval` with `every: 300`, so refreshes
+land on :00, :05, … on the wall clock; the weather calendar keeps `times`.
+[CONTRIBUTING.md](../CONTRIBUTING.md) explains the pools.
 
-```yaml
-display_schedule:
-  every: 300        # seconds; aligned to the wall clock so refreshes land on :00, :05, …
-  page: now.png
-```
-
-`next_wake` / `next_regen` handle both shapes; `DisplayServer` does not
-care which. The weather calendar keeps its list.
-
-## 4. What stays exactly as it is
+## 4. What stays as the kit has it
 
 - The wire contract: `GET /<page>.png` with `X-Next-Refresh-Seconds` and `X-Next-URL`. The awake client honours the header by waiting instead of sleeping.
 - `DisplayServer`, `Page`, `regenerate()`, `DataSource`, the config loader, the MQTT log relay.
-- `IBoard` and `EpdBoardInkplate`. Inkplate 5 Gen2 is `-DARDUINO_INKPLATE5V2`; GPIO39 RTC wake matches the schematic even though this device will not sleep.
-- Rendering: `GreyscaleQuantiser(levels=8)` — the payoff from step 4, one argument.
+- `IBoard` and `EpdBoardInkplate`. Inkplate 5 Gen2 is `-DARDUINO_INKPLATE5V2`; GPIO39 RTC wake matches the schematic, though this device does not sleep.
+- Rendering: `GreyscaleQuantiser` at eight levels for the panel's eight greys, one argument.
 
-## 5. Shape of the env-monitor repo
+## 5. Shape of the repo
 
 ```
-firmware/                      PlatformIO project (or src/ at root, like weather-cal)
-  platformio.ini               esp32dev + -DARDUINO_INKPLATE5V2, lib_deps symlink://../epd/firmware, boards/inkplate
-  src/main.cpp                 the awake loop from §3.1
-  src/defaults.cpp             WiFi, server URL, MQTT logging (gitignored, example committed)
-  include/sensors/
-    Readings.h                 what each sensor returns, and the posted set
-    IShtc3.h  IScd41.h  IPmsa003i.h  IBme688.h    one interface per part, shaped by its datasheet
-    IClock.h                   millis() / waitMs(); ArduinoClock on the device
-    SensorSuite.h              the four sensors as one begin() and one sample()
-  src/sensors/
-    SensorSuite.cpp            the sampling protocol, written once against the interfaces
-    Pmsa003iFrame.cpp          the 32-byte frame decoder, shared by every driver
-    ReadingsJson.cpp           the wire format in docs/READINGS.md
-    II2cBus.h  SensirionI2c.{h,cpp}                the bus seam, and what the two Sensirion parts share
-    Shtc3Driver.cpp  Scd41Driver.cpp  Pmsa003iDriver.cpp  Bme688Driver.cpp
-    mock/
-      EnvModel.{h,cpp}         one simulated room driving all four mocks coherently
-      MockScd41.h  MockPmsa003i.h  MockBme688.h  MockShtc3.h
-  test/                        host tests: mocks, JSON encoding, loop timing (native env, like the kit)
+platformio.ini                 envs: esp32 (the drivers), esp32-mock (-DUSE_MOCK_SENSORS), esp32-validate, native, sim
+partitions.csv
+src/main.cpp                   the awake loop from §3.1
+src/defaults.example.cpp       copy to defaults.cpp: WiFi, server URL, MQTT logging
+include/sensors/  src/sensors/
+  Readings.h  ReadingsJson.cpp                  what the sensors return, and the wire format in READINGS.md
+  IShtc3.h  IScd41.h  IPmsa003i.h  IBme688.h    one interface per part, shaped by its datasheet
+  IClock.h  II2cBus.h                           the clock and bus seams
+  SensorSuite                                   the four sensors as one begin() and one sample()
+  Shtc3Driver  Scd41Driver  Pmsa003iDriver  Bme688Driver  SensirionI2c  Pmsa003iFrame
+  IBsec.h  BsecRunner  BsecLibrary              BSEC, in a task of its own
+  SensorValidation                              the bench routine's checks
+  mock/                                         EnvModel, LaggedValue and the four mocks
+include/net/  src/net/         Backlog, Calibration, ClientStatus, RefreshTimer, Url
+src/sim/main.cpp               the sensor loop as a host binary
+src/validate/main.cpp          the bench routine
+lib/bme68x/                    Bosch's BME68x API
+scripts/                       bsec.py, version.py
+test/                          host tests, native env
 server/
-  server.py                    config, pages, DisplayServer(...).run()
-  sources/mock.py              MockReadingsSource — the same room model in Python, for page work
-  pages/breathe.py  pages/comfort.py  pages/day.py
-  static/
+  server.py                    config, sources, pages, DisplayServer(...).run()
+  sources/                     the mock room, readings ingest, calibration store, device status, sea-level pressure
+  pages/                       Breathe, Comfort, Dust, Air, Day, Diagnostics, and the trace and delta pages
+  metrics.py                   derived values and wording
+  static/                      CSS, fonts, charts.js
   config.example.yaml
+hardware/enclosure/v1/         the desk enclosure
+docs/
 ```
 
 ## 5.1 The sensor seam
@@ -224,27 +205,15 @@ events, T/RH follow a diurnal curve with the heating on. The same model,
 ported to Python, feeds `MockReadingsSource` so the pages are developed
 against the same shapes the firmware will send.
 
-When the hardware arrives, each mock is corrected against a log of the real
-part. The tests then pin the corrected behaviour.
+---
 
-## 7. Order of work, if you agree
+## Decision Log
 
-1. Kit: `postJson`, `refresh_cycle()`, interval schedule, `ReadingsStore` + `IngestSource`, `POST /readings`. Tests for each. Weather-cal stays green.
-   *Status 2026-09-04: the kit's `display` block is in: `pools` of images and a `schedule` of type `times` or `interval` (round-robin over pools, round-robin within, random starts reshuffled every few hours). The calendar uses `times` with one image per pool. `refresh_cycle()` was not needed: the awake loop composes the kit's WiFi, download, draw and back-off helpers directly. `postJson` and the kit's `POST /<name>` ingest routes (`DisplayServer(ingest=...)`) are in. `ReadingsStore` and `IngestSource` are open; the server keeps only the newest posted document, for the Diagnostics page.*
-   *Status 2026-09-12: `ReadingsStore` and `IngestSource` are in the kit from 0.5.0. `source.kind: store` serves them to the pages.*
-2. Env-monitor firmware scaffold: `platformio.ini`, `ISensor`, `EnvModel`, the four mocks, host tests. Builds for `esp32dev` with the mocks selected by a build flag.
-3. Env-monitor server: `MockReadingsSource`, one `now.png` page, `config.example.yaml`, `server.py`. Renders end to end with the mock.
-4. The awake loop in `main.cpp` against the mocks, posting to the local server. First full loop with no hardware.
-   *Status 2026-09-04: done. Fetch and draw on the server's cadence, one readings document a minute posted to `/readings` with the board's `client` status beside it.*
-5. Real drivers when the parts arrive; correct the mocks.
-   *Status 2026-09-09: the four drivers are in, behind `II2cBus`, with host
-   tests. The mocks are not corrected yet — that needs a log of the real
-   parts. Open: BSEC for IAQ, and the PM fan's SET line, which is not wired.*
+Dated decisions and status behind the text above, oldest first.
 
-## 8. Decisions needed from you
-
-1. **HTTP POST** for readings, with MQTT republish later — or MQTT from the start?
-2. **Fan always on** (datasheet's active mode, better accuracy) or duty-cycled via the SET wire (less power and dust)? Default: always on; wire SET anyway so it can change in software.
-3. **Which SCD41 breakout** was ordered? HARDWARE.md assumes Adafruit 5190.
-   *Answered 2026-09-09: Adafruit 5190, inventory item 92.*
-4. Firmware layout: `firmware/` subdirectory, or `src/` at the repo root like weather-cal? Default: root, to match.
+- **2026-09-03**: proposed: an awake loop, readings posted to the server, and an interval schedule, with the kit additions they need (`postJson`, a `refresh_cycle()` helper, an interval schedule, `ReadingsStore` and `IngestSource`, `POST /readings`). Four questions were open: HTTP or MQTT for the readings; the PM fan always on or duty-cycled; which SCD41 breakout; firmware in `firmware/` or at the repo root.
+- **2026-09-03**: the firmware scaffold at the repo root, `EnvModel`, the four mocks and their host tests; the server with `MockReadingsSource`, the first pages and `config.example.yaml`.
+- **2026-09-04**: epd's `display` block landed: `pools` of images and a `schedule` of type `times` or `interval`, round-robin over pools and within them, with random starts reshuffled every few hours. `postJson` and `DisplayServer(ingest=...)` landed. `refresh_cycle()` was not needed: the awake loop composes the kit's WiFi, download, draw and back-off helpers directly. The awake loop ran end to end against the mocks, drawing on the server's cadence and posting one readings document a minute with the board's `client` status. Until the store existed, the server kept only the newest document, for the Diagnostics page.
+- **2026-09-04**: the build settled three of the four questions. Readings go by HTTP POST: one route in `DisplayServer`, testable with Flask's test client, and an MQTT republish can follow on the server when Home Assistant enters the picture, with no change to the firmware. The firmware sits at the repo root, like the weather calendar's. The PM fan runs all the time.
+- **2026-09-09**: the four drivers landed behind `II2cBus`, with host tests. The SCD41 board is the Adafruit 5190 (inventory item 92). The mocks were not corrected against logs of the real parts; that needs a log of each part.
+- **2026-09-12**: `ReadingsStore` and `IngestSource` are in epd from 0.5.0, and `source.kind: store` serves them to the pages. BSEC runs for the BME688's IAQ index.
