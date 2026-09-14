@@ -1,13 +1,13 @@
 # Contributing to Inkplate 5 Environment Monitor
 
-## What it will be
+## Layout
 
 A thin consumer of [epd](https://github.com/chrisjtwomey/epd), in the same
 shape as [inkplate10-weather-cal](https://github.com/chrisjtwomey/inkplate10-weather-cal):
 
 ```
 platformio.ini            -DARDUINO_INKPLATE5V2; lib_deps symlink://../epd/firmware
-src/main.cpp              which IBoard to use
+src/main.cpp              the awake loop: sensors, readings, the page loop
 src/defaults.example.cpp  copy to defaults.cpp: WiFi, server URL, MQTT logging
 server/
   server.py               config keys, a DataSource, a page list, DisplayServer(...).run()
@@ -16,6 +16,8 @@ server/
   static/                 CSS, fonts, charts.js; the rendered HTML lands here too
   config.example.yaml
 ```
+
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §5 has the whole tree.
 
 Everything generic — the client firmware, HTTP, scheduling, rendering — is
 epd. If a change is not about this device's sensors or pages, it goes there,
@@ -213,8 +215,8 @@ place of the sensors, for a board with nothing attached.
 
 The log shows the boot banner and User-Agent, WiFi and NTP, then
 `downloading file at URL ...`, `drawing image from buffer` and
-`next refresh in N s`. The panel shows the seven pages in turn, five
-minutes apart on the wall clock (:00, :05, ...). Once a minute the board
+`next refresh in N s`. The panel works through the pools in turn, one page
+every five minutes on the wall clock (:00, :05, ...). Once a minute the board
 posts a readings document to the server's `/readings`, with a `client`
 object beside the measurements (`posted readings (204)`); the Diagnostics
 page is drawn from the last one. A fetch that fails leaves the last image
@@ -256,7 +258,7 @@ power-on, so the wait is longer than it needs to be, never shorter.
 
 `iaq` and `iaq_accuracy` come from BSEC, Bosch's closed-source library,
 which runs in a task of its own and takes a sample every 3 s. Its accuracy
-starts at 0 and reached 3 in about 40 minutes on the bench. What it has
+starts at 0 and reaches 3 in about 40 minutes on the bench. What it has
 learned is saved to NVS when the accuracy first reaches 3 and every six
 hours after, so a restart resumes from there (`[bsec] start: NVS state
 (accuracy 3)`). Every BSEC line in the log starts with `[bsec]`. The

@@ -3,10 +3,10 @@
 An indoor air-quality display: CO₂, particulates, VOC and temperature on a
 5.2" e-paper panel, rendered server-side.
 
-**Status: end to end with mocks.** The sensors have not arrived. What runs
-today is the simulated room and its four sensor mocks, on the host and on
-the device; the server, which renders three pages from that room; and the
-board, which fetches and shows them in turn.
+The board samples the four sensors every five seconds, posts a readings
+document to the server once a minute, and shows the pages the server renders
+from them in turn. A simulated room stands in for the sensors on the host
+and on a board with nothing attached.
 
 | | |
 |---|---|
@@ -23,18 +23,18 @@ from USB-C; [docs/HARDWARE.md](docs/HARDWARE.md) §7 has the power budget.
 
 | | |
 |---|---|
-| [docs/HARDWARE.md](docs/HARDWARE.md) | Every datasheet distilled: wiring, commands, timing, currents, gotchas, 3D files. The reference to reach for instead of searching. |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How this departs from the weather calendar's model, what [epd](https://github.com/chrisjtwomey/epd) must gain, and the order of work. |
+| [docs/HARDWARE.md](docs/HARDWARE.md) | Every datasheet distilled: wiring, commands, timing, currents, gotchas. The reference to reach for instead of searching. |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How this departs from the weather calendar's model, and how it builds on [epd](https://github.com/chrisjtwomey/epd). |
 | [docs/READINGS.md](docs/READINGS.md) | The JSON the firmware posts. |
-| [hardware/enclosure/v1/](hardware/enclosure/v1/README.md) | The printed desk enclosure (display head + sensor base): Fusion generator, STL and STEP, sensor layout and wiring. |
+| [hardware/enclosure/v1/](hardware/enclosure/v1/README.md) | The printed desk enclosure (display head + sensor base): Fusion generator, STL, STEP and 3MF, sensor layout, fasteners, wiring and 3D model sources. |
 
 ## Build and test
 
 epd must be checked out beside this repo.
 
 ```sh
-pio test -e native     # room model and sensor mocks, on the host
-pio run -e esp32       # firmware; mocks selected by -DUSE_MOCK_SENSORS
+pio test -e native     # host tests: room model, mocks, drivers
+pio run -e esp32       # firmware with the sensor drivers; -e esp32-mock uses the simulated room
 ```
 
 ```sh
@@ -56,9 +56,9 @@ python3 server.py --only breathe.png --at 2026-09-03T21:45  # one page, clock pi
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the pages and the render loop.
 
 `pio run -e esp32 -t upload` then `pio device monitor` shows the board
-fetch a page every five minutes and print one readings document a minute,
-driven by the simulated room. [CONTRIBUTING.md](CONTRIBUTING.md) has the
-setup.
+fetch a page every five minutes and print one readings document a minute.
+`-e esp32-mock` does the same with the simulated room in place of the
+sensors. [CONTRIBUTING.md](CONTRIBUTING.md) has the setup.
 
 ## The mocks
 
@@ -71,5 +71,4 @@ same shapes.
 Each mock reproduces its datasheet's timing and quirks rather than its
 registers: the SCD41's 5 s cadence and untrustworthy first reading, the
 PMSA003I's 30 s fan warm-up and occasional bad checksum, the BME688's
-unstable first heater cycle, the SHTC3's 13 ms measurement and sleep. They
-are corrected against the real parts when those arrive.
+unstable first heater cycle, the SHTC3's 13 ms measurement and sleep.
