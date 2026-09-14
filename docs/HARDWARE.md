@@ -536,6 +536,7 @@ the AMS1117 and the bus still has its ground.
 | 4, 5 · SET, SDA, SCL | < 1 mA | — | — |
 | 6 · PM → SCD41 | 16 / 225 mA | 28 AWG, JST-SH | fine |
 | 7, 8 · onward | 1.3 / 18 mA · 0.4 / 0.9 mA | — | — |
+| 1, 2, 4, 5, 9 · pogo pins, desk enclosure only | as above; VIN and cable 1 GND are the heaviest | one pin each, 1 A *(assumed: the connector is rated 1 A, per pin unstated)* | fine |
 
 Ampacity is not the constraint anywhere; a Dupont jumper only *looks* heavier
 than a Qwiic conductor because its insulation is thicker — the copper is the
@@ -544,13 +545,16 @@ same 28 AWG.
 **Voltage drop is the one thing to watch, and it is mostly contacts.** The
 SCD41's own 175 mA measurement pulse goes out AMS OUT → PM header → socket B →
 cable 2 → SCD41, and comes back either the same way to cable 1, or straight
-down step 9. With the lengths as built — cable 2 45 mm, cable 1 ~90 mm,
-jumpers 50–90 mm — the copper is only a few tens of mΩ; the crimp and plug
-contacts at 10–20 mΩ each are what add up. Without step 9 the loop crosses
+down step 9. Over runs of a few centimetres (cable 2 is 45 mm) the copper is
+only a few tens of mΩ; the crimp and plug contacts at 10–20 mΩ each are what
+add up. Without step 9 the loop crosses
 eight of them (~130–210 mΩ, **25–35 mV** at the sensor during its pulse, on
 the line of Sensirion's 30 mV ripple guidance in §2). With step 9 the return
 half is two Dupont contacts in parallel with the four-contact path back
 through the PM board, and the loop falls to roughly 90–140 mΩ, **≈ 15–25 mV**.
+In the desk enclosure each return also crosses one pogo contact, whose
+resistance the connector's listing does not give; at 30–100 mΩ *(assumed)* the
+loop comes to roughly 105–195 mΩ, **≈ 18–34 mV**.
 That guidance is a ripple figure, not an operating limit (the part runs from
 2.4–5.5 V), so this is margin, not a fault; clean crimps matter more than
 cable length. Two returns landing on the same ground plane a few centimetres
@@ -597,6 +601,7 @@ built from. The placement rules it follows come from each part's section here: �
 1. **PMSA003I input current at 3.3 V** is derived from the charge-pump datasheet, not measured. Measure; it sets the LDO rating.
 2. **Inkplate awake / Wi-Fi / refresh currents** are unpublished. Measure the whole device on USB to confirm it sits under the 500 mA VBUS fuse.
 3. **What the BME688 board's JP2 joins** (§4). Soldered's docs say only that it powers the regulator from 5 V, and no schematic is public. A continuity check across JP2, or the hardware files Soldered sends on request, would settle it.
+4. **Pogo contact resistance** in the desk enclosure. The connector's listing gives none, so §8 assumes 30–100 mΩ. Measure across a mated pair with ~200 mA flowing.
 
 ---
 
@@ -614,3 +619,4 @@ Dated findings and decisions behind the text above, oldest first.
 - **2026-09-13**: on the bench, BSEC restarted from the state in NVS was back at accuracy 3 within 3 minutes.
 - **2026-09-13**: the wiring became one wire per crimp, with ground starred at the Inkplate and cable 1 landing on the PM header. The draft before it chained ground Inkplate → AMS1117 → PM, which put two wires on the regulator's one GND pin.
 - **2026-09-14**: Soldered's pages checked again. Neither Soldered sensor board has a public hardware repo, their docs describe the BME688's JP2 only as feeding the regulator from 5 V, and the Inkplate's BOM names its module only as "ESP32-WROVER", so the PSRAM size stays unverified.
+- **2026-09-14**: the head-to-base pogo connector is rated 1 A, with no per-pin figure and no contact resistance. §8 takes 1 A per pin and assumes 30–100 mΩ per contact.

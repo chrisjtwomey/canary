@@ -232,6 +232,12 @@ above the plinth's rim. That boss enters the male's pocket, so the halves nest: 
 not 10.3. The key is the contact block's own outline — a rounded rectangle with one semicircle cut into the middle
 of its S-end wall — so a half turned end for end fouls it and will not close.
 
+The seven conductors use seven of its eight pins. The connector is rated 1 A and its listing gives no per-pin
+figure, so each pin is taken as good for 1 A. The two heavy pins are VIN (220 mA typical, 475 mA peak) and cable
+1's GND, the return for all four sensors (215 mA typical, 470 mA peak, less whatever the SCD41's second return
+takes); the other five carry a few milliamps or less. Nor does the listing give a contact resistance:
+[HARDWARE.md §8](../../../docs/HARDWARE.md#8-wiring) carries it into the voltage-drop estimate as an assumption.
+
 Assembly order matters. **Fit the Inkplate before the connector**: the male's back band sits at the board's bottom
 edge, and with the connector already in, the board cannot pass it. Solder all seven wires to each half on the
 bench, then fit.
