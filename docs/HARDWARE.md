@@ -58,7 +58,7 @@ Sources: [product page](https://soldered.com/products/inkplate-5-gen2) ·
 | | |
 |---|---|
 | Panel | E Ink ED052TC4, 5.17", **1280 × 720**, **3-bit grey (8 levels)**. Full refresh 0.99 s, partial 0.22 s. |
-| MCU | ESP32-WROVER-E, 4 MB flash, PSRAM. Soldered states no PSRAM size and the BOM names only "ESP32-WROVER"; the WROVER-E family is 8 MB *(unverified)*. Library allocates ~921 kB PSRAM for framebuffers. |
+| MCU | ESP32-WROVER-E. **8 MB PSRAM** *(derived)*: the board reports 4.0 MB, the most an ESP32 maps at a time, and a WROVER-E carries either 8 MB or 2 MB. Flash **at least 4 MB** *(unverified)*: the variant sets 4, 8 or 16 MB, the shield prints no suffix, and `partitions.csv` uses 4 MB. Library allocates ~921 kB PSRAM for framebuffers. |
 | Radio | Wi-Fi, BT 4.0 BLE |
 | USB | USB-C, CH340C UART, 500 mA fuse on VBUS *(schematic)* |
 | Battery | 2-pin JST-PH 2.0 mm, 3.7 V Li-ion, MCP73831 charger at ~400 mA *(schematic, R32 = 2.49 k)* |
@@ -602,6 +602,7 @@ built from. The placement rules it follows come from each part's section here: �
 2. **Inkplate awake / Wi-Fi / refresh currents** are unpublished. Measure the whole device on USB to confirm it sits under the 500 mA VBUS fuse.
 3. **What the BME688 board's JP2 joins** (§4). Soldered's docs say only that it powers the regulator from 5 V, and no schematic is public. A continuity check across JP2, or the hardware files Soldered sends on request, would settle it.
 4. **Pogo contact resistance** in the desk enclosure. The connector's listing gives none, so §8 assumes 30–100 mΩ. Measure across a mated pair with ~200 mA flowing.
+5. **Flash size** of the Inkplate's ESP32-WROVER-E: 4, 8 or 16 MB by variant, and the module's shield prints no suffix. `esptool.py flash_id` over USB settles it; it resets the board.
 
 ---
 
@@ -620,3 +621,4 @@ Dated findings and decisions behind the text above, oldest first.
 - **2026-09-13**: the wiring became one wire per crimp, with ground starred at the Inkplate and cable 1 landing on the PM header. The draft before it chained ground Inkplate → AMS1117 → PM, which put two wires on the regulator's one GND pin.
 - **2026-09-14**: Soldered's pages checked again. Neither Soldered sensor board has a public hardware repo, their docs describe the BME688's JP2 only as feeding the regulator from 5 V, and the Inkplate's BOM names its module only as "ESP32-WROVER", so the PSRAM size stays unverified.
 - **2026-09-14**: the head-to-base pogo connector is rated 1 A, with no per-pin figure and no contact resistance. §8 takes 1 A per pin and assumes 30–100 mΩ per contact.
+- **2026-09-14**: the module is an ESP32-WROVER-E; its shield prints the name but no variant suffix. The board's Diagnostics report shows 4.0 MB of PSRAM, which rules out the 2 MB variants, so it carries 8 MB. The flash stays 4, 8 or 16 MB.
