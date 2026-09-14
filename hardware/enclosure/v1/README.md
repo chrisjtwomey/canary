@@ -51,16 +51,15 @@ the base rather than behind the panel is what buys that margin — carried in th
 
 0.4 mm nozzle, 2 mm walls and skin, 2.2 mm slots on a 3.4 mm pitch where slots remain. The shell prints upside
 down so its whole outer surface is either on the bed or a drafted wall — no supports; the STL is rotated 5.15° past
-the flip so the sloped skin lies flat. Everything is printed in **PLA+** (September 2026): the only heat in the base
+the flip so the sloped skin lies flat. Everything is printed in **PLA+**: the only heat in the base
 is the AMS1117's few hundred milliwatts, so PETG is the fallback if its pocket or the shell post over it ever
-softens — revisit after a summer.
+softens (Unverified 10).
 
 **Nothing stands inside the head's cavity, and nothing may.** The Inkplate is 130.59 × 75.23 in a 132.6 × 77.2
 opening — a millimetre all round, so it cannot tilt past anything either — and it goes in from the back, which
 means its own footprint sweeps the whole cavity on the way to its seat. A boss is in the way however far behind
-the seated board it finally sits. Four cover-boss towers and two base-screw blocks were exactly that, and the
-first head printed could not be assembled (Sept 2026). This is why the cover screws to the Inkplate's own
-standoffs and the head is held by magnets.
+the seated board it finally sits. So the cover screws to the Inkplate's own
+standoffs, and the head is held by magnets.
 
 ## Fasteners
 
@@ -79,7 +78,7 @@ threads straight into printed plastic.
 - Board pilots are blind, in 2 mm bosses on the chassis floor: 3 mm of engagement with 1 mm of floor left under
   them, so no screw breaks the desk face. Two screws per sensor board carry a few grams comfortably; all four holes
   are there if wanted.
-- **Board screws are one nominal size under their pilot** *(measured 2026-09-12, PLA+ print)*, for two separate
+- **Board screws are one nominal size under their pilot** *(measured on a PLA+ print)*, for two separate
   reasons. The PMSA003I's board holes are 2.5 mm, so an M2.5 screw cannot pass through one — M2 is the only option
   there, and the SCD41 takes the same screw for consistency though its 3.0 mm holes would also accept M2.5. The
   Soldered boards' 3.2 mm holes would pass M3 happily; what rules M3 out is the printed pilot, since Ø 2.6 nominal
@@ -149,9 +148,7 @@ There are no grilles on the top, the right side, the rear or the head.
   **along X**: everything else about this object is horizontal — the shadow gap, the PM's vent strip — and vertical
   ticks cut across all of it. One band spanning low to high also vents better than two discrete ones, since the 20°
   tilt makes the bottom rows the intake and the top rows the exhaust. Y 14 is the lower limit: the head's five wires
-  cross the board at Y 3–11 and would otherwise show through. Until Sept 2026 the grille was at X 104–124, which is
-  on top of the **CR2032 holder** (X 106–122) — left over from rotating the Inkplate 180°, and venting the one part
-  of the board that makes no heat.
+  cross the board at Y 3–11 and would otherwise show through.
 
 ## Bay layout
 
@@ -171,22 +168,20 @@ Each board's place follows the placement rules in its section of [HARDWARE.md](.
 
 | Board | X × D (mm) | Placement |
 |---|---|---|
-| PMSA003I | −3.8…31.8 × 27…77.8 | Left end, module face 2.5 mm from the left wall and its vents. X −3.8 puts the board edge and its two left bosses 1 mm inside the edge of the chassis floor (which is inset 1.5 mm from the wall) — at −5.3 they overhung it. Header row along its **front** edge, so the tall Dupont housings stand behind the head where the base is deepest. D 27 (not 30) keeps its rear corner clear of the cavity's 10 mm rounded corner. |
+| PMSA003I | −3.8…31.8 × 27…77.8 | Left end, module face 2.5 mm from the left wall and its vents. X −3.8 puts the board edge and its two left bosses 1 mm inside the edge of the chassis floor (which is inset 1.5 mm from the wall) ; at −5.3 they would overhang it. Header row along its **front** edge, so the tall Dupont housings stand behind the head where the base is deepest. D 27 (not 30) keeps its rear corner clear of the cavity's 10 mm rounded corner. |
 | SCD41 | 49.9…72.8 × 35…60.4, sockets facing front and rear | Middle, in its own compartment (walls X 47.3–48.8 and 74.3–75.8 from D 30, rear wall D 72–73.5, all to the skin). Both sockets in use. A 5-pin straight header on its right-hand edge (X 70.8; VIN · 3Vo · GND · SCL · SDA along D 42.6–52.8) carries one standing Dupont housing, on GND, for the second ground return. |
 | SHTC3 | 82.8…120.8 × 26.5…48.5 | Front-right: coolest corner, against the solid cradle block, farthest from the fan and the LDO, behind a full-height baffle at D 50–51.5. End of the chain, only its right socket used. |
 | BME688 | 82.8…120.8 × 53.5…75.5 | Rear-right, behind the baffle. Both sockets in use. |
-| AMS1117-3.3 | 35.3…43.8 × 61…73.5, **pins toward the head** | Centred in the strip between the PM board (X 31.8) and the SCD41 compartment wall (47.3). No mounting holes: it sits in a pocket 0.5 mm clear of the board on every side (9.5 × 13.5 in plan — the 0.3 mm tried first gave a 9.1 mm slot, too tight to trust an FDM print with), front and rear walls 1 mm thick to H 8, the sides only 2.5 mm corner tabs so the underside is open to the strip. The board rests on a pad under its two solder domes at the front (top H 4.8; the domes stand 1.2 mm proud) and on two solid corners at the rear either side of the SOT-223 (to H 6.0, the PCB's underside), so the regulator hangs in a 2.3 mm air passage open at both sides — no floor slots, nothing to bridge. A Ø4 shell post at (39.55, 66), on the board's centreline between the two supports, holds it down with 0.15 mm of preload (until the shell is on, the module is loose); a 3 mm cone at the post's root keeps it printable upside down. Dupont housings on its three pins run **forward**, D 47.3–61. |
+| AMS1117-3.3 | 35.3…43.8 × 61…73.5, **pins toward the head** | Centred in the strip between the PM board (X 31.8) and the SCD41 compartment wall (47.3). No mounting holes: it sits in a pocket 0.5 mm clear of the board on every side (9.5 × 13.5 in plan; 0.3 mm a side would give a 9.1 mm slot, too tight to trust an FDM print with), front and rear walls 1 mm thick to H 8, the sides only 2.5 mm corner tabs so the underside is open to the strip. The board rests on a pad under its two solder domes at the front (top H 4.8; the domes stand 1.2 mm proud) and on two solid corners at the rear either side of the SOT-223 (to H 6.0, the PCB's underside), so the regulator hangs in a 2.3 mm air passage open at both sides — no floor slots, nothing to bridge. A Ø4 shell post at (39.55, 66), on the board's centreline between the two supports, holds it down with 0.15 mm of preload (until the shell is on, the module is loose); a 3 mm cone at the post's root keeps it printable upside down. Dupont housings on its three pins run **forward**, D 47.3–61. |
 
 The four shell pillars sit at (68, 30), (125, 30), (50, 77.5) and (125, 76) — plan positions clear of every board,
 plug, ribbon and wire lane, **and far enough in from the chassis edge for the countersink on the underside to keep
-a full wall outside it**. The first print had the last three at (126, 30), (50, 78.5) and (126, 79), which left
-0.8, 0.7 and −0.6 mm of material outside the Ø6.2 countersink — the last one broke clean out through the rounded
-corner. The corner is the trap: the chassis corner is r 6.5, so out there the edge curves away on two sides at
-once and the *further into the corner the hole goes, the worse it gets*. The useful position is near the corner
-arc's centre (123.6, 76), not near the corner itself. Each hole now keeps **≥ 1.7 mm** of wall, and each is
-limited by the thing it sits beside: 0.7 mm of drop-on clearance to the SHTC3, 0.5 mm to the SCD41 compartment's
-rear wall, 0.7 mm to the BME688. The countersink is Ø6.2 × 1.4 deep at 90° — an ISO 7046 M3 head is 5.5 across
-(5.6 max), so the 6.6 first drawn was 0.4 mm of wall given away for nothing, and the smaller cone also leaves
+a full wall outside it**. The corner is the trap: the chassis corner is r 6.5, so out there the edge curves away
+on two sides at once and the *further into the corner the hole goes, the worse it gets*. The useful position is
+near the corner arc's centre (123.6, 76), not near the corner itself. Each hole keeps **≥ 1.7 mm** of wall, and
+each is limited by the thing it sits beside: 0.7 mm of drop-on clearance to the SHTC3, 0.5 mm to the SCD41
+compartment's rear wall, 0.7 mm to the BME688. The countersink is Ø6.2 × 1.4 deep at 90°: an ISO 7046 M3 head is
+5.5 across (5.6 max), so a Ø6.6 cone would give away 0.4 mm of wall for nothing, and the smaller cone leaves
 0.6 mm rather than 0.4 of floor above it.
 
 The left third of the shell has no pillar (the PM board leaves 6 mm at the rear and 2 mm at the front, and a
@@ -194,7 +189,7 @@ pillar needs 9); it is held by the skin and located by the cradle block.
 
 ## Wiring and headers
 
-Follows the wiring table in [HARDWARE.md §8](../../../docs/HARDWARE.md#8-wiring--validated-and-corrected). Two Fusion components hold every header,
+Follows the wiring table in [HARDWARE.md §8](../../../docs/HARDWARE.md#8-wiring). Two Fusion components hold every header,
 plug, Dupont housing and wire as separate coloured bodies — **Head wiring (toggle)** and **Base wiring
 (toggle)**; switch their light bulbs off to hide the lot. Wires are drawn schematically, right-angle bends only,
 each in a dedicated channel, so the model documents where cables are meant to run rather than how they sag.
@@ -202,7 +197,7 @@ Colours: red 3V3 / VIN, black GND, blue SDA, yellow SCL, white SET. Qwiic cables
 black / red / blue / yellow order with white plugs; the boards' JST-SH sockets are beige. A mated plug is drawn
 standing 2 mm proud of its socket, which is what the real ones do — the housing disappears inside the socket —
 so the space to leave at a socket is whatever the cable needs to turn — about 6 mm is comfortable
-*(measured 2026-09-12)* — not the length of a loose plug. Everything nominally
+*(measured)* — not the length of a loose plug. Everything nominally
 black is drawn as a mid grey instead — Dupont housings #696969, header shrouds #585858, the GND wire #646464:
 these appearances copy Fusion's matte-black plastic, whose shader darkens the base colour so far that a true
 black housing or wire loses every edge and reads as one solid blob against the boards. The Adafruit boards' bare
@@ -252,14 +247,14 @@ about D 24.2 at the top lane's height — they go three ways:
   there to the **H 25.2 lane** just under the skin, then back to the header row and down into the top of a
   standing housing. The PM's **straight** 7-pin header is on its front edge at D 29.5 with five housings on it
   (VIN, GND, SCL, SDA, SET; tops at H 22.1). A housing is 14 mm tall and the wire needs ~3.7 mm above it to turn
-  without strain — **17.7 mm clear above the header block** *(measured on the real parts, 2026-09-13)* — which is
+  without strain — **17.7 mm clear above the header block** *(measured on the real parts)* — which is
   what makes the base 30.5 mm tall at the front; the skin's underside there is at 28.5, 2.7 mm above the wire
   crowns.
 - **To the AMS1117** (VIN and the expander GND): stay at H 7, cross to the pin's X, run back to D 31 and D 29, and
   rise to H 11.6 into the open ends of the IN / GND housings at D 47.3. AMS **OUT** leaves its housing the same
   way, forward to D 42, up to the H 25.2 lane, across and forward into the PM's VIN housing. There is no AMS GND →
-  PM GND wire any more: the PM's ground comes down cable 1, so the regulator's GND pin carries one crimp (star
-  grounding, [HARDWARE.md §8](../../../docs/HARDWARE.md#8-wiring--validated-and-corrected)).
+  PM GND wire: the PM's ground comes down cable 1, so the regulator's GND pin carries one crimp (star
+  grounding, [HARDWARE.md §8](../../../docs/HARDWARE.md#8-wiring)).
 - **To the SCD41** (the ESP32-group GND): crosses at H 7 to X 73 — clear of the shell pillar at (68, 30) — rises
   there to the H 25.2 lane, runs back along the compartment's right wall to D 47.7, and drops into a housing
   standing on a **5-pin straight header on the SCD41's right-hand edge** (X 70.8, GND the middle pin; housing top
@@ -267,9 +262,8 @@ about D 24.2 at the top lane's height — they go three ways:
   row is unverified — see below.
 
 The AMS1117 module is **rotated 180° from the obvious orientation so its pins face the head**. With the pins at the
-rear the head's two power wires had to travel to D 78.9 and the regulator's outputs all the way forward again to
-D 29.5 — about 100 mm of round trip, plus two long lanes up the strip and a jog around the pocket, all of which this
-removes. Pins at X 37.0 (IN), 39.55 (OUT) and 42.1 (GND), housings running forward D 47.3–61. The board sits as far
+rear the head's two power wires would travel to D 78.9 and the regulator's outputs all the way forward again to
+D 29.5 — about 100 mm of round trip, plus two long lanes up the strip and a jog around the pocket. Pins at X 37.0 (IN), 39.55 (OUT) and 42.1 (GND), housings running forward D 47.3–61. The board sits as far
 back as it does — rear edge flush with the SCD41 compartment's rear wall — because the housings project 14 mm
 forward of it. Any further forward and they foul the PM → SCD41 ribbon, which crosses the strip at D 25.5–37.9 on
 its way to the compartment.
@@ -285,9 +279,9 @@ lane at X 126 through a notch in the baffle (X 119.7–128.5).
 Both notches are **8.8 × 6 mm — a JST-SH plug is 6.8 × 2.7, and it has to be threaded through them**, so each one
 is the plug plus a millimetre a side. Size them from the plug, not the ribbon. The right-hand lane sits at X 126
 rather than hard against the chassis edge, with a **guide rib at X 128.5–130.1, 7 mm tall, from D 35 to 67**: at
-129.1 the ribbon overhung the edge of the chassis and the shell's inner wall was the only thing holding it in, so
-it had to be stuffed in as the lid came down and sprang out every time the lid came off. The rib is that wall now,
-and the shell drops on without touching the cable. Thread the loose plug down the lane at X 123–125, inboard of
+129.1 the ribbon would overhang the edge of the chassis with only the shell's inner wall to hold it in, so it
+would have to be stuffed in as the lid came down and would spring out every time the lid came off. The rib is that
+wall, and the shell drops on without touching the cable. Thread the loose plug down the lane at X 123–125, inboard of
 the rib, then let the ribbon settle against it.
 
 ## Display window
@@ -321,25 +315,49 @@ underside 1.7 mm tall, a 3-pin right-angle header on the other face with a 6.9 m
 Every part is one connected solid — verified in Fusion (`lumps == 1`) and again from the exported STLs. This is
 worth re-checking after any edit to `enclosure.py`: because the parts are built by unioning primitives, a boss or
 rib whose position drifts clear of the body it should touch silently becomes a second lump in the same body, and
-the slicer will just plate it as a loose part with no indication of where it goes. Two such strays were caught
-this way — the PM seal rib (built at X −6.1…−5.3 after the chassis had been trimmed to X ≥ −4.8) and the four
-head-cover bosses (floating 0.5 mm clear of the cavity wall — that one had survived unnoticed through several
-revisions of the head).
+the slicer will just plate it as a loose part with no indication of where it goes.
 
 The head has a second check for the same reason. `enclosure.py` sweeps the Inkplate's footprint from the cavity
 mouth to its seated position, intersects that with the tray, and reports the result as
-`inkplate_insertion_blocked_mm3`. It must be **0**. It would have read several hundred on the head that was
-printed, which is the whole point of it.
+`inkplate_insertion_blocked_mm3`. It must be **0**.
 
 ## Unverified
 
 1. **Everything about how it looks and feels** is unverified until it is printed — the shape is a judgement no render settles. Print the shell first: it is the only part whose surface is on show.
-2. Active-area offset — from the panel's STEP; with the board rotated the narrow border should now be on the left (USB-C) side. Check on the real panel before printing the head tray.
+2. Active-area offset — from the panel's STEP; with the board rotated the narrow border should be on the left (USB-C) side. Check on the real panel before printing the head tray.
 3. The shadow gap doubles as a dust path. If it collects, a 1 mm tongue on the chassis edge inside the gap would baffle it without closing the air path.
-4. SCD41 response time, now that it vents into the bay rather than through its own lid grille.
+4. SCD41 response time: it vents into the bay, not through a lid grille of its own.
 5. Dupont housings are modelled as 2.54 × 2.54 × 14 mm single-position shells (14 mm measured, plus 3.7 mm for the wire to turn — the base height follows from that); right-angle headers with the pin axis 4.2 mm off the board. Check the 1.7 mm margin to the head's back cover with the real housings before soldering the Inkplate headers.
 6. The Inkplate's expander pads are 0.8 mm drills (from the KiCad board): confirm the chosen header's pins fit, otherwise solder the two wires straight to the pads.
 7. The head sits 8 mm deep in the cradle pocket with 0.3 mm side clearance, located by the pocket and the block's rear lip and held down by the pogo connector's two Ø5 magnets — nothing is screwed. A ≈145 g head on a 20° lean is the thing to watch; if it creeps or lifts too easily the cure is a catch on the rear lip, not screws back through the cavity.
 8. The shell's left end is unsupported over ≈ 50 mm. If it lifts, the cure is a printed clip on the chassis edge rather than a fifth screw — there is no room for one past the PM board.
 9. The SCD41's header is modelled on the board's right-hand edge (X 70.8) as it sits in its compartment. Confirm which edge of the Adafruit 5190 carries the five pads before soldering; on the left-hand edge the ESP32-GND wire would come straight down the compartment's front instead of round its right wall, and the compartment has the room either way.
 10. PLA+ through a winter. The two places heat could tell are the AMS1117's pocket walls and the shell post over it; check them after the first warm spell, and go to PETG for the base if they have moved.
+
+## Decision Log
+
+Dated findings and decisions behind the text above, oldest first.
+
+- **2026-09-12**: on a PLA+ print, the board screws held one size under their pilots: M2 in the 2.1 mm pilots of
+  the Adafruit boards, M2.5 in the 2.6 mm pilots of the Soldered ones. A mated JST-SH plug stands about 2 mm proud
+  of its socket, and about 6 mm is comfortable for the cable to turn.
+- **2026-09-13**, after the first print:
+  - Three shell pillars sat at (126, 30), (50, 78.5) and (126, 79), which left 0.8, 0.7 and −0.6 mm of material
+    outside the countersink; the last one broke clean out through the rounded corner. They moved in to keep
+    ≥ 1.7 mm, and the countersink went from the Ø6.6 first drawn to Ø6.2.
+  - The ESP32 grille moved from X 104–124 to X 74–94. At 104–124 it sat on the CR2032 holder (X 106–122), left over
+    from rotating the Inkplate 180°, and vented the one part of the board that makes no heat.
+  - The AMS1117 pocket went from 0.3 mm a side, a 9.1 mm slot, to 0.5 mm.
+  - The PMSA003I board moved from X −5.3, where its two left bosses overhung the chassis floor, to X −3.8.
+  - The right-hand ribbon lane moved in from X 129.1 to X 126, behind a guide rib. At 129.1 the ribbon overhung the
+    chassis, had to be stuffed in as the shell came down, and sprang out every time it came off.
+  - The lumps check caught two strays: the PM seal rib, built at X −6.1…−5.3 after the chassis had been trimmed to
+    X ≥ −4.8, and the four head-cover bosses, floating 0.5 mm clear of the cavity wall through several revisions
+    of the head.
+  - A standing Dupont housing and its wire were measured at 17.7 mm above the header, which set the base at
+    30.5 mm tall at the front. Everything is printed in PLA+ from here.
+- **2026-09-14**: the first printed head could not be assembled. Four cover-boss towers and two base-screw blocks
+  stood in the cavity that the Inkplate sweeps on its way in. All six went: the cover screws to the Inkplate's
+  standoffs, and an 8-pin magnetic pogo connector holds the head down and carries the head-to-base wiring.
+  `enclosure.py` reports the swept volume as `inkplate_insertion_blocked_mm3`; it would have read several hundred
+  on the printed head.

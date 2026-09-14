@@ -1,8 +1,10 @@
 # Hardware reference — Inkplate 5 Gen2 environment monitor
 
-Working shorthand for development, distilled from the datasheets on
-2026-09-03. Every section links its sources. Facts are from the datasheet
-unless marked *(product page)*, *(schematic)*, *(derived)* or *(unverified)*.
+Working shorthand for development, distilled from the datasheets. Every
+section links its sources. Facts are from the datasheet unless marked
+*(product page)*, *(schematic)*, *(derived)*, *(measured)*, *(bench)* or
+*(unverified)*. Dates, and the history behind the text, are in the
+[Decision Log](#decision-log).
 
 - [0. At a glance](#0-at-a-glance)
 - [1. Inkplate 5 Gen2](#1-inkplate-5-gen2)
@@ -12,9 +14,10 @@ unless marked *(product page)*, *(schematic)*, *(derived)* or *(unverified)*.
 - [5. SHTC3 — temperature and humidity](#5-shtc3--temperature-and-humidity)
 - [6. The I²C bus](#6-the-ic-bus)
 - [7. Power](#7-power)
-- [8. Wiring — validated and corrected](#8-wiring--validated-and-corrected)
+- [8. Wiring](#8-wiring)
 - [9. The enclosure](#9-the-enclosure)
 - [10. Open questions](#10-open-questions)
+- [Decision Log](#decision-log)
 
 ---
 
@@ -99,7 +102,7 @@ No conflict with 0x12, 0x62, 0x70, 0x76/0x77.
 
 ### Deep sleep and wake
 
-- RTC INT → JP2 (default INT) → **GPIO39** with 10 k pull-up *(schematic)*. Library example: `setAlarmEpoch(..., RTC_ALARM_MATCH_DHHMMSS); esp_sleep_enable_ext0_wakeup(GPIO_NUM_39, 0);` — the example carries the comment "GPIO39 is NOT guaranteed for Inkplate 5v2". Matches what `EpdBoardInkplate::enableWakeOnRtcAlarm()` does. **It works on this board** *(measured 2026-09-09)*: the validation build sets a 10 s alarm and every wake logs `ESP_SLEEP_WAKEUP_EXT0` on time. Soldered's warning stands for the family, not for this unit.
+- RTC INT → JP2 (default INT) → **GPIO39** with 10 k pull-up *(schematic)*. Library example: `setAlarmEpoch(..., RTC_ALARM_MATCH_DHHMMSS); esp_sleep_enable_ext0_wakeup(GPIO_NUM_39, 0);` — the example carries the comment "GPIO39 is NOT guaranteed for Inkplate 5v2". Matches what `EpdBoardInkplate::enableWakeOnRtcAlarm()` does. **It works on this board** *(measured)*: the validation build sets a 10 s alarm and every wake logs `ESP_SLEEP_WAKEUP_EXT0` on time. Soldered's warning stands for the family, not for this unit.
 - Wake button SW3 → GPIO36, active low. Expander INT → GPIO34.
 - **easyC 3V3 stays on in deep sleep.** It is the unswitched LDO output the ESP32 itself runs from. Only microSD and RTC rails are switched. Cutting sensor power needs an external load switch on a free expander pin.
 - Free GPIO: expander P1_3–P1_7 on the bottom header; `gpioInit()` sets them OUTPUT LOW. Use `display.expander1.pinMode/digitalWrite(IO_PIN_B3..B7, ...)`. Do not use P0_x.
@@ -296,8 +299,8 @@ Chip ID 0xD0 = 0x61; variant 0xF0 = 0x01. Set osrs_h (0x72), then osrs_t/osrs_p 
 - Sample rates: **LP 3 s** (0.9 mA) or **ULP 300 s** (0.09 mA). Calibration: accuracy 0 for ~5 min (LP) / ~20 min (ULP), then hours to reach 3; needs both clean and polluted air exposure.
 - **State blob 238 bytes** must be saved and restored or calibration restarts. Config blob (~1.9 kB, pick the 3.3 V / 3 s or 300 s / 4 d or 28 d variant) is re-applied each boot. BSEC needs a monotonic clock (`Bsec2::begin` takes a millis function).
 - Mains-powered and always awake, LP mode with the state kept in RAM and checkpointed to NVS every few hours is the well-trodden path. Deep-sleep BSEC setups are where the forum failures live.
-- The firmware links BSEC2 1.10.2610's `libalgobsec` without Bosch's Arduino wrapper, whose sources need a second copy of the BME68x API; `scripts/bsec.py` adds the headers, the config blobs and the binary. It uses `bme688_sel_33v_3s_4d`, subscribes to the IAQ outputs and to raw pressure at the LP rate, and runs in a FreeRTOS task of its own. Without an output that needs pressure, BSEC asks for no pressure conversion, the BME688 skips it, and the reading comes out near 659 hPa. The Arduino package has no BME688 configuration named for IAQ, but `sel` gives an index from the first sample and reached accuracy 1 in about 4 minutes and 3 in about 40 *(bench, 2026-09-12)*. Restarted from the state in NVS, it was back at accuracy 3 within 3 minutes *(bench, 2026-09-13)*.
-- BSEC's header gives its pressure input in Pa, but Bosch's own BSEC2 wrapper passes hPa, and so does the firmware. BSEC took 1019 hPa without an error and kept giving an index *(bench, 2026-09-12)*.
+- The firmware links BSEC2 1.10.2610's `libalgobsec` without Bosch's Arduino wrapper, whose sources need a second copy of the BME68x API; `scripts/bsec.py` adds the headers, the config blobs and the binary. It uses `bme688_sel_33v_3s_4d`, subscribes to the IAQ outputs and to raw pressure at the LP rate, and runs in a FreeRTOS task of its own. Without an output that needs pressure, BSEC asks for no pressure conversion, the BME688 skips it, and the reading comes out near 659 hPa. The Arduino package has no BME688 configuration named for IAQ, but `sel` gives an index from the first sample and reached accuracy 1 in about 4 minutes and 3 in about 40 *(bench)*. Restarted from the state in NVS, it is back at accuracy 3 within 3 minutes *(bench)*.
+- BSEC's header gives its pressure input in Pa, but Bosch's own BSEC2 wrapper passes hPa, and so does the firmware. BSEC took 1019 hPa without an error and kept giving an index *(bench)*.
 
 ### Self-heating
 
@@ -427,25 +430,9 @@ Duty-cycled, deep sleep between: per 10-minute cycle ≈ 154 mC SCD41 (power-cyc
 
 ---
 
-## 8. Wiring — validated and corrected
+## 8. Wiring
 
-### Your diagram
-
-```
-Inkplate 5GEN2 (3V3/GND/SDA/SCL) → BME688 → SHTC3 → SCD41 → PMSA003I
-```
-
-| Check | Verdict |
-|---|---|
-| Electrical order | Irrelevant on I²C; any order works. |
-| Connectors | All JST-SH, same pinout. Fine. |
-| Addresses | No conflicts. Fine. |
-| Pull-ups | 2.0 kΩ total, in spec at 100 kHz. Nothing to cut. |
-| **Power** | **Not OK.** 3V3 through the chain from the Inkplate's shared 500 mA LDO; noisy for the SCD41; the two heavy loads (PMSA003I, SCD41) sit at the far end where cable drop is worst. |
-| **SHTC3 placement** | **Not OK.** The T/RH reference is chained between the BME688 heater and the SCD41, and nothing says where it sits physically. It must be the coolest, most exposed point. |
-| PMSA003I control | SET pin unused → fan runs continuously. Fine on mains; optional GPIO for duty-cycling. |
-
-### Corrected *(revised 2026-09-13 — one wire per crimp, ground starred at the Inkplate, cable 1 lands on the PM header)*
+### Circuit
 
 ```
  USB-C 5 V
@@ -502,8 +489,9 @@ In the desk enclosure, every conductor that leaves the Inkplate (rows 1, 2,
 [enclosure README](../hardware/enclosure/v1/README.md) has the routing.
 
 On the Inkplate, steps 2 and 4 use the expander group's GND and P1_3 pads,
-and step 9 the ESP32 group's GND. The Inkplate's four plain GND pads — panel, ESP32, I²C and expander groups — are the same net and
-interchangeable; **AGND** in the panel group is not, leave it alone.
+and step 9 the ESP32 group's GND. The Inkplate's four plain GND pads — panel,
+ESP32, I²C and expander groups — are the same net and interchangeable;
+**AGND** in the panel group is not, leave it alone.
 
 The VIN pad is a 4 × 4 mm surface pad with no hole (PAD3 in Soldered's KiCad
 board). The wire unplugs at the AMS1117 end.
@@ -527,9 +515,8 @@ on GND and the other four empty.
 Ground has four endpoints on this device — the Inkplate's ground plane, the
 AMS1117's single GND pin, the PM header and the SCD41 header — and a Dupont
 housing takes one crimp, so any scheme that chains them (Inkplate → AMS1117 →
-PM) puts two wires on the regulator's GND pin. The earlier draft did exactly
-that. Instead each endpoint gets its own wire back to the Inkplate's ground
-plane (**star grounding**), each on its own Inkplate GND pad:
+PM) puts two wires on the regulator's GND pin. Instead each endpoint gets its
+own wire back to the Inkplate's ground plane (**star grounding**), each on its own Inkplate GND pad:
 
 - the AMS1117's GND pin by step 2 (expander-group GND), carrying only the
   regulator's own few mA,
@@ -623,8 +610,20 @@ built from. The placement rules it follows come from each part's section here: �
 ## 10. Open questions
 
 1. **Which SCD41 breakout?** Soldered sells no SCD41 (their CO₂ board is the SCD43). This doc assumes **Adafruit 5190**. If it is a bare Sensirion module or another board, §2's board section and the pull-up count change.
-2. ~~**Soldered pull-up values** for the BME688 and SHTC3 are not published.~~ Answered 2026-09-10: both boards carry `103` resistors beside their pull-up jumpers, so 10 kΩ, and the §6 total of 2.0 kΩ stands.
-3. **SHTC3 board size**: Soldered's text says 22 × 22 mm, their own drawing shows ~38 × 22 mm. Measure.
-4. **PMSA003I input current at 3.3 V** is derived from the charge-pump datasheet, not measured. Measure; it sets the LDO rating.
-5. **Inkplate awake / Wi-Fi / refresh currents** are unpublished. Measure the whole device on USB to confirm it sits under the 500 mA VBUS fuse.
-6. ~~**Does the RTC alarm wake this board?** Soldered say GPIO39 is not guaranteed on the 5 Gen2.~~ Answered 2026-09-09: yes. `pio run -e esp32-validate` sleeps 10 s on the alarm and wakes on `ESP_SLEEP_WAKEUP_EXT0` every cycle, with an ESP32 timer armed at 15 s as a backstop that has never had to fire.
+2. **SHTC3 board size**: Soldered's text says 22 × 22 mm, their own drawing shows ~38 × 22 mm. Measure.
+3. **PMSA003I input current at 3.3 V** is derived from the charge-pump datasheet, not measured. Measure; it sets the LDO rating.
+4. **Inkplate awake / Wi-Fi / refresh currents** are unpublished. Measure the whole device on USB to confirm it sits under the 500 mA VBUS fuse.
+
+---
+
+## Decision Log
+
+Dated findings and decisions behind the text above, oldest first.
+
+- **2026-09-03**: distilled from the datasheets.
+- **2026-09-03**: the first wiring plan chained Inkplate → BME688 → SHTC3 → SCD41 → PMSA003I and fed all four from the Inkplate's 3V3 through the chain. Order, connectors, addresses and pull-ups were fine. Power was not: the Inkplate's 500 mA LDO also carries the ESP32, the SCD41 wants a quiet supply, and the two heavy loads sat at the far end, where the drop is worst. Nor was the SHTC3's place: the reference sat between the BME688's heater and the SCD41. The PM fan's SET pin was unused. §8's circuit replaced the plan.
+- **2026-09-09**: the RTC alarm wakes this board on GPIO39, though Soldered does not guarantee it on the 5 Gen2. `pio run -e esp32-validate` sleeps 10 s on the alarm and wakes on `ESP_SLEEP_WAKEUP_EXT0` every cycle; an ESP32 timer armed at 15 s as a backstop has never had to fire.
+- **2026-09-10**: the Soldered BME688 and SHTC3 boards carry `103` resistors beside their pull-up jumpers, so 10 kΩ, and the §6 total of 2.0 kΩ stands.
+- **2026-09-12**: on the bench, BSEC with `bme688_sel_33v_3s_4d` reached accuracy 1 in about 4 minutes and 3 in about 40, and took 1019 hPa as its pressure input without an error.
+- **2026-09-13**: on the bench, BSEC restarted from the state in NVS was back at accuracy 3 within 3 minutes.
+- **2026-09-13**: the wiring became one wire per crimp, with ground starred at the Inkplate and cable 1 landing on the PM header. The draft before it chained ground Inkplate → AMS1117 → PM, which put two wires on the regulator's one GND pin.
