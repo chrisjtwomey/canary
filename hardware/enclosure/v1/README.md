@@ -10,9 +10,10 @@ Designed in Fusion (project **Inkplate Env Monitor Enclosure**, design **Env Mon
 |---|---|
 | `stl/` | The four printed parts, in print orientation, mm. |
 | `step/` | The same parts, upright in their own frames (head parts in the head frame, base parts in the base frame). |
+| `3mf/` | The same four parts again as 3MF, in print orientation, for slicers that prefer it. |
 | `enclosure.py` | Fusion script: downloads the Inkplate / Adafruit STEP models, builds the Soldered and AMS1117 block-outs, places every board, builds the four parts and the two wiring layers, applies the tilt. Run it from Fusion's script editor in an empty design. |
 
-On the desk: **146.1 wide × 87.3 deep × 88.3 tall mm**. Base 30.5 mm tall at the front (flat over the cradle to
+On the desk: **146.1 wide × 87.3 deep × 89.8 tall mm**. Base 30.5 mm tall at the front (flat over the cradle to
 D 25), sloping to 25 mm at the rear — the front height is set by the Dupont housings standing on the PMSA003I's
 header, see Wiring.
 
@@ -44,18 +45,25 @@ the base rather than behind the panel is what buys that margin — carried in th
 | Part | Print orientation | Fixings |
 |---|---|---|
 | **Head tray** | face down | Bezel (2.4 mm lip) and four walls, 14.1 mm deep, 5 mm plan radii, 1.2 mm round on the bezel edge. Left wall 7.3 mm thick, carrying the USB-C, power-button and microSD pockets; right wall 2 mm with the wake-button hole. Relief in the bezel lip for the expander header's solder tails. No vents. |
-| **Head back cover** | flat, outside down | 2 mm plate resting on the Inkplate's four 7.2 mm SMT standoffs (4 × M3 clearance holes over them, screws optional), held by 4 × M2.5 self-tapping into tray bosses. Those bosses reach in from the top and bottom walls and sit behind the PCB (Z −4…−9.67), which is the only place in a 2 mm-walled tray where a boss can both clear the board and stay attached to something. One grille band over the ESP32 (8 capsule slots, X 74–94, Y 14–40) — the head's only opening, facing up and back. |
-| **Base chassis** | upright (desk face down) | Floor, the solid 20° cradle block with the head pocket, and every bay feature: board bosses, the SCD41 compartment, the SHTC3 baffle, the AMS1117 pocket. Two M3×12 from below (counterbored) into heat-set inserts in the head's bottom wall hold the head. |
+| **Head back cover** | flat, outside down | 2 mm plate resting on the Inkplate's four 7.2 mm SMT standoffs and screwed to them: 4 × M3 through clearance holes, counterbored 0.7 mm so the heads sit near flush in a 2 mm plate. Nothing screws into the tray — there is nothing in the tray to screw into, see below. One grille band over the ESP32 (8 capsule slots, X 74–94, Y 14–40) — the head's only opening, facing up and back. |
+| **Base chassis** | upright (desk face down) | Floor, the solid 20° cradle block with the head pocket, and every bay feature: board bosses, the SCD41 compartment, the SHTC3 baffle, the AMS1117 pocket. It also carries the pogo plinth standing in the trench. Nothing fastens the head: the connector's two Ø5 magnets hold it down and the cradle pocket locates it. |
 | **Base shell** | upside down (top skin on the bed) | The visible skin: rounded, drafted walls and the sloped top, in one piece with no top-side fixings. 4 × M3×8 countersunk up from underneath into heat-set inserts in its internal pillars (×10 bottoms out — the insert ends at 7.7 mm). A Ø4 post holds the AMS1117 module down, and the PMSA003I's seal rib is part of this wall. |
 
 Sensor boards: M2 × 4 self-tapping into 2.1 mm pilots (Adafruit), M2.5 × 4 into 2.6 mm pilots (Soldered), all on
 2 mm bosses on the chassis floor — one size under what each nominal pilot suggests, because printed holes finish
-undersize and the PMSA003I's own board holes are 2.5 mm. Validated on a PLA+ print, 2026-09-12. Heat-set inserts: 2 × M3 in the head's bottom wall, 4 × M3 in the shell.
+undersize and the PMSA003I's own board holes are 2.5 mm. Validated on a PLA+ print, 2026-09-12. Heat-set inserts: 4 × M3 in the shell, and nowhere else — nothing is screwed into the head.
 0.4 mm nozzle, 2 mm walls and skin, 2.2 mm slots on a 3.4 mm pitch where slots remain. The shell prints upside
 down so its whole outer surface is either on the bed or a drafted wall — no supports; the STL is rotated 5.15° past
 the flip so the sloped skin lies flat. Everything is printed in **PLA+** (September 2026): the only heat in the base
 is the AMS1117's few hundred milliwatts, so PETG is the fallback if its pocket or the shell post over it ever
 softens — revisit after a summer.
+
+**Nothing stands inside the head's cavity, and nothing may.** The Inkplate is 130.59 × 75.23 in a 132.6 × 77.2
+opening — a millimetre all round, so it cannot tilt past anything either — and it goes in from the back, which
+means its own footprint sweeps the whole cavity on the way to its seat. A boss is in the way however far behind
+the seated board it finally sits. Four cover-boss towers and two base-screw blocks were exactly that, and the
+first head printed could not be assembled (Sept 2026). This is why the cover screws to the Inkplate's own
+standoffs and the head is held by magnets.
 
 ## Frames
 
@@ -69,7 +77,7 @@ component carries the 20° tilt. Bay interior X −6.3…131.6, D 25…84, H 2 u
 sloping to 23 at the rear). Board component faces at H 5.6 (Adafruit / Soldered) and 6.0 (AMS1117, raised so the
 regulator on its underside hangs in free air).
 
-The head's front-bottom edge lands at D 2.3 / H 12, chosen so the **bezel plane passes through (D 0, H 0)** —
+The head's front-bottom edge lands at D 4.91 / H 13.5, chosen so the **bezel plane passes through (D 0, H 0)** —
 that is what makes the base's front face and the bezel one plane. Change `HEAD_FRONT_H` and the front slab
 follows automatically.
 
@@ -171,35 +179,49 @@ group's GND · 3V3 at X 45–47.5 with a housing on GND — the second ground re
 wires straight to the pads. Cable 1 plugs into easyC K3 with its red conductor cut; its black, blue and yellow run
 on as three wires. With VIN from its pad that is **seven conductors** leaving the head, in two lanes behind the
 board (Z −7.4 for SET, expander GND and ESP32 GND; Z −8.7 for VIN, cable 1's GND, SCL and SDA — clear of the
-ESP32), running along the bottom edge at Y 3–12.5 and dropping at X 32.5–43.5 into a single **common slot** in the
-bottom wall at X 31–45, Z −3.5…−9.2. Within a lane nothing crosses — each wire's run along X passes only under
-descents that stop above it — which fixes the order, left to right: SDA, SCL, cable-1 GND, ESP32 GND, expander GND,
-SET, VIN. Nothing else pierces the head.
+ESP32), running along the bottom edge at Y 3–12.5. They do not leave the head as wires: they end on the solder
+tails of the pogo male, let into the bottom wall at X 62.65. Each run first gets clear of the **AVX bulk
+capacitor** — it stands 7.89 mm off the board at X 62.5–67, deeper than either lane and directly over the
+connector — dropping to Y 2.05 or 2.70 at X 70 coming from the right, X 56 from the left, and making the last hop
+underneath it, where nothing else in that corner reaches past Z −2.6. The connector's stadium hole is the only
+thing that pierces the head.
 
-**Base.** The slot opens into a trench in the cradle block (X −2.7…51.3, D 9.5–26, floor at H 3) leading under
-the head into the bay. Every wire drops to H 4.5 in the trench — under the PM's Qwiic plug — and then goes one of
-three ways:
+**The junction.** Head and base meet on an **8-pin magnetic pogo pair**, centred on the device at X 62.65.
+Both halves are panel-mount parts fixed by their lips, each fitted from inside its own shell. The male's nose
+fills the head's 2 mm bottom wall and stands 0.30 mm proud of the underside; its lip is glued to the cavity floor
+between two locating ribs, and its back band and tails are in open cavity. The female drops into a plinth standing
+in the base's trench, its lip landing on a ledge with a glue relief inside the rim, and only its 1 mm boss stands
+above the plinth's rim. That boss enters the male's pocket, so the halves nest: the mated bodies come to 9.3 mm,
+not 10.3. The key is the contact block's own outline — a rounded rectangle with one semicircle cut into the middle
+of its S-end wall — so a half turned end for end fouls it and will not close.
 
-- **To the PM header** (cable 1's GND, SCL and SDA, and the expander's SET): back along the trench, up at D 26.9 /
-  28.3 / 31.0 / 40.5 to the **H 25.2 lane** just under the skin, across to the pin's X and down into the top of a
+Assembly order matters. **Fit the Inkplate before the connector**: the male's back band sits at the board's bottom
+edge, and with the connector already in, the board cannot pass it. Solder all seven wires to each half on the
+bench, then fit.
+
+**Base.** The wires pick up on the female's tails, in a chamber under it that breaks out through the plinth's back
+into the trench (X 42–84, D 9.5–26, floor at H 3 — a well around the plinth with about 4 mm of working room each
+side, open at the top once the head is off). Each drops to H 3.9 only for the few millimetres it takes to get out
+from under the connector, runs back to D 19, climbs to **H 7**, and crosses the bay up there rather than along the
+floor. From D 25.8 — behind the plinth, which ends about D 20, and behind the head's back cover, which leans to
+about D 24.2 at the top lane's height — they go three ways:
+
+- **To the PM header** (cable 1's GND, SCL and SDA, and the expander's SET): across at H 7 to the pin's X, up
+  there to the **H 25.2 lane** just under the skin, then back to the header row and down into the top of a
   standing housing. The PM's **straight** 7-pin header is on its front edge at D 29.5 with five housings on it
   (VIN, GND, SCL, SDA, SET; tops at H 22.1). A housing is 14 mm tall and the wire needs ~3.7 mm above it to turn
   without strain — **17.7 mm clear above the header block** *(measured on the real parts, 2026-09-13)* — which is
   what makes the base 30.5 mm tall at the front; the skin's underside there is at 28.5, 2.7 mm above the wire
-  crowns. Where each wire rises is boxed in three ways: the head's back cover leans, and at the wire crowns' height
-  it is at D 24.4, so nothing rises nearer than D 25.5; the PM's Qwiic plug stands at X 31.4–33.4, D 32.5–39.3, so
-  the SDA lane at X 32.5 rises behind it, at 40.5; and a wire's cross-run must not pass over another's drop into
-  the header row, so in front of the row the nearer lane takes the smaller pin X and behind it the larger.
-- **To the AMS1117** (VIN and the expander GND): stay at H 4.5 to D 35 and D 33, change lanes to the pin's X there
-  — behind every PM-bound rise, and far enough apart that neither meets the other's riser — then rise to H 11.6 and
-  run straight back into the open ends of the IN / GND housings at D 47.3. AMS **OUT** leaves its housing the same
+  crowns.
+- **To the AMS1117** (VIN and the expander GND): stay at H 7, cross to the pin's X, run back to D 31 and D 29, and
+  rise to H 11.6 into the open ends of the IN / GND housings at D 47.3. AMS **OUT** leaves its housing the same
   way, forward to D 42, up to the H 25.2 lane, across and forward into the PM's VIN housing. There is no AMS GND →
   PM GND wire any more: the PM's ground comes down cable 1, so the regulator's GND pin carries one crimp (star
   grounding, [HARDWARE.md §8](../../../docs/HARDWARE.md#8-wiring--validated-and-corrected)).
-- **To the SCD41** (the ESP32-group GND): rises at D 25.5 — the only D in front of the shell pillar at (68, 30) —
-  to the H 25.2 lane, runs right along D 25.5 to X 73, back along the compartment's right wall to D 47.7, and drops
-  into a housing standing on a **5-pin straight header on the SCD41's right-hand edge** (X 70.8, GND the middle
-  pin; housing top at H 22.1, 4.3 mm under the skin there). Which edge of the Adafruit board actually carries the
+- **To the SCD41** (the ESP32-group GND): crosses at H 7 to X 73 — clear of the shell pillar at (68, 30) — rises
+  there to the H 25.2 lane, runs back along the compartment's right wall to D 47.7, and drops into a housing
+  standing on a **5-pin straight header on the SCD41's right-hand edge** (X 70.8, GND the middle pin; housing top
+  at H 22.1, 4.3 mm under the skin there). Which edge of the Adafruit board actually carries the
   row is unverified — see below.
 
 The AMS1117 module is **rotated 180° from the obvious orientation so its pins face the head**. With the pins at the
@@ -252,6 +274,11 @@ this way — the PM seal rib (built at X −6.1…−5.3 after the chassis had b
 head-cover bosses (floating 0.5 mm clear of the cavity wall — that one had survived unnoticed through several
 revisions of the head).
 
+The head has a second check for the same reason. `enclosure.py` sweeps the Inkplate's footprint from the cavity
+mouth to its seated position, intersects that with the tray, and reports the result as
+`inkplate_insertion_blocked_mm3`. It must be **0**. It would have read several hundred on the head that was
+printed, which is the whole point of it.
+
 ## Unverified
 
 1. **Everything about how it looks and feels** is unverified until it is printed — the shape is a judgement no render settles. Print the shell first: it is the only part whose surface is on show.
@@ -260,7 +287,7 @@ revisions of the head).
 4. SCD41 response time, now that it vents into the bay rather than through its own lid grille.
 5. Dupont housings are modelled as 2.54 × 2.54 × 14 mm single-position shells (14 mm measured, plus 3.7 mm for the wire to turn — the base height follows from that); right-angle headers with the pin axis 4.2 mm off the board. Check the 1.7 mm margin to the head's back cover with the real housings before soldering the Inkplate headers.
 6. The Inkplate's expander pads are 0.8 mm drills (from the KiCad board): confirm the chosen header's pins fit, otherwise solder the two wires straight to the pads.
-7. The head sits 8 mm deep in the cradle pocket with 0.3 mm side clearance, held by its two screws and the block's rear lip. If the printed pocket is loose, foam tape in the pocket floor takes up the play.
+7. The head sits 8 mm deep in the cradle pocket with 0.3 mm side clearance, located by the pocket and the block's rear lip and held down by the pogo connector's two Ø5 magnets — nothing is screwed. A ≈145 g head on a 20° lean is the thing to watch; if it creeps or lifts too easily the cure is a catch on the rear lip, not screws back through the cavity.
 8. The shell's left end is unsupported over ≈ 50 mm. If it lifts, the cure is a printed clip on the chassis edge rather than a fifth screw — there is no room for one past the PM board.
 9. The SCD41's header is modelled on the board's right-hand edge (X 70.8) as it sits in its compartment. Confirm which edge of the Adafruit 5190 carries the five pads before soldering; on the left-hand edge the ESP32-GND wire would come straight down the compartment's front instead of round its right wall, and the compartment has the room either way.
 10. PLA+ through a winter. The two places heat could tell are the AMS1117's pocket walls and the shell post over it; check them after the first warm spell, and go to PETG for the base if they have moved.

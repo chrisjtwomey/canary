@@ -1,9 +1,20 @@
 {
-  "include": ["server"],
+  "include": [
+    "server",
+    "hardware/enclosure/v1"
+  ],
   "venvPath": "server",
   "venv": ".venv",
   "extraPaths": [
     "server",
     "../epd/server"
+  ],
+  "executionEnvironments": [
+    {
+      "root": "hardware/enclosure/v1",
+      "extraPaths": [
+        "/Users/chris/Library/Application Support/Autodesk/webdeploy/production/Autodesk Fusion.app/Contents/Api/Python/packages/adsk/defs"
+      ]
+    }
   ]
 }
