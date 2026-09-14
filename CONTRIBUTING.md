@@ -344,13 +344,26 @@ even though the tests pass, because Pylance does not read `pytest.ini`.
 ## Releases
 
 Publishing a GitHub release runs `.github/workflows/release.yaml`. It builds
-`server/` into `ghcr.io/chrisjtwomey/inkplate5-env-monitor-server`, tagged
+`server/` into `ghcr.io/chrisjtwomey/inkplate5-env-monitor-server` and
+`firmware-builder/` into
+`ghcr.io/chrisjtwomey/inkplate5-env-monitor-firmware-builder`, each tagged
 with the release's version (`0.2.0` and `0.2` for `v0.2.0`) and `latest`. No
 release carries a firmware image: the firmware links Bosch's BSEC binary,
-which this project does not hand out. To update a board over the air, build
-from the tag and copy `.pio/build/esp32/firmware.bin` to the server's
-`firmware/` directory as `<tag>.bin`. The server offers the newest file
-there, by modification time, so delete the one it replaces.
+which this project does not hand out. `scripts/build-firmware.sh` builds one
+instead, from a tag in a clean checkout, so the version is exactly the tag:
+epd offers an update only to a board that runs a tagged build.
+
+```sh
+scripts/build-firmware.sh v0.2.0 myserver:/path/to/server/firmware
+scripts/build-firmware.sh --defaults src/defaults.cpp --upload v0.2.0
+```
+
+The first puts the image in a server's `firmware/` directory as `v0.2.0.bin`,
+in place of the one before. The second flashes it over USB with your own
+`defaults.cpp`, whose settings the board then keeps: the one USB flash a
+board needs. `--signed-by <fingerprint>` refuses a tag that key did not sign.
+The `firmware-builder` service in `docker-compose.yml` runs the first for
+each new release, signed by the key in its `SIGNED_BY`.
 
 The image runs `python server.py` with the example config on port 8080.
 Mount your own `config.yaml` at `/app/config.yaml`, and volumes at

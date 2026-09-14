@@ -12,9 +12,28 @@ services:
       # the container runs as uid 1000 and could not write to a directory the
       # host owns.
       - env-monitor-data:/app/data
-      # Firmware images, copied in by hand, so a host directory. Create it
-      # before the first start, or Docker makes it as root. The server only
-      # reads it.
+      # Firmware images, from firmware-builder or scripts/build-firmware.sh.
+      # Create the directory before the first start, or Docker makes it as
+      # root and neither can write to it. The server only reads it.
       - ./server/firmware:/app/firmware:ro
+
+  # Builds each new release's firmware into server/firmware. See
+  # CONTRIBUTING.md, Releases.
+  firmware-builder:
+    image: ghcr.io/chrisjtwomey/inkplate5-env-monitor-firmware-builder:latest
+    restart: unless-stopped
+    # Must be able to write server/firmware on the host.
+    user: "1000:1000"
+    environment:
+      # Only a tag this key signed is built, since the board flashes whatever
+      # the server offers.
+      SIGNED_BY: "878D72349B08E6610A678B88614344BCB54CC36E"
+      POLL_SECONDS: "900"
+    volumes:
+      - ./server/firmware:/firmware
+      # The PlatformIO toolchain, downloaded by the first build.
+      - platformio:/platformio
+
 volumes:
   env-monitor-data:
+  platformio:

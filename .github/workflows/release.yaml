@@ -4,16 +4,26 @@ on:
   release:
     types: [published]
 
-# The server image only. Unlike weather-cal, no job attaches firmware.bin: a
-# firmware image carries Bosch's BSEC binary, and this project never
-# publishes one.
+# The server image, and the image that builds firmware for it. Unlike
+# weather-cal, no job attaches firmware.bin: a firmware image carries Bosch's
+# BSEC binary, and this project never publishes one. firmware-builder
+# downloads BSEC and builds on the machine that runs it.
 jobs:
   publish-docker:
-    name: Push server image to GHCR
+    name: Push ${{ matrix.image }} to GHCR
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    strategy:
+      matrix:
+        include:
+          - image: inkplate5-env-monitor-server
+            context: ./server
+            file: ./server/Dockerfile
+          - image: inkplate5-env-monitor-firmware-builder
+            context: .
+            file: ./firmware-builder/Dockerfile
 
     steps:
       - uses: actions/checkout@v6
@@ -29,7 +39,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/${{ github.repository_owner }}/inkplate5-env-monitor-server
+          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -38,7 +48,8 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v7
         with:
-          context: ./server
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
