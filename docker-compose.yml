@@ -1,0 +1,20 @@
+services:
+  env-monitor-server:
+    image: ghcr.io/chrisjtwomey/inkplate5-env-monitor-server:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      # Without it the image runs its example config, the simulated room.
+      # CONTRIBUTING.md, Releases, says which keys a deployment sets.
+      - ./server/config.yaml:/app/config.yaml:ro
+      # The readings and calibration stores. A named volume, not a host path:
+      # the container runs as uid 1000 and could not write to a directory the
+      # host owns.
+      - env-monitor-data:/app/data
+      # Firmware images, copied in by hand, so a host directory. Create it
+      # before the first start, or Docker makes it as root. The server only
+      # reads it.
+      - ./server/firmware:/app/firmware:ro
+volumes:
+  env-monitor-data:

@@ -347,13 +347,18 @@ Publishing a GitHub release runs `.github/workflows/release.yaml`. It builds
 `server/` into `ghcr.io/chrisjtwomey/inkplate5-env-monitor-server`, tagged
 with the release's version (`0.2.0` and `0.2` for `v0.2.0`) and `latest`. No
 release carries a firmware image: the firmware links Bosch's BSEC binary,
-which this project does not hand out.
+which this project does not hand out. To update a board over the air, build
+from the tag and copy `.pio/build/esp32/firmware.bin` to the server's
+`firmware/` directory as `<tag>.bin`. The server offers the newest file
+there, by modification time, so delete the one it replaces.
 
 The image runs `python server.py` with the example config on port 8080.
 Mount your own `config.yaml` at `/app/config.yaml`, and volumes at
 `/app/data` and `/app/firmware` to keep the stores and the OTA images; point
 `source.path` and `calibration.path` at `data/readings.db` and
-`data/calibration.db`.
+`data/calibration.db`. `docker-compose.yml`, at the repo root, runs the image
+this way, with `server/config.yaml` as the config and `server/firmware/` as
+the firmware directory.
 
 ## Making Changes
 
