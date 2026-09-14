@@ -241,7 +241,7 @@ The sensor updates its registers itself; the host polls. **No I²C commands** fo
 
 ### Operating mode for this device (mains)
 
-Run the fan continuously (datasheet "active mode", MTTF ≥ 3 years) and poll every few seconds, keeping checksum-valid frames and averaging. Optionally wire SET to expander P1_3 to duty-cycle the fan (30 s spin-up before each reading window) — saves ~200 mA and dust, costs accuracy per the field reports.
+Run the fan continuously (datasheet "active mode", MTTF ≥ 3 years) and poll every few seconds, keeping checksum-valid frames and averaging. SET is optional: the breakout's 100 k pull-up holds it high, so with no wire the fan runs from power-on. Wired to expander P1_3 (§8), it lets the firmware stop and start the fan; stopping it between readings saves dust, at a cost in accuracy per the field reports.
 
 ### Gotchas
 
@@ -433,7 +433,7 @@ A **3.3 V LDO module rated ≥ 600 mA** (e.g. AP2112K-3.3, or an AMS1117-3.3 boa
     ├─ expander-group GND ──────────► AMS1117-3.3  GND       regulator's reference only, a few mA
     │                                 AMS1117-3.3  OUT ─────► PMSA003I header VIN    3.3 V for the whole chain
     │
-    ├─ expander P1_3 ───────────────────────────────────────► PMSA003I header SET    fan control
+    ├─ expander P1_3 ───────────────────────────────────────► PMSA003I header SET    fan control, optional
     │
     ├─ easyC K3 ── cable 1: GND · SDA · SCL, 3V3 cut ───────► PMSA003I header GND · SDA · SCL   bus in, chain's ground return out
     │
@@ -459,7 +459,7 @@ A **3.3 V LDO module rated ≥ 600 mA** (e.g. AP2112K-3.3, or an AMS1117-3.3 boa
 | 1 | Inkplate **VIN pad** | AMS1117 **IN** | 28 AWG jumper, Dupont at the AMS1117 end |
 | 2 | Inkplate **expander-group GND** | AMS1117 **GND** | 28 AWG jumper, Dupont both ends |
 | 3 | AMS1117 **OUT** | PMSA003I header **VIN** | 28 AWG jumper, Dupont both ends |
-| 4 | Inkplate **expander P1_3** | PMSA003I header **SET** | 28 AWG jumper, Dupont both ends |
+| 4 | Inkplate **expander P1_3** | PMSA003I header **SET** | 28 AWG jumper, Dupont both ends — optional, see below |
 | 5 | Inkplate **easyC K3** | PMSA003I header **GND, SDA, SCL** | cable 1: a Qwiic cable with its plug kept at the Inkplate end, the other end cut and re-terminated with three Dupont crimps; **3V3 conductor removed** |
 | 6 | PMSA003I **easyC socket B** | SCD41 either socket | cable 2: stock Qwiic |
 | 7 | SCD41 other socket | BME688 either socket | cable 3: stock Qwiic |
@@ -476,6 +476,13 @@ faces a wall.
 In the desk enclosure, every conductor that leaves the Inkplate (rows 1, 2,
 4, 5 and 9) also crosses the head-to-base pogo connector. The
 [enclosure README](../hardware/enclosure/v1/README.md) has the routing.
+
+**Step 4 is optional.** The PM breakout pulls SET high through 100 kΩ (§3),
+so without the wire the fan runs from power-on and every reading is valid.
+With it, the firmware controls the fan: the Inkplate library drives P1_3 low
+at boot, which stops the fan, and the firmware drives it high when it starts
+the sensors, so the 30 s warm-up counts from then. The validation build
+reports a missing SET wire as a warning, not a failure.
 
 On the Inkplate, steps 2 and 4 use the expander group's GND and P1_3 pads,
 and step 9 the ESP32 group's GND. The Inkplate's four plain GND pads — panel,
