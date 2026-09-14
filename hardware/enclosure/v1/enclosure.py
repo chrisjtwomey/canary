@@ -95,12 +95,129 @@ HEAD_R, HEAD_CAV_R, HEAD_R_FRONT = 5.0, 3.0, 1.2   # plan corner radius (outer /
 HEAD_ZF, HEAD_ZBACK = 2.4, -11.67
 HEAD_X0, HEAD_X1, HEAD_Y0, HEAD_Y1 = -1.0, 131.6, -1.0, 76.2       # cavity
 HEAD_LWALL, HEAD_RWALL, HEAD_WALL = 7.3, 2.0, 2.0                  # thick LEFT wall (USB-C side) for a symmetric bezel
-COVER_BOSSES = [(24.0, 2.0), (118.0, 2.0), (12.0, 73.2), (119.0, 73.2)]   # behind the PCB, clear of its back-side parts
-#   each one must overlap the cavity wall (Y -1 / 76.2): a boss floating inside the cavity is a separate lump,
-#   i.e. a loose part on the print bed. They only clear the PCB because they live behind it, at Z -4..-9.67.
-BASE_SCREWS_X = (10.0, 110.0)                                       # bottom-wall bosses the base screws into
-HEAD_SLOT = (31.0, 45.0, -9.2, -3.5)                                # wire slot through the bottom wall: X0, X1, Z0, Z1 (left of centre, to meet the PM header)
-ESP32_VENT = (30.0, 100.0)
+# There are no bosses of any kind inside the cavity, and there must never be. The Inkplate is 130.59 x 75.23 in a
+# 132.6 x 77.2 cavity - a millimetre all round - and it goes in from the back, so its own footprint sweeps the whole
+# cavity on the way to its seat. Anything standing in there, however far behind the board it ends up, is something
+# the board has to pass through first. Four boss towers for the cover and two blocks for the base screws were
+# exactly that, and the first print could not be assembled (Sept 2026). The cover now screws to the Inkplate's own
+# four M3 SMT standoffs, and the head is held down by the pogo connector's magnets rather than by screws.
+# --- head-to-base junction: an 8-pin magnetic pogo pair, mating along the head's Y as the head sits down ---
+#   Both halves are panel-mount parts with a LIP, and that lip is how they are fixed: each goes in from inside its
+#   own shell, the lip lands on a face and is glued to it, and only what has to make contact stands out. So the
+#   male lives almost entirely inside the head - its nose fills the 2 mm bottom wall and stands PG_PROUD out of the
+#   underside, the lip and the solder tails are in the cavity - and the female almost entirely inside a plinth in
+#   the base. Nothing hangs in the gap between the two any more.
+#   Centred on the device in X (-8.3..133.6): everything that feeds the head half is right of centre (the expander
+#   row at 90.7, the easyC cable at 99..103, the ESP32 ground at 45) and everything the base half feeds is left of
+#   it (the PM header at 6.4..21.6, the AMS at 37..42), so no run doubles back on itself.
+POGO_X, POGO_Z = 62.65, -6.00
+#   Z is boxed in: the male's 8.00 lip and the female's 11.00 lip both sit BELOW the PCB's bottom edge where the
+#   whole 0..-9.67 depth is free, but the male's 7.00 back band is at Y 0..1.4, alongside the board, and has to
+#   pass between its back face (-2.45) and the back cover (-9.67). 7.00 in 7.22 leaves a tenth of a millimetre.
+PG_PITCH, PG_CLR, PG_PROUD = 2.30, 0.20, 0.30
+PG_M_LIP_L, PG_M_LIP_W, PG_M_LIP_T = 25.30, 8.00, 1.00      # male: lip (the glue face), then the two bands
+PG_M_L, PG_M_W, PG_M_NOSE, PG_M_BACK, PG_M_TAIL = 24.30, 7.00, 2.30, 1.40, 1.50
+PG_F_LIP_L, PG_F_LIP_W, PG_F_LIP_T = 28.30, 11.00, 0.90     # female: ditto, lip the widest band and in the middle
+PG_F_L, PG_F_W, PG_F_TOP, PG_F_BOT, PG_F_TAIL = 25.30, 8.00, 2.00, 1.70, 1.40
+PG_KEY_L, PG_KEY_W, PG_KEY_R = 9.92, 5.00, 0.70             # the contact block: a rounded rectangle with one
+PG_NOTCH_R = 0.95                                           # semicircle cut into the middle of its S-end wall
+PG_BOSS, PG_FIT = 1.00, 0.145                               # boss height; the male's pocket is the same shape
+PG_POCKET = PG_BOSS + 0.15                                  # grown by PG_FIT all round (10.21 against 9.92)
+PG_MAG_C, PG_MAG_R, PG_MAG_T = 8.65, 2.50, 1.20
+
+PG_YM = HEAD_Y0 - HEAD_WALL - PG_PROUD                      # the mating plane, -3.30: where the two faces meet
+M_Y0 = PG_YM                                                # male nose face
+M_Y1 = M_Y0 + PG_M_NOSE                                     # -1.00, the cavity floor: the lip lands here
+M_Y2 = M_Y1 + PG_M_LIP_T                                    #  0.00
+M_Y3 = M_Y2 + PG_M_BACK                                     #  1.40
+M_Y4 = M_Y3 + PG_M_TAIL                                     #  2.90, tail tips
+F_Y0 = PG_YM                                                # female top face, against the male's nose
+F_Y1 = F_Y0 - PG_F_TOP                                      # -5.30
+F_Y2 = F_Y1 - PG_F_LIP_T                                    # -6.20, lip underside: the ledge it is glued to
+F_Y3 = F_Y2 - PG_F_BOT                                      # -7.90
+F_Y4 = F_Y3 - PG_F_TAIL                                     # -9.30, tail tips
+PG_PLINTH_TOP = PG_YM - 0.15                                # the plinth's rim, clear of the cradle pocket's 0.3
+PG_PLINTH_WALL = 2.20
+
+PG_TAILS = {'SDA': (-3.45, 1.15), 'SCL': (-1.15, 1.15), 'GNDC': (1.15, 1.15), 'GND2': (3.45, 1.15),
+            'SET': (-1.15, -1.15), 'GND': (1.15, -1.15), 'VIN': (3.45, -1.15)}   # (-3.45, -1.15) is the empty way
+
+def pogo_tail(sig):
+    dx, dz = PG_TAILS[sig]
+    return POGO_X + dx, POGO_Z + dz
+
+def pg_stad(L, W, y0, y1, g=0.0):
+    """Stadium in plan, centred on the connector: straight sides, a full semicircular end at each end."""
+    L, W = L + 2 * g, W + 2 * g
+    r = W / 2.0
+    b = box(POGO_X - L/2 + r, POGO_X + L/2 - r, y0, y1, POGO_Z - r, POGO_Z + r)
+    union(b, cyl_y(POGO_X - L/2 + r, POGO_Z, y0, y1, r)); union(b, cyl_y(POGO_X + L/2 - r, POGO_Z, y0, y1, r))
+    return b
+
+def pg_key(g, y0, y1):
+    """The keyed contact block: rounded rectangle, one semicircle out of the middle of its S-end wall.
+    g = 0 is the female's boss, PG_FIT the male's pocket - the same shape grown all round."""
+    L, W, r = PG_KEY_L + 2 * g, PG_KEY_W + 2 * g, PG_KEY_R
+    b = box(POGO_X - L/2 + r, POGO_X + L/2 - r, y0, y1, POGO_Z - W/2, POGO_Z + W/2)
+    union(b, box(POGO_X - L/2, POGO_X + L/2, y0, y1, POGO_Z - W/2 + r, POGO_Z + W/2 - r))
+    for cx in (POGO_X - L/2 + r, POGO_X + L/2 - r):
+        for cz in (POGO_Z - W/2 + r, POGO_Z + W/2 - r): union(b, cyl_y(cx, cz, y0, y1, r))
+    cut(b, cyl_y(POGO_X + L/2, POGO_Z, y0 - 1.0, y1 + 1.0, PG_NOTCH_R - g))
+    return b
+
+def pg_contacts(y0, y1, r):
+    out = None
+    for sig in PG_TAILS:
+        x, z = pogo_tail(sig)
+        c = cyl_y(x, z, y0, y1, r); out = c if out is None else union(out, c)
+    return out
+
+def pg_male_bodies():
+    """The male as bought, in place in the head."""
+    b = pg_stad(PG_M_L, PG_M_W, M_Y0, M_Y1)                                  # nose, through the bottom wall
+    union(b, pg_stad(PG_M_LIP_L, PG_M_LIP_W, M_Y1 - 0.01, M_Y2))             # lip, glued to the cavity floor
+    union(b, pg_stad(PG_M_L, PG_M_W, M_Y2 - 0.01, M_Y3))                     # back band
+    cut(b, pg_key(PG_FIT, M_Y0 - 0.01, M_Y0 + PG_POCKET))                    # the pocket, inset into the nose face
+    mags = None
+    for dx in (-PG_MAG_C, PG_MAG_C):
+        cut(b, cyl_y(POGO_X + dx, POGO_Z, M_Y0 - 0.01, M_Y0 + PG_MAG_T, PG_MAG_R))
+        m = cyl_y(POGO_X + dx, POGO_Z, M_Y0, M_Y0 + PG_MAG_T, PG_MAG_R)
+        mags = m if mags is None else union(mags, m)
+    fl = M_Y0 + PG_POCKET                                                    # pocket floor
+    pins = pg_contacts(F_Y0 + PG_BOSS, fl + 0.01, 0.45)                      # the plungers, drawn COMPRESSED onto
+    #   the pads: mated, the boss fills the pocket to within PG_POCKET - PG_BOSS, so that gap is all the travel the
+    #   pins have left. The barrels live inside the plastic. See the standalone reference model for the free part.
+    tails = pg_contacts(M_Y3 - 0.01, M_Y4, 0.30)                             # O0.60 x 1.50, into the cavity
+    return b, mags, pins, tails
+
+def pg_female_bodies():
+    """The female as bought, in place in the base."""
+    b = pg_stad(PG_F_L, PG_F_W, F_Y3, F_Y2)                                  # bottom band
+    union(b, pg_stad(PG_F_LIP_L, PG_F_LIP_W, F_Y2 - 0.01, F_Y1))             # lip, glued to the plinth's ledge
+    union(b, pg_stad(PG_F_L, PG_F_W, F_Y1 - 0.01, F_Y0))                     # top band
+    union(b, pg_key(0.0, F_Y0 - 0.01, F_Y0 + PG_BOSS))                       # boss, into the male's pocket
+    mags = None                                                              # buried: they do not break the face
+    for dx in (-PG_MAG_C, PG_MAG_C):
+        cut(b, cyl_y(POGO_X + dx, POGO_Z, F_Y3 - 1.0, F_Y0 - 0.50, PG_MAG_R))
+        m = cyl_y(POGO_X + dx, POGO_Z, F_Y0 - 0.50 - PG_MAG_T, F_Y0 - 0.50, PG_MAG_R)
+        mags = m if mags is None else union(mags, m)
+    pads = pg_contacts(F_Y0 + PG_BOSS - 0.10, F_Y0 + PG_BOSS, 0.90)          # O1.80, flush on the boss
+    cut(pads, cyl_y(POGO_X + PG_KEY_L / 2, POGO_Z, F_Y0, F_Y0 + PG_BOSS + 1.0, PG_NOTCH_R))
+    tails = pg_contacts(F_Y4, F_Y3 + 0.01, 0.35)                             # O0.70 x 1.40, down into the plinth
+    return b, mags, pads, tails
+
+def build_pogo_head(headc):
+    b, mags, pins, tails = pg_male_bodies()
+    return add_bodies(headc, 'Pogo male (head)', [('pogo male body', b, 'housing'), ('pogo male magnets', mags, 'silver'),
+                                                  ('pogo male pins', pins, 'gold'), ('pogo male tails', tails, 'silver')])
+
+ESP32_VENT = (74.0, 94.0, 14.0, 40.0)   # back-cover grille: X span, then the Y band. Slots run ALONG X -
+#   everything else about this object is horizontal (the shadow gap, the PM's vent strip), and one band spanning
+#   low to high vents better than two: air enters at the bottom rows and leaves at the top ones.
+#   The ESP32-WROVER sits at X 75..93, Y -0.2..31.8 once the Inkplate is rotated 180 deg, and it is the only real heat
+#   source in the head. The bands used to be at X 104..124, which is directly over the CR2032 holder (X 106..122) -
+#   venting the one part of the board that makes no heat, and dropping debris onto a lithium cell. They start at Y 14
+#   to stay clear of the wire lanes that cross the board at Y 3..11, or you would see cables through the slots.
 
 def rrect_h(x0, x1, y0, y1, z0, z1, r):
     """Rounded-rectangle prism in the head frame (corner centres inset by r)."""
@@ -131,6 +248,21 @@ def slots_x(body, Y_from, Y_to, Xlo, Xhi, Z0, Z1, pitch=3.4, w=2.2):
         y += pitch
     return body
 
+def capsule_x(x0, x1, yc, r, z0, z1):
+    """Stadium slot running along X: a box with a half-round at each end. Square-ended slots read as cut holes;
+    the rounded ends are most of what makes a grille look drawn rather than punched, and cost nothing to print."""
+    b = box(x0 + r, x1 - r, yc - r, yc + r, z0, z1)
+    union(b, cyl_z(x0 + r, yc, z0, z1, r))
+    union(b, cyl_z(x1 - r, yc, z0, z1, r))
+    return b
+
+def slots_x_round(body, X0, X1, Y_from, Y_to, Z0, Z1, pitch=3.4, w=2.2):
+    y0 = Y_from
+    while y0 + w <= Y_to + 1e-6:
+        cut(body, capsule_x(X0, X1, y0 + w / 2.0, w / 2.0, Z0, Z1))
+        y0 += pitch
+    return body
+
 def build_head_tray(headc):
     """Front shell: bezel + 4 walls, 14.1 mm deep, printed face-down. Inkplate rotated 180 deg."""
     X0, X1, Y0, Y1 = HEAD_X0, HEAD_X1, HEAD_Y0, HEAD_Y1
@@ -143,17 +275,16 @@ def build_head_tray(headc):
     cut(t, box(AX0 - MARG - 1, AX1 + MARG + 1, AY0 - MARG - 1, AY1 + MARG + 1, ZF - 1.0, ZF + 1))
     # --- relief in the bezel lip for the solder tails of the expander header (now on the TOP edge, X 89.4..102.1) ---
     cut(t, box(88.0, 104.0, 72.0, 74.9, -0.5, 1.5))
-    # --- back-cover bosses: behind the PCB (start 1.55 mm behind its back face), M2.5 self-tapping pilots ---
-    for (x, y) in COVER_BOSSES:
-        union(t, cyl_z(x, y, -4.0, ZBACK + 2.0 + 0.01, 3.5))          # ends at the cover's inner face (-9.67)
-        cut(t, cyl_z(x, y, ZBACK - 1.0, -4.6, 1.05))                  # 2.1 mm pilot, 5 mm deep, for M2.5 self-tapping
-    # --- base-screw bosses on the bottom wall (M3 heat-set insert from below, axis along Y) ---
-    for x in BASE_SCREWS_X:
-        union(t, box(x - 3.5, x + 3.5, Y0, 7.0, ZBACK + 2.0 + 0.01, -2.6))
-        cut(t, cyl_y(x, -6.13, Y0 - HEAD_WALL - 1, 4.5, 2.0))          # 4.0 mm hole, 5.5 mm deep
-    # --- common wire slot through the bottom wall ---
-    sx0, sx1, sz0, sz1 = HEAD_SLOT
-    cut(t, box(sx0, sx1, Y0 - HEAD_WALL - 1, Y0 + 0.5, sz0, sz1))
+    cut(t, box(42.5, 50.0, 72.0, 74.9, -0.5, 1.5))                 # ... and for the ESP32-group header (GND at X 44.97)
+    # --- pogo male: a stadium hole through the bottom wall for its nose, and two ribs on the cavity floor that
+    #     locate its lip. Everything behind the lip is in open cavity, so with the back cover off you solder the
+    #     seven wires to the tails, push the part out through the hole and glue the lip to the floor. ---
+    cut(t, pg_stad(PG_M_L, PG_M_W, Y0 - HEAD_WALL - 1.0, M_Y1 + 0.01, PG_CLR))
+    for sgn in (-1, 1):                                       # ribs that locate the lip while the glue goes off
+        xr = POGO_X + sgn * (PG_M_LIP_L / 2 + PG_CLR + 0.75)
+        union(t, box(xr - 0.75, xr + 0.75, M_Y1 - 0.01, M_Y2 - 0.20, POGO_Z - 3.5, POGO_Z + 3.5))
+    cut(t, pg_stad(PG_M_LIP_L - 3.0, PG_M_LIP_W - 3.0, M_Y1 - 0.15, M_Y1 + 0.01))   # glue relief: the lip lands on
+    #   a 1.5 mm land round its rim and the glue has somewhere to go instead of squeezing out over the contacts
     # --- left wall (thick): USB-C, power button, microSD through stepped pockets ---
     LI = (X0 - 2.0, X0 + 0.5)                       # inner 2 mm skin
     LO = (X0 - HEAD_LWALL - 1, X0 - 2.0)            # outer pocket region
@@ -168,17 +299,18 @@ def build_head_tray(headc):
     return replace_body(occ.component, t, 'Head tray')
 
 def build_head_cover(headc):
-    """Flat back cover: sits inside the walls on the Inkplate's standoffs; 4 x M2.5 into the tray bosses,
-    4 x M3 clearance holes over the standoffs (optional screws)."""
+    """Flat back cover: sits inside the walls on the Inkplate's four M3 SMT standoffs and screws into them.
+    That is the only thing holding it - see the note by the cavity constants for why there are no tray bosses."""
     ZO, ZI = HEAD_ZBACK, HEAD_ZBACK + 2.0
     c = rrect_h(HEAD_X0 + 0.2, HEAD_X1 - 0.2, HEAD_Y0 + 0.2, HEAD_Y1 - 0.2, ZO, ZI, HEAD_CAV_R - 0.2)
-    for (x, y) in COVER_BOSSES:
-        cut(c, cyl_z(x, y, ZO - 1, ZI + 1, 1.45))
-        cut(c, cyl_z(x, y, ZO - 1, ZO + 0.8, 2.6))
-    for (x, y) in [(3.4, 3.4), (127.19, 3.4), (3.4, 71.83), (127.19, 71.83)]:
-        cut(c, cyl_z(x, y, ZO - 1, ZI + 1, 1.7))
-    slots_y(c, 104.0, 124.0, 24.0, 40.0, ZO - 1, ZI + 1)         # grille over the ESP32 module: low band (intake)
-    slots_y(c, 104.0, 124.0, 46.0, 60.0, ZO - 1, ZI + 1)         # ... and high band, so warm air can circulate out
+    for (x, y) in [(3.4, 3.4), (127.19, 3.4), (3.4, 71.83), (127.19, 71.83)]:   # the Inkplate's own standoffs
+        cut(c, cyl_z(x, y, ZO - 1, ZI + 1, 1.7))                                 # M3 clearance
+        cut(c, cyl_z(x, y, ZO - 1, ZO + 0.7, 3.1))                               # ... and a shallow counterbore, so
+    #   the four heads sit nearly flush in a 2 mm cover instead of standing proud of the back
+    cut(c, box(POGO_X - PG_M_LIP_L / 2 - 1.5, POGO_X + PG_M_LIP_L / 2 + 1.5, HEAD_Y0 - 1.0, M_Y2 + 0.4,
+               ZI - 0.7, ZI + 1.0))     # relief for the male's lip, which overhangs the cover's inner face by 0.33
+    vx0, vx1, vy0, vy1 = ESP32_VENT
+    slots_x_round(c, vx0, vx1, vy0, vy1, ZO - 1, ZI + 1)         # grille over the ESP32 module
     occ = get_or_make_comp(headc, 'Head back cover')
     return replace_body(occ.component, c, 'Head back cover')
 
@@ -186,7 +318,7 @@ def build_head_cover(headc):
 # Base: chassis (floor + cradle block + bay features, printed upright) inside a shell (top skin + 4 walls,
 # printed upside down). Base frame "B": X as the head, D = depth from the front-bottom edge, H = height above the
 # desk; Fusion world X_f = X, Y_f = D, Z_f = H. The front face is a 20-deg slab continuous with the head's bezel;
-# the top skin slopes from H 27 behind the head to H 21.5 at the rear. PM sits on the LEFT.
+# the top skin slopes from H 30.5 behind the head to H 25 at the rear. PM sits on the LEFT.
 #
 # The shell's side and rear walls are drafted outward toward the desk and its plan corners are rounded,
 # its bottom rim floats GAP above the desk so a continuous shadow gap replaces every visible grille, and the chassis
@@ -197,7 +329,11 @@ B_X0, B_X1 = -8.3, 133.6            # outer at the top of the walls; the draft w
 B_XI0, B_XI1 = -6.3, 131.6          # bay interior (vertical inner walls)
 B_D1 = 86.0                         # depth
 B_DBAY0, B_DBAY1 = 25.0, 84.0       # bay interior depth range (front = cradle block's rear face)
-H_FRONT, H_REAR = 27.0, 21.5        # top skin, outer, at D 25 and at the rear
+H_FRONT, H_REAR = 30.5, 25.0        # top skin, outer, at D 25 and at the rear
+#   Set by the connectors, not the boards: a Dupont housing standing on a straight header needs 14 mm for itself and
+#   3.7 mm for the wire to turn (measured), so on a board at H 5.6 the wire's crown is at H 25.8, and the skin's
+#   underside has to clear that wherever a housing stands - at the PM header (D 29.5) and the SCD41 header (D ~48).
+#   At 27 / 21.5 the PM housings were 1 mm short and the wire kinked against the skin.
 SKIN = 2.0
 TILT = 20.0
 GAP = 1.5                           # shadow gap: the shell's bottom rim floats this far above the desk
@@ -210,7 +346,10 @@ C_TOP, C_RIM = 1.5, 0.8             # chamfers on the top edge and on the bottom
 R_CAV = R_PLAN - SKIN               # cavity corners, concentric with the outer ones -> constant wall
 R_CH = R_CAV - CH_INSET             # chassis corners, concentric again -> constant gap
 REC_DEPTH = 1.0                     # depth of the recessed vent strip on the left wall
-HEAD_FRONT_H = 12.0                                    # head's front-bottom edge height
+HEAD_FRONT_H = 13.5                                    # head's front-bottom edge height. It was 12.0. Only the
+#   female and its plinth sit in the joint now - the male is inside the head - so what the cradle has to find room
+#   for is 6 mm of connector below the mating plane plus wire room under its tails, not the whole 13.2 mm pair.
+#   The 20 deg tilt still spends depth across the connector's width, which is what the extra 1.5 buys.
 HEAD_FRONT_D = HEAD_FRONT_H * math.tan(math.radians(TILT))   # ... and depth: the bezel plane passes through (D 0, H 0)
 BLOCK_TOP_REAR = 14.0               # cradle block height behind the head (rear lip)
 
@@ -289,14 +428,41 @@ PM_PINS = {k: PM_X0 + v for k, v in {'SET': 25.4, 'SDA': 20.32, 'SCL': 17.78, 'G
 SCD_X1, SCD_D0 = 72.8, 35.0                   # SCD41 X 49.9..72.8, D 35..60.4, sockets facing front / rear (centre X 61.4)
 BME_X0, BME_D0 = 82.8, 53.5                   # BME688 X 82.8..120.8, D 53.5..75.5 (rear-right)
 SHT_X0, SHT_D0 = 82.8, 26.5                   # SHTC3 X 82.8..120.8, D 26.5..48.5 (front-right, coolest corner)
-AMS_X1, AMS_D0 = 41.8, 50.5                   # AMS1117 X 33.3..41.8, D 50.5..63, pins toward +D
+AMS_X1, AMS_D0 = 43.8, 61.0                   # AMS1117 X 35.3..43.8, D 61..73.5, pins toward the HEAD (-D)
+#   X 43.8 centres the mount in the strip: 2.0 mm to the PM board on one side, 2.0 mm to the compartment wall on the other
+#   (it used to sit 0.2 mm off the PM board with 4.2 mm spare on the far side)
+#   D 61 puts its back edge flush with the SCD41 compartment's rear wall, and - the reason for it - pushes the Dupont
+#   housings back to D 47..61, clear of the PM -> SCD41 ribbon that crosses the strip at D 35.9
+AMS_CLR = 0.5                                 # slip fit: 0.3 a side gave a 9.1 mm slot for an 8.5 mm board, and a printed
+#   slot finishes 0.1-0.2 mm under nominal per wall, so it was not a fit you could count on. 9.5 mm is.
+AMS_H = 6.0                                   # underside of the board: 2 mm higher than the other boards, so the SOT-223 clears
+#   the floor by 2.3 mm instead of 0.3 and sits in a through-passage rather than a sealed slot
+AMS_TAB = 2.5                                 # the side walls survive only as corner tabs this long; the rest is the passage
+AMS_DOME = 1.2                                # the header's solder domes stand this proud of the board's underside
 COMP = (47.3, 48.8, 74.3, 75.8, 30.0, 72.0, 73.5)
 BAFFLE_D = (50.0, 51.5)
-TRENCH = (-2.7, 51.3, 9.5, 26.0)
-RIBBON_X = 44.9                               # Qwiic lane between the AMS pocket and the compartment's left wall
-RIBBON_XR = 129.1                             # lane along the right wall for the BME688 -> SHTC3 ribbon
-SHELL_PILLARS = [(68.0, 30.0), (126.0, 30.0), (50.0, 78.5), (126.0, 79.0)]   # the only four plan positions clear of every board, plug, ribbon and wire lane
-AMS_POST = (35.0, 58.3)                       # r 1.2, between the head-GND lane (X 33.1) and the OUT lane (X 37.55)
+TRENCH = (42.0, 84.0, 9.5, 26.0)              # Now only a well for the pogo plinth (X 46.1..79.2), with about
+#   4 mm of working room either side of it and the whole top open once the head is off. It used to run the full
+#   width, back when seven loose wires crossed the joint and had to travel along it to reach the boards; they go
+#   out the back of the plinth into the bay now, so the rest of the cradle block - and the wall behind it - stays.
+RIBBON_X = 45.05                              # Qwiic lane, centred between the AMS pocket rib (42.8) and the compartment wall (47.3)
+RIBBON_XR = 126.0                             # lane for the BME688 -> SHTC3 ribbon: inboard of the chassis edge (130.1) so the
+#   guide rib below, not the shell's inner wall, is what keeps the ribbon tidy. At 129.1 the ribbon overhung the edge and
+#   could only be held in by fitting the shell over it.
+RIB_XR = (128.5, 35.0, 67.0, 9.0)             # outer guide rib: X 128.5..chassis edge, D 35..67, up to H 9
+#   Plan positions clear of every board, plug, ribbon and wire lane - and far enough in from the chassis edge that the
+#   countersink on the underside keeps a full wall outside it. The first print had them at (126,30), (50,78.5) and
+#   (126,79): 0.8, 0.7 and -0.6 mm of material outside the CSK_D/2 circle, the last one breaking clean out through the
+#   rounded corner. The corner is the trap - the chassis corner is r 6.5, so out there the edge curves away on two sides
+#   at once and the useful position is nearer the arc's centre (123.6, 76), not nearer the corner. Each one now keeps
+#   >= 1.8 mm, limited by the board it sits beside (0.5..0.7 mm of drop-on clearance to the SCD41 compartment's rear
+#   wall, the SHTC3 and the BME688 respectively).
+SHELL_PILLARS = [(68.0, 30.0), (125.0, 30.0), (50.0, 77.5), (125.0, 76.0)]
+CSK_D, CSK_H = 6.2, 1.4                       # countersink for the M3 flat heads, 90 deg: an ISO 7046 head is 5.5 (5.6
+#   max) across, so 6.2 clears it, and taking 0.4 off the 6.6 first drawn is 0.2 mm more wall at every hole and 0.6 mm
+#   rather than 0.4 of floor left above the cone.
+AMS_POST = (AMS_X1 - 4.25, AMS_D0 + 5.0, 2.0, AMS_H + 1.4 - 0.15)   # on the board's centreline, between the two supports, so the
+#   two rather than pivoting about the pad - 0.15 mm of preload, on bare board between the header and R1
 PM_BOSSES = [(PM_X0 + 2.54, PM_D0 + 2.54), (PM_X0 + 33.02, PM_D0 + 2.54), (PM_X0 + 2.75, PM_D0 + 48.3), (PM_X0 + 32.75, PM_D0 + 15.3)]   # Adafruit 4632 holes
 PM_SEAL_D = (PM_D0 + 27.8, PM_D0 + 31.1)      # seal rib between the module's two ports (gap: 54.5..58.4)
 PM_SEAL_W, PM_SEAL_H = PM_X0 - 0.2 - B_XI0, 19.0   # fills the gap to the module face (0.2 mm short of it), up to 1 mm above the module
@@ -312,15 +478,26 @@ def build_chassis(basec, mh):
     cut(body, boxb(B_XI0 - 1, B_XI1 + 1, 17.8, B_DBAY0 + 1, BLOCK_TOP_REAR, H_FRONT))        # low rear lip behind the head
     tx0, tx1, td0, td1 = TRENCH
     trench = boxb(tx0, tx1, td0, td1, 3.0, H_FRONT)
-    sx = BASE_SCREWS_X[0]
-    cut(trench, boxb(sx - 3.5, sx + 3.5, 0.0, 12.8, 0.0, H_FRONT))                           # floor island around the left base screw
-    cut(body, trench)
-    for x in BASE_SCREWS_X:                                                                  # head screws, tilted with the head
-        p = head_point(mh, x, -3.0, -6.13); d = head_dir(mh, 0.0, 1.0, 0.0)
-        t_floor = p.z / d.z
-        def along(t): return adsk.core.Point3D.create(p.x - d.x * t, p.y - d.y * t, p.z - d.z * t)
-        cut(body, cyl(along(t_floor + 1.0), along(-0.2), 1.7))
-        cut(body, cyl(along(t_floor + 1.0), along(t_floor - 0.35), 3.2))
+    cut(body, trench)     # (the island that used to protect the left base screw is moot: the trench starts at 42)
+    # --- pogo junction: a plinth standing in the trench, with the female dropped into it from above. Its lip
+    #     lands on the ledge inside and is glued there; the boss stands PG_BOSS proud of the plinth's rim and goes
+    #     up into the male's pocket. Built in the head frame, so it leans with the head and its rim is parallel to
+    #     the head's underside. Open trench all round it, and a chamber under the tails that breaks out rearward,
+    #     so the part goes in with its seven wires already soldered on. ---
+    plinth = pg_stad(PG_F_LIP_L + 2 * (PG_CLR + PG_PLINTH_WALL), PG_F_LIP_W + 2 * (PG_CLR + PG_PLINTH_WALL),
+                     -30.0, PG_PLINTH_TOP)
+    tb.transform(plinth, mh)
+    union(body, plinth)
+    cut(body, boxb(B_X0 - 10, B_X1 + 10, -10.0, B_D1 + 10, -40.0, 0.0))                  # trim it to the desk
+    pk = pg_stad(PG_F_LIP_L, PG_F_LIP_W, F_Y2, PG_PLINTH_TOP + 1.0, PG_CLR)              # lip + top band bore
+    union(pk, pg_stad(PG_F_L, PG_F_W, F_Y3, F_Y2 + 0.01, PG_CLR))                        # bottom band bore
+    union(pk, pg_stad(PG_F_LIP_L - 3.0, PG_F_LIP_W - 3.0, F_Y2 - 0.15, F_Y2 + 0.01))     # glue relief in the ledge
+    union(pk, box(POGO_X - 8.0, POGO_X + 8.0, F_Y4 - 2.0, F_Y3 + 0.01, POGO_Z - 5.0, POGO_Z + 5.0))   # tails
+    tb.transform(pk, mh)
+    cut(body, pk)
+    cut(body, boxb(POGO_X - 8.0, POGO_X + 8.0, 12.0, B_DBAY0, 2.5, 7.5))                 # the tails' chamber out
+    #   through the plinth's back and into the open trench: where the seven wires leave, and how you see the joints
+    # (no head screws: the head is held on its cradle by the pogo connector's two magnets)
     # --- inset from the shell's inner wall: this slot, open to the room under the shell's rim, is the bay's intake ---
     inter(body, rrect_b(B_XI0 + CH_INSET, B_XI1 - CH_INSET, SKIN + CH_INSET, B_DBAY1 - CH_INSET, -20.0, 100.0, R_CH))
     # board bosses
@@ -338,17 +515,33 @@ def build_chassis(basec, mh):
     lx0, lx1, rx0, rx1, d0, rd0, rd1 = COMP
     HW = H_FRONT
     union(body, boxb(lx0, lx1, d0, rd1, 2.0 - 0.01, HW)); union(body, boxb(rx0, rx1, d0, rd1, 2.0 - 0.01, HW)); union(body, boxb(lx0, rx1, rd0, rd1, 2.0 - 0.01, HW))
-    cut(body, boxb(rx0 - 0.5, rx1 + 0.5, 62.0, 67.0, 4.0, 10.0))                             # SCD41 rear -> BME688 ribbon notch
+    cut(body, boxb(rx0 - 0.5, rx1 + 0.5, 60.1, 68.9, 4.0, 10.0))                             # SCD41 rear -> BME688 ribbon notch
+    #   8.8 x 6: a JST-SH plug is 6.8 x 2.7 and has to be threaded through here, so the opening is the plug plus 1 mm a side
     union(body, boxb(rx1 - 0.01, B_XI1 - CH_INSET, BAFFLE_D[0], BAFFLE_D[1], 2.0 - 0.01, HW))   # baffle SHTC3 | BME688
-    cut(body, boxb(126.5, B_XI1, BAFFLE_D[0] - 0.5, BAFFLE_D[1] + 0.5, 4.0, 10.0))           # ribbon notch at the right wall
+    cut(body, boxb(119.7, 128.5, BAFFLE_D[0] - 0.5, BAFFLE_D[1] + 0.5, 4.0, 10.0))           # ribbon notch, plug width + 1 mm a side
+    union(body, boxb(RIB_XR[0], B_XI1 - CH_INSET, RIB_XR[1], RIB_XR[2], 2.0 - 0.01, RIB_XR[3]))   # outer wall of the ribbon lane
     ax0, ax1, ad0, ad1 = AMS_X1 - 8.5, AMS_X1, AMS_D0, AMS_D0 + 12.5
-    union(body, boxb(ax0, ax1, ad0 + 6.3, ad0 + 9.3, 2.0 - 0.01, 4.0))                       # AMS pad, between the chip and the solder domes
-    union(body, boxb(ax0 - 0.7, ax1 + 0.7, ad0 - 0.7, ad0, 2.0 - 0.01, 6.0)); union(body, boxb(ax0 - 0.7, ax1 + 0.7, ad1, ad1 + 0.7, 2.0 - 0.01, 6.0))
-    union(body, boxb(ax0 - 0.7, ax0, ad0 - 0.7, ad1 + 0.7, 2.0 - 0.01, 6.0)); union(body, boxb(ax1, ax1 + 0.7, ad0 - 0.7, ad1 + 0.7, 2.0 - 0.01, 6.0))
+    px0, px1, pd0, pd1 = ax0 - AMS_CLR, ax1 + AMS_CLR, ad0 - AMS_CLR, ad1 + AMS_CLR          # pocket = board + AMS_CLR a side
+    rt = AMS_H + 2.0                                                                         # top of the locating walls
+    union(body, boxb(px0, px1, ad0 + 0.9, ad0 + 2.9, 2.0 - 0.01, AMS_H - AMS_DOME))          # front support: the three solder
+    #   domes land on this. They are the one thing under that board whose height repeats copy to copy; the clear band between
+    #   the domes and the SOT-223 is under a millimetre wide and moves about, so a pad that relied on it would not fit twice.
+    #   Full pocket width, so the domes land on it wherever the board sits in its clearance.
+    union(body, boxb(px0, ax0 + 2.1, ad0 + 10.4, ad1, 2.0 - 0.01, AMS_H))                    # rear supports, BEHIND the body of
+    union(body, boxb(ax1 - 2.1, px1, ad0 + 10.4, ad1, 2.0 - 0.01, AMS_H))                    # U1: past D +10.4 the only thing
+    #   under the board is the SOT-223's 3 mm tab, so there is 2.6 mm of bare PCB to bear on each side instead of the 1.0 mm
+    #   beside the chip - and with AMS_CLR the board can sit 0.5 mm off centre, which that 1.0 mm could not have absorbed.
+    union(body, boxb(px0 - 1.0, px1 + 1.0, pd0 - 1.0, pd0, 2.0 - 0.01, rt))                  # front wall
+    union(body, boxb(px0 - 1.0, px1 + 1.0, pd1, pd1 + 1.0, 2.0 - 0.01, rt))                  # rear wall
+    for t0, t1 in ((pd0, pd0 + AMS_TAB), (pd1 - AMS_TAB, pd1)):                              # the sides are corner tabs only. What
+        union(body, boxb(px0 - 1.0, px0, t0, t1, 2.0 - 0.01, rt))                            # is left between them is the passage:
+        union(body, boxb(px1, px1 + 1.0, t0, t1, 2.0 - 0.01, rt))                            # bay air crosses under the board, in one
+    #   side and out the other, straight beneath the regulator. The floor stays solid - with the chassis flat on the desk a hole
+    #   there would open into a dead pocket, and trapped air insulates about three times better than the 2 mm of PLA it replaced.
     cut(body, hs_b((0.0, B_DBAY0, H_FRONT - SKIN - 0.3), (0.0, (H_FRONT - H_REAR) / (B_D1 - B_DBAY0), 1.0)))   # under the sloped skin
     for (x, d) in SHELL_PILLARS:                                                             # shell screws, countersunk from below
         cut(body, cylH(x, d, -1.0, 3.0, 1.7))
-        cut(body, coneH(x, d, -0.01, 3.3, 1.6, 1.7))
+        cut(body, coneH(x, d, -0.01, CSK_D / 2, CSK_H, 1.7))
     occ = get_or_make_comp(basec, 'Base chassis')
     return replace_body(occ.component, body, 'Base chassis')
 
@@ -369,7 +562,9 @@ def build_shell(basec, mh):
     for (x, d) in SHELL_PILLARS:
         union(outer, cylH(x, d, 2.0, skin_top(d) - SKIN + 0.5, 3.5))
         cut(outer, cylH(x, d, 1.0, 8.0, 2.0))                                               # M3 heat-set insert from below
-    union(outer, cylH(AMS_POST[0], AMS_POST[1], 5.4, skin_top(AMS_POST[1]) - SKIN + 0.5, 1.2))
+    pt = skin_top(AMS_POST[1]) - SKIN + 0.5                                                # AMS retainer: 4 mm, not 2.4 - it is a
+    union(outer, cylH(AMS_POST[0], AMS_POST[1], AMS_POST[3], pt, AMS_POST[2]))               # 17 mm tower printed off the skin, and PLA is brittle
+    union(outer, coneH(AMS_POST[0], AMS_POST[1], pt - 3.0, AMS_POST[2], pt, AMS_POST[2] + 1.4))   # flare at the root
     # --- PM seal rib: fills the 2.5 mm gap between the module's air face and this wall, between the two slot groups,
     #     so the fan's exhaust cannot run along that gap into its own inlet. It lives on the shell because the
     #     chassis is inset 1.5 mm from this wall and could only reach it as a detached island. The part that
@@ -387,9 +582,15 @@ def build_shell(basec, mh):
     occ = get_or_make_comp(basec, 'Base shell')
     return replace_body(occ.component, outer, 'Base shell')
 
+def build_pogo_base(basec, mh):
+    b, mags, pads, tails = pg_female_bodies()
+    for x in (b, mags, pads, tails): tb.transform(x, mh)
+    return add_bodies(basec, 'Pogo female (base)', [('pogo female body', b, 'housing'), ('pogo female magnets', mags, 'silver'),
+                                                    ('pogo female pads', pads, 'gold'), ('pogo female tails', tails, 'silver')])
 # ---------------------------------------------------------------------------------------------
 # Wiring layer: 'Head wiring (toggle)' (head frame) + 'Base wiring (toggle)' (base frame).
-# Schematic wiring: right-angle bends only, dedicated channels, one common slot between head and base.
+# Schematic wiring: right-angle bends only, dedicated channels. There is no slot between head and base: the
+# head's runs end on the pogo male's solder tails and the base's on the female's, and the joint is the connector.
 # ---------------------------------------------------------------------------------------------
 QWIIC = ('black', 'red', 'blue', 'yellow')          # GND, 3V3, SDA, SCL
 
@@ -454,9 +655,15 @@ def dupont(x, y_start, pin_dir, zc):
     y1 = y_start + pin_dir * 14.0
     return box(x - 1.27, x + 1.27, min(y_start, y1), max(y_start, y1), zc - 1.27, zc + 1.27)
 
+# A mated JST-SH plug mostly disappears into its socket: only about 2 mm of the housing stays outside the socket
+# face (measured on the real cables), not the ~6.5 mm of a free-standing plug. PLUG_W x PLUG_T is the housing
+# section - the same 6.8 x 2.7 every cable passage in the chassis is sized around.
+PLUG_OUT, PLUG_W, PLUG_T = 2.0, 6.8, 2.7
+
 def jst_plug_y(y_face, x_c, z_pcb, open_dir_y, z_sign=-1):
-    y1 = y_face + open_dir_y * 6.5
-    return box(x_c - 3.0, x_c + 3.0, min(y_face, y1), max(y_face, y1), min(z_pcb, z_pcb + z_sign * 3.0), max(z_pcb, z_pcb + z_sign * 3.0))
+    y1 = y_face + open_dir_y * PLUG_OUT
+    return box(x_c - PLUG_W / 2, x_c + PLUG_W / 2, min(y_face, y1), max(y_face, y1),
+               min(z_pcb, z_pcb + z_sign * PLUG_T), max(z_pcb, z_pcb + z_sign * PLUG_T))
 
 # --- base-frame connector helpers ---
 def ra_header_b(x0, n, d_pad, h_pcb, pin_dir, up=1):
@@ -479,12 +686,14 @@ def dupont_b(x, d_start, pin_dir, hc):
     return boxb(x - 1.27, x + 1.27, min(d_start, d1), max(d_start, d1), hc - 1.27, hc + 1.27)
 
 def plug_bx(x_face, d_c, h_pcb, open_dir_x, up=1):
-    x1 = x_face + open_dir_x * 6.5
-    return boxb(min(x_face, x1), max(x_face, x1), d_c - 3.0, d_c + 3.0, min(h_pcb, h_pcb + up * 3.0), max(h_pcb, h_pcb + up * 3.0))
+    x1 = x_face + open_dir_x * PLUG_OUT
+    return boxb(min(x_face, x1), max(x_face, x1), d_c - PLUG_W / 2, d_c + PLUG_W / 2,
+                min(h_pcb, h_pcb + up * PLUG_T), max(h_pcb, h_pcb + up * PLUG_T))
 
 def plug_bd(d_face, x_c, h_pcb, open_dir_d, up=1):
-    d1 = d_face + open_dir_d * 6.5
-    return boxb(x_c - 3.0, x_c + 3.0, min(d_face, d1), max(d_face, d1), min(h_pcb, h_pcb + up * 3.0), max(h_pcb, h_pcb + up * 3.0))
+    d1 = d_face + open_dir_d * PLUG_OUT
+    return boxb(x_c - PLUG_W / 2, x_c + PLUG_W / 2, min(d_face, d1), max(d_face, d1),
+                min(h_pcb, h_pcb + up * PLUG_T), max(h_pcb, h_pcb + up * PLUG_T))
 
 def add_bodies(parent_comp, comp_name, bodies):
     occ = get_or_make_comp(parent_comp, comp_name)
@@ -497,11 +706,28 @@ def add_bodies(parent_comp, comp_name, bodies):
     bf.finishEdit()
     return occ, {name: col for name, body, col in bodies}
 
-# --- head lanes (head frame): five descents into the bottom-wall slot X 31..45 ---
+# --- head lanes (head frame): the Z level each of the seven runs keeps along the bottom edge ---
+#   Only the Z of each entry is read. The X beside it is vestigial, from when the runs dropped through a
+#   slot in the bottom wall; they end on the pogo male's solder tails now and there is no slot.
+#   GNDC / SDA / SCL are cable 1 (the easyC cable, red cut); GND is the expander-group pad, feeding the AMS1117;
+#   GND2 is the ESP32-group pad, the second ground return, going to the SCD41. Two Z levels so runs can cross.
 ZL_LOW, ZL_HIGH = -8.7, -7.4
-HEAD_LANES = {'VIN': (42.5, ZL_LOW), 'SET': (40.5, ZL_HIGH), 'GND': (38.5, ZL_HIGH), 'SCL': (36.5, ZL_LOW), 'SDA': (34.5, ZL_LOW)}
-HEAD_RUN_Y = {'VIN': 3.03, 'SET': 9.5, 'GND': 11.0, 'SCL': 6.5, 'SDA': 8.0}       # Y of each wire's run along the bottom edge
-Y_EXIT = -3.5
+HEAD_LANES = {'VIN': (43.5, ZL_LOW), 'SET': (41.5, ZL_HIGH), 'GND': (39.5, ZL_HIGH), 'GND2': (36.5, ZL_HIGH),
+              'GNDC': (35.5, ZL_LOW), 'SCL': (34.0, ZL_LOW), 'SDA': (32.5, ZL_LOW)}
+HEAD_RUN_Y = {'VIN': 3.03, 'GNDC': 5.0, 'SCL': 6.5, 'SDA': 8.0, 'SET': 9.5, 'GND': 11.0, 'GND2': 12.5}   # Y of each run along the bottom edge
+#   Within a Z level nothing may cross: a wire's run (along X at its Y) must not meet another's descent (along Y at its
+#   X). So on LOW the three cable-1 conductors come off the plug in the order SDA, SCL, GNDC left to right, run at
+#   8.0 / 6.5 / 5.0 and drop at 32.5 / 34.0 / 35.5 - each one's run passes only under descents that stop above it.
+CAP_X, CAP_Y = (62.5, 67.0), 3.2     # the AVX bulk capacitor on the back of the Inkplate: it stands 7.89 mm off
+#   the board, deeper than either lane, and it sits right over the connector. Its underside is at Y 3.2, though,
+#   and nothing else in that corner of the board reaches past Z -2.6 - so every wire drops BELOW it before it
+#   crosses those 4.5 mm of X, and the last hop to the tails is made down there.
+Y_APP = {ZL_LOW: 2.05, ZL_HIGH: 2.70}            # approach heights - one per lane, so the seven do not all
+#   end up in the same plane - and where each wire drops to them from, either side of the capacitor
+X_DROP_R, X_DROP_L = 70.0, 56.0
+Y_TAIL_A, Y_TAIL_B = M_Y4, F_Y4                     # the tail tips: the male's up inside the head's cavity, the
+#   female's down inside its plinth. Both parts go in with their wires already soldered on, so what matters is
+#   that each run reaches its own tail from a direction a soldering iron could have got to first.
 
 def build_head_wiring(headc):
     bodies = []
@@ -510,26 +736,45 @@ def build_head_wiring(headc):
     bodies += [('Inkplate R/A header GND..P1_3', blk, 'housing'), ('Inkplate header pins', pins, 'silver')]
     bodies.append(('Dupont P1_3 (SET)', dupont(100.85, ys, -1, zc), 'dupont'))
     bodies.append(('Dupont GND', dupont(90.69, ys, -1, zc), 'dupont'))
+    blk2, pins2, _, _ = ra_header(44.97, 2, 73.73, ZPCB, -1, -1)          # ESP32-group GND (+3V3 unused): the second ground return
+    bodies += [('Inkplate R/A header ESP32 GND', blk2, 'housing'), ('Inkplate header pins ESP32', pins2, 'silver')]
+    bodies.append(('Dupont GND2', dupont(44.97, ys, -1, zc), 'dupont'))
     ye = ys - 14.0
     bodies.append(('easyC plug (K3)', jst_plug_y(43.83, 100.0, ZPCB, +1), 'white'))
     def route(sig, src, y_turn, z_src):
-        x, z = HEAD_LANES[sig]; yr = HEAD_RUN_Y[sig]
-        return [(src, y_turn, z_src), (src, y_turn, z), (src, yr, z), (x, yr, z), (x, Y_EXIT, z)]
-    bodies.append(('wire SET: P1_3 -> slot', wire([(100.85, ye, zc)] + route('SET', 100.85, 57.0, zc)), 'white'))
-    bodies.append(('wire GND: Inkplate GND -> slot', wire([(90.69, ye, zc)] + route('GND', 90.69, 56.0, zc)), 'black'))
-    bodies.append(('wire SDA: easyC -> slot', wire([(99.0, 50.33, -4.0)] + route('SDA', 99.0, 52.0, -4.0)), 'blue'))
-    bodies.append(('wire SCL: easyC -> slot', wire([(101.0, 50.33, -4.0)] + route('SCL', 101.0, 54.0, -4.0)), 'yellow'))
-    x, z = HEAD_LANES['VIN']
-    bodies.append(('wire VIN: VIN pad -> slot', wire([(37.99, 3.03, ZPCB), (37.99, 3.03, z), (x, 3.03, z), (x, Y_EXIT, z)]), 'red'))
+        z = HEAD_LANES[sig][1]; yr = HEAD_RUN_Y[sig]; tx, tz = pogo_tail(sig)
+        xd = X_DROP_R if src > CAP_X[1] else X_DROP_L      # drop clear of the capacitor, then go under it
+        ya = Y_APP[z]
+        return [(src, y_turn, z_src), (src, y_turn, z), (src, yr, z), (xd, yr, z),
+                (xd, ya, z), (tx, ya, z), (tx, ya, tz)]
+    bodies.append(('wire SET: P1_3 -> pogo', wire([(100.85, ye, zc)] + route('SET', 100.85, 57.0, zc)), 'white'))
+    bodies.append(('wire GND: expander GND -> pogo', wire([(90.69, ye, zc)] + route('GND', 90.69, 56.0, zc)), 'black'))
+    bodies.append(('wire GND2: ESP32 GND -> pogo', wire([(44.97, ye, zc)] + route('GND2', 44.97, 55.0, zc)), 'black'))
+    # cable 1: the easyC cable's black, blue and yellow. Its red is cut. Drawn as three wires from the plug.
+    bodies.append(('wire SDA: easyC -> pogo', wire([(99.0, 50.33, -4.0)] + route('SDA', 99.0, 52.0, -4.0)), 'blue'))
+    bodies.append(('wire SCL: easyC -> pogo', wire([(102.0, 50.33, -4.0)] + route('SCL', 102.0, 54.0, -4.0)), 'yellow'))
+    bodies.append(('wire GNDC: easyC GND -> pogo', wire([(103.2, 50.33, -4.0)] + route('GNDC', 103.2, 48.0, -4.0)), 'black'))
+    z = HEAD_LANES['VIN'][1]; tx, tz = pogo_tail('VIN')
+    bodies.append(('wire VIN: VIN pad -> pogo', wire([(37.99, 3.03, ZPCB), (37.99, 3.03, z), (X_DROP_L, 3.03, z),
+                                                      (X_DROP_L, Y_APP[z], z), (tx, Y_APP[z], z), (tx, Y_APP[z], tz)]), 'red'))
     return add_bodies(headc, 'Head wiring (toggle)', bodies)
 
 def build_base_wiring(basec, mh):
     bodies = []
     def jn(sig):
-        x, z = HEAD_LANES[sig]
-        p = head_point(mh, x, Y_EXIT, z)
+        """Where a wire picks up in the base: on its own solder tail under the pogo connector's base half."""
+        x, z = pogo_tail(sig)
+        p = head_point(mh, x, Y_TAIL_B + 0.25, z)
         return (round(p.x * 10, 3), round(p.y * 10, 3), round(p.z * 10, 3))
-    H_TR, H_TOP = 5.0, 22.7
+    H_LOW, D_RISE, H_MID, D_ESC = 3.9, 19.0, 7.0, 25.8   # D_RISE is past the female lip, whose rear reaches 17.2
+    #   A wire drops off its tail to H_LOW - just under the female's rear-bottom corner, which is the lowest thing
+    #   in the junction - runs back through the chamber to D_RISE, and climbs to H_MID before it goes anywhere. It
+    #   only stays low for the 6 mm it takes to get out from under the connector; nothing runs the length of the
+    #   bay a couple of millimetres off the desk, where it would be pinched between the floor and whatever sits on
+    #   it. D_ESC is behind both the plinth (which ends about D 20) and the head's back cover, which at the top
+    #   lane's height leans back to about D 24.2, so every rise to H_TOP happens in clear air.
+    H_TR, H_TOP = 4.5, 25.2      # H_TR under the PM's Qwiic plug (H 5.6). H_TOP: the lane the wires run along before dropping into a standing housing - 14 mm of
+    #   housing on a 2.54 header on a board at H 5.6 tops out at 22.14, and the wire needs 3.7 mm above that to turn
     # ---- PMSA003I: straight 7-pin header on its FRONT edge (D 32.54), housings standing up ----
     H_PM = 4.0 + 1.6
     d_hdr = PM_D0 + 2.54
@@ -543,47 +788,72 @@ def build_base_wiring(basec, mh):
     h_top = H_PM + 2.54 + 14.0
     for name, x in PM_PINS.items():
         bodies.append(('Dupont PM %s' % name, boxb(x - 1.27, x + 1.27, d_hdr - 1.27, d_hdr + 1.27, H_PM + 2.54, h_top), 'dupont'))
-    # ---- AMS1117: pins toward +D, housings D 63..77 ----
-    hams = 4.0 + 1.4 + 4.5 - 0.32
-    ams_x = {'VIN': AMS_X1 - 1.71, 'OUT': AMS_X1 - 4.25, 'GND': AMS_X1 - 6.79}
-    d_ams0 = AMS_D0 + 12.5
+    # ---- AMS1117: rotated 180 deg in plan, so the pins face the HEAD and the housings run D 36.5..50.5.
+    #      With the pins at the rear, the head's VIN/GND had to travel back to D 78.9 and the regulator's outputs all the
+    #      way forward again to the PM header at D 29.5 - about 100 mm of round trip, and two long lanes up the strip,
+    #      that this removes. The rotation swaps VIN and GND in X. ----
+    hams = AMS_H + 1.4 + 4.5 - 0.32
+    ams_x = {'VIN': AMS_X1 - 6.79, 'OUT': AMS_X1 - 4.25, 'GND': AMS_X1 - 1.71}
     for name, x in ams_x.items():
-        bodies.append(('Dupont AMS %s' % name, dupont_b(x, d_ams0, +1, hams), 'dupont'))
-    d_ams = d_ams0 + 14.0
+        bodies.append(('Dupont AMS %s' % name, dupont_b(x, AMS_D0, -1, hams), 'dupont'))
+    D_IN = AMS_D0 - 14.0 + 0.3                 # open end of the housings, where every wire goes in
     # ---- head signals -> PM header: trench, rise behind the head, over to the pin, into the housing top ----
-    for sig, d_lane in (('SET', 26.7), ('SDA', 25.5), ('SCL', 24.3)):
-        jx, jd, jh = jn(sig); x = PM_PINS[sig]
-        pts = [(jx, jd, jh), (jx, jd, H_TR), (jx, d_lane, H_TR), (jx, d_lane, H_TOP), (x, d_lane, H_TOP), (x, d_hdr, H_TOP), (x, d_hdr, h_top - 0.2)]
-        bodies.append(('wire %s: slot -> PM %s' % (sig, sig), wire_b(pts), {'SET': 'white', 'SDA': 'blue', 'SCL': 'yellow'}[sig]))
-    # ---- head VIN / GND -> AMS IN / GND, up the strip, into the housing ends from the rear ----
-    D_DROP = 78.9
-    jx, jd, jh = jn('VIN'); xv = ams_x['VIN']
-    bodies.append(('wire VIN: slot -> AMS IN', wire_b([(jx, jd, jh), (jx, jd, H_TR), (jx, 25.3, H_TR), (jx, 25.3, 16.2), (xv, 25.3, 16.2), (xv, D_DROP, 16.2),
-                                                       (xv, D_DROP, hams), (xv, d_ams - 0.3, hams)]), 'red'))
-    jx, jd, jh = jn('GND'); xg = ams_x['GND']; XG_LANE = AMS_X1 - 8.7    # runs beside the AMS board, clear of the lid post
-    bodies.append(('wire GND: slot -> AMS GND', wire_b([(jx, jd, jh), (jx, jd, H_TR), (jx, 26.8, H_TR), (jx, 26.8, 18.8), (XG_LANE, 26.8, 18.8), (XG_LANE, D_DROP, 18.8),
-                                                        (XG_LANE, D_DROP, hams), (xg, D_DROP, hams), (xg, d_ams - 0.3, hams)]), 'black'))
-    # ---- AMS OUT / GND -> PM VIN / GND: up at the rear, forward under the skin, across behind the header, into the tops ----
+    #   Where each wire rises to H_TOP is boxed in three ways. The head's back cover leans, and at the H 25.8 wire crown it
+    #   is at D 24.4, so nothing rises nearer than 25.5. The PM's Qwiic plug stands at X 31.4..33.4, D 32.5..39.3, so the
+    #   lane at X 32.5 cannot rise between D 31.9 and 39.9. And a wire's cross-run must not pass over another's drop-run
+    #   into the header row at D 29.54: in front of the row, the nearer lane takes the smaller pin X; behind it, the
+    #   nearer lane takes the larger. Hence GND and SCL in front (26.9, 28.3), SET just behind (31.0), SDA well behind (40.5);
+    #   GND2 (below) crosses to the compartment at 25.5, the only D in front of the shell pillar at (68, 30).
+    for sig, pin, col in (('GNDC', 'GND', 'black'), ('SCL', 'SCL', 'yellow'), ('SET', 'SET', 'white'), ('SDA', 'SDA', 'blue')):
+        jx, jd, jh = jn(sig); x = PM_PINS[pin]
+        pts = [(jx, jd, jh), (jx, jd, H_LOW), (jx, D_RISE, H_LOW), (jx, D_RISE, H_MID), (jx, D_ESC, H_MID),
+               (x, D_ESC, H_MID), (x, D_ESC, H_TOP), (x, d_hdr, H_TOP), (x, d_hdr, h_top - 0.2)]
+        bodies.append(('wire %s: pogo -> PM %s' % (sig, pin), wire_b(pts), col))
+    # ---- second ground return: ESP32-group GND -> a straight header on the SCD41, housing standing in the compartment ----
+    SCD_HX, SCD_HD = SCD_X1 - 2.0, SCD_D0 + 12.7          # 5-pin header 2 mm in from the board's right edge, GND the middle pin
+    H_S = 4.0 + 1.57
+    bodies.append(('SCD41 straight header 5-pin', boxb(SCD_HX - 1.27, SCD_HX + 1.27, SCD_HD - 2 * 2.54 - 1.27, SCD_HD + 2 * 2.54 + 1.27, H_S, H_S + 2.54), 'housing'))
+    spins = None
+    for k in range(-2, 3):
+        p = boxb(SCD_HX - 0.32, SCD_HX + 0.32, SCD_HD + 2.54 * k - 0.32, SCD_HD + 2.54 * k + 0.32, H_S + 2.54, H_S + 8.5)
+        spins = p if spins is None else union(spins, p)
+    bodies.append(('SCD41 header pins', spins, 'silver'))
+    s_top = H_S + 2.54 + 14.0
+    bodies.append(('Dupont SCD41 GND', boxb(SCD_HX - 1.27, SCD_HX + 1.27, SCD_HD - 1.27, SCD_HD + 1.27, H_S + 2.54, s_top), 'dupont'))
+    jx, jd, jh = jn('GND2')
+    #   into the compartment through its open front, hugging the right wall at X 73 to pass the shell pillar at (68, 30)
+    bodies.append(('wire GND2: pogo -> SCD41 GND', wire_b([(jx, jd, jh), (jx, jd, H_LOW), (jx, D_RISE, H_LOW),
+                                                          (jx, D_RISE, H_MID), (jx, D_ESC, H_MID),
+                                                          (SCD_X1 + 0.2, D_ESC, H_MID), (SCD_X1 + 0.2, D_ESC, H_TOP),
+                                                          (SCD_X1 + 0.2, SCD_HD, H_TOP), (SCD_HX, SCD_HD, H_TOP), (SCD_HX, SCD_HD, s_top - 0.2)]), 'black'))
+    # ---- head VIN / GND -> AMS IN / GND: cross to the pin's X while still in the trench, rise, run straight back in ----
+    #   The two cross over each other in plan (VIN comes off the connector on the right and wants the left-hand pin,
+    #   GND the reverse), so they change lanes at D 35 and D 33 - behind every PM-bound lane's rise, and far enough
+    #   apart that neither meets the other's riser.
+    for sig, d_jog, col in (('VIN', 31.0, 'red'), ('GND', 29.0, 'black')):
+        jx, jd, jh = jn(sig); x = ams_x[sig]
+        bodies.append(('wire %s: pogo -> AMS %s' % (sig, 'IN' if sig == 'VIN' else 'GND'),
+                       wire_b([(jx, jd, jh), (jx, jd, H_LOW), (jx, D_RISE, H_LOW), (jx, D_RISE, H_MID),
+                               (jx, D_ESC, H_MID), (x, D_ESC, H_MID), (x, d_jog, H_MID),
+                               (x, d_jog, hams), (x, D_IN, hams)]), col))
+    # ---- AMS OUT / GND -> PM VIN / GND: up to the lane under the skin and forward over the PM board ----
     xo = ams_x['OUT']
-    H_LDO = 18.5                               # under the sloped skin at the rear, above everything in the strip
-    bodies.append(('wire 3V3: AMS OUT -> PM VIN', wire_b([(xo, d_ams - 0.3, hams), (xo, D_DROP, hams), (xo, D_DROP, H_LDO), (xo, 36.0, H_LDO), (xo, 36.0, H_TOP),
-                                                          (PM_PINS['VIN'], 36.0, H_TOP), (PM_PINS['VIN'], d_hdr, H_TOP), (PM_PINS['VIN'], d_hdr, h_top - 0.2)]), 'red'))
-    xj = AMS_X1 + 1.7                          # jog past the housings before rising, clear of the pocket rib
-    bodies.append(('wire GND: AMS GND -> PM GND', wire_b([(xg, d_ams - 0.3, hams), (xg, 77.8, hams), (xj, 77.8, hams), (xj, 77.8, H_LDO), (xj, 34.3, H_LDO),
-                                                          (xj, 34.3, H_TOP), (PM_PINS['GND'], 34.3, H_TOP), (PM_PINS['GND'], d_hdr, H_TOP), (PM_PINS['GND'], d_hdr, h_top - 0.2)]), 'black'))
+    bodies.append(('wire 3V3: AMS OUT -> PM VIN', wire_b([(xo, D_IN, hams), (xo, 42.0, hams), (xo, 42.0, H_TOP),
+                                                          (PM_PINS['VIN'], 42.0, H_TOP), (PM_PINS['VIN'], d_hdr, H_TOP), (PM_PINS['VIN'], d_hdr, h_top - 0.2)]), 'red'))
+    #   (no AMS GND -> PM GND wire any more: the PM's ground comes down cable 1, so the regulator's GND pin has one crimp)
     # ---- Qwiic chain: PM (socket on its inner edge) -> SCD41 front -> SCD41 rear -> BME688 left -> BME688 right -> SHTC3 right ----
     H_B = 4.0 + 1.6; H_R = H_B + 1.5
     scd_xs = SCD_X1 - 11.4                     # X 59.9
     x_pm_face = PM_X0 + 35.6 - 0.4; d_pm_sock = PM_D0 + 8.9
     bodies.append(('plug PM socket', plug_bx(x_pm_face, d_pm_sock, H_B, +1), 'white'))
     bodies.append(('plug SCD41 front', plug_bd(SCD_D0, scd_xs, H_B, -1), 'white'))
-    bodies += ribbon_b('Qwiic PM -> SCD41', [(x_pm_face + 6.5, d_pm_sock, H_R), (RIBBON_X, d_pm_sock, H_R), (RIBBON_X, 27.5, H_R), (scd_xs, 27.5, H_R), (scd_xs, SCD_D0 - 5.0, H_R)])
+    bodies += ribbon_b('Qwiic PM -> SCD41', [(x_pm_face + PLUG_OUT, d_pm_sock, H_R), (RIBBON_X, d_pm_sock, H_R), (RIBBON_X, 27.5, H_R), (scd_xs, 27.5, H_R), (scd_xs, SCD_D0 - PLUG_OUT, H_R)])
     bodies.append(('plug SCD41 rear', plug_bd(SCD_D0 + 25.4, scd_xs, H_B, +1), 'white'))
     bodies.append(('plug BME688 left', plug_bx(BME_X0, BME_D0 + 11.0, H_B, -1), 'white'))
-    bodies += ribbon_b('Qwiic SCD41 -> BME688', [(scd_xs, SCD_D0 + 25.4 + 6.5, H_R), (scd_xs, 69.0, H_R), (SCD_X1 - 1.0, 69.0, H_R), (SCD_X1 - 1.0, BME_D0 + 11.0, H_R), (BME_X0 - 5.0, BME_D0 + 11.0, H_R)])
+    bodies += ribbon_b('Qwiic SCD41 -> BME688', [(scd_xs, SCD_D0 + 25.4 + PLUG_OUT, H_R), (scd_xs, 69.0, H_R), (SCD_X1 - 1.0, 69.0, H_R), (SCD_X1 - 1.0, BME_D0 + 11.0, H_R), (BME_X0 - PLUG_OUT, BME_D0 + 11.0, H_R)])
     bodies.append(('plug BME688 right', plug_bx(BME_X0 + 38.0, BME_D0 + 11.0, H_B, +1), 'white'))
     bodies.append(('plug SHTC3 right', plug_bx(SHT_X0 + 38.0, SHT_D0 + 11.0, H_B, +1), 'white'))
-    bodies += ribbon_b('Qwiic BME688 -> SHTC3', [(BME_X0 + 38.0 + 6.5, BME_D0 + 11.0, H_R), (RIBBON_XR, BME_D0 + 11.0, H_R), (RIBBON_XR, SHT_D0 + 11.0, H_R), (SHT_X0 + 38.0 + 5.0, SHT_D0 + 11.0, H_R)])
+    bodies += ribbon_b('Qwiic BME688 -> SHTC3', [(BME_X0 + 38.0 + PLUG_OUT, BME_D0 + 11.0, H_R), (RIBBON_XR, BME_D0 + 11.0, H_R), (RIBBON_XR, SHT_D0 + 11.0, H_R), (SHT_X0 + 38.0 + PLUG_OUT, SHT_D0 + 11.0, H_R)])
     return add_bodies(basec, 'Base wiring (toggle)', bodies)
 
 # ---------------------------------------------------------------------------------------------
@@ -712,7 +982,7 @@ BASE_PLACEMENTS = {     # PM on the left with its header at the front
     'Adafruit SCD41':    [[0,-1,0,SCD_X1],[1,0,0,SCD_D0],[0,0,1,4.0]],    # vertical in its compartment: sockets face front / rear
     'BME688':            [[1,0,0,82.8],[0,1,0,53.5],[0,0,1,4.0]],         # rear-right
     'SHTC3':             [[1,0,0,82.8],[0,1,0,26.5],[0,0,1,4.0]],         # front-right, coolest corner
-    'AMS1117':           [[0,-1,0,AMS_X1],[1,0,0,AMS_D0],[0,0,1,4.0]],    # pins toward the rear (+D), chip underneath
+    'AMS1117':           [[0,1,0,AMS_X1-8.5],[-1,0,0,AMS_D0+12.5],[0,0,1,AMS_H]],  # rotated 180: pins toward the head (-D), chip underneath
 }
 
 def lbox(x0, x1, y0, y1, z0, z1):
@@ -751,13 +1021,13 @@ def soldered_38x22(header_y, sensor_wh, slots, reg_xy):
 def ams1117_module():
     """AMS1117-3.3 breakout as measured: PCB 12.5 x 8.5 x 1.4, no mounting holes. Local frame: x 0..12.5 with the
     right-angle header at x = 12.5, y 0..8.5, z up = header/silkscreen side. SOT-223 on the underside (1.7 tall);
-    header stack 6.9 mm overall including the solder domes below the board; pins reach 7 mm past the edge."""
+    header stack 7.1 mm overall including the solder domes below the board; pins reach 7 mm past the edge."""
     L, W, T = 12.5, 8.5, 1.4
     bodies = [('PCB', lbox(0, L, 0, W, 0, T)), ('header body', lbox(L-2.54, L, W/2-3.81, W/2+3.81, T, 5.9))]
     for k in range(3):
         yc = W/2 + (k-1)*2.54
         bodies.append(('pin %d' % (k+1), lbox(L, L+7.0, yc-0.32, yc+0.32, 5.26, 5.9)))
-        bodies.append(('solder dome %d' % (k+1), lcyl(L-1.9, yc, -1.0, 0.0, 0.9)))
+        bodies.append(('solder dome %d' % (k+1), lcyl(L-1.9, yc, -1.2, 0.0, 0.9)))   # 1.2 proud of the underside (measured)
     bodies += [('AMS1117 SOT-223', lbox(2.3, 5.8, 1.0, 7.5, -1.7, 0.0)), ('SOT-223 tab', lbox(0.4, 2.3, 2.75, 5.75, -0.3, 0.0)),
                ('R1 0603', lbox(1.0, 2.0, 5.5, 7.5, T, T+0.6))]
     return bodies
@@ -812,7 +1082,7 @@ def setup_components(app, des, head, base):
 # against the boards (which are #404040) and reads as one solid blob. 88..105 renders as dark grey on screen.
 COLS = {'housing': (88, 88, 88), 'black': (100, 100, 100), 'silver': (205, 205, 210), 'red': (200, 30, 30), 'yellow': (220, 190, 30),
         'white': (240, 240, 235), 'blue': (30, 80, 200), 'purple': (120, 60, 170), 'pcb_blue': (30, 90, 190), 'beige': (226, 208, 170),
-        'dupont': (105, 105, 105), 'pm_blue': (30, 110, 185)}
+        'gold': (216, 176, 70), 'dupont': (105, 105, 105), 'pm_blue': (30, 110, 185)}
 
 def ic_grey(des, app):
     """The colour the Inkplate's own STEP model gives its IC packages (the SOT-23 and TSSOP bodies): Opaque(64,64,64).
@@ -861,6 +1131,15 @@ def colour_all(des, app, headc, basec, wiring):
         for b in occ.component.bRepBodies:
             b.appearance = ap(colmap[b.name])
 
+def insertion_sweep(tray_body):
+    """What the Inkplate would have to pass through to reach its seat. It goes in from the back along Z, so sweep
+    its own footprint from the cavity mouth up to its back face and intersect that with the tray. Anything at all
+    here means the head cannot be assembled, however much clearance the board has once it is seated - which is
+    exactly how four cover bosses and two screw blocks got as far as a printed part (Sept 2026)."""
+    prism = rrect_h(0.0, 130.59, 0.0, 75.23, HEAD_ZBACK, -2.45, 3.0)
+    tb.booleanOperation(prism, tb.copy(tray_body), adsk.fusion.BooleanTypes.IntersectionBooleanType)
+    return round(prism.volume * 1000, 2)
+
 def interference(des, root):
     names = {}
     def key(b): return (b.name, b.parentComponent.name, round(b.volume, 6))
@@ -889,6 +1168,8 @@ def interference(des, root):
             a = names.get(key(r.entityOne), r.entityOne.name); b = names.get(key(r.entityTwo), r.entityTwo.name)
             if a.startswith('Inkplate/') and b.startswith('Inkplate/'): continue
             if a.startswith('WIRING/') and b.startswith('WIRING/'): continue
+            if a.split('/')[0] == b.split('/')[0]: continue   # bodies of one part touching each other
+            if ('WIRING/' in a + b) and 'tails' in a + b: continue        # a wire soldered to a pogo tail touches it
             hits.append({'a': a, 'b': b, 'mm3': round(r.interferenceBody.volume * 1000, 3) if r.interferenceBody else None})
     return hits
 
@@ -913,7 +1194,9 @@ def run(context):
     sh = build_shell(base.component, mh)
     w1 = build_head_wiring(head.component)          # toggle these two components' light bulbs to hide the wiring
     w2 = build_base_wiring(base.component, mh)
-    colour_all(des, app, head.component, base.component, [w1, w2])
+    p1 = build_pogo_head(head.component)            # the two halves of the junction, as bought
+    p2 = build_pogo_base(base.component, mh)
+    colour_all(des, app, head.component, base.component, [w1, w2, p1, p2])
     fin = {}
     fin.update(finish_shell([o for o in base.component.occurrences if o.component.name == 'Base shell'][0]))
     fin.update(finish_tray([o for o in head.component.occurrences if o.component.name == 'Head tray'][0]))
@@ -925,6 +1208,6 @@ def run(context):
         for o in top.component.occurrences:
             if o.component.bRepBodies.count == 1 and 'wiring' not in o.component.name:
                 lumps[o.component.name] = o.component.bRepBodies.item(0).lumps.count
-    print(json.dumps({'lumps_must_all_be_1': lumps, 'head tray': bb_mm(t.boundingBox), 'head cover': bb_mm(c.boundingBox),
+    print(json.dumps({'lumps_must_all_be_1': lumps, 'inkplate_insertion_blocked_mm3': insertion_sweep(t), 'head tray': bb_mm(t.boundingBox), 'head cover': bb_mm(c.boundingBox),
                       'base chassis': bb_mm(ch.boundingBox), 'base shell': bb_mm(sh.boundingBox),
                       'finish': fin, 'interference': interference(des, root)}))
