@@ -37,8 +37,8 @@ systems (easyC, Qwiic, STEMMA QT) are the same JST-SH 4-pin in the same order.
 
 **Power verdict:** the Inkplate's 3.3 V regulator is 500 mA and also runs the
 ESP32. Sensor peaks alone reach ~470 mA. **Power the sensor chain from its own
-3.3 V regulator, fed from the Inkplate's VIN pad (5 V when on USB).** Do not
-feed the PM board 5 V: its bus pull-ups go to its supply pin. Details in §7.
+3.3 V regulator, fed from the Inkplate's VIN pad (5 V when on USB).** Details
+in §7.
 
 ---
 
@@ -213,7 +213,7 @@ Sources: [Plantower PMSA003I manual V2.6](https://cdn-shop.adafruit.com/product-
 
 - Module: **DC 5.0 V (4.5–5.5)**, "needed because the FAN should be driven by 5V". Data pins are 3.3 V logic (L < 0.8 V, H > 2.7 V). Active ≤ 100 mA, standby ≤ 200 µA.
 - Adafruit board: **makes its own 5 V** with an AP3602A charge pump from VIN 3–5 V, so it runs from a 3.3 V Qwiic chain. AP3602A: 100 mA continuous, 250 mA for 100 ms, input current ≈ 2 × output → **~200 mA from 3.3 V while the fan runs** *(derived)*.
-- Board also has an AP2112K 3.3 V LDO (pull-ups, LED, level shifter) and a BSS138 level shifter. **10 kΩ pull-ups on both sides of the shifter; the connector side is pulled to VIN.** ⇒ if VIN were 5 V, the shared bus would be pulled to 5 V. Keep VIN at 3.3 V.
+- Board also has an AP2112K 3.3 V LDO (pull-ups, LED, level shifter) and a BSS138 level shifter. **10 kΩ pull-ups on both sides of the shifter; the connector side is pulled to VIN.** ⇒ a 5 V VIN pulls the shared bus to 5 V, past the SCD41's VDD + 0.3 V absolute maximum. **Keep VIN at 3.3 V**, though the module itself wants 5 V: the charge pump makes that.
 - I²C **0x12**, fixed. 100 kHz-class timing. No UART on this variant (pins 6 and 8 NC).
 
 ### Interface
@@ -415,8 +415,6 @@ The Inkplate's TPS7A2633 is **500 mA** and must also carry the ESP32 and panel P
 
 A **3.3 V LDO module rated ≥ 600 mA** (e.g. AP2112K-3.3, or an AMS1117-3.3 board — 1.1 V dropout is fine from ~4.7 V) fed from the Inkplate's **VIN pad** (≈5 V on USB), output into the sensor chain. The Inkplate's own regulator then powers only the Inkplate. The USB VBUS fuse is 500 mA total, so the whole device must stay under that: Inkplate (~150 mA typical) + sensors (~215 mA) fits; peaks are brief.
 
-**Do not feed the PMSA003I board 5 V** to skip the charge pump: its connector-side pull-ups go to VIN and would pull the shared bus to 5 V, past the SCD41's VDD + 0.3 V absolute maximum.
-
 ---
 
 ## 8. Wiring
@@ -561,36 +559,27 @@ apart is not a ground loop.
 Chain order is chosen for **cable voltage drop** (heavy loads nearest the
 injection point) and **heat** (reference sensor farthest from everything warm).
 
-### Every board runs at 3.3 V
-
-There is nothing unusual to do to any board. All four take 3.3 V on an
-ordinary Qwiic cable. The PMSA003I is no exception: its module needs 5 V for
-the fan, but the Adafruit breakout generates that itself with a charge pump
-from a 3–5 V input.
-
-**Do not give the PMSA003I board 5 V** to skip that charge pump. Its
-connector-side I²C pull-ups go to its VIN pin, so a 5 V input pulls the whole
-shared bus to 5 V — past the SCD41's absolute maximum of VDD + 0.3 V.
-
 ### Can I just daisy-chain it all off the Inkplate?
 
-**For bench bring-up, yes.** Plug the chain into easyC K3 and use stock
-cables throughout. Everything enumerates and reads.
+**For bench bring-up, yes.** Every board runs at 3.3 V on an ordinary Qwiic
+cable, with nothing to change on any of them; the PMSA003I's module needs 5 V
+for its fan, but the breakout makes that itself (§3). Plug the chain into
+easyC K3 with stock cables throughout, and everything enumerates and reads.
 
-**For the built device, no.** Two reasons, both about current, neither about
-any individual board:
+**For the built device, no**, for reasons of current, not of any one board:
 
-- The Inkplate's 3.3 V rail is 500 mA and already carries the ESP32, the
-  panel PMIC and Wi-Fi bursts. Sensor peaks alone reach ~470 mA (§7).
+- The Inkplate's 3.3 V rail cannot carry the sensor peaks on top of the
+  ESP32, the panel PMIC and Wi-Fi bursts (§7).
 - ~200 mA for the PM board would flow through every upstream board's
-  connectors and three cables' worth of contacts and copper before reaching
-  it. The drop, not the ampacity, is the problem: SparkFun's conservative
-  figure for a Qwiic cable is 226 mA, but the contacts are rated 1 A.
+  connectors and three cables' worth of contacts and copper. The drop, not the
+  ampacity, is the problem: SparkFun's conservative figure for a Qwiic cable
+  is 226 mA, but the contacts are rated 1 A.
 
 Hence the separate regulator and the heaviest-load-first order above. The
 symptom if you skip it is an intermittent brown-out when the fan, an SCD41
 measurement peak and a Wi-Fi transmit coincide — the hardest kind of fault to
-find later.
+find later. The regulator's 3.3 V goes to the PM board's VIN; the VIN pad's
+5 V never does (§3).
 
 ---
 
