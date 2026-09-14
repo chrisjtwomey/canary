@@ -72,7 +72,7 @@ void SensorValidation::say(int level, const char* fmt, ...) {
 }
 
 // The millisecond stamp is what lines a PPK2 capture up with the phase it was
-// taken in. See docs/BATTERY.md 10.
+// taken in.
 void SensorValidation::mark(const char* phase) {
     say(kLogNotice, "[validate] %7u ms  %s", clock_.millis(), phase);
 }
@@ -195,7 +195,7 @@ void SensorValidation::checkScd41(Report& r) {
         outcomeName(r.scd41.normal));
 
     // Idle, never power_down: powering the part down loses the automatic
-    // self-calibration history. docs/BATTERY.md 4.
+    // self-calibration history.
     if (!scd41_.stopPeriodicMeasurement(clock_.millis())) {
         r.scd41.lowPower = record(r, FAIL);
         say(kLogError, "[validate] scd41 would not stop measuring");

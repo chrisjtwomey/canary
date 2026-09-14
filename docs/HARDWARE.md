@@ -40,10 +40,6 @@ ESP32. Sensor peaks alone reach ~470 mA. **Power the sensor chain from its own
 3.3 V regulator, fed from the Inkplate's VIN pad (5 V when on USB).** Do not
 feed the PM board 5 V: its bus pull-ups go to its supply pin. Details in §7.
 
-**Battery verdict:** always-on, a 1200 mAh cell lasts about 3.5 hours; with
-everything duty-cycled to one reading set every 10 minutes, about 3 days. The
-PM sensor dominates either way. This is a mains-powered device.
-
 ---
 
 ## 1. Inkplate 5 Gen2
@@ -420,13 +416,6 @@ The Inkplate's TPS7A2633 is **500 mA** and must also carry the ESP32 and panel P
 A **3.3 V LDO module rated ≥ 600 mA** (e.g. AP2112K-3.3, or an AMS1117-3.3 board — 1.1 V dropout is fine from ~4.7 V) fed from the Inkplate's **VIN pad** (≈5 V on USB), output into the sensor chain. The Inkplate's own regulator then powers only the Inkplate. The USB VBUS fuse is 500 mA total, so the whole device must stay under that: Inkplate (~150 mA typical) + sensors (~215 mA) fits; peaks are brief.
 
 **Do not feed the PMSA003I board 5 V** to skip the charge pump: its connector-side pull-ups go to VIN and would pull the shared bus to 5 V, past the SCD41's VDD + 0.3 V absolute maximum.
-
-### Battery, for the record
-
-Always-on: ~215 mA sensors + ~100 mA Inkplate ≈ 315 mA → a 1200 mAh cell lasts **~3.5 h**.
-Duty-cycled, deep sleep between: per 10-minute cycle ≈ 154 mC SCD41 (power-cycled single shot) + ~1.9 mAh PMSA003I (35 s fan) + ~0.8 mAh ESP32 wake ≈ 2.8 mAh → **~3 days**; at 30 minutes, ~9 days. The PM fan is 70 % of it. ASC for the SCD41 is unavailable in that mode, so CO₂ accuracy drifts too.
-
-**Conclusion:** mains (USB-C) power, with the battery as optional backup — the Inkplate charges it at ~400 mA and switches over automatically.
 
 ---
 

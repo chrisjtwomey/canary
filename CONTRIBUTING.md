@@ -302,8 +302,7 @@ sleeping for 10 seconds (RTC alarm at epoch 1757443210)
 ```
 
 The phase markers carry milliseconds so a PPK2 trace lines up with the phase
-it was taken in; [docs/BATTERY.md](docs/BATTERY.md) §10 says which capture
-replaces which estimate. Three things worth knowing when it does not pass:
+it was taken in. Three things worth knowing when it does not pass:
 
 - **A sensor is absent.** Its address is missing from the scan and it counts
   as a failure. The rest of the pass still runs.

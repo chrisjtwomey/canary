@@ -16,9 +16,8 @@ board, which fetches and shows them in turn.
 | Temperature, humidity | Sensirion SHTC3 (Soldered breakout) — the reference |
 | Display / controller | Soldered Inkplate 5 Gen2 (ESP32-WROVER-E) |
 
-All four sensors hang off one I²C bus over Qwiic/easyC. Mains powered: the
-particulate sensor's fan and the CO₂ sensor's 175 mA peaks rule out useful
-battery life. See [docs/HARDWARE.md](docs/HARDWARE.md) §7.
+All four sensors hang off one I²C bus over Qwiic/easyC, and the device runs
+from USB-C; [docs/HARDWARE.md](docs/HARDWARE.md) §7 has the power budget.
 
 ## Documentation
 
