@@ -41,11 +41,10 @@ thing unchanged.
 | `pm1_0`, `pm2_5`, `pm10` | PMSA003I | µg/m³ | "atmospheric environment" values, not CF=1 |
 | `pc_*` | PMSA003I | count per 0.1 L | particles larger than 0.3 … 10 µm |
 | `gas_ohm` | BME688 | Ω | raw heater-plate resistance; lower = more VOC |
-| `pressure_hpa` | BME688 | hPa | |
 | `iaq`, `iaq_accuracy` | BME688 via BSEC | 0–500, 0–3 | absent until BSEC has produced an index; the mock emits them |
 | `pressure_hpa` | BME688 | hPa | present whenever the chip answered, even on a cold plate |
 | `scd41.*`, `bme688.*` | those sensors | °C, % | their own T/RH, which run warm; kept for offset tuning, not for display |
-| `client` | firmware | object | object | the board's own state, see below |
+| `client` | firmware | object | the board's own state, see below |
 | `valid.*` | firmware | bool | false when that measurement was not trustworthy this cycle |
 
 Integers are integers; floats carry one decimal (temperatures, humidity,
