@@ -49,9 +49,6 @@ the base rather than behind the panel is what buys that margin — carried in th
 | **Base chassis** | upright (desk face down) | Floor, the solid 20° cradle block with the head pocket, and every bay feature: board bosses, the SCD41 compartment, the SHTC3 baffle, the AMS1117 pocket. It also carries the pogo plinth standing in the trench. Nothing fastens the head: the connector's two Ø5 magnets hold it down and the cradle pocket locates it. |
 | **Base shell** | upside down (top skin on the bed) | The visible skin: rounded, drafted walls and the sloped top, in one piece with no top-side fixings. 4 × M3×8 countersunk up from underneath into heat-set inserts in its internal pillars (×10 bottoms out — the insert ends at 7.7 mm). A Ø4 post holds the AMS1117 module down, and the PMSA003I's seal rib is part of this wall. |
 
-Sensor boards: M2 × 4 self-tapping into 2.1 mm pilots (Adafruit), M2.5 × 4 into 2.6 mm pilots (Soldered), all on
-2 mm bosses on the chassis floor — one size under what each nominal pilot suggests, because printed holes finish
-undersize and the PMSA003I's own board holes are 2.5 mm. Validated on a PLA+ print, 2026-09-12. Heat-set inserts: 4 × M3 in the shell, and nowhere else — nothing is screwed into the head.
 0.4 mm nozzle, 2 mm walls and skin, 2.2 mm slots on a 3.4 mm pitch where slots remain. The shell prints upside
 down so its whole outer surface is either on the bed or a drafted wall — no supports; the STL is rotated 5.15° past
 the flip so the sloped skin lies flat. Everything is printed in **PLA+** (September 2026): the only heat in the base
@@ -64,6 +61,38 @@ means its own footprint sweeps the whole cavity on the way to its seat. A boss i
 the seated board it finally sits. Four cover-boss towers and two base-screw blocks were exactly that, and the
 first head printed could not be assembled (Sept 2026). This is why the cover screws to the Inkplate's own
 standoffs and the head is held by magnets.
+
+## Fasteners
+
+Four brass heat-set inserts carry the one screwed joint that gets opened: the shell on the chassis. The back cover
+screws into the Inkplate's own standoffs, the pogo connector's two magnets hold the head down, and everything else
+threads straight into printed plastic.
+
+| Fastener | Qty | Where | Hole |
+|---|---|---|---|
+| M3 heat-set insert (≈ 5.7 long, 4.6 OD) | 4 | Base shell, internal pillars | Ø 4.0 × 6.0 deep |
+| M3 × 8 countersunk, 90° | 4 | Shell → chassis, up from underneath | Ø 3.4 clearance, Ø 6.2 × 1.4 cone |
+| M3 × 6 machine screw | 4 | Head back cover → the Inkplate's four SMT standoffs | Ø 3.4 clearance, Ø 6.2 × 0.7 counterbore |
+| M2 × 4 self-tapping, pan head | 8 | PMSA003I and SCD41, 4 each | Ø 2.1 pilot, 3 mm deep |
+| M2.5 × 4 self-tapping | 8 | BME688 and SHTC3, 4 each | Ø 2.6 pilot, 3 mm deep |
+
+- Board pilots are blind, in 2 mm bosses on the chassis floor: 3 mm of engagement with 1 mm of floor left under
+  them, so no screw breaks the desk face. Two screws per sensor board carry a few grams comfortably; all four holes
+  are there if wanted.
+- **Board screws are one nominal size under their pilot** *(measured 2026-09-12, PLA+ print)*, for two separate
+  reasons. The PMSA003I's board holes are 2.5 mm, so an M2.5 screw cannot pass through one — M2 is the only option
+  there, and the SCD41 takes the same screw for consistency though its 3.0 mm holes would also accept M2.5. The
+  Soldered boards' 3.2 mm holes would pass M3 happily; what rules M3 out is the printed pilot, since Ø 2.6 nominal
+  finishes nearer 2.4 on an FDM print and a thread-former that tight in PLA+ splits the boss. Do not re-cut the
+  pilots to suit the smaller screws: they are sized for how the hole prints, not for how it reads in CAD.
+- Every self-tapper is sized to stop **short of the blind end of its pilot**, not to fill the material: a tapered
+  tip driven into the last millimetre wedges the boss open. A 1.57 mm board plus 3 mm of pilot leaves 4.6 mm,
+  hence 4 mm screws and 2.4 mm of engagement — short of the usual 2 × diameter, but these are five-gram boards.
+- The shell screw stops at 8 mm: its insert ends at 7.7, so an M3 × 10 bottoms out.
+- The cover's counterbore leaves 1.3 mm of plate under each screw head, so an M3 × 6 puts about 4.7 mm of thread
+  into the 7.2 mm standoff.
+- Self-tapping into PLA or PETG holds fine for a one-time build. If boards will come in and out repeatedly, those
+  pilots strip after a handful of cycles and want inserts instead — which means taller, wider bosses.
 
 ## Frames
 
@@ -126,7 +155,19 @@ There are no grilles on the top, the right side, the rear or the head.
 
 ## Bay layout
 
-Follows [HARDWARE.md §9](../../../docs/HARDWARE.md#9-placement-in-the-enclosure).
+Each board's place follows the placement rules in its section of [HARDWARE.md](../../../docs/HARDWARE.md)
+(§2–§5):
+
+- **SHTC3**: at a corner or edge, in the incoming airflow, slit-isolated from any mounting plate, nowhere near the
+  Inkplate's LDO, PMIC or ESP32 or the PM fan's exhaust. It sets the reading everyone sees.
+- **PMSA003I**: inlet and outlet against an enclosure wall or separated by a baffle; enclosure vent no smaller than
+  the inlet; ≥ 20 cm off the floor; its exhaust pointed away from the SHTC3 and SCD41.
+- **SCD41**: its own compartment with a large opening, small dead volume, out of the direct airflow, lowest point
+  of the device, away from the fan and the Inkplate's warm parts. Membrane untouched.
+- **BME688**: anywhere with air access; its heater is a heat source for the others, so not adjacent to the SHTC3.
+- **Inkplate**: the ESP32, LDO and panel PMIC are the warmest parts; the sensors go on the opposite side or in a
+  ventilated bay.
+- Vent the sensor bay on two sides so air moves through rather than pooling.
 
 | Board | X × D (mm) | Placement |
 |---|---|---|
@@ -134,7 +175,7 @@ Follows [HARDWARE.md §9](../../../docs/HARDWARE.md#9-placement-in-the-enclosure
 | SCD41 | 49.9…72.8 × 35…60.4, sockets facing front and rear | Middle, in its own compartment (walls X 47.3–48.8 and 74.3–75.8 from D 30, rear wall D 72–73.5, all to the skin). Both sockets in use. A 5-pin straight header on its right-hand edge (X 70.8; VIN · 3Vo · GND · SCL · SDA along D 42.6–52.8) carries one standing Dupont housing, on GND, for the second ground return. |
 | SHTC3 | 82.8…120.8 × 26.5…48.5 | Front-right: coolest corner, against the solid cradle block, farthest from the fan and the LDO, behind a full-height baffle at D 50–51.5. End of the chain, only its right socket used. |
 | BME688 | 82.8…120.8 × 53.5…75.5 | Rear-right, behind the baffle. Both sockets in use. |
-| AMS1117-3.3 | 35.3…43.8 × 61…73.5, **pins toward the head** | Centred in the strip between the PM board (X 31.8) and the SCD41 compartment wall (47.3). No mounting holes: it sits in a pocket 0.5 mm clear of the board on every side (9.5 × 13.5 in plan — the 0.3 mm tried first gave a 9.1 mm slot, too tight to trust an FDM print with), front and rear walls 1 mm thick to H 8, the sides only 2.5 mm corner tabs so the underside is open to the strip. The board rests on a pad under its two solder domes at the front (top H 4.8; the domes stand 1.2 mm proud) and on two solid corners at the rear either side of the SOT-223 (to H 6.0, the PCB's underside), so the regulator hangs in a 2.3 mm air passage open at both sides — no floor slots, nothing to bridge. A Ø4 shell post at (39.55, 66), on the board's centreline between the two supports, holds it down with 0.15 mm of preload; a 3 mm cone at the post's root keeps it printable upside down. Dupont housings on its three pins run **forward**, D 47.3–61. |
+| AMS1117-3.3 | 35.3…43.8 × 61…73.5, **pins toward the head** | Centred in the strip between the PM board (X 31.8) and the SCD41 compartment wall (47.3). No mounting holes: it sits in a pocket 0.5 mm clear of the board on every side (9.5 × 13.5 in plan — the 0.3 mm tried first gave a 9.1 mm slot, too tight to trust an FDM print with), front and rear walls 1 mm thick to H 8, the sides only 2.5 mm corner tabs so the underside is open to the strip. The board rests on a pad under its two solder domes at the front (top H 4.8; the domes stand 1.2 mm proud) and on two solid corners at the rear either side of the SOT-223 (to H 6.0, the PCB's underside), so the regulator hangs in a 2.3 mm air passage open at both sides — no floor slots, nothing to bridge. A Ø4 shell post at (39.55, 66), on the board's centreline between the two supports, holds it down with 0.15 mm of preload (until the shell is on, the module is loose); a 3 mm cone at the post's root keeps it printable upside down. Dupont housings on its three pins run **forward**, D 47.3–61. |
 
 The four shell pillars sit at (68, 30), (125, 30), (50, 77.5) and (125, 76) — plan positions clear of every board,
 plug, ribbon and wire lane, **and far enough in from the chassis edge for the countersink on the underside to keep
@@ -153,14 +194,15 @@ pillar needs 9); it is held by the skin and located by the cradle block.
 
 ## Wiring and headers
 
-Follows the wiring table in [HARDWARE.md](../../../docs/HARDWARE.md). Two Fusion components hold every header,
+Follows the wiring table in [HARDWARE.md §8](../../../docs/HARDWARE.md#8-wiring--validated-and-corrected). Two Fusion components hold every header,
 plug, Dupont housing and wire as separate coloured bodies — **Head wiring (toggle)** and **Base wiring
 (toggle)**; switch their light bulbs off to hide the lot. Wires are drawn schematically, right-angle bends only,
 each in a dedicated channel, so the model documents where cables are meant to run rather than how they sag.
 Colours: red 3V3 / VIN, black GND, blue SDA, yellow SCL, white SET. Qwiic cables are 4 mm ribbons in the standard
 black / red / blue / yellow order with white plugs; the boards' JST-SH sockets are beige. A mated plug is drawn
 standing 2 mm proud of its socket, which is what the real ones do — the housing disappears inside the socket —
-so the space to leave at a socket is whatever the cable needs to turn, not the length of a loose plug. Everything nominally
+so the space to leave at a socket is whatever the cable needs to turn — about 6 mm is comfortable
+*(measured 2026-09-12)* — not the length of a loose plug. Everything nominally
 black is drawn as a mid grey instead — Dupont housings #696969, header shrouds #585858, the GND wire #646464:
 these appearances copy Fusion's matte-black plastic, whose shader darkens the base colour so far that a true
 black housing or wire loses every edge and reads as one solid blob against the boards. The Adafruit boards' bare
@@ -232,8 +274,10 @@ back as it does — rear edge flush with the SCD41 compartment's rear wall — b
 forward of it. Any further forward and they foul the PM → SCD41 ribbon, which crosses the strip at D 25.5–37.9 on
 its way to the compartment.
 
-**Qwiic chain**: PM (front socket) → SCD41 front → SCD41 rear → BME688 left → BME688 right → SHTC3 right —
-i.e. PM, SCD41, BME688, SHTC3, the order in the wiring table. Ribbons stay at board height (H 7.1): the PM ribbon
+**Qwiic chain**: PM (socket B) → SCD41 front → SCD41 rear → BME688 left → BME688 right → SHTC3 right —
+i.e. PM, SCD41, BME688, SHTC3, the order in the wiring table. The PM's socket A faces the left wall 2.9 mm away,
+where no plug fits, so the bus reaches that board on its header instead. All three are stock cables: 45 mm
+PM → SCD41, 30 mm SCD41 → BME688, 40–45 mm BME688 → SHTC3. Ribbons stay at board height (H 7.1): the PM ribbon
 runs down the lane at X 45.05 and along the bay's front into the compartment; the SCD41 → BME688 ribbon leaves
 through a notch in the compartment's right wall (D 60.1–68.9); the BME688 → SHTC3 ribbon runs up the right-hand
 lane at X 126 through a notch in the baffle (X 119.7–128.5).
@@ -256,8 +300,16 @@ top and bottom).
 
 ## Sensor board models
 
-The Adafruit PMSA003I and SCD41 are Adafruit's own STEP models. The Soldered SHTC3 (333032) and BME688 (333203)
-are built from the docs.soldered.com pinout drawings and checked with calipers: 38.0 × 22.0 mm, 2 mm corner
+`enclosure.py` downloads three vendor models:
+
+| Model | Source |
+|---|---|
+| Inkplate 5 Gen2 board | [Soldered's hardware repo](https://github.com/SolderedElectronics/Soldered-Inkplate-5-Gen2-hardware-design), `OUTPUTS/V1.1.0/Soldered Inkplate 5 Gen2 3D.step` (31 MB). In the export the panel model sits at the origin; move it after a manual import. |
+| Adafruit PMSA003I (4632), with the Plantower module | [Adafruit_CAD_Parts, `4632 PMSA003I`](https://github.com/adafruit/Adafruit_CAD_Parts/tree/main/4632%20PMSA003I) |
+| Adafruit SCD41 (5190) | [Adafruit_CAD_Parts, `5187 SCD-40 C02 Sensor`](https://github.com/adafruit/Adafruit_CAD_Parts/tree/main/5187%20SCD-40%20C02%20Sensor). The 5187 and 5190 share one PCB. |
+
+Soldered publishes no model for its two boards, so the SHTC3 (333032) and BME688 (333203) are built from the
+docs.soldered.com pinout drawings and checked with calipers: 38.0 × 22.0 mm, 2 mm corner
 radius, four Ø3.2 holes inset 3.05 mm (32 × 16 mm pitch), JST-SH sockets 0.5–5.5 mm in from each short edge and
 centred on it, a 4-pin 2.54 mm header 1.6 mm from one long edge, 1.6 mm PCB, 3.0 mm sockets, 1.1 mm regulator.
 The AMS1117-3.3 module is from caliper measurements: PCB 12.5 × 8.5 × 1.4 mm, no mounting holes, SOT-223 on the

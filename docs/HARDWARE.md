@@ -13,9 +13,8 @@ unless marked *(product page)*, *(schematic)*, *(derived)* or *(unverified)*.
 - [6. The I²C bus](#6-the-ic-bus)
 - [7. Power](#7-power)
 - [8. Wiring — validated and corrected](#8-wiring--validated-and-corrected)
-- [9. Placement in the enclosure](#9-placement-in-the-enclosure)
-- [10. 3D files](#10-3d-files)
-- [11. Open questions](#11-open-questions)
+- [9. The enclosure](#9-the-enclosure)
+- [10. Open questions](#10-open-questions)
 
 ---
 
@@ -24,7 +23,7 @@ unless marked *(product page)*, *(schematic)*, *(derived)* or *(unverified)*.
 | Device | Board | I²C addr | Supply | Current, typical | Current, peak | Library |
 |---|---|---|---|---|---|---|
 | Inkplate 5 Gen2 | Soldered | host; 0x20 0x48 0x51 on board | USB-C 5 V or LiPo | 18 µA deep sleep *(product page)* | not published | Inkplate-Arduino-library ≥ 11.1 |
-| SCD41 CO₂ | Adafruit 5190 (assumed, see §11) | 0x62 | 2.4–5.5 V | 15 mA @ 5 s periodic; 0.45 mA single-shot every 5 min | **175 mA typ, 205 mA max** (3.3 V) | Sensirion I2C SCD4x |
+| SCD41 CO₂ | Adafruit 5190 (assumed, see §10) | 0x62 | 2.4–5.5 V | 15 mA @ 5 s periodic; 0.45 mA single-shot every 5 min | **175 mA typ, 205 mA max** (3.3 V) | Sensirion I2C SCD4x |
 | PMSA003I PM | Adafruit 4632 | 0x12 | 5 V module; board makes its own 5 V from 3–5 V | ≤ 100 mA @ 5 V → **~200 mA from 3.3 V** *(derived)* | 250 mA / 100 ms fan start *(charge pump rating)* | Adafruit PM25AQI |
 | BME688 gas | Soldered 333203 | 0x76 (JP1 → 0x77) | 1.7–3.6 V (board takes 3.3–5 V) | 0.9 mA (BSEC LP), 0.09 mA (ULP) | 17 mA heater | Bosch BME68x + BSEC2 |
 | SHTC3 T/RH | Soldered 333032 | 0x70 fixed | 1.62–3.6 V (board takes 3.3–5 V) | 430 µA measuring, 0.3 µA sleep | 0.9 mA | Adafruit_SHTC3 |
@@ -118,7 +117,7 @@ No conflict with 0x12, 0x62, 0x70, 0x76/0x77.
 - Outline **130.59 × 75.23**, 2.5 mm corner radius, 1.6 mm PCB.
 - Mounting: 4 × SMT M3 standoffs at (3.40, 3.40), (127.19, 3.40), (3.40, 71.83), (127.19, 71.83) — pitch **123.79 × 68.43**.
 - USB-C (3.00, 60.23) left edge · power button (2.00, 49.23) left · wake button (128.59, 49.23) right · battery JST (28.00, 15.23) · microSD (10.00, 31.23) · **easyC (100.00, 41.23)** · CR2032 (114.00, 41.23) · ESP32 (80.83, 15.80) · panel FPC (27.50, 46.43).
-- Header: 1×1 pads on 2.54 mm along the bottom edge (y = 73.73), x = 19.57–111.01: panel group, ESP32 group (GND, 3V3, TXD, RXD, IO12–15, IO34, V_BAT, IO36, IO39), I²C group (GND, 3V3, SDA, SCL), expander group (GND, 3V3, P1_1–P1_7).
+- Header: 1×1 pads on 2.54 mm along the bottom edge (y = 73.73), x = 19.57–111.01: panel group, ESP32 group (GND, 3V3, TXD, RXD, IO12–15, IO34, V_BAT, IO36, IO39), I²C group (GND, 3V3, SDA, SCL), expander group (GND, 3V3, P1_1–P1_7). The pads are 0.8 mm drills, so a header needs round machined pins.
 - Panel 124.59 × 69.14 mm centred on the far side; active area 114.56 × 64.44 mm.
 - Soldered enclosure: 145.24 × 84.23 × 13.5 mm, sold assembled (€19.95) and published as STL/STEP.
 
@@ -130,7 +129,8 @@ Sources: [SCD4x datasheet v1.7](https://sensirion.com/media/documents/48C4B7FB/6
 [low-power app note](https://sensirion.com/media/documents/077BC86F/62BF01B9/CD_AN_SCD4x_Low_Power_Operation_D1.pdf) ·
 [design-in guide](https://sensirion.com/media/documents/0D0C9129/623B1183/Sensirion_CO2_Sensors_SCD4x_design-in_guide.pdf) ·
 [Adafruit 5190](https://www.adafruit.com/product/5190) · [learn guide](https://learn.adafruit.com/adafruit-scd-40-and-scd-41) ·
-[Sensirion library](https://github.com/Sensirion/arduino-i2c-scd4x)
+[Sensirion library](https://github.com/Sensirion/arduino-i2c-scd4x) ·
+[module STEP](https://sensirion.com/media/documents/260AFF2D/616531AE/Sensirion_CO2_Sensors_SCD4x_STEP_file.step)
 
 ### Measures
 
@@ -464,7 +464,7 @@ Inkplate 5GEN2 (3V3/GND/SDA/SCL) → BME688 → SHTC3 → SCD41 → PMSA003I
     └─ ESP32-group GND ── step 9 ───────────────────────────► SCD41 header GND        second ground return, from the sensitive board
 
    ┌─ PMSA003I  (Adafruit 4632)   0x12   heaviest load first: power enters at its header, ground leaves by cable 1
-   │     cable 2: stock, from socket B (socket A faces the wall)
+   │     cable 2: stock, from socket B
    │     ▼
    ├─ SCD41     (Adafruit 5190)   0x62   second heaviest; gets BME688 pressure each cycle; carries step 9's return
    │     cable 3: stock
@@ -485,25 +485,24 @@ Inkplate 5GEN2 (3V3/GND/SDA/SCL) → BME688 → SHTC3 → SCD41 → PMSA003I
 | 3 | AMS1117 **OUT** | PMSA003I header **VIN** | 28 AWG jumper, Dupont both ends |
 | 4 | Inkplate **expander P1_3** | PMSA003I header **SET** | 28 AWG jumper, Dupont both ends |
 | 5 | Inkplate **easyC K3** | PMSA003I header **GND, SDA, SCL** | cable 1: a Qwiic cable with its plug kept at the Inkplate end, the other end cut and re-terminated with three Dupont crimps; **3V3 conductor removed** |
-| 6 | PMSA003I **easyC socket B** | SCD41 either socket | cable 2: stock, 45 mm |
-| 7 | SCD41 other socket | BME688 either socket | cable 3: stock, 30 mm |
-| 8 | BME688 other socket | SHTC3 either socket | cable 4: stock, 40–45 mm |
+| 6 | PMSA003I **easyC socket B** | SCD41 either socket | cable 2: stock Qwiic |
+| 7 | SCD41 other socket | BME688 either socket | cable 3: stock Qwiic |
+| 8 | BME688 other socket | SHTC3 either socket | cable 4: stock Qwiic |
 | 9 | Inkplate **ESP32-group GND** | SCD41 header **GND** | 28 AWG jumper, Dupont both ends — a second ground return in parallel with cable 1's, see below |
 
 Every sensor board has two easyC sockets wired in parallel, so "either" is
 literal. The SHTC3 is last, so one of its sockets stays empty. The PM board's
 7-pin header is VIN, 3Vo, GND, SCL, SDA, RST, SET: you use **VIN, GND, SCL,
-SDA and SET** (five housings standing on the header) and leave 3Vo and RST
-empty. The bus arrives at the header, not at a socket, because in the
-enclosure the PM board's socket A faces the left wall 2.9 mm away — no plug
-fits — and socket B is taken by cable 2.
+SDA and SET** and leave 3Vo and RST empty. Cable 1 lands on that header,
+not on a socket: socket B carries cable 2, and in the desk enclosure socket A
+faces a wall.
 
-On the Inkplate, the two expander-group pads (GND and P1_3) sit five
-positions apart, so one 5-pin right-angle header spanning GND…P1_3 serves
-both, with a Dupont housing on each end pin; step 9 takes a second, 2-pin
-right-angle header on the ESP32 group, using its GND. The header pads are
-0.8 mm drills, so both headers need round machined pins. The Inkplate's four
-plain GND pads — panel, ESP32, I²C and expander groups — are the same net and
+In the desk enclosure, every conductor that leaves the Inkplate (rows 1, 2,
+4, 5 and 9) also crosses the head-to-base pogo connector. The
+[enclosure README](../hardware/enclosure/v1/README.md) has the routing.
+
+On the Inkplate, steps 2 and 4 use the expander group's GND and P1_3 pads,
+and step 9 the ESP32 group's GND. The Inkplate's four plain GND pads — panel, ESP32, I²C and expander groups — are the same net and
 interchangeable; **AGND** in the panel group is not, leave it alone.
 
 The VIN pad is a 4 × 4 mm surface pad with no hole (PAD3 in Soldered's KiCad
@@ -521,11 +520,7 @@ AMS1117, which is the fault this whole section exists to avoid.
 
 **Step 9** needs a header on the SCD41 board: five machined round pins
 soldered to its VIN · 3Vo · GND · SCL · SDA row, with a single Dupont housing
-on GND and the other four empty. The housing stands upright inside the SCD41
-compartment; the enclosure is sized for it (§9). Which edge of the Adafruit
-5190 carries that row decides how the wire runs — the model assumes the
-right-hand edge as the board sits in its compartment; check yours before
-soldering.
+on GND and the other four empty.
 
 ### Ground: one wire per crimp
 
@@ -578,8 +573,7 @@ through the PM board, and the loop falls to roughly 90–140 mΩ, **≈ 15–25 
 That guidance is a ripple figure, not an operating limit (the part runs from
 2.4–5.5 V), so this is margin, not a fault; clean crimps matter more than
 cable length. Two returns landing on the same ground plane a few centimetres
-apart is not a ground loop. Cable lengths: cable 2 45 mm, cable 3 30 mm,
-cable 4 40–45 mm, all jumpers 50–90 mm.
+apart is not a ground loop.
 
 Chain order is chosen for **cable voltage drop** (heavy loads nearest the
 injection point) and **heat** (reference sensor farthest from everything warm).
@@ -617,64 +611,16 @@ find later.
 
 ---
 
-## 9. Placement in the enclosure
+## 9. The enclosure
 
-- **SHTC3**: at a corner or edge, in the incoming airflow, slit-isolated from any mounting plate, nowhere near the Inkplate's LDO/PMIC/ESP32 or the PM fan's exhaust. It sets the reading everyone sees.
-- **PMSA003I**: inlet and outlet against an enclosure wall or separated by a baffle; enclosure vent no smaller than the inlet; ≥ 20 cm off the floor; its exhaust pointed away from the SHTC3 and SCD41.
-- **SCD41**: its own compartment with a large opening, small dead volume, out of the direct airflow, lowest point of the device, away from the fan and the Inkplate's warm parts. Membrane untouched.
-- **BME688**: anywhere with air access; its heater is a heat source for the others, so not adjacent to the SHTC3.
-- **Inkplate**: the ESP32, LDO and panel PMIC are the warmest parts; the sensors go on the opposite side or in a ventilated bay.
-- Vent the sensor bay on two sides so air moves through rather than pooling.
-- **Standing Dupont housings set the base height.** The PMSA003I's straight header carries five housings and the
-  SCD41's header one, all upright. A housing is 14 mm tall and the jumper needs ~3.7 mm above it to turn, so each
-  header block wants **17.7 mm clear** above it *(measured 2026-09-13)* — which is what makes the shell 30.5 mm
-  high at the front and 25 mm at the rear.
-
-### Fasteners
-
-For the enclosure in [`hardware/enclosure/v1/`](../hardware/enclosure/v1/README.md). Six brass heat-set inserts carry the two joints that get opened and that hold weight; everything else threads straight into printed plastic.
-
-| Fastener | Qty | Where | Hole |
-|---|---|---|---|
-| M3 heat-set insert (≈ 5.7 long, 4.6 OD) | 2 | Head tray, bottom wall | Ø 4.0 × 7.5 deep |
-| M3 heat-set insert, same | 4 | Base shell, internal pillars | Ø 4.0 × 6.0 deep |
-| M3 × 12 socket cap | 2 | Head → base, up through the cradle block | Ø 3.4 clearance, Ø 6.4 × 3.5 counterbore |
-| M3 × 8 countersunk, 90° | 4 | Shell → chassis, up from underneath | Ø 3.4 clearance, Ø 6.2 × 1.4 cone |
-| M2.5 × 6 self-tapping, pan head | 4 | Head back cover → tray bosses | Ø 2.9 clearance + Ø 5.2 × 0.8 recess; Ø 2.1 pilot, 5.0 deep |
-| M2 × 4 self-tapping, pan head | 8 | PMSA003I and SCD41, 4 each | Ø 2.1 pilot, 3 mm deep |
-| M2.5 × 4 self-tapping | 8 | BME688 and SHTC3, 4 each | Ø 2.6 pilot, 3 mm deep |
-| M3 × 6 machine screw *(optional)* | 4 | Back cover → the Inkplate's own brass standoffs | Ø 3.4 clearance |
-
-- Board pilots are blind: 3 mm of engagement with 1 mm of floor left under them, so no screw breaks the desk face. Two screws per sensor board carry a few grams comfortably; all four holes are there if wanted.
-- **Board screws are one nominal size under their pilot** *(measured 2026-09-12, PLA+ print)*, for two separate reasons. The PMSA003I's board holes are 2.5 mm (§3), so an M2.5 screw cannot physically pass through one — M2 is the only option there, and the SCD41 takes the same screw for consistency though its 3.0 mm holes would also accept M2.5. The Soldered boards' 3.2 mm holes would pass M3 happily; what rules M3 out is the printed pilot, since Ø 2.6 nominal finishes nearer 2.4 on an FDM print and a thread-former that tight in PLA+ splits the boss. Do not re-cut the pilots to suit the smaller screws: they are sized for how the hole prints, not for how it reads in CAD.
-- Every self-tapper is sized to stop **short of the blind end of its pilot**, not to fill the material: a tapered tip driven into the last millimetre wedges the boss open. Board 1.57 mm + 3 mm of pilot = 4.6 mm available, hence 4 mm screws; the cover has 1.2 mm of plate below its recess + 5.0 mm of pilot = 6.2 mm, hence 6 mm. Engagement is then 2.4 mm at the boards and 4 mm at the cover — short of the usual 2 × diameter, but these are five-gram boards.
-- The shell screw cannot go past 8 mm either — that insert bottoms at 7.7. Its countersink is Ø 6.2, not the Ø 6.6 first drawn: an ISO 7046 M3 head is 5.5 across (5.6 max), and the four holes sit close enough to the chassis edge that 0.4 mm of wall matters — see the enclosure README.
-- The **AMS1117 module has no mounting holes**. It drops into a walled pocket in the chassis 0.5 mm clear of the board on every side (9.1 mm — the board plus 0.3 a side — is tighter than an FDM print can be trusted to hold), pins toward the head, chip underneath. It rests on a pad under the two solder domes at the front (1.2 mm below the PCB) and on two solid corners at the rear beside the SOT-223, with an open passage under the board between them so the regulator has air on both faces; a Ø4 post under the shell's skin traps it when the shell goes on. It is not captive until then.
-- Self-tapping into PLA or PETG holds fine for a one-time build. If boards will come in and out repeatedly, those pilots strip after a handful of cycles and want inserts instead — which means taller, wider bosses.
+The desk enclosure is in [`hardware/enclosure/v1/`](../hardware/enclosure/v1/README.md): where each board
+sits and why, the fasteners, the cable routing, the head-to-base pogo connector, and the 3D models it is
+built from. The placement rules it follows come from each part's section here: §2 (SCD41), §3 (PMSA003I),
+§4 (BME688) and §5 (SHTC3).
 
 ---
 
-## 10. 3D files
-
-| Part | File | Notes |
-|---|---|---|
-| Inkplate 5 Gen2 board | [`OUTPUTS/V1.1.0/Soldered Inkplate 5 Gen2 3D.step`](https://github.com/SolderedElectronics/Soldered-Inkplate-5-Gen2-hardware-design) (31 MB) | Panel model sits at the origin in the export; reposition after import. |
-| Inkplate enclosure | same repo: `OUTPUTS/V1.1.0/3D files/*.stl`, `CAD/V1.1.0/Source 3D files/*.step` | Top 145.24 × 84.23 × 5.8, bottom 146.84 × 84.23 × 11.3 mm. Good starting shell to extend with a sensor bay. |
-| SCD41 module | [Sensirion STEP](https://sensirion.com/media/documents/260AFF2D/616531AE/Sensirion_CO2_Sensors_SCD4x_STEP_file.step) | 10.1 × 10.1 × 6.5 mm |
-| Adafruit SCD41 board | [`Adafruit_CAD_Parts/5187 SCD-40 C02 Sensor/`](https://github.com/adafruit/Adafruit_CAD_Parts/tree/main/5187%20SCD-40%20C02%20Sensor) — `.f3d`, `.step`, `.stl` | Same PCB for 5187/5190 |
-| Adafruit PMSA003I board | [`.step`](https://raw.githubusercontent.com/adafruit/Adafruit_CAD_Parts/main/4632%20PMSA003I/4632%20PMSA003I.step) · [`.stl`](https://raw.githubusercontent.com/adafruit/Adafruit_CAD_Parts/main/4632%20PMSA003I/4632%20PMSA003I.stl) · [`.f3d`](https://raw.githubusercontent.com/adafruit/Adafruit_CAD_Parts/main/4632%20PMSA003I/4632%20PMSA003I.f3d) | Includes the module |
-| Soldered BME688 board | none published | Block out **38 × 22 × ~1.6 mm**, M3 holes at the corners, JST-SH on both short edges |
-| Soldered SHTC3 board | none published | Block out **38 × 22 × ~1.6 mm**, M3 holes at ~32 × 16 mm pitch, JST-SH on both short edges |
-| 3.3 V LDO module | vendor-specific | typical breakout ~15 × 10 mm |
-| This enclosure | [`hardware/enclosure/v1/`](../hardware/enclosure/v1/README.md) — `enclosure.py` (Fusion generator), `stl/`, `step/` | Display head (tray + back cover) in a 20° cradle on a sensor base (chassis + shell). The layout in §9 as built. |
-
-A **mated** JST-SH plug stands only about **2 mm** proud of its socket — the housing sits inside it — so the
-clearance to allow beyond a socket is set by the cable turning, not by the plug: ~6 mm is comfortable, and the
-6.8 × 2.7 mm housing section is what every cable passage has to be sized around *(measured 2026-09-12)*.
-
----
-
-## 11. Open questions
+## 10. Open questions
 
 1. **Which SCD41 breakout?** Soldered sells no SCD41 (their CO₂ board is the SCD43). This doc assumes **Adafruit 5190**. If it is a bare Sensirion module or another board, §2's board section and the pull-up count change.
 2. ~~**Soldered pull-up values** for the BME688 and SHTC3 are not published.~~ Answered 2026-09-10: both boards carry `103` resistors beside their pull-up jumpers, so 10 kΩ, and the §6 total of 2.0 kΩ stands.
