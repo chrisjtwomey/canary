@@ -26,7 +26,7 @@ section links its sources. Facts are from the datasheet unless marked
 | Device | Board | I²C addr | Supply | Current, typical | Current, peak | Library |
 |---|---|---|---|---|---|---|
 | Inkplate 5 Gen2 | Soldered | host; 0x20 0x48 0x51 on board | USB-C 5 V or LiPo | 18 µA deep sleep *(product page)* | not published | Inkplate-Arduino-library ≥ 11.1 |
-| SCD41 CO₂ | Adafruit 5190 (assumed, see §10) | 0x62 | 2.4–5.5 V | 15 mA @ 5 s periodic; 0.45 mA single-shot every 5 min | **175 mA typ, 205 mA max** (3.3 V) | Sensirion I2C SCD4x |
+| SCD41 CO₂ | Adafruit 5190 | 0x62 | 2.4–5.5 V | 15 mA @ 5 s periodic; 0.45 mA single-shot every 5 min | **175 mA typ, 205 mA max** (3.3 V) | Sensirion I2C SCD4x |
 | PMSA003I PM | Adafruit 4632 | 0x12 | 5 V module; board makes its own 5 V from 3–5 V | ≤ 100 mA @ 5 V → **~200 mA from 3.3 V** *(derived)* | 250 mA / 100 ms fan start *(charge pump rating)* | Adafruit PM25AQI |
 | BME688 gas | Soldered 333203 | 0x76 (JP1 → 0x77) | 1.7–3.6 V (board takes 3.3–5 V) | 0.9 mA (BSEC LP), 0.09 mA (ULP) | 17 mA heater | Bosch BME68x + BSEC2 |
 | SHTC3 T/RH | Soldered 333032 | 0x70 fixed | 1.62–3.6 V (board takes 3.3–5 V) | 430 µA measuring, 0.3 µA sleep | 0.9 mA | Adafruit_SHTC3 |
@@ -58,7 +58,7 @@ Sources: [product page](https://soldered.com/products/inkplate-5-gen2) ·
 | | |
 |---|---|
 | Panel | E Ink ED052TC4, 5.17", **1280 × 720**, **3-bit grey (8 levels)**. Full refresh 0.99 s, partial 0.22 s. |
-| MCU | ESP32-WROVER-E, 4 MB flash, PSRAM (size not stated by Soldered; WROVER-E family is 8 MB *(unverified)*). Library allocates ~921 kB PSRAM for framebuffers. |
+| MCU | ESP32-WROVER-E, 4 MB flash, PSRAM. Soldered states no PSRAM size and the BOM names only "ESP32-WROVER"; the WROVER-E family is 8 MB *(unverified)*. Library allocates ~921 kB PSRAM for framebuffers. |
 | Radio | Wi-Fi, BT 4.0 BLE |
 | USB | USB-C, CH340C UART, 500 mA fuse on VBUS *(schematic)* |
 | Battery | 2-pin JST-PH 2.0 mm, 3.7 V Li-ion, MCP73831 charger at ~400 mA *(schematic, R32 = 2.49 k)* |
@@ -308,8 +308,8 @@ Bosch `BME68x Sensor library` (`setTPH(2x,16x,1x)`, `setHeaterProf(300,100)`, `s
 
 ### Soldered 333203 board
 
-- **38 × 22 mm**, four M3 (3.2 mm) corner holes, 1.5 mm header holes. Two easyC connectors, one per short edge; 4-pin header GND/VCC/SDA/SCL on the long edge. Sensor near centre.
-- Hardware repo: "not available yet".
+- **38.0 × 22.0 mm** *(measured)*, four M3 (3.2 mm) corner holes, 1.5 mm header holes. Two easyC connectors, one per short edge; 4-pin header GND/VCC/SDA/SCL on the long edge. Sensor near centre.
+- No public hardware repo: Soldered's docs call it "not available yet" and send the files on request.
 
 ---
 
@@ -358,8 +358,8 @@ Sequence from sleep: wakeup → ≥ 240 µs → measure → ≥ 12.1 ms (0.8 ms 
 
 ### Soldered 333032 board
 
-- Text says 22 × 22 mm; the pinout drawing and photo show **~38 × 22 mm with four M3 corner holes** at ~32 × 16 mm pitch *(scaled, unverified; text looks stale)*. Two easyC connectors on the short ends; unpopulated 4-pin header on one long edge.
-- Hardware repo: "not available yet".
+- **38.0 × 22.0 mm** *(measured)*, 2 mm corner radius, four Ø3.2 mm (M3) holes inset 3.05 mm on a 32 × 16 mm pitch. Soldered's product page and docs give 22 × 22 mm with two holes, which does not match the board. Two easyC connectors on the short ends; unpopulated 4-pin header on one long edge.
+- No public hardware repo: Soldered's docs call it "not available yet" and send the files on request.
 
 ---
 
@@ -413,7 +413,7 @@ The Inkplate's TPS7A2633 is **500 mA** and must also carry the ESP32 and panel P
 
 ### The fix
 
-A **3.3 V LDO module rated ≥ 600 mA** (e.g. AP2112K-3.3, or an AMS1117-3.3 board — 1.1 V dropout is fine from ~4.7 V) fed from the Inkplate's **VIN pad** (≈5 V on USB), output into the sensor chain. The Inkplate's own regulator then powers only the Inkplate. The USB VBUS fuse is 500 mA total, so the whole device must stay under that: Inkplate (~150 mA typical) + sensors (~215 mA) fits; peaks are brief.
+A **3.3 V LDO module rated ≥ 600 mA** fed from the Inkplate's **VIN pad** (≈5 V on USB), output into the sensor chain. The build uses an AMS1117-3.3 module: 800 mA maximum and about 1.1 V of dropout, which the VIN pad's ~4.7 V on USB covers, and a power LED that draws a little on its own. The Inkplate's own regulator then powers only the Inkplate. The USB VBUS fuse is 500 mA total, so the whole device must stay under that: Inkplate (~150 mA typical) + sensors (~215 mA) fits; peaks are brief.
 
 ---
 
@@ -594,10 +594,9 @@ built from. The placement rules it follows come from each part's section here: �
 
 ## 10. Open questions
 
-1. **Which SCD41 breakout?** Soldered sells no SCD41 (their CO₂ board is the SCD43). This doc assumes **Adafruit 5190**. If it is a bare Sensirion module or another board, §2's board section and the pull-up count change.
-2. **SHTC3 board size**: Soldered's text says 22 × 22 mm, their own drawing shows ~38 × 22 mm. Measure.
-3. **PMSA003I input current at 3.3 V** is derived from the charge-pump datasheet, not measured. Measure; it sets the LDO rating.
-4. **Inkplate awake / Wi-Fi / refresh currents** are unpublished. Measure the whole device on USB to confirm it sits under the 500 mA VBUS fuse.
+1. **PMSA003I input current at 3.3 V** is derived from the charge-pump datasheet, not measured. Measure; it sets the LDO rating.
+2. **Inkplate awake / Wi-Fi / refresh currents** are unpublished. Measure the whole device on USB to confirm it sits under the 500 mA VBUS fuse.
+3. **What the BME688 board's JP2 joins** (§4). Soldered's docs say only that it powers the regulator from 5 V, and no schematic is public. A continuity check across JP2, or the hardware files Soldered sends on request, would settle it.
 
 ---
 
@@ -608,7 +607,10 @@ Dated findings and decisions behind the text above, oldest first.
 - **2026-09-03**: distilled from the datasheets.
 - **2026-09-03**: the first wiring plan chained Inkplate → BME688 → SHTC3 → SCD41 → PMSA003I and fed all four from the Inkplate's 3V3 through the chain. Order, connectors, addresses and pull-ups were fine. Power was not: the Inkplate's 500 mA LDO also carries the ESP32, the SCD41 wants a quiet supply, and the two heavy loads sat at the far end, where the drop is worst. Nor was the SHTC3's place: the reference sat between the BME688's heater and the SCD41. The PM fan's SET pin was unused. §8's circuit replaced the plan.
 - **2026-09-09**: the RTC alarm wakes this board on GPIO39, though Soldered does not guarantee it on the 5 Gen2. `pio run -e esp32-validate` sleeps 10 s on the alarm and wakes on `ESP_SLEEP_WAKEUP_EXT0` every cycle; an ESP32 timer armed at 15 s as a backstop has never had to fire.
+- **2026-09-09**: the SCD41 board is the Adafruit 5190. Soldered sells no SCD41; their CO₂ board is the SCD43.
 - **2026-09-10**: the Soldered BME688 and SHTC3 boards carry `103` resistors beside their pull-up jumpers, so 10 kΩ, and the §6 total of 2.0 kΩ stands.
 - **2026-09-12**: on the bench, BSEC with `bme688_sel_33v_3s_4d` reached accuracy 1 in about 4 minutes and 3 in about 40, and took 1019 hPa as its pressure input without an error.
+- **2026-09-12**: with calipers, the Soldered SHTC3 and BME688 boards are both 38.0 × 22.0 mm with four Ø3.2 mm holes on a 32 × 16 mm pitch. For the SHTC3 this overrides Soldered's product page and docs, which give 22 × 22 mm and two holes.
 - **2026-09-13**: on the bench, BSEC restarted from the state in NVS was back at accuracy 3 within 3 minutes.
 - **2026-09-13**: the wiring became one wire per crimp, with ground starred at the Inkplate and cable 1 landing on the PM header. The draft before it chained ground Inkplate → AMS1117 → PM, which put two wires on the regulator's one GND pin.
+- **2026-09-14**: Soldered's pages checked again. Neither Soldered sensor board has a public hardware repo, their docs describe the BME688's JP2 only as feeding the regulator from 5 V, and the Inkplate's BOM names its module only as "ESP32-WROVER", so the PSRAM size stays unverified.
