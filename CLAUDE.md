@@ -5,7 +5,6 @@
 ## This repo
 
 - Not built yet. It will be a thin consumer of [epd](https://github.com/chrisjtwomey/epd): firmware is `src/main.cpp` plus `src/defaults.cpp`, built with `-DARDUINO_INKPLATE5V2`; the server is a `DataSource`, a page list, and `DisplayServer(...).run()`.
-- The design, and the status of the extraction from `inkplate10-weather-cal` that made it possible, is in [docs/EXTRACTION-PLAN.md](docs/EXTRACTION-PLAN.md).
 - epd must be checked out beside this repo.
 
 ## General rules when working in this codebase

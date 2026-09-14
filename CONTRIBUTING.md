@@ -1,8 +1,5 @@
 # Contributing to Inkplate 5 Environment Monitor
 
-This project is at the design stage. The plan, and the status of the work
-that makes it possible, is in [docs/EXTRACTION-PLAN.md](docs/EXTRACTION-PLAN.md).
-
 ## What it will be
 
 A thin consumer of [epd](https://github.com/chrisjtwomey/epd), in the same
