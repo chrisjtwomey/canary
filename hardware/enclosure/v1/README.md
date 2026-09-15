@@ -391,3 +391,5 @@ Dated findings and decisions behind the text above, oldest first.
     walls frame it with 0.8 mm at the top, more below. Kept in reserve: stop the side walls behind the head, with a
     2 mm shoulder round its bottom corners; or drop the side draft, so the head is flush with the base's sides the
     full height and the base looks boxier.
+  - The two front shell pillars stood 0.55 mm into the clearance behind the head and left a 0.23 mm sliver at their
+    tops: the head opening was cut before they were added. It is cut after them now.
