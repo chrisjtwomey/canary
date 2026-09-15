@@ -47,7 +47,7 @@ the base rather than behind the panel is what buys that margin — carried in th
 | **Head tray** | face down | Bezel (2.4 mm lip) and four walls, 14.1 mm deep, 5 mm plan radii, 1.2 mm round on the bezel edge. Left wall 7.3 mm thick, carrying the USB-C, power-button and microSD pockets; right wall 2 mm with the wake-button hole. Relief in the bezel lip for the expander header's solder tails. No vents. |
 | **Head back cover** | flat, outside down | 2 mm plate resting on the Inkplate's four 7.2 mm SMT standoffs and screwed to them: 4 × M3 through clearance holes, counterbored 0.7 mm so the heads sit near flush in a 2 mm plate. Nothing screws into the tray — there is nothing in the tray to screw into, see below. One grille band over the ESP32 (8 capsule slots, X 74–94, Y 14–40) — the head's only opening, facing up and back. |
 | **Base chassis** | upright (desk face down) | Floor, the solid 20° cradle block with the head pocket, and every bay feature: board bosses, the SCD41 compartment, the SHTC3 baffle, the AMS1117 pocket. It also carries the pogo plinth standing in the trench. Nothing fastens the head: the connector's two Ø5 magnets hold it down and the cradle pocket locates it. |
-| **Base shell** | upside down (top skin on the bed) | The visible skin: rounded, drafted walls and the sloped top, in one piece with no top-side fixings. 4 × M3×8 countersunk up from underneath into heat-set inserts in its internal pillars (×10 bottoms out — the insert ends at 7.7 mm). A Ø4 post holds the AMS1117 module down, and the PMSA003I's seal rib is part of this wall. |
+| **Base shell** | upside down (top skin on the bed) | The visible skin: rounded, drafted walls, the sloped top and a 2 mm front wall under the head, in one piece with no top-side fixings. 4 × M3×8 countersunk up from underneath into heat-set inserts in its internal pillars (×10 bottoms out — the insert ends at 7.7 mm). A Ø4 post holds the AMS1117 module down, and the PMSA003I's seal rib is part of this wall. |
 
 0.4 mm nozzle, 2 mm walls and skin, 2.2 mm slots on a 3.4 mm pitch where slots remain. The shell prints upside
 down so its whole outer surface is either on the bed or a drafted wall — no supports; the STL is rotated 5.15° past
@@ -231,7 +231,8 @@ between two locating ribs, and its back band and tails are in open cavity. The f
 in the base's trench, its lip landing on a ledge with a glue relief inside the rim, and only its 1 mm boss stands
 above the plinth's rim. That boss enters the male's pocket, so the halves nest: the mated bodies come to 9.3 mm,
 not 10.3. The key is the contact block's own outline — a rounded rectangle with one semicircle cut into the middle
-of its S-end wall — so a half turned end for end fouls it and will not close.
+of its S-end wall — so a half turned end for end fouls it and will not close. The plinth is open at the front
+above the ledge; the shell's front wall closes it, 0.9 mm off the lip.
 
 The seven conductors use seven of its eight pins. The connector is rated 1 A and its listing gives no per-pin
 figure, so each pin is taken as good for 1 A. The two heavy pins are VIN (220 mA typical, 475 mA peak) and cable
@@ -379,3 +380,7 @@ Dated findings and decisions behind the text above, oldest first.
     reach them on the print even at 0.15 mm. Kept in reserve: a printed plunger in each hole, with a flange inside
     the wall to keep it and a head to press, fitted before the Inkplate goes in. On the current board SW2 is
     bypassed (R34 bridged), so the wake switch would get one first.
+  - The shell had no front wall above H 5.5. The two cuts meant to leave it 2 mm thick had the offset in X, which a
+    plane tilted about X ignores, so the front was a 1 mm wedge that bent easily, with the cradle block showing above
+    it. The wall is now 2 mm from the rim to the head, and the cradle block stands CH_FRONT (0.3 mm) behind it. The
+    pogo plinth opens to the front above its ledge, since its front wall would have been 0.4 mm.

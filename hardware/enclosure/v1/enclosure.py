@@ -339,6 +339,7 @@ SKIN = 2.0
 TILT = 20.0
 GAP = 1.5                           # shadow gap: the shell's bottom rim floats this far above the desk
 CH_INSET = 1.5                      # chassis inset from the shell's inner wall = the air path from the gap into the bay
+CH_FRONT = 0.3                      # cradle block to the shell's front wall, square to it: the wall rests on it if pushed
 DRAFT = 4.3                         # deg, side and rear walls flare toward the desk (2.0 mm over the height)
 R_PLAN = 10.0                       # shell plan corner radius, at the top of the walls
 C_TOP, C_RIM = 1.5, 0.8             # chamfers on the top edge and on the bottom rim. A 2 mm skin cannot carry a
@@ -475,7 +476,6 @@ def build_chassis(basec, mh):
     body = boxb(B_XI0, B_XI1, SKIN, B_DBAY1, 0.0, 2.0)                                      # floor
     union(body, boxb(B_XI0, B_XI1, SKIN, B_DBAY0 + 0.01, 0.0, H_FRONT - SKIN))               # cradle block
     c, s = math.cos(math.radians(TILT)), math.sin(math.radians(TILT))
-    cut(body, hs_b((SKIN / c, 0.0, 0.0), (0.0, -c, s)))                                      # in front of the shell's inner front face
     cut(body, head_volume(mh, HEAD_CLR, HEAD_ZBACK - 0.3, HEAD_ZF + 0.3))                    # cradle pocket
     cut(body, boxb(B_XI0 - 1, B_XI1 + 1, 17.8, B_DBAY0 + 1, BLOCK_TOP_REAR, H_FRONT))        # low rear lip behind the head
     tx0, tx1, td0, td1 = TRENCH
@@ -491,10 +491,13 @@ def build_chassis(basec, mh):
     tb.transform(plinth, mh)
     union(body, plinth)
     cut(body, boxb(B_X0 - 10, B_X1 + 10, -10.0, B_D1 + 10, -40.0, 0.0))                  # trim it to the desk
+    cut(body, hs_b((0.0, (SKIN + CH_FRONT) / c, 0.0), (0.0, -c, s)))                     # CH_FRONT behind the shell's front wall; after the plinth, which reaches past it
     pk = pg_stad(PG_F_LIP_L, PG_F_LIP_W, F_Y2, PG_PLINTH_TOP + 1.0, PG_CLR)              # lip + top band bore
     union(pk, pg_stad(PG_F_L, PG_F_W, F_Y3, F_Y2 + 0.01, PG_CLR))                        # bottom band bore
     union(pk, pg_stad(PG_F_LIP_L - 3.0, PG_F_LIP_W - 3.0, F_Y2 - 0.15, F_Y2 + 0.01))     # glue relief in the ledge
     union(pk, box(POGO_X - 8.0, POGO_X + 8.0, F_Y4 - 2.0, F_Y3 + 0.01, POGO_Z - 5.0, POGO_Z + 5.0))   # tails
+    union(pk, box(POGO_X - PG_F_LIP_L / 2 - PG_CLR, POGO_X + PG_F_LIP_L / 2 + PG_CLR, F_Y2, PG_PLINTH_TOP + 1.0,
+                  POGO_Z, HEAD_ZF + 1.0))                                                # lip bore open to the front, above its ledge
     tb.transform(pk, mh)
     cut(body, pk)
     cut(body, boxb(POGO_X - 8.0, POGO_X + 8.0, 12.0, B_DBAY0, 2.5, 7.5))                 # the tails' chamber out
@@ -558,7 +561,7 @@ def build_shell(basec, mh):
     inter(outer, top_chamfer_solid())                                                       # C_TOP chamfer on the top edge
     cavity = rrect_b(B_XI0, B_XI1, SKIN, B_DBAY1, GAP - 6.0, H_FRONT - SKIN, R_CAV)
     cut(cavity, hs_b((0.0, B_DBAY0, H_FRONT - SKIN), (0.0, slope, 1.0)))                    # under the sloped skin
-    cut(cavity, hs_b((SKIN / c, 0.0, 0.0), (0.0, -c, sn)))                                  # keep the tilted front wall
+    cut(cavity, hs_b((0.0, SKIN / c, 0.0), (0.0, -c, sn)))                                  # keep the tilted front wall
     cut(outer, cavity)
     cut(outer, head_volume(mh, HEAD_CLR, HEAD_ZBACK - 1.6, HEAD_ZF + 0.3))                  # head opening, corners matching the head
     for (x, d) in SHELL_PILLARS:
