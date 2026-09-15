@@ -546,6 +546,7 @@ void setup() {
 
 void loop() {
     events();   // ezTime: periodic NTP re-sync
+    keepMQTTConnected();
     uint32_t nowMs = millis();
     if (!bootEpoch && timeStatus() != timeNotSet) bootEpoch = (uint32_t)now() - nowMs / 1000;
 
