@@ -539,8 +539,8 @@ def build_chassis(basec, mh):
     #   domes land on this. They are the one thing under that board whose height repeats copy to copy; the clear band between
     #   the domes and the SOT-223 is under a millimetre wide and moves about, so a pad that relied on it would not fit twice.
     #   Full pocket width, so the domes land on it wherever the board sits in its clearance.
-    union(body, boxb(px0, ax0 + 2.1, ad0 + 10.4, ad1, 2.0 - 0.01, AMS_H))                    # rear supports, BEHIND the body of
-    union(body, boxb(ax1 - 2.1, px1, ad0 + 10.4, ad1, 2.0 - 0.01, AMS_H))                    # U1: past D +10.4 the only thing
+    union(body, boxb(px0, ax0 + 2.1, ad0 + 10.4, pd1 + 0.01, 2.0 - 0.01, AMS_H))             # rear supports, BEHIND the body of
+    union(body, boxb(ax1 - 2.1, px1, ad0 + 10.4, pd1 + 0.01, 2.0 - 0.01, AMS_H))             # U1: past D +10.4 the only thing
     #   under the board is the SOT-223's 3 mm tab, so there is 2.6 mm of bare PCB to bear on each side instead of the 1.0 mm
     #   beside the chip - and with AMS_CLR the board can sit 0.5 mm off centre, which that 1.0 mm could not have absorbed.
     union(body, boxb(px0 - 1.0, px1 + 1.0, pd0 - 1.0, pd0, 2.0 - 0.01, rt))                  # front wall

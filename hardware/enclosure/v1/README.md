@@ -396,3 +396,5 @@ Dated findings and decisions behind the text above, oldest first.
   - The pogo plinth's rim sloped down onto the tails chamber's ceiling at 20°, so the plinth's back wall over the
     chamber was a wedge under 0.8 mm. It printed, but thin. The chamber's roof now drops to H 5.5 under that wall,
     which makes it 2 mm thick, and the wires climb to their H 7 lane at D 21, behind the plinth, not inside it.
+  - The AMS1117 pocket's two rear supports stopped at the board's rear edge, 0.5 mm short of the pocket's rear wall:
+    a slot that would half fuse in print. They run to the wall now.
