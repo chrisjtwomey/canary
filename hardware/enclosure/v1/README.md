@@ -246,10 +246,10 @@ Assembly order matters. **Fit the Inkplate before the connector**: the male's ba
 edge, and with the connector already in, the board cannot pass it. Solder all seven wires to each half on the
 bench, then fit.
 
-**Base.** The wires pick up on the female's tails, in a chamber under it that breaks out through the plinth's back
-into the trench (X 42–84, D 9.5–26, floor at H 3 — a well around the plinth with about 4 mm of working room each
-side, open at the top once the head is off). Each drops to H 3.9 only for the few millimetres it takes to get out
-from under the connector, runs back to D 19, climbs to **H 7**, and crosses the bay up there rather than along the
+**Base.** The wires pick up on the female's tails, in a chamber under it that breaks out under the plinth's back
+wall, its roof at H 5.5 there, into the trench (X 42–84, D 9.5–26, floor at H 3 — a well around the plinth with
+about 4 mm of working room each side, open at the top once the head is off). Each drops to H 3.9 only for the few millimetres it takes to get out
+from under the connector, runs back to D 21, climbs to **H 7**, and crosses the bay up there rather than along the
 floor. From D 25.8 — behind the plinth, which ends about D 20, and behind the head's back cover, which leans to
 about D 24.2 at the top lane's height — they go three ways:
 
@@ -393,3 +393,6 @@ Dated findings and decisions behind the text above, oldest first.
     full height and the base looks boxier.
   - The two front shell pillars stood 0.55 mm into the clearance behind the head and left a 0.23 mm sliver at their
     tops: the head opening was cut before they were added. It is cut after them now.
+  - The pogo plinth's rim sloped down onto the tails chamber's ceiling at 20°, so the plinth's back wall over the
+    chamber was a wedge under 0.8 mm. It printed, but thin. The chamber's roof now drops to H 5.5 under that wall,
+    which makes it 2 mm thick, and the wires climb to their H 7 lane at D 21, behind the plinth, not inside it.
