@@ -414,3 +414,6 @@ Dated findings and decisions behind the text above, oldest first.
     way out. It runs 1 mm into the bay now.
   - These fixes came from a scan run by hand. The rebuild report runs it every time now, as `printability`: see
     Printing check.
+  - The two `(ref)` pogo components beside the device were made by hand, and they had drifted: the female's pads
+    were an older revision. `run()` builds them now, from the same code as the fitted pair, with all eight ways and
+    the male's plungers standing free in its pocket. It builds them hidden.

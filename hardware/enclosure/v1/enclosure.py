@@ -142,6 +142,7 @@ PG_PLINTH_WALL = 2.20
 
 PG_TAILS = {'SDA': (-3.45, 1.15), 'SCL': (-1.15, 1.15), 'GNDC': (1.15, 1.15), 'GND2': (3.45, 1.15),
             'SET': (-1.15, -1.15), 'GND': (1.15, -1.15), 'VIN': (3.45, -1.15)}   # (-3.45, -1.15) is the empty way
+PG_WAYS = tuple((dx, dz) for dz in (1.15, -1.15) for dx in (-3.45, -1.15, 1.15, 3.45))   # all eight, as the part is bought
 
 def pogo_tail(sig):
     dx, dz = PG_TAILS[sig]
@@ -166,15 +167,15 @@ def pg_key(g, y0, y1):
     cut(b, cyl_y(POGO_X + L/2, POGO_Z, y0 - 1.0, y1 + 1.0, PG_NOTCH_R - g))
     return b
 
-def pg_contacts(y0, y1, r):
+def pg_contacts(y0, y1, r, ways=None):
     out = None
-    for sig in PG_TAILS:
-        x, z = pogo_tail(sig)
-        c = cyl_y(x, z, y0, y1, r); out = c if out is None else union(out, c)
+    for dx, dz in (PG_TAILS.values() if ways is None else ways):
+        c = cyl_y(POGO_X + dx, POGO_Z + dz, y0, y1, r); out = c if out is None else union(out, c)
     return out
 
-def pg_male_bodies():
-    """The male as bought, in place in the head."""
+def pg_male_bodies(as_bought=False):
+    """The male, in place in the head. as_bought: all eight ways, and the plungers standing free in the pocket."""
+    ways = PG_WAYS if as_bought else PG_TAILS.values()
     b = pg_stad(PG_M_L, PG_M_W, M_Y0, M_Y1)                                  # nose, through the bottom wall
     union(b, pg_stad(PG_M_LIP_L, PG_M_LIP_W, M_Y1 - 0.01, M_Y2))             # lip, glued to the cavity floor
     union(b, pg_stad(PG_M_L, PG_M_W, M_Y2 - 0.01, M_Y3))                     # back band
@@ -185,14 +186,15 @@ def pg_male_bodies():
         m = cyl_y(POGO_X + dx, POGO_Z, M_Y0, M_Y0 + PG_MAG_T, PG_MAG_R)
         mags = m if mags is None else union(mags, m)
     fl = M_Y0 + PG_POCKET                                                    # pocket floor
-    pins = pg_contacts(F_Y0 + PG_BOSS, fl + 0.01, 0.45)                      # the plungers, drawn COMPRESSED onto
-    #   the pads: mated, the boss fills the pocket to within PG_POCKET - PG_BOSS, so that gap is all the travel the
-    #   pins have left. The barrels live inside the plastic. See the standalone reference model for the free part.
-    tails = pg_contacts(M_Y3 - 0.01, M_Y4, 0.30)                             # O0.60 x 1.50, into the cavity
+    pins = pg_contacts(M_Y0, fl, 0.45, ways) if as_bought else pg_contacts(F_Y0 + PG_BOSS, fl + 0.01, 0.45, ways)
+    #   fitted, the plungers are drawn COMPRESSED onto the pads: mated, the boss fills the pocket to within
+    #   PG_POCKET - PG_BOSS, so that gap is all the travel the pins have left. The barrels live inside the plastic.
+    tails = pg_contacts(M_Y3 - 0.01, M_Y4, 0.30, ways)                       # O0.60 x 1.50, into the cavity
     return b, mags, pins, tails
 
-def pg_female_bodies():
-    """The female as bought, in place in the base."""
+def pg_female_bodies(as_bought=False):
+    """The female, in place in the base. as_bought: all eight ways."""
+    ways = PG_WAYS if as_bought else PG_TAILS.values()
     b = pg_stad(PG_F_L, PG_F_W, F_Y3, F_Y2)                                  # bottom band
     union(b, pg_stad(PG_F_LIP_L, PG_F_LIP_W, F_Y2 - 0.01, F_Y1))             # lip, glued to the plinth's ledge
     union(b, pg_stad(PG_F_L, PG_F_W, F_Y1 - 0.01, F_Y0))                     # top band
@@ -202,10 +204,10 @@ def pg_female_bodies():
         cut(b, cyl_y(POGO_X + dx, POGO_Z, F_Y3 - 1.0, F_Y0 - 0.50, PG_MAG_R))
         m = cyl_y(POGO_X + dx, POGO_Z, F_Y0 - 0.50 - PG_MAG_T, F_Y0 - 0.50, PG_MAG_R)
         mags = m if mags is None else union(mags, m)
-    pads = pg_contacts(F_Y0 + PG_BOSS - 0.10, F_Y0 + PG_BOSS, 0.90)          # O1.80, flush on the boss
+    pads = pg_contacts(F_Y0 + PG_BOSS - 0.10, F_Y0 + PG_BOSS, 0.90, ways)    # O1.80, flush on the boss
     cut(pads, cyl_y(POGO_X + PG_KEY_L / 2, POGO_Z, F_Y0, F_Y0 + PG_BOSS + 1.0, PG_NOTCH_R))
     cut(b, tb.copy(pads))
-    tails = pg_contacts(F_Y4, F_Y3 + 0.01, 0.35)                             # O0.70 x 1.40, down into the plinth
+    tails = pg_contacts(F_Y4, F_Y3 + 0.01, 0.35, ways)                       # O0.70 x 1.40, down into the plinth
     return b, mags, pads, tails
 
 def build_pogo_head(headc):
@@ -600,6 +602,26 @@ def build_pogo_base(basec, mh):
     for x in (b, mags, pads, tails): tb.transform(x, mh)
     return add_bodies(basec, 'Pogo female (base)', [('pogo female body', b, 'housing'), ('pogo female magnets', mags, 'silver'),
                                                     ('pogo female pads', pads, 'gold'), ('pogo female tails', tails, 'silver')])
+
+PG_REF_X, PG_REF_D, PG_REF_H = 175.0, (40.0, 62.0), 3.0   # the bought pair, laid face up beside the device: X centre, the male's and female's D centres, and the height each housing sits at
+
+def build_pogo_ref(root):
+    """The pair as bought, at root beside the device, hidden: all eight ways, and the male's plungers standing free.
+    Built from the same code as the fitted pair, so it cannot drift from it."""
+    male = [1.0, 0.0, 0.0, (PG_REF_X - POGO_X) * M, 0.0, -1.0, 0.0, (PG_REF_D[0] - POGO_Z) * M,
+            0.0, 0.0, -1.0, (PG_REF_H + M_Y3) * M, 0.0, 0.0, 0.0, 1.0]
+    female = [1.0, 0.0, 0.0, (PG_REF_X - POGO_X) * M, 0.0, 1.0, 0.0, (PG_REF_D[1] + POGO_Z) * M,
+              0.0, 0.0, 1.0, (PG_REF_H - F_Y3) * M, 0.0, 0.0, 0.0, 1.0]
+    specs = (('Pogo 8-pin male (ref)', pg_male_bodies(True), male, ('male housing', 'male magnets', 'male pins', 'male tails')),
+             ('Pogo 8-pin female (ref)', pg_female_bodies(True), female, ('female housing', 'female magnets', 'female pads', 'female tails')))
+    out = []
+    for name, bodies, cells, labels in specs:
+        m = adsk.core.Matrix3D.create(); m.setWithArray(cells)
+        for x in bodies: tb.transform(x, m)
+        occ, colmap = add_bodies(root, name, list(zip(labels, bodies, ('housing', 'silver', 'gold', 'silver'))))
+        occ.isLightBulbOn = False
+        out.append((occ, colmap))
+    return out
 # ---------------------------------------------------------------------------------------------
 # Wiring layer: 'Head wiring (toggle)' (head frame) + 'Base wiring (toggle)' (base frame).
 # Schematic wiring: right-angle bends only, dedicated channels. There is no slot between head and base: the
@@ -1322,7 +1344,8 @@ def run(context):
     w2 = build_base_wiring(base.component, mh)
     p1 = build_pogo_head(head.component)            # the two halves of the junction, as bought
     p2 = build_pogo_base(base.component, mh)
-    colour_all(des, app, head.component, base.component, [w1, w2, p1, p2])
+    refs = build_pogo_ref(root)
+    colour_all(des, app, head.component, base.component, [w1, w2, p1, p2] + refs)
     fin = {}
     fin.update(finish_shell([o for o in base.component.occurrences if o.component.name == 'Base shell'][0]))
     fin.update(finish_tray([o for o in head.component.occurrences if o.component.name == 'Head tray'][0]))
