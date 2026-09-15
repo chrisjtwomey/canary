@@ -13,7 +13,7 @@ Designed in Fusion (project **Inkplate Env Monitor Enclosure**, design **Env Mon
 | `3mf/` | The same four parts again as 3MF, in print orientation, for slicers that prefer it. |
 | `enclosure.py` | Fusion script: downloads the Inkplate / Adafruit STEP models, builds the Soldered and AMS1117 block-outs, places every board, builds the four parts and the two wiring layers, applies the tilt. Run it from Fusion's script editor in an empty design. |
 
-On the desk: **148.1 wide × 87.3 deep × 89.8 tall mm**. Base 30.5 mm tall at the front (flat over the cradle to
+On the desk: **150.7 wide × 87.3 deep × 89.8 tall mm**. Base 30.5 mm tall at the front (flat over the cradle to
 D 25), sloping to 25 mm at the rear — the front height is set by the Dupont housings standing on the PMSA003I's
 header, see Wiring.
 
@@ -26,7 +26,7 @@ It is meant to sit on a desk without announcing itself, which drove the architec
 - **The base is a chassis inside a shell.** The shell is one uninterrupted skin; all four of its screws come up
   from underneath through the chassis, so nothing breaks the top or the sides.
 - **The front is one continuous 20° slab.** The head's bezel and the base's front face lie in the same plane with
-  only a parting line between them, rather than the head standing in a visible pocket.
+  only a parting line between them. At the sides the base's walls frame the head, 1.3 mm outside it at the top.
 - **Nothing is square.** 10 mm plan radii on the base and 5 mm on the head, a 1.5 mm chamfer round the top edge and
   a 1.2 mm round on the bezel, and 4.3° of draft on the side and rear walls so the base reads as a foot, not a box.
 - **The vents are hidden.** A 1.5 mm shadow gap under the whole shell replaces every grille; the only visible
@@ -37,7 +37,7 @@ It is meant to sit on a desk without announcing itself, which drove the architec
 Mass is ≈ 280 g (92 g Inkplate, 52 g head shells, 145 g base and boards, PLA+ or PETG at ~1.24 g/cm³ printed near
 solid). The centre of mass sits **≈ 27 mm above the desk and 32 mm back** (worked out on the 27 mm base; the extra
 3.5 mm of shell moves it by a fraction of a millimetre), and only the chassis touches the desk
-(X −5.8…131.1, D 3.5…82.5), so tipping needs ≈ 46° forward, 62° backward or 68° sideways. Keeping the sensors in
+(X −7.1…132.4, D 3.5…82.5), so tipping needs ≈ 46° forward, 62° backward or 68° sideways. Keeping the sensors in
 the base rather than behind the panel is what buys that margin — carried in the head they would sit 40 mm higher.
 
 ## Parts
@@ -102,7 +102,7 @@ front +2.4 · panel 0 · PCB back −2.45 · standoff tops / cover inner −9.67
 
 **Base frame**: X as the head, D = depth from the front-bottom edge (0…86 nominal, 87.9 including the draft),
 H = height above the desk. This is Fusion's world frame; the `Base` component is untilted and the `Head`
-component carries the 20° tilt. Bay interior X −7.3…132.6, D 25…84, H 2 up to the skin's underside (28.5 at D 25,
+component carries the 20° tilt. Bay interior X −8.6…133.9, D 25…84, H 2 up to the skin's underside (28.5 at D 25,
 sloping to 23 at the rear). Board component faces at H 5.6 (Adafruit / Soldered) and 6.0 (AMS1117, raised so the
 regulator on its underside hangs in free air).
 
@@ -117,7 +117,9 @@ follows automatically.
   r 6.5 about *the same centres*, so the wall stays 2 mm and the chassis-to-shell gap stays 1.5 mm all the way
   round the corner.
 - **Draft** 4.3° on the sides and rear, referenced to the top of the walls: 2.0 mm wider at the desk than at the
-  top, where the shell matches the head's width exactly. The front (bezel) plane and the cavity are not drafted.
+  top, where the shell stands 1.3 mm outside the head's sides. The front (bezel) plane and the cavity are not
+  drafted. Flush with the head, the draft would carry the side walls out past its vertical sides to a knife edge;
+  1.3 mm out, the wall beside the head is 0.8 mm at the top of the walls and thickens down the draft.
 - **The top chamfer is also solid geometry.** A 2 mm skin cannot carry a fillet larger than 1.17 mm — the arc
   breaks through into the cavity at the corner — whereas a 45° chamfer of leg *c* only eats (4 − c)/√2, so 1.5 mm
   is comfortable. It is made by intersecting the shell with a 45°-drafted prism whose reference plane is rotated
@@ -136,10 +138,10 @@ There are no grilles on the top, the right side, the rear or the head.
 - **PMSA003I.** The fan needs its own path and cannot use the gap: its inlet and outlet are both on the face
   against the left wall, 8 mm above the gap and up to 40 mm away. So that wall keeps two real slot groups
   (D 41.4–54.5 for the outlet, D 58.4–78 for the inlet), sunk in a 1 mm recessed strip so they read as one
-  detail rather than a grille. A 3.3 mm rib on the shell's inner wall (D 54.8–58.1, H 1.5–19) crosses the 3.5 mm
+  detail rather than a grille. A 4.6 mm rib on the shell's inner wall (D 54.8–58.1, H 1.5–19) crosses the 4.8 mm
   gap between that wall and the module's face, between the two slot groups, so exhaust cannot run along it into
   the inlet. It is on the shell, not the chassis: the chassis is inset 1.5 mm from this wall and could only reach
-  it as a detached island. The 1.8 mm of rib that reaches over the chassis floor starts 0.2 mm above it, so the
+  it as a detached island. The 3.1 mm of rib that reaches over the chassis floor starts 0.2 mm above it, so the
   shell still drops on freely.
 - **SCD41** breathes through its compartment's open front (≈ 500 mm² facing the bay) rather than a lid grille.
   If its response turns out sluggish, the fix is a slot row low in the compartment's left wall — see Unverified.
@@ -169,7 +171,7 @@ Each board's place follows the placement rules in its section of [HARDWARE.md](.
 
 | Board | X × D (mm) | Placement |
 |---|---|---|
-| PMSA003I | −3.8…31.8 × 27…77.8 | Left end, module face 3.5 mm from the left wall and its vents. X −3.8 puts the board edge and its two left bosses 2 mm inside the edge of the chassis floor (which is inset 1.5 mm from the wall). Header row along its **front** edge, so the tall Dupont housings stand behind the head where the base is deepest. D 27 (not 30) keeps its rear corner clear of the cavity's 10 mm rounded corner. |
+| PMSA003I | −3.8…31.8 × 27…77.8 | Left end, module face 4.8 mm from the left wall and its vents. X −3.8 puts the board edge and its two left bosses 3.3 mm inside the edge of the chassis floor (which is inset 1.5 mm from the wall). Header row along its **front** edge, so the tall Dupont housings stand behind the head where the base is deepest. D 27 (not 30) keeps its rear corner clear of the cavity's 10 mm rounded corner. |
 | SCD41 | 49.9…72.8 × 35…60.4, sockets facing front and rear | Middle, in its own compartment (walls X 47.3–48.8 and 74.3–75.8 from D 30, rear wall D 72–73.5, all to the skin). Both sockets in use. A 5-pin straight header on its right-hand edge (X 70.8; VIN · 3Vo · GND · SCL · SDA along D 42.6–52.8) carries one standing Dupont housing, on GND, for the second ground return. |
 | SHTC3 | 82.8…120.8 × 26.5…48.5 | Front-right: coolest corner, against the solid cradle block, farthest from the fan and the LDO, behind a full-height baffle at D 50–51.5. End of the chain, only its right socket used. |
 | BME688 | 82.8…120.8 × 53.5…75.5 | Rear-right, behind the baffle. Both sockets in use. |
@@ -179,7 +181,7 @@ The four shell pillars sit at (68, 30), (125, 30), (50, 77.5) and (125, 76) — 
 plug, ribbon and wire lane, **and far enough in from the chassis edge for the countersink on the underside to keep
 a full wall outside it**. The corner is the trap: the chassis corner is r 6.5, so out there the edge curves away
 on two sides at once and the *further into the corner the hole goes, the worse it gets*. The useful position is
-near the corner arc's centre (124.6, 76), not near the corner itself. Each hole keeps **≥ 1.7 mm** of wall, and
+near the corner arc's centre (125.9, 76), not near the corner itself. Each hole keeps **≥ 1.7 mm** of wall, and
 each is limited by the thing it sits beside: 0.7 mm of drop-on clearance to the SHTC3, 0.5 mm to the SCD41
 compartment's rear wall, 0.7 mm to the BME688. The countersink is Ø6.2 × 1.4 deep at 90°: an ISO 7046 M3 head is
 5.5 across (5.6 max), so a Ø6.6 cone would give away 0.4 mm of wall for nothing, and the smaller cone leaves
@@ -277,7 +279,7 @@ forward of it. Any further forward and they foul the PM → SCD41 ribbon, which 
 its way to the compartment.
 
 **Qwiic chain**: PM (socket B) → SCD41 front → SCD41 rear → BME688 left → BME688 right → SHTC3 right —
-i.e. PM, SCD41, BME688, SHTC3, the order in the wiring table. The PM's socket A faces the left wall 3.9 mm away,
+i.e. PM, SCD41, BME688, SHTC3, the order in the wiring table. The PM's socket A faces the left wall 5.2 mm away,
 where no plug fits, so the bus reaches that board on its header instead. All three are stock cables: 45 mm
 PM → SCD41, 30 mm SCD41 → BME688, 40–45 mm BME688 → SHTC3. Ribbons stay at board height (H 7.1): the PM ribbon
 runs down the lane at X 45.05 and along the bay's front into the compartment; the SCD41 → BME688 ribbon leaves
@@ -286,7 +288,7 @@ lane at X 126 through a notch in the baffle (X 119.7–128.5).
 
 Both notches are **8.8 × 6 mm — a JST-SH plug is 6.8 × 2.7, and it has to be threaded through them**, so each one
 is the plug plus a millimetre a side. Size them from the plug, not the ribbon. The right-hand lane sits at X 126
-rather than hard against the chassis edge, with a **guide rib at X 128.5–131.1, 7 mm tall, from D 35 to 67**: at
+rather than hard against the chassis edge, with a **guide rib at X 128.5–132.4, 7 mm tall, from D 35 to 67**: at
 129.1 the ribbon would overhang the edge of the chassis with only the shell's inner wall to hold it in, so it
 would have to be stuffed in as the lid came down and would spring out every time the lid came off. The rib is that
 wall, and the shell drops on without touching the cable. Thread the loose plug down the lane at X 123–125, inboard of
@@ -384,3 +386,8 @@ Dated findings and decisions behind the text above, oldest first.
     plane tilted about X ignores, so the front was a 1 mm wedge that bent easily, with the cradle block showing above
     it. The wall is now 2 mm from the rim to the head, and the cradle block stands CH_FRONT (0.3 mm) behind it. The
     pogo plinth opens to the front above its ledge, since its front wall would have been 0.4 mm.
+  - The side walls ended beside the head in a 4.3° knife edge: flush with the head at the top of the walls, the
+    draft carried them out past its vertical sides. The base is now 1.3 mm wider each side than the head, so the
+    walls frame it with 0.8 mm at the top, more below. Kept in reserve: stop the side walls behind the head, with a
+    2 mm shoulder round its bottom corners; or drop the side draft, so the head is flush with the base's sides the
+    full height and the base looks boxier.
