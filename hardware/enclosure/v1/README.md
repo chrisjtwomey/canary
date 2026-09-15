@@ -401,3 +401,5 @@ Dated findings and decisions behind the text above, oldest first.
   - The header-tail reliefs in the bezel lip went 0.1 mm past the window step's floor, which left a 0.36 × 0.1 mm
     strip between the two cuts, under one nozzle width. They stop at the step's floor now: the skin over them is
     1.0 mm, and the tails have 2.25 mm past the board's front face, not 2.35.
+  - The tails chamber stopped 0.01 mm short of the bay, which left a 0.01 mm film over the bottom 0.5 mm of its
+    way out. It runs 1 mm into the bay now.

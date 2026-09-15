@@ -506,7 +506,7 @@ def build_chassis(basec, mh):
     bore_back = head_point(mh, POGO_X, PG_PLINTH_TOP, POGO_Z - PG_F_LIP_W / 2 - PG_CLR)
     bore_back_d = bore_back.y / M - (bore_back.z / M - chamber_top) * math.tan(math.radians(TILT))
     cut(body, boxb(POGO_X - 8.0, POGO_X + 8.0, 12.0, bore_back_d, 2.5, chamber_top))     # the tails' chamber out
-    cut(body, boxb(POGO_X - 8.0, POGO_X + 8.0, bore_back_d - 0.01, B_DBAY0, 2.5, 5.5))   # through the plinth's back
+    cut(body, boxb(POGO_X - 8.0, POGO_X + 8.0, bore_back_d - 0.01, B_DBAY0 + 1.0, 2.5, 5.5))   # through the plinth's back
     #   and into the open trench: where the seven wires leave, and how you see the joints. Under the plinth's back wall
     #   the roof drops to H 5.5, 1.1 mm over the wires in their low lane, so that wall is 2 mm thick rather than a wedge.
     # (no head screws: the head is held on its cradle by the pogo connector's two magnets)
