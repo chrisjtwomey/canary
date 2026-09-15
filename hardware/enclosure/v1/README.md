@@ -398,3 +398,6 @@ Dated findings and decisions behind the text above, oldest first.
     which makes it 2 mm thick, and the wires climb to their H 7 lane at D 21, behind the plinth, not inside it.
   - The AMS1117 pocket's two rear supports stopped at the board's rear edge, 0.5 mm short of the pocket's rear wall:
     a slot that would half fuse in print. They run to the wall now.
+  - The header-tail reliefs in the bezel lip went 0.1 mm past the window step's floor, which left a 0.36 × 0.1 mm
+    strip between the two cuts, under one nozzle width. They stop at the step's floor now: the skin over them is
+    1.0 mm, and the tails have 2.25 mm past the board's front face, not 2.35.

@@ -275,8 +275,8 @@ def build_head_tray(headc):
     cut(t, box(AX0 - MARG, AX1 + MARG, AY0 - MARG, AY1 + MARG, ZLIP - 1, ZF + 1))
     cut(t, box(AX0 - MARG - 1, AX1 + MARG + 1, AY0 - MARG - 1, AY1 + MARG + 1, ZF - 1.0, ZF + 1))
     # --- relief in the bezel lip for the solder tails of the expander header (now on the TOP edge, X 89.4..102.1) ---
-    cut(t, box(88.0, 104.0, 72.0, 74.9, -0.5, 1.5))
-    cut(t, box(42.5, 50.0, 72.0, 74.9, -0.5, 1.5))                 # ... and for the ESP32-group header (GND at X 44.97)
+    cut(t, box(88.0, 104.0, 72.0, 74.9, -0.5, ZF - 1.0))
+    cut(t, box(42.5, 50.0, 72.0, 74.9, -0.5, ZF - 1.0))            # ... and for the ESP32-group header (GND at X 44.97)
     # --- pogo male: a stadium hole through the bottom wall for its nose, and two ribs on the cavity floor that
     #     locate its lip. Everything behind the lip is in open cavity, so with the back cover off you solder the
     #     seven wires to the tails, push the part out through the hole and glue the lip to the floor. ---
