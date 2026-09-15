@@ -93,10 +93,11 @@ def bb_mm(b):
 HEAD_R, HEAD_CAV_R, HEAD_R_FRONT = 5.0, 3.0, 1.2   # plan corner radius (outer / cavity), round on the bezel's front edge
 #   (the bezel round is limited by the 2 mm wall and the 2.4 mm lip: 1.3 mm would break through at the cavity corner)
 HEAD_ZF, HEAD_ZBACK = 2.4, -11.67
-HEAD_X0, HEAD_X1, HEAD_Y0, HEAD_Y1 = -1.0, 131.6, -1.0, 76.2       # cavity
+HEAD_X0, HEAD_X1, HEAD_Y0, HEAD_Y1 = -2.0, 132.6, -1.0, 76.2       # cavity
 HEAD_LWALL, HEAD_RWALL, HEAD_WALL = 7.3, 2.0, 2.0                  # thick LEFT wall (USB-C side) for a symmetric bezel
 # There are no bosses of any kind inside the cavity, and there must never be. The Inkplate is 130.59 x 75.23 in a
-# 132.6 x 77.2 cavity - a millimetre all round - and it goes in from the back, so its own footprint sweeps the whole
+# 134.6 x 77.2 cavity - 2 mm a side in X, because SW2 and the wake switch stand 0.85 mm past the board's left and
+# right edges, and 1 mm top and bottom - and it goes in from the back, so its own footprint sweeps the whole
 # cavity on the way to its seat. Anything standing in there, however far behind the board it ends up, is something
 # the board has to pass through first. Four boss towers for the cover and two blocks for the base screws were
 # exactly that, and the first print could not be assembled (Sept 2026). The cover now screws to the Inkplate's own
@@ -107,7 +108,7 @@ HEAD_LWALL, HEAD_RWALL, HEAD_WALL = 7.3, 2.0, 2.0                  # thick LEFT 
 #   male lives almost entirely inside the head - its nose fills the 2 mm bottom wall and stands PG_PROUD out of the
 #   underside, the lip and the solder tails are in the cavity - and the female almost entirely inside a plinth in
 #   the base. Nothing hangs in the gap between the two any more.
-#   Centred on the device in X (-8.3..133.6): everything that feeds the head half is right of centre (the expander
+#   Centred on the device in X (-9.3..134.6): everything that feeds the head half is right of centre (the expander
 #   row at 90.7, the easyC cable at 99..103, the ESP32 ground at 45) and everything the base half feeds is left of
 #   it (the PM header at 6.4..21.6, the AMS at 37..42), so no run doubles back on itself.
 POGO_X, POGO_Z = 62.65, -6.00
@@ -136,7 +137,7 @@ F_Y1 = F_Y0 - PG_F_TOP                                      # -5.30
 F_Y2 = F_Y1 - PG_F_LIP_T                                    # -6.20, lip underside: the ledge it is glued to
 F_Y3 = F_Y2 - PG_F_BOT                                      # -7.90
 F_Y4 = F_Y3 - PG_F_TAIL                                     # -9.30, tail tips
-PG_PLINTH_TOP = PG_YM - 0.15                                # the plinth's rim, clear of the cradle pocket's 0.3
+PG_PLINTH_TOP = PG_YM - 0.15                                # the plinth's rim, 0.15 under the mating plane
 PG_PLINTH_WALL = 2.20
 
 PG_TAILS = {'SDA': (-3.45, 1.15), 'SCL': (-1.15, 1.15), 'GNDC': (1.15, 1.15), 'GND2': (3.45, 1.15),
@@ -325,8 +326,8 @@ def build_head_cover(headc):
 # is inset from the shell's inner wall so that gap is the bay's intake. Only the PMSA003I keeps real vents, in a
 # recessed strip on the left wall opposite its inlet and outlet.
 # ---------------------------------------------------------------------------------------------
-B_X0, B_X1 = -8.3, 133.6            # outer at the top of the walls; the draft widens this toward the desk
-B_XI0, B_XI1 = -6.3, 131.6          # bay interior (vertical inner walls)
+B_X0, B_X1 = -9.3, 134.6            # outer at the top of the walls; the draft widens this toward the desk
+B_XI0, B_XI1 = -7.3, 132.6          # bay interior (vertical inner walls)
 B_D1 = 86.0                         # depth
 B_DBAY0, B_DBAY1 = 25.0, 84.0       # bay interior depth range (front = cradle block's rear face)
 H_FRONT, H_REAR = 30.5, 25.0        # top skin, outer, at D 25 and at the rear
@@ -352,6 +353,7 @@ HEAD_FRONT_H = 13.5                                    # head's front-bottom edg
 #   The 20 deg tilt still spends depth across the connector's width, which is what the extra 1.5 buys.
 HEAD_FRONT_D = HEAD_FRONT_H * math.tan(math.radians(TILT))   # ... and depth: the bezel plane passes through (D 0, H 0)
 BLOCK_TOP_REAR = 14.0               # cradle block height behind the head (rear lip)
+HEAD_CLR = 0.5                      # clearance round the head's outline in the cradle pocket and the shell's opening
 
 def boxb(X0, X1, D0, D1, H0, H1):  return box(X0, X1, H0, H1, -D1, -D0)
 def cylH(X, D, H0, H1, r):         return cyl_y(X, -D, H0, H1, r)
@@ -420,10 +422,10 @@ def skin_top(d):                    # outer top surface height at depth d (flat 
     return H_FRONT if d <= B_DBAY0 else H_FRONT - (H_FRONT - H_REAR) * (d - B_DBAY0) / (B_D1 - B_DBAY0)
 
 # --- bay layout (mm) ---------------------------------------------------------
-PM_X0, PM_D0 = -3.8, 27.0                     # PMSA003I X -3.8..31.8 (air face 2.5 mm from the left wall), D 27..77.8, header row at the FRONT
+PM_X0, PM_D0 = -3.8, 27.0                     # PMSA003I X -3.8..31.8 (air face 3.5 mm from the left wall), D 27..77.8, header row at the FRONT
 #   X -3.8: the chassis floor is inset 1.5 mm from the wall (CH_INSET), so the board edge and its two left bosses need
 #   ~1 mm of floor under them; everything between the PM and the SCD41 compartment moved right with it
-#   D 27 keeps the board's rear corner clear of the cavity's 10 mm rounded corner (0.8 mm at the tightest point)
+#   D 27 keeps the board's rear corner clear of the cavity's 10 mm rounded corner (1.7 mm at the tightest point)
 PM_PINS = {k: PM_X0 + v for k, v in {'SET': 25.4, 'SDA': 20.32, 'SCL': 17.78, 'GND': 15.24, 'VIN': 10.16}.items()}   # straight header at D 29.54, housings standing up
 SCD_X1, SCD_D0 = 72.8, 35.0                   # SCD41 X 49.9..72.8, D 35..60.4, sockets facing front / rear (centre X 61.4)
 BME_X0, BME_D0 = 82.8, 53.5                   # BME688 X 82.8..120.8, D 53.5..75.5 (rear-right)
@@ -446,7 +448,7 @@ TRENCH = (42.0, 84.0, 9.5, 26.0)              # Now only a well for the pogo pli
 #   width, back when seven loose wires crossed the joint and had to travel along it to reach the boards; they go
 #   out the back of the plinth into the bay now, so the rest of the cradle block - and the wall behind it - stays.
 RIBBON_X = 45.05                              # Qwiic lane, centred between the AMS pocket rib (42.8) and the compartment wall (47.3)
-RIBBON_XR = 126.0                             # lane for the BME688 -> SHTC3 ribbon: inboard of the chassis edge (130.1) so the
+RIBBON_XR = 126.0                             # lane for the BME688 -> SHTC3 ribbon: inboard of the chassis edge (131.1) so the
 #   guide rib below, not the shell's inner wall, is what keeps the ribbon tidy. At 129.1 the ribbon overhung the edge and
 #   could only be held in by fitting the shell over it.
 RIB_XR = (128.5, 35.0, 67.0, 9.0)             # outer guide rib: X 128.5..chassis edge, D 35..67, up to H 9
@@ -454,7 +456,7 @@ RIB_XR = (128.5, 35.0, 67.0, 9.0)             # outer guide rib: X 128.5..chassi
 #   countersink on the underside keeps a full wall outside it. The first print had them at (126,30), (50,78.5) and
 #   (126,79): 0.8, 0.7 and -0.6 mm of material outside the CSK_D/2 circle, the last one breaking clean out through the
 #   rounded corner. The corner is the trap - the chassis corner is r 6.5, so out there the edge curves away on two sides
-#   at once and the useful position is nearer the arc's centre (123.6, 76), not nearer the corner. Each one now keeps
+#   at once and the useful position is nearer the arc's centre (124.6, 76), not nearer the corner. Each one now keeps
 #   >= 1.8 mm, limited by the board it sits beside (0.5..0.7 mm of drop-on clearance to the SCD41 compartment's rear
 #   wall, the SHTC3 and the BME688 respectively).
 SHELL_PILLARS = [(68.0, 30.0), (125.0, 30.0), (50.0, 77.5), (125.0, 76.0)]
@@ -474,7 +476,7 @@ def build_chassis(basec, mh):
     union(body, boxb(B_XI0, B_XI1, SKIN, B_DBAY0 + 0.01, 0.0, H_FRONT - SKIN))               # cradle block
     c, s = math.cos(math.radians(TILT)), math.sin(math.radians(TILT))
     cut(body, hs_b((SKIN / c, 0.0, 0.0), (0.0, -c, s)))                                      # in front of the shell's inner front face
-    cut(body, head_volume(mh, 0.3, HEAD_ZBACK - 0.3, HEAD_ZF + 0.3))                         # cradle pocket
+    cut(body, head_volume(mh, HEAD_CLR, HEAD_ZBACK - 0.3, HEAD_ZF + 0.3))                    # cradle pocket
     cut(body, boxb(B_XI0 - 1, B_XI1 + 1, 17.8, B_DBAY0 + 1, BLOCK_TOP_REAR, H_FRONT))        # low rear lip behind the head
     tx0, tx1, td0, td1 = TRENCH
     trench = boxb(tx0, tx1, td0, td1, 3.0, H_FRONT)
@@ -558,14 +560,14 @@ def build_shell(basec, mh):
     cut(cavity, hs_b((0.0, B_DBAY0, H_FRONT - SKIN), (0.0, slope, 1.0)))                    # under the sloped skin
     cut(cavity, hs_b((SKIN / c, 0.0, 0.0), (0.0, -c, sn)))                                  # keep the tilted front wall
     cut(outer, cavity)
-    cut(outer, head_volume(mh, 0.3, HEAD_ZBACK - 1.6, HEAD_ZF + 0.3))                       # head opening, corners matching the head
+    cut(outer, head_volume(mh, HEAD_CLR, HEAD_ZBACK - 1.6, HEAD_ZF + 0.3))                  # head opening, corners matching the head
     for (x, d) in SHELL_PILLARS:
         union(outer, cylH(x, d, 2.0, skin_top(d) - SKIN + 0.5, 3.5))
         cut(outer, cylH(x, d, 1.0, 8.0, 2.0))                                               # M3 heat-set insert from below
     pt = skin_top(AMS_POST[1]) - SKIN + 0.5                                                # AMS retainer: 4 mm, not 2.4 - it is a
     union(outer, cylH(AMS_POST[0], AMS_POST[1], AMS_POST[3], pt, AMS_POST[2]))               # 17 mm tower printed off the skin, and PLA is brittle
     union(outer, coneH(AMS_POST[0], AMS_POST[1], pt - 3.0, AMS_POST[2], pt, AMS_POST[2] + 1.4))   # flare at the root
-    # --- PM seal rib: fills the 2.5 mm gap between the module's air face and this wall, between the two slot groups,
+    # --- PM seal rib: fills the 3.5 mm gap between the module's air face and this wall, between the two slot groups,
     #     so the fan's exhaust cannot run along that gap into its own inlet. It lives on the shell because the
     #     chassis is inset 1.5 mm from this wall and could only reach it as a detached island. The part that
     #     reaches over the chassis floor starts 0.2 mm above it so the shell still drops on freely. ---

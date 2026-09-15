@@ -13,7 +13,7 @@ Designed in Fusion (project **Inkplate Env Monitor Enclosure**, design **Env Mon
 | `3mf/` | The same four parts again as 3MF, in print orientation, for slicers that prefer it. |
 | `enclosure.py` | Fusion script: downloads the Inkplate / Adafruit STEP models, builds the Soldered and AMS1117 block-outs, places every board, builds the four parts and the two wiring layers, applies the tilt. Run it from Fusion's script editor in an empty design. |
 
-On the desk: **146.1 wide × 87.3 deep × 89.8 tall mm**. Base 30.5 mm tall at the front (flat over the cradle to
+On the desk: **148.1 wide × 87.3 deep × 89.8 tall mm**. Base 30.5 mm tall at the front (flat over the cradle to
 D 25), sloping to 25 mm at the rear — the front height is set by the Dupont housings standing on the PMSA003I's
 header, see Wiring.
 
@@ -37,7 +37,7 @@ It is meant to sit on a desk without announcing itself, which drove the architec
 Mass is ≈ 280 g (92 g Inkplate, 52 g head shells, 145 g base and boards, PLA+ or PETG at ~1.24 g/cm³ printed near
 solid). The centre of mass sits **≈ 27 mm above the desk and 32 mm back** (worked out on the 27 mm base; the extra
 3.5 mm of shell moves it by a fraction of a millimetre), and only the chassis touches the desk
-(X −4.8…130.1, D 3.5…82.5), so tipping needs ≈ 46° forward, 62° backward or 68° sideways. Keeping the sensors in
+(X −5.8…131.1, D 3.5…82.5), so tipping needs ≈ 46° forward, 62° backward or 68° sideways. Keeping the sensors in
 the base rather than behind the panel is what buys that margin — carried in the head they would sit 40 mm higher.
 
 ## Parts
@@ -55,9 +55,10 @@ the flip so the sloped skin lies flat. Everything is printed in **PLA+**: the on
 is the AMS1117's few hundred milliwatts, so PETG is the fallback if its pocket or the shell post over it ever
 softens (Unverified 10).
 
-**Nothing stands inside the head's cavity, and nothing may.** The Inkplate is 130.59 × 75.23 in a 132.6 × 77.2
-opening — a millimetre all round, so it cannot tilt past anything either — and it goes in from the back, which
-means its own footprint sweeps the whole cavity on the way to its seat. A boss is in the way however far behind
+**Nothing stands inside the head's cavity, and nothing may.** The Inkplate is 130.59 × 75.23 in a 134.6 × 77.2
+opening — 2 mm a side in X, because SW2 and the wake switch stand 0.85 mm past the board's left and right edges,
+and 1 mm top and bottom — and it goes in from the back, which means its own footprint sweeps the whole cavity on
+the way to its seat. A boss is in the way however far behind
 the seated board it finally sits. So the cover screws to the Inkplate's own
 standoffs, and the head is held by magnets.
 
@@ -101,7 +102,7 @@ front +2.4 · panel 0 · PCB back −2.45 · standoff tops / cover inner −9.67
 
 **Base frame**: X as the head, D = depth from the front-bottom edge (0…86 nominal, 87.9 including the draft),
 H = height above the desk. This is Fusion's world frame; the `Base` component is untilted and the `Head`
-component carries the 20° tilt. Bay interior X −6.3…131.6, D 25…84, H 2 up to the skin's underside (28.5 at D 25,
+component carries the 20° tilt. Bay interior X −7.3…132.6, D 25…84, H 2 up to the skin's underside (28.5 at D 25,
 sloping to 23 at the rear). Board component faces at H 5.6 (Adafruit / Soldered) and 6.0 (AMS1117, raised so the
 regulator on its underside hangs in free air).
 
@@ -135,10 +136,10 @@ There are no grilles on the top, the right side, the rear or the head.
 - **PMSA003I.** The fan needs its own path and cannot use the gap: its inlet and outlet are both on the face
   against the left wall, 8 mm above the gap and up to 40 mm away. So that wall keeps two real slot groups
   (D 41.4–54.5 for the outlet, D 58.4–78 for the inlet), sunk in a 1 mm recessed strip so they read as one
-  detail rather than a grille. A 2.3 mm rib on the shell's inner wall (D 54.8–58.1, H 1.5–19) crosses the 2.5 mm
+  detail rather than a grille. A 3.3 mm rib on the shell's inner wall (D 54.8–58.1, H 1.5–19) crosses the 3.5 mm
   gap between that wall and the module's face, between the two slot groups, so exhaust cannot run along it into
   the inlet. It is on the shell, not the chassis: the chassis is inset 1.5 mm from this wall and could only reach
-  it as a detached island. The 0.8 mm of rib that reaches over the chassis floor starts 0.2 mm above it, so the
+  it as a detached island. The 1.8 mm of rib that reaches over the chassis floor starts 0.2 mm above it, so the
   shell still drops on freely.
 - **SCD41** breathes through its compartment's open front (≈ 500 mm² facing the bay) rather than a lid grille.
   If its response turns out sluggish, the fix is a slot row low in the compartment's left wall — see Unverified.
@@ -168,7 +169,7 @@ Each board's place follows the placement rules in its section of [HARDWARE.md](.
 
 | Board | X × D (mm) | Placement |
 |---|---|---|
-| PMSA003I | −3.8…31.8 × 27…77.8 | Left end, module face 2.5 mm from the left wall and its vents. X −3.8 puts the board edge and its two left bosses 1 mm inside the edge of the chassis floor (which is inset 1.5 mm from the wall) ; at −5.3 they would overhang it. Header row along its **front** edge, so the tall Dupont housings stand behind the head where the base is deepest. D 27 (not 30) keeps its rear corner clear of the cavity's 10 mm rounded corner. |
+| PMSA003I | −3.8…31.8 × 27…77.8 | Left end, module face 3.5 mm from the left wall and its vents. X −3.8 puts the board edge and its two left bosses 2 mm inside the edge of the chassis floor (which is inset 1.5 mm from the wall). Header row along its **front** edge, so the tall Dupont housings stand behind the head where the base is deepest. D 27 (not 30) keeps its rear corner clear of the cavity's 10 mm rounded corner. |
 | SCD41 | 49.9…72.8 × 35…60.4, sockets facing front and rear | Middle, in its own compartment (walls X 47.3–48.8 and 74.3–75.8 from D 30, rear wall D 72–73.5, all to the skin). Both sockets in use. A 5-pin straight header on its right-hand edge (X 70.8; VIN · 3Vo · GND · SCL · SDA along D 42.6–52.8) carries one standing Dupont housing, on GND, for the second ground return. |
 | SHTC3 | 82.8…120.8 × 26.5…48.5 | Front-right: coolest corner, against the solid cradle block, farthest from the fan and the LDO, behind a full-height baffle at D 50–51.5. End of the chain, only its right socket used. |
 | BME688 | 82.8…120.8 × 53.5…75.5 | Rear-right, behind the baffle. Both sockets in use. |
@@ -178,7 +179,7 @@ The four shell pillars sit at (68, 30), (125, 30), (50, 77.5) and (125, 76) — 
 plug, ribbon and wire lane, **and far enough in from the chassis edge for the countersink on the underside to keep
 a full wall outside it**. The corner is the trap: the chassis corner is r 6.5, so out there the edge curves away
 on two sides at once and the *further into the corner the hole goes, the worse it gets*. The useful position is
-near the corner arc's centre (123.6, 76), not near the corner itself. Each hole keeps **≥ 1.7 mm** of wall, and
+near the corner arc's centre (124.6, 76), not near the corner itself. Each hole keeps **≥ 1.7 mm** of wall, and
 each is limited by the thing it sits beside: 0.7 mm of drop-on clearance to the SHTC3, 0.5 mm to the SCD41
 compartment's rear wall, 0.7 mm to the BME688. The countersink is Ø6.2 × 1.4 deep at 90°: an ISO 7046 M3 head is
 5.5 across (5.6 max), so a Ø6.6 cone would give away 0.4 mm of wall for nothing, and the smaller cone leaves
@@ -275,7 +276,7 @@ forward of it. Any further forward and they foul the PM → SCD41 ribbon, which 
 its way to the compartment.
 
 **Qwiic chain**: PM (socket B) → SCD41 front → SCD41 rear → BME688 left → BME688 right → SHTC3 right —
-i.e. PM, SCD41, BME688, SHTC3, the order in the wiring table. The PM's socket A faces the left wall 2.9 mm away,
+i.e. PM, SCD41, BME688, SHTC3, the order in the wiring table. The PM's socket A faces the left wall 3.9 mm away,
 where no plug fits, so the bus reaches that board on its header instead. All three are stock cables: 45 mm
 PM → SCD41, 30 mm SCD41 → BME688, 40–45 mm BME688 → SHTC3. Ribbons stay at board height (H 7.1): the PM ribbon
 runs down the lane at X 45.05 and along the bay's front into the compartment; the SCD41 → BME688 ribbon leaves
@@ -284,7 +285,7 @@ lane at X 126 through a notch in the baffle (X 119.7–128.5).
 
 Both notches are **8.8 × 6 mm — a JST-SH plug is 6.8 × 2.7, and it has to be threaded through them**, so each one
 is the plug plus a millimetre a side. Size them from the plug, not the ribbon. The right-hand lane sits at X 126
-rather than hard against the chassis edge, with a **guide rib at X 128.5–130.1, 7 mm tall, from D 35 to 67**: at
+rather than hard against the chassis edge, with a **guide rib at X 128.5–131.1, 7 mm tall, from D 35 to 67**: at
 129.1 the ribbon would overhang the edge of the chassis with only the shell's inner wall to hold it in, so it
 would have to be stuffed in as the lid came down and would spring out every time the lid came off. The rib is that
 wall, and the shell drops on without touching the cable. Thread the loose plug down the lane at X 123–125, inboard of
@@ -295,7 +296,7 @@ the rib, then let the ribbon settle against it.
 The ED052TC4 STEP model carries the active area as a 0.04 mm recess on its front face: 114.56 × 64.44 mm, in the
 rotated frame at X 5.35–119.91, Y 5.39–69.84. The window is that plus 0.8 mm, with a 1 × 1 mm step outside. The
 Inkplate is mounted rotated 180° from the STEP model's own orientation so USB-C, the power button and microSD exit
-the **left** wall; the thick wall is on that side, keeping the visible bezel symmetric (12.9 mm each side, 7.6 mm
+the **left** wall; the thick wall is on that side, keeping the visible bezel symmetric (13.9 mm each side, 7.6 mm
 top and bottom).
 
 ## Sensor board models
@@ -335,7 +336,7 @@ mouth to its seated position, intersects that with the tray, and reports the res
 4. SCD41 response time: it vents into the bay, not through a lid grille of its own.
 5. Dupont housings are modelled as 2.54 × 2.54 × 14 mm single-position shells (14 mm measured, plus 3.7 mm for the wire to turn — the base height follows from that); right-angle headers with the pin axis 4.2 mm off the board. Check the 1.7 mm margin to the head's back cover with the real housings before soldering the Inkplate headers.
 6. The Inkplate's expander pads are 0.8 mm drills (from the KiCad board): confirm the chosen header's pins fit, otherwise solder the two wires straight to the pads.
-7. The head sits 8 mm deep in the cradle pocket with 0.3 mm side clearance, located by the pocket and the block's rear lip and held down by the pogo connector's two Ø5 magnets — nothing is screwed. A ≈145 g head on a 20° lean is the thing to watch; if it creeps or lifts too easily the cure is a catch on the rear lip, not screws back through the cavity.
+7. The head sits 8 mm deep in the cradle pocket with 0.5 mm side clearance, located by the pocket and the block's rear lip and held down by the pogo connector's two Ø5 magnets — nothing is screwed. A ≈145 g head on a 20° lean is the thing to watch; if it creeps or lifts too easily the cure is a catch on the rear lip, not screws back through the cavity.
 8. The shell's left end is unsupported over ≈ 50 mm. If it lifts, the cure is a printed clip on the chassis edge rather than a fifth screw — there is no room for one past the PM board.
 9. The SCD41's header is modelled on the board's right-hand edge (X 70.8) as it sits in its compartment. Confirm which edge of the Adafruit 5190 carries the five pads before soldering; on the left-hand edge the ESP32-GND wire would come straight down the compartment's front instead of round its right wall, and the compartment has the room either way.
 10. PLA+ through a winter. The two places heat could tell are the AMS1117's pocket walls and the shell post over it; check them after the first warm spell, and go to PETG for the base if they have moved.
@@ -367,3 +368,9 @@ Dated findings and decisions behind the text above, oldest first.
   standoffs, and an 8-pin magnetic pogo connector holds the head down and carries the head-to-base wiring.
   `enclosure.py` reports the swept volume as `inkplate_insertion_blocked_mm3`; it would have read several hundred
   on the printed head.
+- **2026-09-15**:
+  - Fitting the Inkplate into the printed head broke off SW2 (power) and the wake switch. Both stand 0.85 mm past
+    the board's edges, and the cavity was 1 mm clear of the board: 0.15 mm for the switches, less whatever the print
+    took. The cavity went to 2 mm a side in X, and the head 1 mm wider each side with it.
+  - The printed shell was tight as well. The base went 1 mm wider each side to stay flush with the head, the chassis
+    with it, and the clearance round the head in the cradle pocket and the shell's opening went from 0.3 to 0.5 mm.
