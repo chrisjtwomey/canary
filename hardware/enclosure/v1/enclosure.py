@@ -204,6 +204,7 @@ def pg_female_bodies():
         mags = m if mags is None else union(mags, m)
     pads = pg_contacts(F_Y0 + PG_BOSS - 0.10, F_Y0 + PG_BOSS, 0.90)          # O1.80, flush on the boss
     cut(pads, cyl_y(POGO_X + PG_KEY_L / 2, POGO_Z, F_Y0, F_Y0 + PG_BOSS + 1.0, PG_NOTCH_R))
+    cut(b, tb.copy(pads))
     tails = pg_contacts(F_Y4, F_Y3 + 0.01, 0.35)                             # O0.70 x 1.40, down into the plinth
     return b, mags, pads, tails
 
