@@ -374,3 +374,8 @@ Dated findings and decisions behind the text above, oldest first.
     took. The cavity went to 2 mm a side in X, and the head 1 mm wider each side with it.
   - The printed shell was tight as well. The base went 1 mm wider each side to stay flush with the head, the chassis
     with it, and the clearance round the head in the cradle pocket and the shell's opening went from 0.3 to 0.5 mm.
+  - The switches stay pin-operated. SW2 and the wake switch sit 1.15 mm behind the wall's inner face, behind an
+    8 × 4.7 mm hole in the left wall's inner skin and an 8 × 4.2 mm hole through the right wall, and a finger did not
+    reach them on the print even at 0.15 mm. Kept in reserve: a printed plunger in each hole, with a flange inside
+    the wall to keep it and a head to press, fitted before the Inkplate goes in. On the current board SW2 is
+    bypassed (R34 bridged), so the wake switch would get one first.
