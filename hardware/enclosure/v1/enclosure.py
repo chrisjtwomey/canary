@@ -1185,6 +1185,119 @@ def interference(des, root):
             hits.append({'a': a, 'b': b, 'mm3': round(r.interferenceBody.volume * 1000, 3) if r.interferenceBody else None})
     return hits
 
+PRINT_MIN_WALL, PRINT_WARN_WALL, PRINT_MIN_EDGE_DEG = 0.45, 0.8, 30.0   # 0.4 mm nozzle: one line is ~0.45 wide, two ~0.8
+PRINTED_PARTS = ('Head tray', 'Head back cover', 'Base chassis', 'Base shell')
+
+def _side(body, p):
+    c = body.pointContainment(p)
+    PC = adsk.fusion.PointContainment
+    return 'in' if c == PC.PointInsidePointContainment else 'out' if c == PC.PointOutsidePointContainment else 'on'
+
+def _thin_kind(body, p1, p2):
+    """'wall' if solid runs from p1 to p2 with air just beyond each, 'gap' for the reverse, 'touch' if they coincide,
+    None if the two faces only meet across a corner of thicker material. Probed along the segment and 0.02 mm to each
+    side of it, because the nearest points often land on an edge, where containment reads 'on'."""
+    seg = adsk.core.Vector3D.create(p2.x - p1.x, p2.y - p1.y, p2.z - p1.z)
+    if seg.length < 1e-6:
+        return 'touch'
+    u = seg.copy(); u.normalize()
+    v = u.crossProduct(adsk.core.Vector3D.create(0, 1, 0) if abs(u.x) > 0.9 else adsk.core.Vector3D.create(1, 0, 0)); v.normalize()
+    w = u.crossProduct(v); w.normalize()
+    eps = 0.002 / seg.length
+    for ox, oy, oz in ((0, 0, 0), (v.x, v.y, v.z), (-v.x, -v.y, -v.z), (w.x, w.y, w.z), (-w.x, -w.y, -w.z)):
+        def at(t):
+            return _side(body, adsk.core.Point3D.create(p1.x + seg.x * t + ox * 0.002, p1.y + seg.y * t + oy * 0.002, p1.z + seg.z * t + oz * 0.002))
+        mid, ends = {at(0.25), at(0.5), at(0.75)}, (at(-eps), at(1 + eps))
+        if mid == {'in'} and ends == ('out', 'out'): return 'wall'
+        if mid == {'out'} and ends == ('in', 'in'): return 'gap'
+    return None
+
+def _worst_per_cell(rows, key):
+    """The worst row in each 3 mm cell, so one long thin wall reads as a few rows rather than hundreds."""
+    cells = {}
+    for r in rows:
+        cell = tuple(int(c // 3) for c in r['at']) + (r['kind'],)
+        if cell not in cells or r[key] < cells[cell][key]: cells[cell] = r
+    return sorted(cells.values(), key=lambda r: r[key])
+
+def _knife_edges(body, loc):
+    """Edges whose two faces meet at under PRINT_MIN_EDGE_DEG: 'knife' with solid in the wedge, 'slot' with air."""
+    lim = -math.cos(math.radians(PRINT_MIN_EDGE_DEG))
+    rows = []
+    for e in body.edges:
+        if e.faces.count != 2: continue
+        fa, fb = e.faces.item(0), e.faces.item(1)
+        ok, t0, t1 = e.evaluator.getParameterExtents()
+        if not ok: continue
+        worst = None
+        for k in (0.2, 0.5, 0.8):
+            ok, pt = e.evaluator.getPointAtParameter(t0 + (t1 - t0) * k)
+            if not ok: continue
+            ok1, na = fa.evaluator.getNormalAtPoint(pt)
+            ok2, nb = fb.evaluator.getNormalAtPoint(pt)
+            if not (ok1 and ok2): continue
+            dot = max(-1.0, min(1.0, na.dotProduct(nb)))
+            if dot > lim: continue
+            s = adsk.core.Vector3D.create(-(na.x + nb.x), -(na.y + nb.y), -(na.z + nb.z))
+            kind = 'degenerate'
+            if s.length > 1e-9:
+                s.normalize(); s.scaleBy(0.005)
+                probe = pt.copy(); probe.translateBy(s)
+                kind = {'in': 'knife', 'out': 'slot', 'on': 'on'}[_side(body, probe)]
+            deg = 180.0 - math.degrees(math.acos(dot))
+            if worst is None or deg < worst['deg']: worst = {'deg': round(deg, 1), 'kind': kind, 'at': loc(pt)}
+        if worst: rows.append(worst)
+    return _worst_per_cell(rows, 'deg')
+
+def _thin_walls(body, loc, measure):
+    """Walls and gaps under PRINT_WARN_WALL between two faces that face each other and share no edge or corner."""
+    faces = list(body.faces)
+    boxes, boundary = [], []
+    for f in faces:
+        bb = f.boundingBox
+        boxes.append((bb.minPoint.x, bb.minPoint.y, bb.minPoint.z, bb.maxPoint.x, bb.maxPoint.y, bb.maxPoint.z))
+        ids = {('e', e.tempId) for e in f.edges}
+        ids.update(('v', v.tempId) for v in f.vertices)
+        boundary.append(ids)
+    g = PRINT_WARN_WALL / 10
+    rows = []
+    for i, a in enumerate(boxes):
+        for j in range(i + 1, len(faces)):
+            c = boxes[j]
+            if c[0] > a[3] + g or a[0] > c[3] + g or c[1] > a[4] + g or a[1] > c[4] + g or c[2] > a[5] + g or a[2] > c[5] + g: continue
+            if boundary[i] & boundary[j]: continue
+            r = measure.measureMinimumDistance(faces[i], faces[j])
+            if r.value * 10 >= PRINT_WARN_WALL: continue
+            p1, p2 = r.positionOne, r.positionTwo
+            ok1, n1 = faces[i].evaluator.getNormalAtPoint(p1)
+            ok2, n2 = faces[j].evaluator.getNormalAtPoint(p2)
+            if not (ok1 and ok2) or n1.dotProduct(n2) > -0.5: continue
+            kind = _thin_kind(body, p1, p2)
+            if kind:
+                mid = adsk.core.Point3D.create((p1.x + p2.x) / 2, (p1.y + p2.y) / 2, (p1.z + p2.z) / 2)
+                rows.append({'mm': round(r.value * 10, 2), 'kind': kind, 'at': loc(mid)})
+    return _worst_per_cell(rows, 'mm')
+
+def printability(app, head, base):
+    """Knife edges and thin walls or gaps in the four printed parts, for a 0.4 mm nozzle. Positions are in each
+    part's own frame (head X, Y, Z; base X, D, H). 'knives' and 'fail' must be empty."""
+    measure = app.measureManager
+    out = {}
+    for top, is_head in ((head, True), (base, False)):
+        inv = top.transform2.copy(); inv.invert()
+        def loc(p, inv=inv, is_head=is_head):
+            q = p.copy(); q.transformBy(inv)
+            x, y, z = q.x * 10, q.y * 10, q.z * 10
+            return [round(v, 1) for v in ((x, z, -y) if is_head else (x, y, z))]
+        for occ in top.childOccurrences:
+            if occ.component.name not in PRINTED_PARTS: continue
+            body = occ.bRepBodies.item(0)
+            thin = _thin_walls(body, loc, measure)
+            out[occ.component.name] = {'knives': _knife_edges(body, loc),
+                                       'fail': [r for r in thin if r['mm'] < PRINT_MIN_WALL],
+                                       'warn': [r for r in thin if r['mm'] >= PRINT_MIN_WALL]}
+    return out
+
 
 def run(context):
     """Build the whole thing from scratch in an empty design: downloads the reference models, places every board,
@@ -1222,4 +1335,4 @@ def run(context):
                 lumps[o.component.name] = o.component.bRepBodies.item(0).lumps.count
     print(json.dumps({'lumps_must_all_be_1': lumps, 'inkplate_insertion_blocked_mm3': insertion_sweep(t), 'head tray': bb_mm(t.boundingBox), 'head cover': bb_mm(c.boundingBox),
                       'base chassis': bb_mm(ch.boundingBox), 'base shell': bb_mm(sh.boundingBox),
-                      'finish': fin, 'interference': interference(des, root)}))
+                      'finish': fin, 'interference': interference(des, root), 'printability': printability(app, head, base)}))

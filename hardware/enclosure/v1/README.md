@@ -331,6 +331,15 @@ The head has a second check for the same reason. `enclosure.py` sweeps the Inkpl
 mouth to its seated position, intersects that with the tray, and reports the result as
 `inkplate_insertion_blocked_mm3`. It must be **0**.
 
+`enclosure.py` also reports `printability` for the four printed parts, for a 0.4 mm nozzle:
+
+- `knives`: edges where two faces meet at less than 30°. It must be empty.
+- `fail`: walls or gaps under 0.45 mm, about one extruded line. It must be empty.
+- `warn`: walls or gaps from 0.45 to 0.8 mm, under two lines. It holds four entries: the chassis floor's
+  countersinks, which leave 0.6 mm of floor at the edge of each bore. Anything else there is new.
+
+Each entry is the thinnest point in a 3 mm cell, in the part's own frame (see Frames).
+
 ## Unverified
 
 1. **Everything about how it looks and feels** is unverified until it is printed — the shape is a judgement no render settles. Print the shell first: it is the only part whose surface is on show.
@@ -403,3 +412,5 @@ Dated findings and decisions behind the text above, oldest first.
     1.0 mm, and the tails have 2.25 mm past the board's front face, not 2.35.
   - The tails chamber stopped 0.01 mm short of the bay, which left a 0.01 mm film over the bottom 0.5 mm of its
     way out. It runs 1 mm into the bay now.
+  - These fixes came from a scan run by hand. The rebuild report runs it every time now, as `printability`: see
+    Printing check.
