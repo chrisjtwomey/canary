@@ -1,0 +1,16 @@
+# Local state and generated output stay out of the image. firmware/ can hold
+# images with Bosch's BSEC binary in them, and this project never publishes one.
+config.yaml
+firmware/
+*.db
+*.png
+static/*.html
+.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+tests/
+pytest.ini
+requirements-dev.txt
+.DS_Store

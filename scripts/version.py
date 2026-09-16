@@ -7,6 +7,9 @@ so a device's boot log always identifies the commit it was built from:
     v1.5.1-3-gab12cd4         three commits past it
     v1.5.1-3-gab12cd4-dirty   with uncommitted changes
 
+Only tags that start with "v" are versions; the repository also tags
+hardware, such as enclosure-v1.0.
+
 Falls back to "dev" when git cannot answer — no binary, no repository, or a
 shallow clone with no tags. CI needs fetch-depth: 0 to see tags.
 """
@@ -18,7 +21,7 @@ Import("env")  # noqa: F821 - injected by PlatformIO
 def git_version() -> str:
     try:
         return subprocess.check_output(
-            ["git", "describe", "--tags", "--always", "--dirty"],
+            ["git", "describe", "--tags", "--match", "v*", "--always", "--dirty"],
             cwd=env.subst("$PROJECT_DIR"),  # noqa: F821
             stderr=subprocess.DEVNULL,
             text=True,
