@@ -2,14 +2,14 @@
 //
 // One pass over the bus and the four parts every wake, then ten seconds of
 // deep sleep and round again. It says which addresses answered, whether each
-// sensor reads sensibly running and in the low-power state docs/BATTERY.md 3
-// gives it, and takes one reading set from them all. There is no network and
-// no panel, so what the serial log shows is the wiring and nothing else.
+// sensor reads sensibly running and in its low-power state (docs/HARDWARE.md
+// 2-5), and takes one reading set from them all. There is no network and no
+// panel, so what the serial log shows is the wiring and nothing else.
 //
 //   pio run -e esp32-validate -t upload && pio device monitor -b 115200
 //
 // The phase markers carry milliseconds so a PPK2 capture can be read against
-// them. See docs/BATTERY.md 10.
+// them.
 #include <Arduino.h>
 #include <Wire.h>
 

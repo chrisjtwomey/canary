@@ -11,10 +11,10 @@
 #include "sensors/SensorSuite.h"
 
 // One pass over the sensors that says whether the bench is wired and working:
-// which parts answered, whether each reads sensibly running and in the
-// low-power state docs/BATTERY.md 3 gives it, and one reading set from them
-// all. It holds interfaces, so the same pass runs against the drivers on the
-// board and against the fake parts in the host tests.
+// which parts answered, whether each reads sensibly running and in its
+// low-power state (docs/HARDWARE.md 2-5), and one reading set from them all.
+// It holds interfaces, so the same pass runs against the drivers on the board
+// and against the fake parts in the host tests.
 //
 // It takes the bus as well as the four sensors because the PM module's sleep
 // cannot be seen through IPmsa003i: the driver answers from its own enabled

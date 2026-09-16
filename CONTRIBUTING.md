@@ -1,16 +1,13 @@
 # Contributing to Inkplate 5 Environment Monitor
 
-This project is at the design stage. The plan, and the status of the work
-that makes it possible, is in [docs/EXTRACTION-PLAN.md](docs/EXTRACTION-PLAN.md).
-
-## What it will be
+## Layout
 
 A thin consumer of [epd](https://github.com/chrisjtwomey/epd), in the same
 shape as [inkplate10-weather-cal](https://github.com/chrisjtwomey/inkplate10-weather-cal):
 
 ```
 platformio.ini            -DARDUINO_INKPLATE5V2; lib_deps symlink://../epd/firmware
-src/main.cpp              which IBoard to use
+src/main.cpp              the awake loop: sensors, readings, the page loop
 src/defaults.example.cpp  copy to defaults.cpp: WiFi, server URL, MQTT logging
 server/
   server.py               config keys, a DataSource, a page list, DisplayServer(...).run()
@@ -19,6 +16,8 @@ server/
   static/                 CSS, fonts, charts.js; the rendered HTML lands here too
   config.example.yaml
 ```
+
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §5 has the whole tree.
 
 Everything generic — the client firmware, HTTP, scheduling, rendering — is
 epd. If a change is not about this device's sensors or pages, it goes there,
@@ -216,8 +215,8 @@ place of the sensors, for a board with nothing attached.
 
 The log shows the boot banner and User-Agent, WiFi and NTP, then
 `downloading file at URL ...`, `drawing image from buffer` and
-`next refresh in N s`. The panel shows the seven pages in turn, five
-minutes apart on the wall clock (:00, :05, ...). Once a minute the board
+`next refresh in N s`. The panel works through the pools in turn, one page
+every five minutes on the wall clock (:00, :05, ...). Once a minute the board
 posts a readings document to the server's `/readings`, with a `client`
 object beside the measurements (`posted readings (204)`); the Diagnostics
 page is drawn from the last one. A fetch that fails leaves the last image
@@ -259,7 +258,7 @@ power-on, so the wait is longer than it needs to be, never shorter.
 
 `iaq` and `iaq_accuracy` come from BSEC, Bosch's closed-source library,
 which runs in a task of its own and takes a sample every 3 s. Its accuracy
-starts at 0 and reached 3 in about 40 minutes on the bench. What it has
+starts at 0 and reaches 3 in about 40 minutes on the bench. What it has
 learned is saved to NVS when the accuracy first reaches 3 and every six
 hours after, so a restart resumes from there (`[bsec] start: NVS state
 (accuracy 3)`). Every BSEC line in the log starts with `[bsec]`. The
@@ -305,8 +304,7 @@ sleeping for 10 seconds (RTC alarm at epoch 1757443210)
 ```
 
 The phase markers carry milliseconds so a PPK2 trace lines up with the phase
-it was taken in; [docs/BATTERY.md](docs/BATTERY.md) §10 says which capture
-replaces which estimate. Three things worth knowing when it does not pass:
+it was taken in. Three things worth knowing when it does not pass:
 
 - **A sensor is absent.** Its address is missing from the scan and it counts
   as a failure. The rest of the pass still runs.
@@ -322,18 +320,21 @@ replaces which estimate. Three things worth knowing when it does not pass:
 
 ## Setup
 
-epd must be checked out beside this repo. Then:
+epd must be checked out beside this repo. Then, in this order:
 
 ```sh
 python3 -m venv server/.venv && source server/.venv/bin/activate
-pip install -e ../epd/server        # the local kit, not the pushed branch
-pip install -r server/requirements-dev.txt
+pip install -r server/requirements-dev.txt   # the tools, and epd-server at its pinned tag
+pip install -e ../epd/server                 # then the local kit, editable, on top
 ```
 
-Install the local `epd` checkout **editable**, and first. `requirements.txt`
-pins `epd-server` to a tagged release on GitHub, which is right for a
-deployment and for the server image, and wrong while developing both repos
-at once.
+`requirements.txt` pins `epd-server` to a release tag on GitHub, which is
+right for a deployment and for the server image, and wrong while developing
+both repos at once. The order matters: pip treats that pin as a direct
+reference, so any `pip install -r` replaces an editable epd with the tagged
+release, whatever the two versions are. Install the checkout last, and again
+after any later `pip install -r`. `pip freeze | grep epd` shows which one is
+in: a line starting `-e` is the checkout.
 
 `pyrightconfig.json` at the repo root points the editor at that virtualenv
 and adds `server/` and `../epd/server` to the import path, so Pylance

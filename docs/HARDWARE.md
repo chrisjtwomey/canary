@@ -1,8 +1,10 @@
 # Hardware reference — Inkplate 5 Gen2 environment monitor
 
-Working shorthand for development, distilled from the datasheets on
-2026-09-03. Every section links its sources. Facts are from the datasheet
-unless marked *(product page)*, *(schematic)*, *(derived)* or *(unverified)*.
+Working shorthand for development, distilled from the datasheets. Every
+section links its sources. Facts are from the datasheet unless marked
+*(product page)*, *(schematic)*, *(derived)*, *(measured)*, *(bench)* or
+*(unverified)*. Dates, and the history behind the text, are in the
+[Decision Log](#decision-log).
 
 - [0. At a glance](#0-at-a-glance)
 - [1. Inkplate 5 Gen2](#1-inkplate-5-gen2)
@@ -12,10 +14,10 @@ unless marked *(product page)*, *(schematic)*, *(derived)* or *(unverified)*.
 - [5. SHTC3 — temperature and humidity](#5-shtc3--temperature-and-humidity)
 - [6. The I²C bus](#6-the-ic-bus)
 - [7. Power](#7-power)
-- [8. Wiring — validated and corrected](#8-wiring--validated-and-corrected)
-- [9. Placement in the enclosure](#9-placement-in-the-enclosure)
-- [10. 3D files](#10-3d-files)
-- [11. Open questions](#11-open-questions)
+- [8. Wiring](#8-wiring)
+- [9. The enclosure](#9-the-enclosure)
+- [10. Open questions](#10-open-questions)
+- [Decision Log](#decision-log)
 
 ---
 
@@ -24,7 +26,7 @@ unless marked *(product page)*, *(schematic)*, *(derived)* or *(unverified)*.
 | Device | Board | I²C addr | Supply | Current, typical | Current, peak | Library |
 |---|---|---|---|---|---|---|
 | Inkplate 5 Gen2 | Soldered | host; 0x20 0x48 0x51 on board | USB-C 5 V or LiPo | 18 µA deep sleep *(product page)* | not published | Inkplate-Arduino-library ≥ 11.1 |
-| SCD41 CO₂ | Adafruit 5190 (assumed, see §11) | 0x62 | 2.4–5.5 V | 15 mA @ 5 s periodic; 0.45 mA single-shot every 5 min | **175 mA typ, 205 mA max** (3.3 V) | Sensirion I2C SCD4x |
+| SCD41 CO₂ | Adafruit 5190 | 0x62 | 2.4–5.5 V | 15 mA @ 5 s periodic; 0.45 mA single-shot every 5 min | **175 mA typ, 205 mA max** (3.3 V) | Sensirion I2C SCD4x |
 | PMSA003I PM | Adafruit 4632 | 0x12 | 5 V module; board makes its own 5 V from 3–5 V | ≤ 100 mA @ 5 V → **~200 mA from 3.3 V** *(derived)* | 250 mA / 100 ms fan start *(charge pump rating)* | Adafruit PM25AQI |
 | BME688 gas | Soldered 333203 | 0x76 (JP1 → 0x77) | 1.7–3.6 V (board takes 3.3–5 V) | 0.9 mA (BSEC LP), 0.09 mA (ULP) | 17 mA heater | Bosch BME68x + BSEC2 |
 | SHTC3 T/RH | Soldered 333032 | 0x70 fixed | 1.62–3.6 V (board takes 3.3–5 V) | 430 µA measuring, 0.3 µA sleep | 0.9 mA | Adafruit_SHTC3 |
@@ -35,12 +37,8 @@ systems (easyC, Qwiic, STEMMA QT) are the same JST-SH 4-pin in the same order.
 
 **Power verdict:** the Inkplate's 3.3 V regulator is 500 mA and also runs the
 ESP32. Sensor peaks alone reach ~470 mA. **Power the sensor chain from its own
-3.3 V regulator, fed from the Inkplate's VIN pad (5 V when on USB).** Do not
-feed the PM board 5 V: its bus pull-ups go to its supply pin. Details in §7.
-
-**Battery verdict:** always-on, a 1200 mAh cell lasts about 3.5 hours; with
-everything duty-cycled to one reading set every 10 minutes, about 3 days. The
-PM sensor dominates either way. This is a mains-powered device.
+3.3 V regulator, fed from the Inkplate's VIN pad (5 V when on USB).** Details
+in §7.
 
 ---
 
@@ -60,7 +58,7 @@ Sources: [product page](https://soldered.com/products/inkplate-5-gen2) ·
 | | |
 |---|---|
 | Panel | E Ink ED052TC4, 5.17", **1280 × 720**, **3-bit grey (8 levels)**. Full refresh 0.99 s, partial 0.22 s. |
-| MCU | ESP32-WROVER-E, 4 MB flash, PSRAM (size not stated by Soldered; WROVER-E family is 8 MB *(unverified)*). Library allocates ~921 kB PSRAM for framebuffers. |
+| MCU | ESP32-WROVER-E. **8 MB PSRAM** *(derived)*: the board reports 4.0 MB, the most an ESP32 maps at a time, and a WROVER-E carries either 8 MB or 2 MB. Flash **at least 4 MB** *(unverified)*: the variant sets 4, 8 or 16 MB, the shield prints no suffix, and `partitions.csv` uses 4 MB. Library allocates ~921 kB PSRAM for framebuffers. |
 | Radio | Wi-Fi, BT 4.0 BLE |
 | USB | USB-C, CH340C UART, 500 mA fuse on VBUS *(schematic)* |
 | Battery | 2-pin JST-PH 2.0 mm, 3.7 V Li-ion, MCP73831 charger at ~400 mA *(schematic, R32 = 2.49 k)* |
@@ -100,7 +98,7 @@ No conflict with 0x12, 0x62, 0x70, 0x76/0x77.
 
 ### Deep sleep and wake
 
-- RTC INT → JP2 (default INT) → **GPIO39** with 10 k pull-up *(schematic)*. Library example: `setAlarmEpoch(..., RTC_ALARM_MATCH_DHHMMSS); esp_sleep_enable_ext0_wakeup(GPIO_NUM_39, 0);` — the example carries the comment "GPIO39 is NOT guaranteed for Inkplate 5v2". Matches what `EpdBoardInkplate::enableWakeOnRtcAlarm()` does. **It works on this board** *(measured 2026-09-09)*: the validation build sets a 10 s alarm and every wake logs `ESP_SLEEP_WAKEUP_EXT0` on time. Soldered's warning stands for the family, not for this unit.
+- RTC INT → JP2 (default INT) → **GPIO39** with 10 k pull-up *(schematic)*. Library example: `setAlarmEpoch(..., RTC_ALARM_MATCH_DHHMMSS); esp_sleep_enable_ext0_wakeup(GPIO_NUM_39, 0);` — the example carries the comment "GPIO39 is NOT guaranteed for Inkplate 5v2". Matches what `EpdBoardInkplate::enableWakeOnRtcAlarm()` does. **It works on this board** *(measured)*: the validation build sets a 10 s alarm and every wake logs `ESP_SLEEP_WAKEUP_EXT0` on time. Soldered's warning stands for the family, not for this unit.
 - Wake button SW3 → GPIO36, active low. Expander INT → GPIO34.
 - **easyC 3V3 stays on in deep sleep.** It is the unswitched LDO output the ESP32 itself runs from. Only microSD and RTC rails are switched. Cutting sensor power needs an external load switch on a free expander pin.
 - Free GPIO: expander P1_3–P1_7 on the bottom header; `gpioInit()` sets them OUTPUT LOW. Use `display.expander1.pinMode/digitalWrite(IO_PIN_B3..B7, ...)`. Do not use P0_x.
@@ -118,7 +116,7 @@ No conflict with 0x12, 0x62, 0x70, 0x76/0x77.
 - Outline **130.59 × 75.23**, 2.5 mm corner radius, 1.6 mm PCB.
 - Mounting: 4 × SMT M3 standoffs at (3.40, 3.40), (127.19, 3.40), (3.40, 71.83), (127.19, 71.83) — pitch **123.79 × 68.43**.
 - USB-C (3.00, 60.23) left edge · power button (2.00, 49.23) left · wake button (128.59, 49.23) right · battery JST (28.00, 15.23) · microSD (10.00, 31.23) · **easyC (100.00, 41.23)** · CR2032 (114.00, 41.23) · ESP32 (80.83, 15.80) · panel FPC (27.50, 46.43).
-- Header: 1×1 pads on 2.54 mm along the bottom edge (y = 73.73), x = 19.57–111.01: panel group, ESP32 group (GND, 3V3, TXD, RXD, IO12–15, IO34, V_BAT, IO36, IO39), I²C group (GND, 3V3, SDA, SCL), expander group (GND, 3V3, P1_1–P1_7).
+- Header: 1×1 pads on 2.54 mm along the bottom edge (y = 73.73), x = 19.57–111.01: panel group, ESP32 group (GND, 3V3, TXD, RXD, IO12–15, IO34, V_BAT, IO36, IO39), I²C group (GND, 3V3, SDA, SCL), expander group (GND, 3V3, P1_1–P1_7). The pads are 0.8 mm drills, so a header needs round machined pins.
 - Panel 124.59 × 69.14 mm centred on the far side; active area 114.56 × 64.44 mm.
 - Soldered enclosure: 145.24 × 84.23 × 13.5 mm, sold assembled (€19.95) and published as STL/STEP.
 
@@ -130,7 +128,8 @@ Sources: [SCD4x datasheet v1.7](https://sensirion.com/media/documents/48C4B7FB/6
 [low-power app note](https://sensirion.com/media/documents/077BC86F/62BF01B9/CD_AN_SCD4x_Low_Power_Operation_D1.pdf) ·
 [design-in guide](https://sensirion.com/media/documents/0D0C9129/623B1183/Sensirion_CO2_Sensors_SCD4x_design-in_guide.pdf) ·
 [Adafruit 5190](https://www.adafruit.com/product/5190) · [learn guide](https://learn.adafruit.com/adafruit-scd-40-and-scd-41) ·
-[Sensirion library](https://github.com/Sensirion/arduino-i2c-scd4x)
+[Sensirion library](https://github.com/Sensirion/arduino-i2c-scd4x) ·
+[module STEP](https://sensirion.com/media/documents/260AFF2D/616531AE/Sensirion_CO2_Sensors_SCD4x_STEP_file.step)
 
 ### Measures
 
@@ -214,7 +213,7 @@ Sources: [Plantower PMSA003I manual V2.6](https://cdn-shop.adafruit.com/product-
 
 - Module: **DC 5.0 V (4.5–5.5)**, "needed because the FAN should be driven by 5V". Data pins are 3.3 V logic (L < 0.8 V, H > 2.7 V). Active ≤ 100 mA, standby ≤ 200 µA.
 - Adafruit board: **makes its own 5 V** with an AP3602A charge pump from VIN 3–5 V, so it runs from a 3.3 V Qwiic chain. AP3602A: 100 mA continuous, 250 mA for 100 ms, input current ≈ 2 × output → **~200 mA from 3.3 V while the fan runs** *(derived)*.
-- Board also has an AP2112K 3.3 V LDO (pull-ups, LED, level shifter) and a BSS138 level shifter. **10 kΩ pull-ups on both sides of the shifter; the connector side is pulled to VIN.** ⇒ if VIN were 5 V, the shared bus would be pulled to 5 V. Keep VIN at 3.3 V.
+- Board also has an AP2112K 3.3 V LDO (pull-ups, LED, level shifter) and a BSS138 level shifter. **10 kΩ pull-ups on both sides of the shifter; the connector side is pulled to VIN.** ⇒ a 5 V VIN pulls the shared bus to 5 V, past the SCD41's VDD + 0.3 V absolute maximum. **Keep VIN at 3.3 V**, though the module itself wants 5 V: the charge pump makes that.
 - I²C **0x12**, fixed. 100 kHz-class timing. No UART on this variant (pins 6 and 8 NC).
 
 ### Interface
@@ -242,7 +241,7 @@ The sensor updates its registers itself; the host polls. **No I²C commands** fo
 
 ### Operating mode for this device (mains)
 
-Run the fan continuously (datasheet "active mode", MTTF ≥ 3 years) and poll every few seconds, keeping checksum-valid frames and averaging. Optionally wire SET to expander P1_3 to duty-cycle the fan (30 s spin-up before each reading window) — saves ~200 mA and dust, costs accuracy per the field reports.
+Run the fan continuously (datasheet "active mode", MTTF ≥ 3 years) and poll every few seconds, keeping checksum-valid frames and averaging. SET is optional: the breakout's 100 k pull-up holds it high, so with no wire the fan runs from power-on. Wired to expander P1_3 (§8), it lets the firmware stop and start the fan; stopping it between readings saves dust, at a cost in accuracy per the field reports.
 
 ### Gotchas
 
@@ -296,8 +295,8 @@ Chip ID 0xD0 = 0x61; variant 0xF0 = 0x01. Set osrs_h (0x72), then osrs_t/osrs_p 
 - Sample rates: **LP 3 s** (0.9 mA) or **ULP 300 s** (0.09 mA). Calibration: accuracy 0 for ~5 min (LP) / ~20 min (ULP), then hours to reach 3; needs both clean and polluted air exposure.
 - **State blob 238 bytes** must be saved and restored or calibration restarts. Config blob (~1.9 kB, pick the 3.3 V / 3 s or 300 s / 4 d or 28 d variant) is re-applied each boot. BSEC needs a monotonic clock (`Bsec2::begin` takes a millis function).
 - Mains-powered and always awake, LP mode with the state kept in RAM and checkpointed to NVS every few hours is the well-trodden path. Deep-sleep BSEC setups are where the forum failures live.
-- The firmware links BSEC2 1.10.2610's `libalgobsec` without Bosch's Arduino wrapper, whose sources need a second copy of the BME68x API; `scripts/bsec.py` adds the headers, the config blobs and the binary. It uses `bme688_sel_33v_3s_4d`, subscribes to the IAQ outputs and to raw pressure at the LP rate, and runs in a FreeRTOS task of its own. Without an output that needs pressure, BSEC asks for no pressure conversion, the BME688 skips it, and the reading comes out near 659 hPa. The Arduino package has no BME688 configuration named for IAQ, but `sel` gives an index from the first sample and reached accuracy 1 in about 4 minutes and 3 in about 40 *(bench, 2026-09-12)*. Restarted from the state in NVS, it was back at accuracy 3 within 3 minutes *(bench, 2026-09-13)*.
-- BSEC's header gives its pressure input in Pa, but Bosch's own BSEC2 wrapper passes hPa, and so does the firmware. BSEC took 1019 hPa without an error and kept giving an index *(bench, 2026-09-12)*.
+- The firmware links BSEC2 1.10.2610's `libalgobsec` without Bosch's Arduino wrapper, whose sources need a second copy of the BME68x API; `scripts/bsec.py` adds the headers, the config blobs and the binary. It uses `bme688_sel_33v_3s_4d`, subscribes to the IAQ outputs and to raw pressure at the LP rate, and runs in a FreeRTOS task of its own. Without an output that needs pressure, BSEC asks for no pressure conversion, the BME688 skips it, and the reading comes out near 659 hPa. The Arduino package has no BME688 configuration named for IAQ, but `sel` gives an index from the first sample and reached accuracy 1 in about 4 minutes and 3 in about 40 *(bench)*. Restarted from the state in NVS, it is back at accuracy 3 within 3 minutes *(bench)*.
+- BSEC's header gives its pressure input in Pa, but Bosch's own BSEC2 wrapper passes hPa, and so does the firmware. BSEC took 1019 hPa without an error and kept giving an index *(bench)*.
 
 ### Self-heating
 
@@ -309,8 +308,8 @@ Bosch `BME68x Sensor library` (`setTPH(2x,16x,1x)`, `setHeaterProf(300,100)`, `s
 
 ### Soldered 333203 board
 
-- **38 × 22 mm**, four M3 (3.2 mm) corner holes, 1.5 mm header holes. Two easyC connectors, one per short edge; 4-pin header GND/VCC/SDA/SCL on the long edge. Sensor near centre.
-- Hardware repo: "not available yet".
+- **38.0 × 22.0 mm** *(measured)*, four M3 (3.2 mm) corner holes, 1.5 mm header holes. Two easyC connectors, one per short edge; 4-pin header GND/VCC/SDA/SCL on the long edge. Sensor near centre.
+- No public hardware repo: Soldered's docs call it "not available yet" and send the files on request.
 
 ---
 
@@ -359,8 +358,8 @@ Sequence from sleep: wakeup → ≥ 240 µs → measure → ≥ 12.1 ms (0.8 ms 
 
 ### Soldered 333032 board
 
-- Text says 22 × 22 mm; the pinout drawing and photo show **~38 × 22 mm with four M3 corner holes** at ~32 × 16 mm pitch *(scaled, unverified; text looks stale)*. Two easyC connectors on the short ends; unpopulated 4-pin header on one long edge.
-- Hardware repo: "not available yet".
+- **38.0 × 22.0 mm** *(measured)*, 2 mm corner radius, four Ø3.2 mm (M3) holes inset 3.05 mm on a 32 × 16 mm pitch. Soldered's product page and docs give 22 × 22 mm with two holes, which does not match the board. Two easyC connectors on the short ends; unpopulated 4-pin header on one long edge.
+- No public hardware repo: Soldered's docs call it "not available yet" and send the files on request.
 
 ---
 
@@ -414,38 +413,13 @@ The Inkplate's TPS7A2633 is **500 mA** and must also carry the ESP32 and panel P
 
 ### The fix
 
-A **3.3 V LDO module rated ≥ 600 mA** (e.g. AP2112K-3.3, or an AMS1117-3.3 board — 1.1 V dropout is fine from ~4.7 V) fed from the Inkplate's **VIN pad** (≈5 V on USB), output into the sensor chain. The Inkplate's own regulator then powers only the Inkplate. The USB VBUS fuse is 500 mA total, so the whole device must stay under that: Inkplate (~150 mA typical) + sensors (~215 mA) fits; peaks are brief.
-
-**Do not feed the PMSA003I board 5 V** to skip the charge pump: its connector-side pull-ups go to VIN and would pull the shared bus to 5 V, past the SCD41's VDD + 0.3 V absolute maximum.
-
-### Battery, for the record
-
-Always-on: ~215 mA sensors + ~100 mA Inkplate ≈ 315 mA → a 1200 mAh cell lasts **~3.5 h**.
-Duty-cycled, deep sleep between: per 10-minute cycle ≈ 154 mC SCD41 (power-cycled single shot) + ~1.9 mAh PMSA003I (35 s fan) + ~0.8 mAh ESP32 wake ≈ 2.8 mAh → **~3 days**; at 30 minutes, ~9 days. The PM fan is 70 % of it. ASC for the SCD41 is unavailable in that mode, so CO₂ accuracy drifts too.
-
-**Conclusion:** mains (USB-C) power, with the battery as optional backup — the Inkplate charges it at ~400 mA and switches over automatically.
+A **3.3 V LDO module rated ≥ 600 mA** fed from the Inkplate's **VIN pad** (≈5 V on USB), output into the sensor chain. The build uses an AMS1117-3.3 module: 800 mA maximum and about 1.1 V of dropout, which the VIN pad's ~4.7 V on USB covers, and a power LED that draws a little on its own. The Inkplate's own regulator then powers only the Inkplate. The USB VBUS fuse is 500 mA total, so the whole device must stay under that: Inkplate (~150 mA typical) + sensors (~215 mA) fits; peaks are brief.
 
 ---
 
-## 8. Wiring — validated and corrected
+## 8. Wiring
 
-### Your diagram
-
-```
-Inkplate 5GEN2 (3V3/GND/SDA/SCL) → BME688 → SHTC3 → SCD41 → PMSA003I
-```
-
-| Check | Verdict |
-|---|---|
-| Electrical order | Irrelevant on I²C; any order works. |
-| Connectors | All JST-SH, same pinout. Fine. |
-| Addresses | No conflicts. Fine. |
-| Pull-ups | 2.0 kΩ total, in spec at 100 kHz. Nothing to cut. |
-| **Power** | **Not OK.** 3V3 through the chain from the Inkplate's shared 500 mA LDO; noisy for the SCD41; the two heavy loads (PMSA003I, SCD41) sit at the far end where cable drop is worst. |
-| **SHTC3 placement** | **Not OK.** The T/RH reference is chained between the BME688 heater and the SCD41, and nothing says where it sits physically. It must be the coolest, most exposed point. |
-| PMSA003I control | SET pin unused → fan runs continuously. Fine on mains; optional GPIO for duty-cycling. |
-
-### Corrected *(revised 2026-09-13 — one wire per crimp, ground starred at the Inkplate, cable 1 lands on the PM header)*
+### Circuit
 
 ```
  USB-C 5 V
@@ -457,14 +431,14 @@ Inkplate 5GEN2 (3V3/GND/SDA/SCL) → BME688 → SHTC3 → SCD41 → PMSA003I
     ├─ expander-group GND ──────────► AMS1117-3.3  GND       regulator's reference only, a few mA
     │                                 AMS1117-3.3  OUT ─────► PMSA003I header VIN    3.3 V for the whole chain
     │
-    ├─ expander P1_3 ───────────────────────────────────────► PMSA003I header SET    fan control
+    ├─ expander P1_3 ───────────────────────────────────────► PMSA003I header SET    fan control, optional
     │
     ├─ easyC K3 ── cable 1: GND · SDA · SCL, 3V3 cut ───────► PMSA003I header GND · SDA · SCL   bus in, chain's ground return out
     │
     └─ ESP32-group GND ── step 9 ───────────────────────────► SCD41 header GND        second ground return, from the sensitive board
 
    ┌─ PMSA003I  (Adafruit 4632)   0x12   heaviest load first: power enters at its header, ground leaves by cable 1
-   │     cable 2: stock, from socket B (socket A faces the wall)
+   │     cable 2: stock, from socket B
    │     ▼
    ├─ SCD41     (Adafruit 5190)   0x62   second heaviest; gets BME688 pressure each cycle; carries step 9's return
    │     cable 3: stock
@@ -483,28 +457,35 @@ Inkplate 5GEN2 (3V3/GND/SDA/SCL) → BME688 → SHTC3 → SCD41 → PMSA003I
 | 1 | Inkplate **VIN pad** | AMS1117 **IN** | 28 AWG jumper, Dupont at the AMS1117 end |
 | 2 | Inkplate **expander-group GND** | AMS1117 **GND** | 28 AWG jumper, Dupont both ends |
 | 3 | AMS1117 **OUT** | PMSA003I header **VIN** | 28 AWG jumper, Dupont both ends |
-| 4 | Inkplate **expander P1_3** | PMSA003I header **SET** | 28 AWG jumper, Dupont both ends |
+| 4 | Inkplate **expander P1_3** | PMSA003I header **SET** | 28 AWG jumper, Dupont both ends — optional, see below |
 | 5 | Inkplate **easyC K3** | PMSA003I header **GND, SDA, SCL** | cable 1: a Qwiic cable with its plug kept at the Inkplate end, the other end cut and re-terminated with three Dupont crimps; **3V3 conductor removed** |
-| 6 | PMSA003I **easyC socket B** | SCD41 either socket | cable 2: stock, 45 mm |
-| 7 | SCD41 other socket | BME688 either socket | cable 3: stock, 30 mm |
-| 8 | BME688 other socket | SHTC3 either socket | cable 4: stock, 40–45 mm |
+| 6 | PMSA003I **easyC socket B** | SCD41 either socket | cable 2: stock Qwiic |
+| 7 | SCD41 other socket | BME688 either socket | cable 3: stock Qwiic |
+| 8 | BME688 other socket | SHTC3 either socket | cable 4: stock Qwiic |
 | 9 | Inkplate **ESP32-group GND** | SCD41 header **GND** | 28 AWG jumper, Dupont both ends — a second ground return in parallel with cable 1's, see below |
 
 Every sensor board has two easyC sockets wired in parallel, so "either" is
 literal. The SHTC3 is last, so one of its sockets stays empty. The PM board's
 7-pin header is VIN, 3Vo, GND, SCL, SDA, RST, SET: you use **VIN, GND, SCL,
-SDA and SET** (five housings standing on the header) and leave 3Vo and RST
-empty. The bus arrives at the header, not at a socket, because in the
-enclosure the PM board's socket A faces the left wall 2.9 mm away — no plug
-fits — and socket B is taken by cable 2.
+SDA and SET** and leave 3Vo and RST empty. Cable 1 lands on that header,
+not on a socket: socket B carries cable 2, and in the desk enclosure socket A
+faces a wall.
 
-On the Inkplate, the two expander-group pads (GND and P1_3) sit five
-positions apart, so one 5-pin right-angle header spanning GND…P1_3 serves
-both, with a Dupont housing on each end pin; step 9 takes a second, 2-pin
-right-angle header on the ESP32 group, using its GND. The header pads are
-0.8 mm drills, so both headers need round machined pins. The Inkplate's four
-plain GND pads — panel, ESP32, I²C and expander groups — are the same net and
-interchangeable; **AGND** in the panel group is not, leave it alone.
+In the desk enclosure, every conductor that leaves the Inkplate (rows 1, 2,
+4, 5 and 9) also crosses the head-to-base pogo connector. The
+[enclosure README](../hardware/enclosure/v1/README.md) has the routing.
+
+**Step 4 is optional.** The PM breakout pulls SET high through 100 kΩ (§3),
+so without the wire the fan runs from power-on and every reading is valid.
+With it, the firmware controls the fan: the Inkplate library drives P1_3 low
+at boot, which stops the fan, and the firmware drives it high when it starts
+the sensors, so the 30 s warm-up counts from then. The validation build
+reports a missing SET wire as a warning, not a failure.
+
+On the Inkplate, steps 2 and 4 use the expander group's GND and P1_3 pads,
+and step 9 the ESP32 group's GND. The Inkplate's four plain GND pads — panel,
+ESP32, I²C and expander groups — are the same net and interchangeable;
+**AGND** in the panel group is not, leave it alone.
 
 The VIN pad is a 4 × 4 mm surface pad with no hole (PAD3 in Soldered's KiCad
 board). The wire unplugs at the AMS1117 end.
@@ -521,20 +502,15 @@ AMS1117, which is the fault this whole section exists to avoid.
 
 **Step 9** needs a header on the SCD41 board: five machined round pins
 soldered to its VIN · 3Vo · GND · SCL · SDA row, with a single Dupont housing
-on GND and the other four empty. The housing stands upright inside the SCD41
-compartment; the enclosure is sized for it (§9). Which edge of the Adafruit
-5190 carries that row decides how the wire runs — the model assumes the
-right-hand edge as the board sits in its compartment; check yours before
-soldering.
+on GND and the other four empty.
 
 ### Ground: one wire per crimp
 
 Ground has four endpoints on this device — the Inkplate's ground plane, the
 AMS1117's single GND pin, the PM header and the SCD41 header — and a Dupont
 housing takes one crimp, so any scheme that chains them (Inkplate → AMS1117 →
-PM) puts two wires on the regulator's GND pin. The earlier draft did exactly
-that. Instead each endpoint gets its own wire back to the Inkplate's ground
-plane (**star grounding**), each on its own Inkplate GND pad:
+PM) puts two wires on the regulator's GND pin. Instead each endpoint gets its
+own wire back to the Inkplate's ground plane (**star grounding**), each on its own Inkplate GND pad:
 
 - the AMS1117's GND pin by step 2 (expander-group GND), carrying only the
   regulator's own few mA,
@@ -560,6 +536,7 @@ the AMS1117 and the bus still has its ground.
 | 4, 5 · SET, SDA, SCL | < 1 mA | — | — |
 | 6 · PM → SCD41 | 16 / 225 mA | 28 AWG, JST-SH | fine |
 | 7, 8 · onward | 1.3 / 18 mA · 0.4 / 0.9 mA | — | — |
+| 1, 2, 4, 5, 9 · pogo pins, desk enclosure only | as above; VIN and cable 1 GND are the heaviest | one pin each, 1 A *(assumed: the connector is rated 1 A, per pin unstated)* | fine |
 
 Ampacity is not the constraint anywhere; a Dupont jumper only *looks* heavier
 than a Qwiic conductor because its insulation is thicker — the copper is the
@@ -568,117 +545,80 @@ same 28 AWG.
 **Voltage drop is the one thing to watch, and it is mostly contacts.** The
 SCD41's own 175 mA measurement pulse goes out AMS OUT → PM header → socket B →
 cable 2 → SCD41, and comes back either the same way to cable 1, or straight
-down step 9. With the lengths as built — cable 2 45 mm, cable 1 ~90 mm,
-jumpers 50–90 mm — the copper is only a few tens of mΩ; the crimp and plug
-contacts at 10–20 mΩ each are what add up. Without step 9 the loop crosses
+down step 9. Over runs of a few centimetres (cable 2 is 45 mm) the copper is
+only a few tens of mΩ; the crimp and plug contacts at 10–20 mΩ each are what
+add up. Without step 9 the loop crosses
 eight of them (~130–210 mΩ, **25–35 mV** at the sensor during its pulse, on
 the line of Sensirion's 30 mV ripple guidance in §2). With step 9 the return
 half is two Dupont contacts in parallel with the four-contact path back
 through the PM board, and the loop falls to roughly 90–140 mΩ, **≈ 15–25 mV**.
+In the desk enclosure each return also crosses one pogo contact, whose
+resistance the connector's listing does not give; at 30–100 mΩ *(assumed)* the
+loop comes to roughly 105–195 mΩ, **≈ 18–34 mV**.
 That guidance is a ripple figure, not an operating limit (the part runs from
 2.4–5.5 V), so this is margin, not a fault; clean crimps matter more than
 cable length. Two returns landing on the same ground plane a few centimetres
-apart is not a ground loop. Cable lengths: cable 2 45 mm, cable 3 30 mm,
-cable 4 40–45 mm, all jumpers 50–90 mm.
+apart is not a ground loop.
 
 Chain order is chosen for **cable voltage drop** (heavy loads nearest the
 injection point) and **heat** (reference sensor farthest from everything warm).
 
-### Every board runs at 3.3 V
-
-There is nothing unusual to do to any board. All four take 3.3 V on an
-ordinary Qwiic cable. The PMSA003I is no exception: its module needs 5 V for
-the fan, but the Adafruit breakout generates that itself with a charge pump
-from a 3–5 V input.
-
-**Do not give the PMSA003I board 5 V** to skip that charge pump. Its
-connector-side I²C pull-ups go to its VIN pin, so a 5 V input pulls the whole
-shared bus to 5 V — past the SCD41's absolute maximum of VDD + 0.3 V.
-
 ### Can I just daisy-chain it all off the Inkplate?
 
-**For bench bring-up, yes.** Plug the chain into easyC K3 and use stock
-cables throughout. Everything enumerates and reads.
+**For bench bring-up, yes.** Every board runs at 3.3 V on an ordinary Qwiic
+cable, with nothing to change on any of them; the PMSA003I's module needs 5 V
+for its fan, but the breakout makes that itself (§3). Plug the chain into
+easyC K3 with stock cables throughout, and everything enumerates and reads.
 
-**For the built device, no.** Two reasons, both about current, neither about
-any individual board:
+**For the built device, no**, for reasons of current, not of any one board:
 
-- The Inkplate's 3.3 V rail is 500 mA and already carries the ESP32, the
-  panel PMIC and Wi-Fi bursts. Sensor peaks alone reach ~470 mA (§7).
+- The Inkplate's 3.3 V rail cannot carry the sensor peaks on top of the
+  ESP32, the panel PMIC and Wi-Fi bursts (§7).
 - ~200 mA for the PM board would flow through every upstream board's
-  connectors and three cables' worth of contacts and copper before reaching
-  it. The drop, not the ampacity, is the problem: SparkFun's conservative
-  figure for a Qwiic cable is 226 mA, but the contacts are rated 1 A.
+  connectors and three cables' worth of contacts and copper. The drop, not the
+  ampacity, is the problem: SparkFun's conservative figure for a Qwiic cable
+  is 226 mA, but the contacts are rated 1 A.
 
 Hence the separate regulator and the heaviest-load-first order above. The
 symptom if you skip it is an intermittent brown-out when the fan, an SCD41
 measurement peak and a Wi-Fi transmit coincide — the hardest kind of fault to
-find later.
+find later. The regulator's 3.3 V goes to the PM board's VIN; the VIN pad's
+5 V never does (§3).
 
 ---
 
-## 9. Placement in the enclosure
+## 9. The enclosure
 
-- **SHTC3**: at a corner or edge, in the incoming airflow, slit-isolated from any mounting plate, nowhere near the Inkplate's LDO/PMIC/ESP32 or the PM fan's exhaust. It sets the reading everyone sees.
-- **PMSA003I**: inlet and outlet against an enclosure wall or separated by a baffle; enclosure vent no smaller than the inlet; ≥ 20 cm off the floor; its exhaust pointed away from the SHTC3 and SCD41.
-- **SCD41**: its own compartment with a large opening, small dead volume, out of the direct airflow, lowest point of the device, away from the fan and the Inkplate's warm parts. Membrane untouched.
-- **BME688**: anywhere with air access; its heater is a heat source for the others, so not adjacent to the SHTC3.
-- **Inkplate**: the ESP32, LDO and panel PMIC are the warmest parts; the sensors go on the opposite side or in a ventilated bay.
-- Vent the sensor bay on two sides so air moves through rather than pooling.
-- **Standing Dupont housings set the base height.** The PMSA003I's straight header carries five housings and the
-  SCD41's header one, all upright. A housing is 14 mm tall and the jumper needs ~3.7 mm above it to turn, so each
-  header block wants **17.7 mm clear** above it *(measured 2026-09-13)* — which is what makes the shell 30.5 mm
-  high at the front and 25 mm at the rear.
-
-### Fasteners
-
-For the enclosure in [`hardware/enclosure/v1/`](../hardware/enclosure/v1/README.md). Six brass heat-set inserts carry the two joints that get opened and that hold weight; everything else threads straight into printed plastic.
-
-| Fastener | Qty | Where | Hole |
-|---|---|---|---|
-| M3 heat-set insert (≈ 5.7 long, 4.6 OD) | 2 | Head tray, bottom wall | Ø 4.0 × 7.5 deep |
-| M3 heat-set insert, same | 4 | Base shell, internal pillars | Ø 4.0 × 6.0 deep |
-| M3 × 12 socket cap | 2 | Head → base, up through the cradle block | Ø 3.4 clearance, Ø 6.4 × 3.5 counterbore |
-| M3 × 8 countersunk, 90° | 4 | Shell → chassis, up from underneath | Ø 3.4 clearance, Ø 6.2 × 1.4 cone |
-| M2.5 × 6 self-tapping, pan head | 4 | Head back cover → tray bosses | Ø 2.9 clearance + Ø 5.2 × 0.8 recess; Ø 2.1 pilot, 5.0 deep |
-| M2 × 4 self-tapping, pan head | 8 | PMSA003I and SCD41, 4 each | Ø 2.1 pilot, 3 mm deep |
-| M2.5 × 4 self-tapping | 8 | BME688 and SHTC3, 4 each | Ø 2.6 pilot, 3 mm deep |
-| M3 × 6 machine screw *(optional)* | 4 | Back cover → the Inkplate's own brass standoffs | Ø 3.4 clearance |
-
-- Board pilots are blind: 3 mm of engagement with 1 mm of floor left under them, so no screw breaks the desk face. Two screws per sensor board carry a few grams comfortably; all four holes are there if wanted.
-- **Board screws are one nominal size under their pilot** *(measured 2026-09-12, PLA+ print)*, for two separate reasons. The PMSA003I's board holes are 2.5 mm (§3), so an M2.5 screw cannot physically pass through one — M2 is the only option there, and the SCD41 takes the same screw for consistency though its 3.0 mm holes would also accept M2.5. The Soldered boards' 3.2 mm holes would pass M3 happily; what rules M3 out is the printed pilot, since Ø 2.6 nominal finishes nearer 2.4 on an FDM print and a thread-former that tight in PLA+ splits the boss. Do not re-cut the pilots to suit the smaller screws: they are sized for how the hole prints, not for how it reads in CAD.
-- Every self-tapper is sized to stop **short of the blind end of its pilot**, not to fill the material: a tapered tip driven into the last millimetre wedges the boss open. Board 1.57 mm + 3 mm of pilot = 4.6 mm available, hence 4 mm screws; the cover has 1.2 mm of plate below its recess + 5.0 mm of pilot = 6.2 mm, hence 6 mm. Engagement is then 2.4 mm at the boards and 4 mm at the cover — short of the usual 2 × diameter, but these are five-gram boards.
-- The shell screw cannot go past 8 mm either — that insert bottoms at 7.7. Its countersink is Ø 6.2, not the Ø 6.6 first drawn: an ISO 7046 M3 head is 5.5 across (5.6 max), and the four holes sit close enough to the chassis edge that 0.4 mm of wall matters — see the enclosure README.
-- The **AMS1117 module has no mounting holes**. It drops into a walled pocket in the chassis 0.5 mm clear of the board on every side (9.1 mm — the board plus 0.3 a side — is tighter than an FDM print can be trusted to hold), pins toward the head, chip underneath. It rests on a pad under the two solder domes at the front (1.2 mm below the PCB) and on two solid corners at the rear beside the SOT-223, with an open passage under the board between them so the regulator has air on both faces; a Ø4 post under the shell's skin traps it when the shell goes on. It is not captive until then.
-- Self-tapping into PLA or PETG holds fine for a one-time build. If boards will come in and out repeatedly, those pilots strip after a handful of cycles and want inserts instead — which means taller, wider bosses.
+The desk enclosure is in [`hardware/enclosure/v1/`](../hardware/enclosure/v1/README.md): where each board
+sits and why, the fasteners, the cable routing, the head-to-base pogo connector, and the 3D models it is
+built from. The placement rules it follows come from each part's section here: §2 (SCD41), §3 (PMSA003I),
+§4 (BME688) and §5 (SHTC3).
 
 ---
 
-## 10. 3D files
+## 10. Open questions
 
-| Part | File | Notes |
-|---|---|---|
-| Inkplate 5 Gen2 board | [`OUTPUTS/V1.1.0/Soldered Inkplate 5 Gen2 3D.step`](https://github.com/SolderedElectronics/Soldered-Inkplate-5-Gen2-hardware-design) (31 MB) | Panel model sits at the origin in the export; reposition after import. |
-| Inkplate enclosure | same repo: `OUTPUTS/V1.1.0/3D files/*.stl`, `CAD/V1.1.0/Source 3D files/*.step` | Top 145.24 × 84.23 × 5.8, bottom 146.84 × 84.23 × 11.3 mm. Good starting shell to extend with a sensor bay. |
-| SCD41 module | [Sensirion STEP](https://sensirion.com/media/documents/260AFF2D/616531AE/Sensirion_CO2_Sensors_SCD4x_STEP_file.step) | 10.1 × 10.1 × 6.5 mm |
-| Adafruit SCD41 board | [`Adafruit_CAD_Parts/5187 SCD-40 C02 Sensor/`](https://github.com/adafruit/Adafruit_CAD_Parts/tree/main/5187%20SCD-40%20C02%20Sensor) — `.f3d`, `.step`, `.stl` | Same PCB for 5187/5190 |
-| Adafruit PMSA003I board | [`.step`](https://raw.githubusercontent.com/adafruit/Adafruit_CAD_Parts/main/4632%20PMSA003I/4632%20PMSA003I.step) · [`.stl`](https://raw.githubusercontent.com/adafruit/Adafruit_CAD_Parts/main/4632%20PMSA003I/4632%20PMSA003I.stl) · [`.f3d`](https://raw.githubusercontent.com/adafruit/Adafruit_CAD_Parts/main/4632%20PMSA003I/4632%20PMSA003I.f3d) | Includes the module |
-| Soldered BME688 board | none published | Block out **38 × 22 × ~1.6 mm**, M3 holes at the corners, JST-SH on both short edges |
-| Soldered SHTC3 board | none published | Block out **38 × 22 × ~1.6 mm**, M3 holes at ~32 × 16 mm pitch, JST-SH on both short edges |
-| 3.3 V LDO module | vendor-specific | typical breakout ~15 × 10 mm |
-| This enclosure | [`hardware/enclosure/v1/`](../hardware/enclosure/v1/README.md) — `enclosure.py` (Fusion generator), `stl/`, `step/` | Display head (tray + back cover) in a 20° cradle on a sensor base (chassis + shell). The layout in §9 as built. |
-
-A **mated** JST-SH plug stands only about **2 mm** proud of its socket — the housing sits inside it — so the
-clearance to allow beyond a socket is set by the cable turning, not by the plug: ~6 mm is comfortable, and the
-6.8 × 2.7 mm housing section is what every cable passage has to be sized around *(measured 2026-09-12)*.
+1. **PMSA003I input current at 3.3 V** is derived from the charge-pump datasheet, not measured. Measure; it sets the LDO rating.
+2. **Inkplate awake / Wi-Fi / refresh currents** are unpublished. Measure the whole device on USB to confirm it sits under the 500 mA VBUS fuse.
+3. **What the BME688 board's JP2 joins** (§4). Soldered's docs say only that it powers the regulator from 5 V, and no schematic is public. A continuity check across JP2, or the hardware files Soldered sends on request, would settle it.
+4. **Pogo contact resistance** in the desk enclosure. The connector's listing gives none, so §8 assumes 30–100 mΩ. Measure across a mated pair with ~200 mA flowing.
+5. **Flash size** of the Inkplate's ESP32-WROVER-E: 4, 8 or 16 MB by variant, and the module's shield prints no suffix. `esptool.py flash_id` over USB settles it; it resets the board.
 
 ---
 
-## 11. Open questions
+## Decision Log
 
-1. **Which SCD41 breakout?** Soldered sells no SCD41 (their CO₂ board is the SCD43). This doc assumes **Adafruit 5190**. If it is a bare Sensirion module or another board, §2's board section and the pull-up count change.
-2. ~~**Soldered pull-up values** for the BME688 and SHTC3 are not published.~~ Answered 2026-09-10: both boards carry `103` resistors beside their pull-up jumpers, so 10 kΩ, and the §6 total of 2.0 kΩ stands.
-3. **SHTC3 board size**: Soldered's text says 22 × 22 mm, their own drawing shows ~38 × 22 mm. Measure.
-4. **PMSA003I input current at 3.3 V** is derived from the charge-pump datasheet, not measured. Measure; it sets the LDO rating.
-5. **Inkplate awake / Wi-Fi / refresh currents** are unpublished. Measure the whole device on USB to confirm it sits under the 500 mA VBUS fuse.
-6. ~~**Does the RTC alarm wake this board?** Soldered say GPIO39 is not guaranteed on the 5 Gen2.~~ Answered 2026-09-09: yes. `pio run -e esp32-validate` sleeps 10 s on the alarm and wakes on `ESP_SLEEP_WAKEUP_EXT0` every cycle, with an ESP32 timer armed at 15 s as a backstop that has never had to fire.
+Dated findings and decisions behind the text above, oldest first.
+
+- **2026-09-03**: distilled from the datasheets.
+- **2026-09-03**: the first wiring plan chained Inkplate → BME688 → SHTC3 → SCD41 → PMSA003I and fed all four from the Inkplate's 3V3 through the chain. Order, connectors, addresses and pull-ups were fine. Power was not: the Inkplate's 500 mA LDO also carries the ESP32, the SCD41 wants a quiet supply, and the two heavy loads sat at the far end, where the drop is worst. Nor was the SHTC3's place: the reference sat between the BME688's heater and the SCD41. The PM fan's SET pin was unused. §8's circuit replaced the plan.
+- **2026-09-09**: the RTC alarm wakes this board on GPIO39, though Soldered does not guarantee it on the 5 Gen2. `pio run -e esp32-validate` sleeps 10 s on the alarm and wakes on `ESP_SLEEP_WAKEUP_EXT0` every cycle; an ESP32 timer armed at 15 s as a backstop has never had to fire.
+- **2026-09-09**: the SCD41 board is the Adafruit 5190. Soldered sells no SCD41; their CO₂ board is the SCD43.
+- **2026-09-10**: the Soldered BME688 and SHTC3 boards carry `103` resistors beside their pull-up jumpers, so 10 kΩ, and the §6 total of 2.0 kΩ stands.
+- **2026-09-12**: on the bench, BSEC with `bme688_sel_33v_3s_4d` reached accuracy 1 in about 4 minutes and 3 in about 40, and took 1019 hPa as its pressure input without an error.
+- **2026-09-12**: with calipers, the Soldered SHTC3 and BME688 boards are both 38.0 × 22.0 mm with four Ø3.2 mm holes on a 32 × 16 mm pitch. For the SHTC3 this overrides Soldered's product page and docs, which give 22 × 22 mm and two holes.
+- **2026-09-13**: on the bench, BSEC restarted from the state in NVS was back at accuracy 3 within 3 minutes.
+- **2026-09-13**: the wiring became one wire per crimp, with ground starred at the Inkplate and cable 1 landing on the PM header. The draft before it chained ground Inkplate → AMS1117 → PM, which put two wires on the regulator's one GND pin.
+- **2026-09-14**: Soldered's pages checked again. Neither Soldered sensor board has a public hardware repo, their docs describe the BME688's JP2 only as feeding the regulator from 5 V, and the Inkplate's BOM names its module only as "ESP32-WROVER", so the PSRAM size stays unverified.
+- **2026-09-14**: the head-to-base pogo connector is rated 1 A, with no per-pin figure and no contact resistance. §8 takes 1 A per pin and assumes 30–100 mΩ per contact.
+- **2026-09-14**: the module is an ESP32-WROVER-E; its shield prints the name but no variant suffix. The board's Diagnostics report shows 4.0 MB of PSRAM, which rules out the 2 MB variants, so it carries 8 MB. The flash stays 4, 8 or 16 MB.
