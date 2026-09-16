@@ -1,1 +1,1 @@
-epd-server @ git+https://github.com/chrisjtwomey/epd.git@v0.5.0#subdirectory=server
+epd-server @ git+https://github.com/chrisjtwomey/epd.git@v0.5.1#subdirectory=server

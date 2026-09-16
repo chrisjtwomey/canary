@@ -20,8 +20,8 @@ ClientConfig builtInSettings() {
     cfg.mqttEnabled = false;
     cfg.mqttBroker = "XXXX";
     cfg.mqttPort = 1883;
-    cfg.mqttClientID = "inkplate5-env-monitor";
-    cfg.mqttTopic = "mqtt/env-monitor-client";
+    cfg.mqttClientID = "env-monitor-client";
+    cfg.mqttTopic = "mqtt/env-monitor";
     cfg.mqttRetries = 3;
 
     return cfg;

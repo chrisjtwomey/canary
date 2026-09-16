@@ -54,5 +54,8 @@ client:             # what the board runs, not what this server does
 
 mqtt:
   enabled: false
+  host: localhost
+  port: 1883
+  topic: mqtt/env-monitor
 
 debug: false
