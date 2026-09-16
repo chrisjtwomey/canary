@@ -359,6 +359,15 @@ HEAD_FRONT_H = 13.5                                    # head's front-bottom edg
 #   The 20 deg tilt still spends depth across the connector's width, which is what the extra 1.5 buys.
 HEAD_FRONT_D = HEAD_FRONT_H * math.tan(math.radians(TILT))   # ... and depth: the bezel plane passes through (D 0, H 0)
 BLOCK_TOP_REAR = 14.0               # cradle block height behind the head (rear lip)
+TUN_X0, TUN_X1 = 9.0, 42.0          # a tunnel through the cradle block at the trench's floor level, from the PM's
+TUN_D0, TUN_D1 = 20.5, 24.0         #   leftmost housing to the trench: the four PM wires run out of the trench
+TUN_H0, TUN_H1 = 3.0, 7.0           #   into it with no climb, in two layers
+TUN_MOUTH = (9.5, 23.5, 3.2)        # (X, X, radius): behind TUN_D0 the block is open to the PM side here, floor to
+TUN_MOUTH_TOP = 10.5                #   TUN_MOUTH_TOP. Its far end is rounded tangent to the tunnel, and that is
+#   where the tunnel ends - so a wire pushed along the tunnel meets a curve that turns it out towards the PM, not a
+#   corner. The mouth stops short of the block's top because the head's pocket leans back into it: at the top the
+#   wall in front would feather to nothing. In front of TUN_D0 the block is untouched, so the head's back still
+#   lands on a full-height wall, and from the mouth back to the trench the tunnel runs through solid block.
 HEAD_CLR = 0.5                      # clearance round the head's outline in the cradle pocket and the shell's opening
 
 def boxb(X0, X1, D0, D1, H0, H1):  return box(X0, X1, H0, H1, -D1, -D0)
@@ -483,6 +492,12 @@ def build_chassis(basec, mh):
     c, s = math.cos(math.radians(TILT)), math.sin(math.radians(TILT))
     cut(body, head_volume(mh, HEAD_CLR, HEAD_ZBACK - 0.3, HEAD_ZF + 0.3))                    # cradle pocket
     cut(body, boxb(B_XI0 - 1, B_XI1 + 1, 17.8, B_DBAY0 + 1, BLOCK_TOP_REAR, H_FRONT))        # low rear lip behind the head
+    cut(body, boxb(TUN_X0, TUN_X1, TUN_D0, TUN_D1, TUN_H0, TUN_H1))                          # wire tunnel at floor level
+    mx0, mx1, mr = TUN_MOUTH
+    mouth = boxb(mx0, mx1, TUN_D0, B_DBAY0 + 1, TUN_H0, TUN_MOUTH_TOP)                       # mouth, open to the PM,
+    union(mouth, cylH(mx0, TUN_D0 + mr, TUN_H0, TUN_MOUTH_TOP, mr))                          # its far end rounded
+    cut(body, mouth)                                                                         # into the tunnel. One
+    #   tool, so the arc meets the flat of it tangentially: cut apart, the two faces cross and leave a fin
     tx0, tx1, td0, td1 = TRENCH
     trench = boxb(tx0, tx1, td0, td1, 3.0, H_FRONT)
     cut(body, trench)     # (the island that used to protect the left base screw is moot: the trench starts at 42)
@@ -839,10 +854,13 @@ def build_base_wiring(basec, mh):
     #   into the header row at D 29.54: in front of the row, the nearer lane takes the smaller pin X; behind it, the
     #   nearer lane takes the larger. Hence GND and SCL in front (26.9, 28.3), SET just behind (31.0), SDA well behind (40.5);
     #   GND2 (below) crosses to the compartment at 25.5, the only D in front of the shell pillar at (68, 30).
+    D_CLIMB = 26.2       # where a PM wire leaves the mouth and climbs: clear of the block in front and the housings behind
+    lanes = {'GNDC': (21.7, 4.2, 50.0), 'SCL': (23.1, 4.2, 48.0), 'SDA': (21.7, 5.7, 54.0), 'SET': (23.1, 5.7, 52.0)}
+    #   one lane each through the tunnel (D, H) and its own X to step up to it, so no two share a line in there
     for sig, pin, col in (('GNDC', 'GND', 'black'), ('SCL', 'SCL', 'yellow'), ('SET', 'SET', 'white'), ('SDA', 'SDA', 'blue')):
-        jx, jd, jh = jn(sig); x = PM_PINS[pin]
-        pts = [(jx, jd, jh), (jx, jd, H_LOW), (jx, D_RISE, H_LOW), (jx, D_RISE, H_MID), (jx, D_ESC, H_MID),
-               (x, D_ESC, H_MID), (x, D_ESC, H_TOP), (x, d_hdr, H_TOP), (x, d_hdr, h_top - 0.2)]
+        jx, jd, jh = jn(sig); x = PM_PINS[pin]; dl, hl, xr = lanes[sig]
+        pts = [(jx, jd, jh), (jx, jd, H_LOW), (jx, dl, H_LOW), (xr, dl, H_LOW), (xr, dl, hl),
+               (x, dl, hl), (x, D_CLIMB, hl), (x, D_CLIMB, H_TOP), (x, d_hdr, H_TOP), (x, d_hdr, h_top - 0.2)]
         bodies.append(('wire %s: pogo -> PM %s' % (sig, pin), wire_b(pts), col))
     # ---- second ground return: ESP32-group GND -> a straight header on the SCD41, housing standing in the compartment ----
     SCD_HX, SCD_HD = SCD_X1 - 2.0, SCD_D0 + 12.7          # 5-pin header 2 mm in from the board's right edge, GND the middle pin

@@ -46,7 +46,7 @@ the base rather than behind the panel is what buys that margin — carried in th
 |---|---|---|
 | **Head tray** | face down | Bezel (2.4 mm lip) and four walls, 14.1 mm deep, 5 mm plan radii, 1.2 mm round on the bezel edge. Left wall 7.3 mm thick, carrying the USB-C, power-button and microSD pockets; right wall 2 mm with the wake-button hole. Relief in the bezel lip for the expander header's solder tails. No vents. |
 | **Head back cover** | flat, outside down | 2 mm plate resting on the Inkplate's four 7.2 mm SMT standoffs and screwed to them: 4 × M3 through clearance holes, counterbored 0.7 mm so the heads sit near flush in a 2 mm plate. Nothing screws into the tray — there is nothing in the tray to screw into, see below. One grille band over the ESP32 (8 capsule slots, X 74–94, Y 14–40) — the head's only opening, facing up and back. |
-| **Base chassis** | upright (desk face down) | Floor, the solid 20° cradle block with the head pocket, and every bay feature: board bosses, the SCD41 compartment, the SHTC3 baffle, the AMS1117 pocket. It also carries the pogo plinth standing in the trench. Nothing fastens the head: the connector's two Ø5 magnets hold it down and the cradle pocket locates it. |
+| **Base chassis** | upright (desk face down) | Floor, the solid 20° cradle block with the head pocket, and every bay feature: board bosses, the SCD41 compartment, the SHTC3 baffle, the AMS1117 pocket. It also carries the pogo plinth standing in the trench. Nothing fastens the head: the connector's two Ø5 magnets hold it down and the cradle pocket locates it. Behind the head it also carries the wire tunnel: a bore at floor level running from the trench to the PM end, with one mouth open towards the PMSA and solid block between that mouth and the trench. |
 | **Base shell** | upside down (top skin on the bed) | The visible skin: rounded, drafted walls, the sloped top and a 2 mm front wall under the head, in one piece with no top-side fixings. 4 × M3×8 countersunk up from underneath into heat-set inserts in its internal pillars (×10 bottoms out — the insert ends at 7.7 mm). A Ø4 post holds the AMS1117 module down, and the PMSA003I's seal rib is part of this wall. |
 
 0.4 mm nozzle, 2 mm walls and skin, 2.2 mm slots on a 3.4 mm pitch where slots remain. The shell prints upside
@@ -249,13 +249,18 @@ bench, then fit.
 **Base.** The wires pick up on the female's tails, in a chamber under it that breaks out under the plinth's back
 wall, its roof at H 5.5 there, into the trench (X 42–84, D 9.5–26, floor at H 3 — a well around the plinth with
 about 4 mm of working room each side, open at the top once the head is off). Each drops to H 3.9 only for the few millimetres it takes to get out
-from under the connector, runs back to D 21, climbs to **H 7**, and crosses the bay up there rather than along the
-floor. From D 25.8 — behind the plinth, which ends about D 20, and behind the head's back cover, which leans to
+from under the connector, then runs back and climbs to **H 7** to cross the bay up there rather than along the
+floor — the four PM wires excepted, which stay on the floor and run into the tunnel through the cradle block.
+From D 25.8 — behind the plinth, which ends about D 20, and behind the head's back cover, which leans to
 about D 24.2 at the top lane's height — they go three ways:
 
-- **To the PM header** (cable 1's GND, SCL and SDA, and the expander's SET): across at H 7 to the pin's X, up
-  there to the **H 25.2 lane** just under the skin, then back to the header row and down into the top of a
-  standing housing. The PM's **straight** 7-pin header is on its front edge at D 29.5 with five housings on it
+- **To the PM header** (cable 1's GND, SCL and SDA, and the expander's SET): out of the trench at floor level and
+  straight into a **tunnel through the cradle block** (D 20.5–24, H 3–7, X 9–42), each wire in its own lane, two
+  on the floor and two above them. The tunnel opens towards the PMSA in one mouth (X 9.5–23.5, floor to H 10.5),
+  and the tunnel's far end is rounded into that mouth, so a wire pushed along the tunnel meets a curve that turns
+  it out rather than a corner. Each wire leaves at its pin's X, climbs at D 26.2 to the **H 25.2 lane** just under
+  the skin, then runs back to the header row and down into the top of a standing housing. The PM's **straight**
+  7-pin header is on its front edge at D 29.5 with five housings on it
   (VIN, GND, SCL, SDA, SET; tops at H 22.1). A housing is 14 mm tall and the wire needs ~3.7 mm above it to turn
   without strain — **17.7 mm clear above the header block** *(measured on the real parts)* — which is
   what makes the base 30.5 mm tall at the front; the skin's underside there is at 28.5, 2.7 mm above the wire
@@ -417,3 +422,11 @@ Dated findings and decisions behind the text above, oldest first.
   - The two `(ref)` pogo components beside the device were made by hand, and they had drifted: the female's pads
     were an older revision. `run()` builds them now, from the same code as the fitted pair, with all eight ways and
     the male's plungers standing free in its pocket. It builds them hidden.
+- **2026-09-16**:
+  - The four wires to the PM header ran down and along a 3.3 mm slot, between the cradle block's rear lip and the
+    header's housings. Four wires do not lie in that, and nothing holds them. They run at floor level now, in a
+    tunnel bored through the block from the trench, and leave through one mouth that opens towards the PMSA. The
+    tunnel's far end is rounded into that mouth, so a wire pushed along it turns out instead of jamming on a corner.
+    Two traps on the way: cutting the mouth's box and its rounded end as separate cuts leaves a fin that thins to
+    nothing where the two faces cross, so the mouth is built as one tool; and the mouth has to stop short of the
+    block's top, because the head's pocket leans back into it and the wall in front would feather away to nothing.
