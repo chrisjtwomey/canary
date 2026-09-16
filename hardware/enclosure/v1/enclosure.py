@@ -1312,14 +1312,30 @@ def board_component(devc, name, bodies):
     return occ
 
 
+BASE_ELEC = 'Base electronics (toggle)'
+
+def base_electronics(basec):
+    """The base's boards, pogo female and wiring, in one component: its light bulb leaves the bare chassis and shell.
+    Anything an older build left directly in the base moves into it."""
+    occ = get_or_make_comp(basec, BASE_ELEC)
+    for o in list(basec.occurrences):
+        if o.component.name not in ('Base chassis', 'Base shell', BASE_ELEC): o.moveToComponent(occ)
+    return occ.component
+
+def parts(top):
+    """A top assembly's parts, with the contents of the base's electronics listed in the group's place."""
+    for c in top.childOccurrences:
+        if c.component.name == BASE_ELEC: yield from c.childOccurrences
+        else: yield c
+
 def setup_components(app, des, head, base):
-    """Import the Inkplate into the head and the Adafruit boards into the base (STEP downloads), build the Soldered
-    and AMS1117 block-outs, then place everything."""
-    headc, basec = head.component, base.component
-    have = [o.component.name for o in headc.occurrences] + [o.component.name for o in basec.occurrences]
+    """Import the Inkplate into the head and the Adafruit boards into the base's electronics (STEP downloads), build
+    the Soldered and AMS1117 block-outs, then place everything."""
+    headc, elecc = head.component, base_electronics(base.component)
+    have = [o.component.name for o in headc.occurrences] + [o.component.name for o in elecc.occurrences]
     d = os.path.join(tempfile.gettempdir(), 'envmon_step'); os.makedirs(d, exist_ok=True)
     im = app.importManager
-    targets = {'inkplate5gen2.step': ('Soldered Inkplate', headc), 'pmsa003i.step': ('Adafruit PMSA003I', basec), 'scd41.step': ('PCB Component', basec)}
+    targets = {'inkplate5gen2.step': ('Soldered Inkplate', headc), 'pmsa003i.step': ('Adafruit PMSA003I', elecc), 'scd41.step': ('PCB Component', elecc)}
     for fn, url in STEP_URLS.items():
         key, target = targets[fn]
         if any(n.startswith(key) or (n.startswith('Adafruit SCD41') and key == 'PCB Component') for n in have): continue
@@ -1329,20 +1345,20 @@ def setup_components(app, des, head, base):
             with urllib.request.urlopen(req, timeout=180) as r, open(p, 'wb') as f: f.write(r.read())
         opts = im.createSTEPImportOptions(p); opts.isViewFit = False
         im.importToTarget(opts, target)
-    for o in basec.occurrences:
+    for o in elecc.occurrences:
         if o.component.name.startswith('PCB Component'): o.component.name = 'Adafruit SCD41 (5190)'
     if not any(n.startswith('BME688') for n in have):
-        board_component(basec, 'BME688 (Soldered 333203)', soldered_38x22(
+        board_component(elecc, 'BME688 (Soldered 333203)', soldered_38x22(
             header_y=1.6, sensor_wh=(3.0, 3.0, 0.93), slots=[(15, 23, 6.8, 7.8), (15, 23, 14.2, 15.2)], reg_xy=(9, 6)))
     if not any(n.startswith('SHTC3') for n in have):
-        board_component(basec, 'SHTC3 (Soldered 333032)', soldered_38x22(
+        board_component(elecc, 'SHTC3 (Soldered 333032)', soldered_38x22(
             header_y=20.4, sensor_wh=(2.0, 2.0, 0.75), slots=[(15, 23, 6.8, 7.8), (15, 23, 14.2, 15.2), (15, 16, 6.8, 15.2)], reg_xy=(9, 16)))
     if not any(n.startswith('AMS1117') for n in have):
-        board_component(basec, 'AMS1117-3.3 module', ams1117_module())
+        board_component(elecc, 'AMS1117-3.3 module', ams1117_module())
     for o in headc.occurrences:
         for key, rows in HEAD_PLACEMENTS.items():
             if o.component.name.startswith(key): o.transform = mat(rows)
-    for o in basec.occurrences:
+    for o in elecc.occurrences:
         for key, rows in BASE_PLACEMENTS.items():
             if o.component.name.startswith(key): o.transform = mat(rows)
     if des.snapshots.hasPendingSnapshot: des.snapshots.add()
@@ -1374,10 +1390,10 @@ def appearance(des, app, name, rgb):
             except Exception: pass
     return a
 
-def colour_all(des, app, headc, basec, wiring):
+def colour_all(des, app, headc, elecc, wiring):
     def ap(col): return appearance(des, app, 'col ' + col, COLS[col])
     grey = ic_grey(des, app)                   # the Inkplate STEP model's own IC colour, reused for every IC and PCB
-    for o in basec.occurrences:
+    for o in elecc.occurrences:
         n = o.component.name
         if n.startswith(('BME688', 'SHTC3')):
             for b in o.component.bRepBodies:
@@ -1420,7 +1436,7 @@ def interference(des, root):
         for c in o.childOccurrences: collect(c, minvol, label + '/' + c.component.name[:14])
     big_ink = ('PCB', 'ED05', 'Standoff', 'USB-C', 'K2-1114', 'HYC77', 'easyC', 'CR2032', 'ESP32', 'JST-2pin', 'SOP-16', 'SMD Switch', 'WQFN', 'TSSOP', 'SOP', 'SOT', 'JST', 'AVX', 'LQH', 'NR40', 'SOLID', 'COMPOUND')
     for top in root.occurrences:
-        for c in top.childOccurrences:
+        for c in parts(top):
             n = c.component.name
             if n.startswith('Soldered Inkplate'):
                 for k in c.childOccurrences:
@@ -1452,7 +1468,7 @@ def wiring_report(root):
     are the solder joints, which may be sharp. Positions are in each layer's own frame."""
     rows = {'overlaps': [], 'forced': [], 'under_floor': [], 'joints': []}
     for top in root.occurrences:
-        for c in top.childOccurrences:
+        for c in parts(top):
             if 'wiring' not in c.component.name:
                 continue
             ws = [b for b in c.bRepBodies if b.name.startswith(('wire', 'Qwiic'))]
@@ -1595,10 +1611,11 @@ def run(context):
     head = get_or_make_comp(root, 'Head')
     base = get_or_make_comp(root, 'Base')
     for top in (head, base):
-        for o in top.component.occurrences: clear_fillets(o.component)
+        for o in parts(top): clear_fillets(o.component)
     head.transform = adsk.core.Matrix3D.create()
     if des.snapshots.hasPendingSnapshot: des.snapshots.add()
     setup_components(app, des, head, base)
+    elec = base_electronics(base.component)          # toggle its light bulb to see the bare chassis and shell
     del BEND_LOG[:]                                 # the module can outlive one run in Fusion's script runner
     mh = head_matrix()
     t  = build_head_tray(head.component)
@@ -1606,11 +1623,11 @@ def run(context):
     ch = build_chassis(base.component, mh)
     sh = build_shell(base.component, mh)
     w1 = build_head_wiring(head.component)          # toggle these two components' light bulbs to hide the wiring
-    w2 = build_base_wiring(base.component, mh)
+    w2 = build_base_wiring(elec, mh)
     p1 = build_pogo_head(head.component)            # the two halves of the junction, as bought
-    p2 = build_pogo_base(base.component, mh)
+    p2 = build_pogo_base(elec, mh)
     refs = build_pogo_ref(root)
-    colour_all(des, app, head.component, base.component, [w1, w2, p1, p2] + refs)
+    colour_all(des, app, head.component, elec, [w1, w2, p1, p2] + refs)
     fin = {}
     fin.update(finish_shell([o for o in base.component.occurrences if o.component.name == 'Base shell'][0]))
     fin.update(finish_tray([o for o in head.component.occurrences if o.component.name == 'Head tray'][0]))

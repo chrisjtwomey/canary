@@ -106,6 +106,9 @@ component carries the 20° tilt. Bay interior X −8.6…133.9, D 25…84, H 2 u
 sloping to 23 at the rear). Board component faces at H 5.6 (Adafruit / Soldered) and 6.0 (AMS1117, raised so the
 regulator on its underside hangs in free air).
 
+Inside `Base`, only the chassis and the shell sit at the top level. Every board, the pogo female and **Base wiring
+(toggle)** sit in **Base electronics (toggle)**; switch its light bulb off to see the bare printed parts.
+
 The head's front-bottom edge lands at D 4.91 / H 13.5, chosen so the **bezel plane passes through (D 0, H 0)** —
 that is what makes the base's front face and the bezel one plane. Change `HEAD_FRONT_H` and the front slab
 follows automatically.
