@@ -194,8 +194,13 @@ pillar needs 9); it is held by the skin and located by the cradle block.
 
 Follows the wiring table in [HARDWARE.md §8](../../../docs/HARDWARE.md#8-wiring). Two Fusion components hold every header,
 plug, Dupont housing and wire as separate coloured bodies — **Head wiring (toggle)** and **Base wiring
-(toggle)**; switch their light bulbs off to hide the lot. Wires are drawn schematically, right-angle bends only,
-each in a dedicated channel, so the model documents where cables are meant to run rather than how they sag.
+(toggle)**; switch their light bulbs off to hide the lot. Wires are drawn at their real size and bent the way a
+wire bends: jumpers Ø1.3 mm, Qwiic conductors Ø1.0 *(both measured)*, every corner an arc of four times the
+diameter where the straights leave room for it, and never under 3 mm except at a solder joint, where a tinned
+wire is bent over a tail with pliers. Wires that travel together are drawn as a bundle - one centreline, each
+wire at a fixed offset, peeling off at its own pin - and no wire passes through another: `enclosure.py` reports
+every wire-on-wire overlap and every bend that got less than it wanted (see Printing check). The model
+documents where cables are meant to run, not how they sag, so every wire is still on the shortest tidy path.
 Colours: red 3V3 / VIN, black GND, blue SDA, yellow SCL, white SET. Qwiic cables are 4 mm ribbons in the standard
 black / red / blue / yellow order with white plugs; the boards' JST-SH sockets are beige. A mated plug is drawn
 standing 2 mm proud of its socket, which is what the real ones do — the housing disappears inside the socket —
@@ -217,14 +222,29 @@ the board is rotated) with housings on P1_3 (SET) and GND (the AMS1117's referen
 group's GND · 3V3 at X 45–47.5 with a housing on GND — the second ground return, to the SCD41. Both 5.5 mm tall,
 1.7 mm clear of the cover. All the header pads are 0.8 mm drills, so use round machined-pin headers or solder the
 wires straight to the pads. Cable 1 plugs into easyC K3 with its red conductor cut; its black, blue and yellow run
-on as three wires. With VIN from its pad that is **seven conductors** leaving the head, in two lanes behind the
-board (Z −7.4 for SET, expander GND and ESP32 GND; Z −8.7 for VIN, cable 1's GND, SCL and SDA — clear of the
-ESP32), running along the bottom edge at Y 3–12.5. They do not leave the head as wires: they end on the solder
-tails of the pogo male, let into the bottom wall at X 62.65. Each run first gets clear of the **AVX bulk
-capacitor** — it stands 7.89 mm off the board at X 62.5–67, deeper than either lane and directly over the
-connector — dropping to Y 2.05 or 2.70 at X 70 coming from the right, X 56 from the left, and making the last hop
-underneath it, where nothing else in that corner reaches past Z −2.6. The connector's stadium hole is the only
-thing that pierces the head.
+on as a three-conductor ribbon. With VIN from its pad that is **seven conductors** leaving the head. They do not
+leave it as wires: they end on the solder tails of the pogo male, let into the bottom wall at X 62.65, and the
+connector's stadium hole is the only thing that pierces the head.
+
+Six of them come down the right-hand side of the board together. Cable 1 leaves its plug pointing up the board
+and turns back on itself in a loop of its own radius (to the left: the coin cell holder is on the right), drops
+behind the ESP32's depth before it reaches the module, and rides on the three jumpers - SET and the expander GND
+off the top-edge housings, and the ESP32 GND, which comes across the top of the board to join them. The bundle
+comes down at X 96, turns along the bottom edge in two layers (ribbon at Z −7.25, jumpers at Z −8.75; 0.85 mm
+under the ESP32, 0.27 off the cover) with its centreline at Y 7, under the **AVX bulk capacitor** (X 62.5–67, Y
+4.2–11.6, down to Z −5.5, directly over the connector), and each conductor leaves it at its own tail's X.
+
+Which way each signal takes is set by what a wire can reach, not by the electronics. The tails stand in two rows
+2.3 mm apart in X and Z, out of the male's body at Y 1.4 to Y 2.9. The capacitor leaves 1.27 mm above the tips of
+the row nearer the board, so its two ways under the capacitor cannot be reached from above at all: each takes a
+wire that comes in along the **front lane** (Y 3.45, Z −3.85: between the tail tips, the capacitor and the
+board) and is bent down onto its tail there - VIN from the left, off its pad, and cable 1's GND from the right.
+The two ways on that row clear of the capacitor take cable 1's SDA and SCL, straight down and lying along the
+tail. The three jumpers reach the row nearer the cover from behind, each on its own line at Z −8.75 (Y 2.1, 3.6,
+5.1): a wire on a line can only end at the first tail it meets, so each needs its own, and the outermost wire in
+the bundle takes the nearest line and the nearest tail, so no slant across the run crosses a wire still on it.
+Their order across the top of the board is the opposite, so on the way to their places every pair crosses, each
+at its own depth. The eighth way, on the cover side nearest the USB-C, is empty.
 
 **The junction.** Head and base meet on an **8-pin magnetic pogo pair**, centred on the device at X 62.65.
 Both halves are panel-mount parts fixed by their lips, each fitted from inside its own shell. The male's nose
@@ -248,33 +268,48 @@ bench, then fit.
 
 **Base.** The wires pick up on the female's tails, in a chamber under it that breaks out under the plinth's back
 wall, its roof at H 5.5 there, into the trench (X 42–84, D 9.5–26, floor at H 3 — a well around the plinth with
-about 4 mm of working room each side, open at the top once the head is off). Each drops to H 3.9 only for the few millimetres it takes to get out
-from under the connector, then runs back and climbs to **H 7** to cross the bay up there rather than along the
-floor — the four PM wires excepted, which stay on the floor and run into the tunnel through the cradle block.
-From D 25.8 — behind the plinth, which ends about D 20, and behind the head's back cover, which leans to
-about D 24.2 at the top lane's height — they go three ways:
+about 4 mm of working room each side, open at the top once the head is off). The tails hang in two rows 2.2 mm
+apart, the back row's tips 0.8 mm lower, under a body that slopes down behind them to H 4.7 at D 14.5, and there
+is one layer of room under that roof, so the seven leave in one layer at H 3.9, each in its own lane 1.5 mm
+apart. A back-row wire meets its tail's tip end-on from below, drops to the chamber's floor and runs off along
+it, rising to H 3.9 once it is out from under the body. A front-row wire has that tail and its wire 2.2 mm behind
+its own: it stays at its tail's height, steps sideways to midway between two back-row tails, slips between them
+under the body and over their wires, and comes down into its lane after — with under 0.1 mm to the body and
+the wires the whole way. That is the tightest spot in the model, and it is the connector's doing.
+
+In the trench each wire turns: the one for the SCD41 to the right, the rest to the left, in order — the further
+right a wire's lane, the further back it turns (D 21.5, 23, 24.5, 26, 27.5, 29), so its bend passes behind the
+bends of the wires to its left and crosses none of their straights. The two that turn first, cable 1's SCL and
+SDA, rise to H 5.6 in the trench; the two AMS wires rise to it after their turns; SET and cable 1's GND cross
+under them all to the floor. From there they go three ways:
 
 - **To the PM header** (cable 1's GND, SCL and SDA, and the expander's SET): out of the trench at floor level and
   straight into a **tunnel through the cradle block** (D 20.5–24, H 3–7, X 9–42), each wire in its own lane, two
-  on the floor and two above them. The tunnel opens towards the PMSA in one mouth (X 9.5–23.5, floor to H 10.5),
+  on the floor and two above them. The tunnel opens towards the PMSA in one mouth (X 9.5–28.5, floor to H 10.5),
   and the tunnel's far end is rounded into that mouth, so a wire pushed along the tunnel meets a curve that turns
-  it out rather than a corner. Each wire leaves at its pin's X, climbs at D 26.2 to the **H 25.2 lane** just under
-  the skin, then runs back to the header row and down into the top of a standing housing. The PM's **straight**
-  7-pin header is on its front edge at D 29.5 with five housings on it
-  (VIN, GND, SCL, SDA, SET; tops at H 22.1). A housing is 14 mm tall and the wire needs ~3.7 mm above it to turn
-  without strain — **17.7 mm clear above the header block** *(measured on the real parts)* — which is
-  what makes the base 30.5 mm tall at the front; the skin's underside there is at 28.5, 2.7 mm above the wire
-  crowns.
-- **To the AMS1117** (VIN and the expander GND): stay at H 7, cross to the pin's X, run back to D 31 and D 29, and
-  rise to H 11.6 into the open ends of the IN / GND housings at D 47.3. AMS **OUT** leaves its housing the same
-  way, forward to D 42, up to the H 25.2 lane, across and forward into the PM's VIN housing. There is no AMS GND →
-  PM GND wire: the PM's ground comes down cable 1, so the regulator's GND pin carries one crimp (star
-  grounding, [HARDWARE.md §8](../../../docs/HARDWARE.md#8-wiring)).
-- **To the SCD41** (the ESP32-group GND): crosses at H 7 to X 73 — clear of the shell pillar at (68, 30) — rises
-  there to the H 25.2 lane, runs back along the compartment's right wall to D 47.7, and drops into a housing
-  standing on a **5-pin straight header on the SCD41's right-hand edge** (X 70.8, GND the middle pin; housing top
-  at H 22.1, 4.3 mm under the skin there). Which edge of the Adafruit board actually carries the
-  row is unverified — see below.
+  it out rather than a corner. The PM's **straight** 7-pin header is on its front edge at D 29.5 with five housings
+  on it (VIN, GND, SCL, SDA, SET; tops at H 22.1), and a housing is entered from the top. The wires cannot turn
+  back over the housings from the front — the head's back cover leans over the header row from that side, and a
+  wire that hairpinned there would get about 2.5 mm — so they leave the mouth at its right-hand end, past the end
+  of the housing row (between the SET housing and the PM's socket B), climbing at 32° over the board's front
+  edge. Three climb straight up there to lanes at **H 26.8** (D 29.5, 31 and 32.5, one each; 1 mm under the skin),
+  run back over the housings and drop into their own, each from its own lane so that none passes over another's
+  drop. SET, whose housing is the last in the row, climbs behind it instead and hairpins over the top, the two
+  bends sharing the housing's own depth: 3 mm each, the tightest bends in the base. A housing is 14 mm tall and a
+  wire needs ~3.7 mm above it to turn without strain — **17.7 mm clear above the header block** *(measured on the
+  real parts)* — which is what makes the base 30.5 mm tall at the front; the over-lanes are 1 mm under the skin.
+- **To the AMS1117** (VIN and the expander GND): along the bay's front at H 5.6, under the PM → SCD41 ribbon
+  (D 26 and D 27.5), up at the pin's X to H 11.6 and straight back into the open ends of the IN / GND housings at
+  D 47.3 — 7.7 mm of climb for two bends, so each gets 3.8. AMS **OUT** leaves its housing the same way, forward to
+  D 41.5, up to the H 25.2 lane, across and forward into the PM's VIN housing. There is no AMS GND → PM GND wire:
+  the PM's ground comes down cable 1, so the regulator's GND pin carries one crimp (star grounding,
+  [HARDWARE.md §8](../../../docs/HARDWARE.md#8-wiring)).
+- **To the SCD41** (the ESP32-group GND): the rightmost lane, so it turns right across nothing, slants to X 72.5 —
+  past the shell pillar at (68, 30), inside the compartment's right wall — runs in through the compartment's
+  open front, climbs in front of the board to H 25.2 (the skin is at 27.9 there), eases over to X 70.8 on the way
+  back, and drops into a housing standing on a **5-pin straight header on the SCD41's right-hand edge** (X 70.8,
+  GND the middle pin; housing top at H 22.1, 4.3 mm under the skin there). Which edge of the Adafruit board
+  actually carries the row is unverified — see below.
 
 The AMS1117 module is **rotated 180° from the obvious orientation so its pins face the head**. With the pins at the
 rear the head's two power wires would travel to D 78.9 and the regulator's outputs all the way forward again to
@@ -286,10 +321,12 @@ its way to the compartment.
 **Qwiic chain**: PM (socket B) → SCD41 front → SCD41 rear → BME688 left → BME688 right → SHTC3 right —
 i.e. PM, SCD41, BME688, SHTC3, the order in the wiring table. The PM's socket A faces the left wall 5.2 mm away,
 where no plug fits, so the bus reaches that board on its header instead. All three are stock cables: 45 mm
-PM → SCD41, 30 mm SCD41 → BME688, 40–45 mm BME688 → SHTC3. Ribbons stay at board height (H 7.1): the PM ribbon
-runs down the lane at X 45.05 and along the bay's front into the compartment; the SCD41 → BME688 ribbon leaves
-through a notch in the compartment's right wall (D 60.1–68.9); the BME688 → SHTC3 ribbon runs up the right-hand
-lane at X 126 through a notch in the baffle (X 119.7–128.5).
+PM → SCD41, 30 mm SCD41 → BME688, 40–45 mm BME688 → SHTC3. Ribbons stay at board height (H 7.1), lie flat, and
+bend as a ribbon does — their conductors 1.1 mm apart, concentric round every corner: the PM ribbon runs down
+the lane at X 44.3 and along the bay's front into the compartment; the SCD41 → BME688 ribbon runs back to D 69.5,
+across, and slants through a notch in the compartment's right wall (D 60.1–68.9) into the BME688's plug; the
+BME688 → SHTC3 ribbon runs up the right-hand lane at X 126 through a notch in the baffle (X 119.7–128.5). That
+last one has 3.2 mm of room to turn out of each plug, so its bends are 3.2 rather than 4.
 
 Both notches are **8.8 × 6 mm — a JST-SH plug is 6.8 × 2.7, and it has to be threaded through them**, so each one
 is the plug plus a millimetre a side. Size them from the plug, not the ribbon. The right-hand lane sits at X 126
@@ -344,6 +381,16 @@ mouth to its seated position, intersects that with the tray, and reports the res
   countersinks, which leave 0.6 mm of floor at the edge of each bore. Anything else there is new.
 
 Each entry is the thinnest point in a 3 mm cell, in the part's own frame (see Frames).
+
+It also reports `wiring`, for the two wiring layers:
+
+- `overlaps`: every pair of wires that pass through each other, with the volume shared. It must be empty.
+- `under_floor`: bends under 3 mm that are not at a solder joint. It must be empty.
+- `forced`: bends that got at least 3 mm but less than four diameters, because the straights either side had no
+  room for more. Each is a place a wire has to be bent harder than it would like.
+- `joints`: the bends at the solder tails, which are made tight on purpose.
+
+Positions are in the layer's own frame (see Frames).
 
 ## Unverified
 
@@ -430,3 +477,24 @@ Dated findings and decisions behind the text above, oldest first.
     Two traps on the way: cutting the mouth's box and its rounded end as separate cuts leaves a fin that thins to
     nothing where the two faces cross, so the mouth is built as one tool; and the mouth has to stop short of the
     block's top, because the head's pocket leans back into it and the wall in front would feather away to nothing.
+  - The wires were schematic: right angles, and several passing through each other. They are drawn at their
+    measured size now (jumpers Ø1.3, Qwiic conductors Ø1.0), with an arc of four diameters at every corner where
+    the straights allow one, bundled where they travel together, and none passing through another — `run()`
+    reports the overlaps (none) and every bend that got less than it wanted. Doing that honestly moved things:
+    - The pogo connector's ways are reassigned. Two of the head's tail ways sit under the AVX capacitor with
+      1.27 mm above their tips, reachable only along a lane in front of them, one wire from each side; the row
+      nearer the cover can only be reached from behind, one wire per line; and in the base the wires must turn
+      out of the chamber in lane order. Between them that fixes which signal takes which way.
+    - The tunnel's mouth is 5 mm wider (to X 28.5). A wire cannot turn back over a PM housing from the front —
+      the head's back cover leans over the header row, and the hairpin would get 2.5 mm — so the four PM wires
+      leave the mouth at its right-hand end, go round the end of the housing row, climb, and drop in from above.
+    - The Qwiic lane moved from X 45.05 to 44.3: a ribbon's outer conductor swings wide on a corner, and at
+      45.05 it swept into the corner of the compartment wall. The SCD41 → BME688 ribbon runs a longer loop, its
+      old route having a 4.5 mm straight between two corners.
+    - Places a wire is bent to about 3 mm because nothing more fits: SET's hairpin over its PM housing (3.0,
+      twice); the two AMS wires' climbs from the bay floor into their housings (3.8, twice each); the drop into
+      the SCD41 housing (3.3) and into the PM's VIN housing (3.2), both under the skin; the bends onto the over-
+      lanes 2 mm from SET's hairpin (3.5, twice); and the BME688 → SHTC3 ribbon out of each plug (3.2). Every
+      other bend is 4 mm or more, most of them the full four diameters.
+    - Fusion's `createTorus` puts the ring at the origin when the axis is one particular direction. The arcs
+      are built on the Z axis at the origin and moved into place.
