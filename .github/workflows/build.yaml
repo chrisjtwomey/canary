@@ -8,14 +8,14 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: inkplate5-env-monitor
+        working-directory: canary
 
     steps:
       # Checked out side by side so lib_deps' symlink://../epd/... paths
       # resolve. The client's own tests live in epd and run in its CI.
       - uses: actions/checkout@v6
         with:
-          path: inkplate5-env-monitor
+          path: canary
           # Tags, so scripts/version.py can derive CLIENT_VERSION.
           fetch-depth: 0
       - uses: actions/checkout@v6

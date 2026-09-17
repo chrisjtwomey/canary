@@ -1,6 +1,6 @@
 services:
-  env-monitor-server:
-    image: ghcr.io/chrisjtwomey/inkplate5-env-monitor-server:latest
+  canary-server:
+    image: ghcr.io/chrisjtwomey/canary-server:latest
     restart: unless-stopped
     ports:
       - "8080:8080"
@@ -11,7 +11,7 @@ services:
       # The readings and calibration stores. A named volume, not a host path:
       # the container runs as uid 1000 and could not write to a directory the
       # host owns.
-      - env-monitor-data:/app/data
+      - canary-data:/app/data
       # Firmware images, from firmware-builder or scripts/build-firmware.sh.
       # Create the directory before the first start, or Docker makes it as
       # root and neither can write to it. The server only reads it.
@@ -20,7 +20,7 @@ services:
   # Builds each new release's firmware into server/firmware. See
   # CONTRIBUTING.md, Releases.
   firmware-builder:
-    image: ghcr.io/chrisjtwomey/inkplate5-env-monitor-firmware-builder:latest
+    image: ghcr.io/chrisjtwomey/canary-firmware-builder:latest
     restart: unless-stopped
     # Must be able to write server/firmware on the host.
     user: "1000:1000"
@@ -35,5 +35,5 @@ services:
       - platformio:/platformio
 
 volumes:
-  env-monitor-data:
+  canary-data:
   platformio:

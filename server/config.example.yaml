@@ -48,7 +48,7 @@ client:             # what the board runs, not what this server does
     dir: firmware   # a directory of <version>.bin, newest wins
     offer_dev_builds: false # true offers to boards not built from a tag
     # source:               # optional: fill dir from a repository's releases
-    #   github: chrisjtwomey/inkplate5-env-monitor
+    #   github: chrisjtwomey/canary
     #   asset: firmware.bin
     #   token: ""           # private repo; prefer CLIENT_FIRMWARE_SOURCE_TOKEN
 
@@ -56,6 +56,6 @@ mqtt:
   enabled: false
   host: localhost
   port: 1883
-  topic: mqtt/env-monitor
+  topic: mqtt/canary
 
 debug: false

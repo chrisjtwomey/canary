@@ -16,7 +16,7 @@
 # exactly the tag: epd offers an update only to a board on a tagged build.
 set -euo pipefail
 
-repo_url=${REPO_URL:-https://github.com/chrisjtwomey/inkplate5-env-monitor.git}
+repo_url=${REPO_URL:-https://github.com/chrisjtwomey/canary.git}
 epd_url=${EPD_URL:-https://github.com/chrisjtwomey/epd.git}
 key_url=https://github.com/chrisjtwomey.gpg
 signed_by=
@@ -51,7 +51,7 @@ cleanup() {
     rm -rf "$work"
 }
 trap cleanup EXIT
-src=$work/inkplate5-env-monitor
+src=$work/canary
 
 # One tag, shallow. Not `git clone --branch`, which warns that an annotated
 # tag is not a commit.

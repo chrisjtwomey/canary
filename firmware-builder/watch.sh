@@ -4,7 +4,7 @@
 # and the board would take a development build.
 set -uo pipefail
 
-repo=${REPO:-chrisjtwomey/inkplate5-env-monitor}
+repo=${REPO:-chrisjtwomey/canary}
 dir=${FIRMWARE_DIR:-/firmware}
 poll=${POLL_SECONDS:-900}
 

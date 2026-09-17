@@ -1,4 +1,4 @@
-# Architecture — where the env monitor departs from the kit, and how
+# Architecture — where CANARY departs from the kit, and how
 
 How this device differs from the weather calendar that [epd](https://github.com/chrisjtwomey/epd)
 came out of, and what it builds on the kit. [HARDWARE.md](HARDWARE.md) has the numbers; the
@@ -103,7 +103,7 @@ server/
   metrics.py                   derived values and wording
   static/                      CSS, fonts, charts.js
   config.example.yaml
-hardware/enclosure/v1/         the desk enclosure
+hardware/                      the desk enclosure
 docs/
 ```
 

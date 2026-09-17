@@ -1,4 +1,4 @@
-# Contributing to Inkplate 5 Environment Monitor
+# Contributing to CANARY
 
 ## Layout
 
@@ -229,9 +229,9 @@ five after each live reading (`posting readings failed (-1); 12 held`, then
 and keeps them across a restart; PSRAM holds about 40 hours and loses them
 to a power cut. The Diagnostics page shows the count as `unsent`.
 
-`kRotation` in `src/main.cpp` is 0: the v2 enclosure holds the board as it
-comes, with the USB-C port on the right. A board turned 180°, as the v1
-enclosure holds it, needs 2.
+`kRotation` in `src/main.cpp` is 0: the enclosure holds the board as it
+comes, with the USB-C port on the right. A board mounted turned 180° needs
+2.
 
 #### Which sensors answered
 
@@ -344,9 +344,9 @@ even though the tests pass, because Pylance does not read `pytest.ini`.
 ## Releases
 
 Publishing a GitHub release runs `.github/workflows/release.yaml`. It builds
-`server/` into `ghcr.io/chrisjtwomey/inkplate5-env-monitor-server` and
+`server/` into `ghcr.io/chrisjtwomey/canary-server` and
 `firmware-builder/` into
-`ghcr.io/chrisjtwomey/inkplate5-env-monitor-firmware-builder`, each tagged
+`ghcr.io/chrisjtwomey/canary-firmware-builder`, each tagged
 with the release's version (`0.2.0` and `0.2` for `v0.2.0`) and `latest`. No
 release carries a firmware image: the firmware links Bosch's BSEC binary,
 which this project does not hand out. `scripts/build-firmware.sh` builds one

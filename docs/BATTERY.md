@@ -1,4 +1,4 @@
-# Battery reference — Inkplate 5 Gen2 environment monitor
+# Battery reference — CANARY
 
 What changes when the device in [HARDWARE.md](HARDWARE.md) runs from its
 battery instead of USB-C. Distilled from the datasheets on 2026-09-06. Every

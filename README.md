@@ -1,4 +1,4 @@
-# Inkplate 5 Gen2 Environment Monitor
+# CANARY
 
 An indoor air-quality display: CO₂, particulates, VOC and temperature on a
 5.2" e-paper panel, rendered server-side.
@@ -26,7 +26,7 @@ from USB-C; [docs/HARDWARE.md](docs/HARDWARE.md) §7 has the power budget.
 | [docs/HARDWARE.md](docs/HARDWARE.md) | Every datasheet distilled: wiring, commands, timing, currents, gotchas. The reference to reach for instead of searching. |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How this departs from the weather calendar's model, and how it builds on [epd](https://github.com/chrisjtwomey/epd). |
 | [docs/READINGS.md](docs/READINGS.md) | The JSON the firmware posts. |
-| [hardware/enclosure/v1/](hardware/enclosure/v1/README.md) | The printed desk enclosure (display head + sensor base): Fusion generator, STL, STEP and 3MF, sensor layout, fasteners, wiring and 3D model sources. |
+| [hardware/](hardware/README.md) | The printed desk enclosure (display head + sensor dock): Fusion generator, STL, STEP and 3MF, sensor layout, fasteners, wiring and 3D model sources. |
 
 ## Build and test
 

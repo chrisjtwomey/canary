@@ -1,4 +1,4 @@
-# Inkplate 5 Environment Monitor
+# CANARY
 
 **Read [CONTRIBUTING.md](CONTRIBUTING.md) first.** It covers the repository layout, how to run the tests, and how to build and run things locally.
 

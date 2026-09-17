@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inkplate 5 env monitor server.
+"""CANARY server.
 
 ``epd_server.DisplayServer`` does the generic work: routes, the X-Next-*
 headers, the regeneration loop, signals. This file is the project: its
@@ -74,7 +74,7 @@ def make_source(seed: int, clock, reports: DeviceReports, altitude_m: float = 0.
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="Inkplate 5 env monitor server")
+    p = argparse.ArgumentParser(description="CANARY server")
     p.add_argument("--once", action="store_true",
                    help="Render the images and exit. No HTTP server, no scheduler.")
     p.add_argument("--only", metavar="PAGE",
@@ -138,7 +138,7 @@ def main():
             regen_lead_seconds=core.server.regen_lead_seconds,
             port=core.server.port,
             mqtt=core.mqtt,
-            mqtt_client_id="env-monitor-server",
+            mqtt_client_id="canary-server",
             ingest={"readings": ingest.accept},
             queries={"calibration": calibration.answer},
             firmware=core.firmware,

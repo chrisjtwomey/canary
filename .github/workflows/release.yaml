@@ -18,10 +18,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - image: inkplate5-env-monitor-server
+          - image: canary-server
             context: ./server
             file: ./server/Dockerfile
-          - image: inkplate5-env-monitor-firmware-builder
+          - image: canary-firmware-builder
             context: .
             file: ./firmware-builder/Dockerfile
 

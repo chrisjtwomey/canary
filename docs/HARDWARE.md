@@ -1,4 +1,4 @@
-# Hardware reference — Inkplate 5 Gen2 environment monitor
+# Hardware reference — CANARY
 
 Working shorthand for development, distilled from the datasheets. Every
 section links its sources. Facts are from the datasheet unless marked
@@ -472,8 +472,8 @@ not on a socket: socket B carries cable 2, and in the desk enclosure socket A
 faces a wall.
 
 In the desk enclosure, every conductor that leaves the Inkplate (rows 1, 2,
-4, 5 and 9) also crosses the head-to-base pogo connector. The
-[enclosure README](../hardware/enclosure/v1/README.md) has the routing.
+4, 5 and 9) also crosses the head-to-dock pogo connector. The
+[enclosure README](../hardware/README.md) has the routing.
 
 **Step 4 is optional.** The PM breakout pulls SET high through 100 kΩ (§3),
 so without the wire the fan runs from power-on and every reading is valid.
@@ -589,8 +589,8 @@ find later. The regulator's 3.3 V goes to the PM board's VIN; the VIN pad's
 
 ## 9. The enclosure
 
-The desk enclosure is in [`hardware/enclosure/v1/`](../hardware/enclosure/v1/README.md): where each board
-sits and why, the fasteners, the cable routing, the head-to-base pogo connector, and the 3D models it is
+The desk enclosure is in [`hardware/`](../hardware/README.md): where each board
+sits and why, the fasteners, the cable routing, the head-to-dock pogo connector, and the 3D models it is
 built from. The placement rules it follows come from each part's section here: §2 (SCD41), §3 (PMSA003I),
 §4 (BME688) and §5 (SHTC3).
 
@@ -620,5 +620,5 @@ Dated findings and decisions behind the text above, oldest first.
 - **2026-09-13**: on the bench, BSEC restarted from the state in NVS was back at accuracy 3 within 3 minutes.
 - **2026-09-13**: the wiring became one wire per crimp, with ground starred at the Inkplate and cable 1 landing on the PM header. The draft before it chained ground Inkplate → AMS1117 → PM, which put two wires on the regulator's one GND pin.
 - **2026-09-14**: Soldered's pages checked again. Neither Soldered sensor board has a public hardware repo, their docs describe the BME688's JP2 only as feeding the regulator from 5 V, and the Inkplate's BOM names its module only as "ESP32-WROVER", so the PSRAM size stays unverified.
-- **2026-09-14**: the head-to-base pogo connector is rated 1 A, with no per-pin figure and no contact resistance. §8 takes 1 A per pin and assumes 30–100 mΩ per contact.
+- **2026-09-14**: the head-to-dock pogo connector is rated 1 A, with no per-pin figure and no contact resistance. §8 takes 1 A per pin and assumes 30–100 mΩ per contact.
 - **2026-09-14**: the module is an ESP32-WROVER-E; its shield prints the name but no variant suffix. The board's Diagnostics report shows 4.0 MB of PSRAM, which rules out the 2 MB variants, so it carries 8 MB. The flash stays 4, 8 or 16 MB.
