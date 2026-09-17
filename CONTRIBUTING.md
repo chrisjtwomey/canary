@@ -229,9 +229,9 @@ five after each live reading (`posting readings failed (-1); 12 held`, then
 and keeps them across a restart; PSRAM holds about 40 hours and loses them
 to a power cut. The Diagnostics page shows the count as `unsent`.
 
-`kRotation` in `src/main.cpp` is 2: the enclosure holds the board turned
-180°, with the USB-C port on the left. A board that sits the other way up
-needs 0.
+`kRotation` in `src/main.cpp` is 0: the v2 enclosure holds the board as it
+comes, with the USB-C port on the right. A board turned 180°, as the v1
+enclosure holds it, needs 2.
 
 #### Which sensors answered
 

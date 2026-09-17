@@ -237,7 +237,7 @@ static const bool kMockSensors = false;
 
 // ─── Everything below is implementation-agnostic ──────────────────────────
 
-static const uint8_t  kRotation = 2;             // landscape, turned 180° so the USB-C port is on the left
+static const uint8_t  kRotation = 0;             // landscape, as the board comes: the USB-C port on the right
 static const uint32_t kSampleIntervalMs = 5000;
 static const uint32_t kReportIntervalMs = 60000;
 // Buffer size when the server sends no Content-Length. An eight-grey
