@@ -95,6 +95,29 @@ HEAD_R, HEAD_CAV_R, HEAD_R_FRONT = 5.0, 3.0, 1.2   # plan corner radius (outer /
 HEAD_ZF, HEAD_ZBACK = 2.4, -11.67
 HEAD_X0, HEAD_X1, HEAD_Y0, HEAD_Y1 = -2.0, 132.6, -1.0, 76.2       # cavity
 HEAD_LWALL, HEAD_RWALL, HEAD_WALL = 2.0, 7.3, 2.0                  # thick RIGHT wall (USB-C side) for a symmetric bezel
+# --- how the cover holds the tray. The cover goes in from the back in a straight line, so only something that
+#   engages after it is in can stop it coming out again: two tongues and two screws. Every tray feature here is a
+#   cut in a wall, so the Inkplate still passes.
+HEAD_STEP, HEAD_STEP_PLAY = 1.0, 0.15   # a step 1 mm into the walls' inner rear edge and 1 mm deep: the seat for the
+#   cover's edge, whose outer millimetre is that much larger. It locates the cover and hides the gap; it holds nothing.
+TONGUE_Y = ((14.0, 26.0), (49.2, 61.2)) # two tongues on the cover's left edge, on its inner face, 0.8 into slots
+TONGUE_T, TONGUE_IN = 0.9, 0.8          #   in the thin wall. The step stops short of each slot, so 1 mm of wall stays
+#   behind the tongue. The cover goes on tilted, tongues first, and swings down on to the standoffs.
+EAR_X1, EAR_Y = 138.7, 9.2              # two ears on the cover's right corners, the full 2 mm thick, in pockets in the
+EAR_SCREW = ((135.8, 3.4), (135.8, 71.83))   # thick wall that leave a 1 mm skirt outside. An M3 x 6 through each
+INSERT_R, INSERT_DEPTH = 2.0, 6.0       #   goes into a heat-set insert in the wall, in line with the standoff screws.
+#   The ears seat level with the standoff tops. The bezel lip stands HEAD_STEP_PLAY clear of the panel, and the
+#   tongues and the cover's edge have the same play, so a wall that prints that much short or long still cannot
+#   make the ear screws press the lip on to the glass.
+
+def head_ear(i, grow, z0, z1):
+    """Ear i (0 bottom, 1 top) grown by `grow`: a block at the cover's right corner, rounded to follow the head's."""
+    lo, hi = HEAD_Y0 - HEAD_STEP + 0.2, HEAD_Y1 + HEAD_STEP - 0.2      # the cover's own edge, 0.2 inside the step
+    y0, y1 = ((lo, EAR_Y), (hi - (EAR_Y - lo), hi))[i]
+    e = box(HEAD_X1 - 1.0, EAR_X1 + grow, y0 - grow, y1 + grow, z0, z1)
+    lim = HEAD_X1 + HEAD_RWALL - EAR_X1 - grow            # what is left of the wall outside the ear
+    return inter(e, rrect_h(HEAD_X0, HEAD_X1 + HEAD_RWALL - lim, HEAD_Y0 - HEAD_WALL + lim, HEAD_Y1 + HEAD_WALL - lim,
+                            z0, z1, HEAD_R - lim))
 # There are no bosses of any kind inside the cavity, and there must never be. The Inkplate is 130.59 x 75.23 in a
 # 134.6 x 77.2 cavity - 2 mm a side in X, because SW2 and the wake switch stand 0.85 mm past the board's left and
 # right edges, and 1 mm top and bottom - and it goes in from the back, so its own footprint sweeps the whole
@@ -181,7 +204,7 @@ def pg_male_bodies(as_bought=False):
     """The male, in place in the head. as_bought: all eight ways, and the plungers standing free in the pocket."""
     ways = PG_WAYS if as_bought else PG_TAILS.values()
     b = pg_stad(PG_M_L, PG_M_W, M_Y0, M_Y1)                                  # nose, through the bottom wall
-    union(b, pg_stad(PG_M_LIP_L, PG_M_LIP_W, M_Y1 - 0.01, M_Y2))             # lip, glued to the cavity floor
+    union(b, pg_stad(PG_M_LIP_L, PG_M_LIP_W, M_Y1, M_Y2))                    # lip, landing on the cavity floor, glued
     union(b, pg_stad(PG_M_L, PG_M_W, M_Y2 - 0.01, M_Y3))                     # back band
     cut(b, pg_key(PG_FIT, M_Y0 - 0.01, M_Y0 + PG_POCKET))                    # the pocket, inset into the nose face
     mags = None
@@ -200,7 +223,7 @@ def pg_female_bodies(as_bought=False):
     """The female, in place in the dock. as_bought: all eight ways."""
     ways = PG_WAYS if as_bought else PG_TAILS.values()
     b = pg_stad(PG_F_L, PG_F_W, F_Y3, F_Y2)                                  # bottom band
-    union(b, pg_stad(PG_F_LIP_L, PG_F_LIP_W, F_Y2 - 0.01, F_Y1))             # lip, glued to the plinth's ledge
+    union(b, pg_stad(PG_F_LIP_L, PG_F_LIP_W, F_Y2, F_Y1))                    # lip, landing on the plinth's ledge, glued
     union(b, pg_stad(PG_F_L, PG_F_W, F_Y1 - 0.01, F_Y0))                     # top band
     union(b, pg_key(0.0, F_Y0 - 0.01, F_Y0 + PG_BOSS))                       # boss, into the male's pocket
     mags = None                                                              # buried: they do not break the face
@@ -273,9 +296,20 @@ def slots_x_round(body, X0, X1, Y_from, Y_to, Z0, Z1, pitch=3.4, w=2.2):
 def build_head_tray(headc):
     """Front shell: bezel + 4 walls, 14.1 mm deep, printed face-down."""
     X0, X1, Y0, Y1 = HEAD_X0, HEAD_X1, HEAD_Y0, HEAD_Y1
-    ZF, ZLIP, ZBACK = HEAD_ZF, 0.0, HEAD_ZBACK
+    ZF, ZLIP, ZBACK = HEAD_ZF, HEAD_STEP_PLAY, HEAD_ZBACK
     t = rrect_h(X0 - HEAD_LWALL, X1 + HEAD_RWALL, Y0 - HEAD_WALL, Y1 + HEAD_WALL, ZBACK, ZF, HEAD_R)
     cut(t, rrect_h(X0, X1, Y0, Y1, ZBACK - 1, ZLIP, HEAD_CAV_R))
+    step = rrect_h(X0 - HEAD_STEP, X1 + HEAD_STEP, Y0 - HEAD_STEP, Y1 + HEAD_STEP,
+                   ZBACK - 1, ZBACK + HEAD_STEP, HEAD_CAV_R + HEAD_STEP)        # the step the cover's edge lands in,
+    for (ya, yb) in TONGUE_Y:                                                   # ... left whole behind each tongue
+        cut(step, box(X0 - HEAD_STEP - 1, X0, ya - 1.0, yb + 1.0, ZBACK - 2, ZBACK + HEAD_STEP + 1))
+    cut(t, step)
+    ZT = ZBACK + 2.0                                                            # the cover's inner face
+    for (ya, yb) in TONGUE_Y:                                                   # tongue slots in the thin wall
+        cut(t, box(X0 - HEAD_STEP, X0 + 0.01, ya - 0.3, yb + 0.3, ZT - TONGUE_T - HEAD_STEP_PLAY, ZT + 0.25))
+    for i, (sx, sy) in enumerate(EAR_SCREW):                                    # ear pockets and insert bores
+        cut(t, head_ear(i, 0.2, ZBACK - 1, ZT))
+        cut(t, cyl_z(sx, sy, ZT - 0.01, ZT + INSERT_DEPTH, INSERT_R))
     # --- display window: active area (X 10.68..125.24, Y 5.39..69.84) + 0.8 mm, 1 mm step outside ---
     AX0, AX1, AY0, AY1, MARG = 10.68, 125.24, 5.39, 69.84, 0.8
     cut(t, box(AX0 - MARG, AX1 + MARG, AY0 - MARG, AY1 + MARG, ZLIP - 1, ZF + 1))
@@ -304,9 +338,21 @@ def build_head_tray(headc):
 
 def build_head_cover(headc):
     """Flat back cover: sits inside the walls on the Inkplate's four M3 SMT standoffs and screws into them.
-    That is the only thing holding it - see the note by the cavity constants for why there are no tray bosses."""
+    Its outer millimetre is wider and lands in the step in the walls, which is what holds the tray - see the notes
+    by the cavity constants for the step and for why there are no tray bosses."""
     ZO, ZI = HEAD_ZBACK, HEAD_ZBACK + 2.0
     c = rrect_h(HEAD_X0 + 0.2, HEAD_X1 - 0.2, HEAD_Y0 + 0.2, HEAD_Y1 - 0.2, ZO, ZI, HEAD_CAV_R - 0.2)
+    e = HEAD_STEP - 0.2
+    edge = rrect_h(HEAD_X0 - e, HEAD_X1 + e, HEAD_Y0 - e, HEAD_Y1 + e,
+                   ZO, ZO + HEAD_STEP - HEAD_STEP_PLAY, HEAD_CAV_R + e)
+    for (ya, yb) in TONGUE_Y:                                    # no wide edge where the wall stays whole
+        cut(edge, box(HEAD_X0 - HEAD_STEP - 1, HEAD_X0 + 0.2, ya - 1.2, yb + 1.2, ZO - 1, ZI + 1))
+    union(c, edge)
+    for (ya, yb) in TONGUE_Y:
+        union(c, box(HEAD_X0 - TONGUE_IN, HEAD_X0 + 0.3, ya, yb, ZI - TONGUE_T, ZI))
+    for i, (sx, sy) in enumerate(EAR_SCREW):
+        union(c, head_ear(i, 0.0, ZO, ZI))
+        cut(c, cyl_z(sx, sy, ZO - 1, ZI + 1, 1.7))               # M3 clearance; the head sits on the ear
     for (x, y) in [(3.4, 3.4), (127.19, 3.4), (3.4, 71.83), (127.19, 71.83)]:   # the Inkplate's own standoffs
         cut(c, cyl_z(x, y, ZO - 1, ZI + 1, 1.7))                                 # M3 clearance
         cut(c, cyl_z(x, y, ZO - 1, ZO + 0.7, 3.1))                               # ... and a shallow counterbore, so
@@ -338,9 +384,10 @@ B_X0, B_X1 = -10.6, 135.9           # outer at the top of the walls; the draft w
 B_XI0, B_XI1 = -8.6, 133.9          # bay interior (vertical inner walls)
 B_D1 = 98.7                         # depth: the sensor bays, then the TinyS3's cradle lying across, behind the SCD41
 B_DBAY0, B_DBAY1 = 25.0, 96.7       # bay interior depth range (front = cradle block's rear face)
-H_FRONT, H_REAR = 30.5, 25.0        # top skin, outer: flat from the front to D_SLOPE, then down to the rear
-D_SLOPE = 37.7                      # where the top starts to fall: 5.5 mm over the last 61 mm, 5.15 deg
-SLOPE = (H_FRONT - H_REAR) / (B_D1 - D_SLOPE)
+H_FRONT, H_REAR = 33.9, 25.0        # top skin, outer: one plane from the front edge down to the rear, 5.15 deg, so
+D_SLOPE = 0.0                       # printed upside down the whole skin lies on the bed. The rear is set by the
+SLOPE = (H_FRONT - H_REAR) / (B_D1 - D_SLOPE)   # TinyS3's USB-C (1.5 mm under the skin); the wires arcing over the PM
+#   header (H_OVER) have 1.4 mm under it, and the front is where that slope arrives.
 #   Set by the connectors, not the boards: a Dupont housing standing on a straight header needs 14 mm for itself and
 #   3.7 mm for the wire to turn (measured), so on a board at H 5.6 the wire's crown is at H 25.8, and the skin's
 #   underside has to clear that wherever a housing stands - at the PM header (D 29.5) and the SCD41 header (D ~48).
@@ -400,17 +447,16 @@ def drafted_rrect(x0, x1, d0, d1, h0, h1, r, draft_deg, h_ref):
     return body
 
 def top_chamfer_solid():
-    """The top-edge chamfer, built into the solid rather than as a chamfer feature: two 45 deg drafted prisms with
-    their reference planes C_TOP under the flat top and under the sloped top. Each is the looser of the two over the
-    other's part of the top, so their intersection takes exactly C_TOP off the top edge all the way round, wrapping
-    the rounded corners, and leaves everything lower untouched (45 deg flares faster than the 4.3 deg wall draft)."""
+    """The top-edge chamfer, built into the solid rather than as a chamfer feature: a 45 deg drafted prism with its
+    reference plane C_TOP under the skin, tilted with it. It takes exactly C_TOP off the top edge all the way round,
+    wrapping the rounded corners, and leaves everything lower untouched (45 deg flares faster than the 4.3 deg wall
+    draft)."""
     k = drafted_rrect(B_X0, B_X1, 0.0, B_D1, -20.0, H_FRONT + 6.0, R_PLAN, 45.0, H_FRONT - C_TOP)   # +6: at 45 deg the corner radius would reach zero 10 mm above the reference plane
-    s = tb.copy(k)
     m = adsk.core.Matrix3D.create()
     m.setToRotation(-math.atan(SLOPE), adsk.core.Vector3D.create(1, 0, 0),
                     adsk.core.Point3D.create(0.0, D_SLOPE * M, (H_FRONT - C_TOP) * M))
-    tb.transform(s, m)
-    return inter(k, s)
+    tb.transform(k, m)
+    return k
 
 def head_matrix(tilt_deg=TILT, front_d=HEAD_FRONT_D, front_h=HEAD_FRONT_H):
     rot = adsk.core.Matrix3D.create()
@@ -430,8 +476,8 @@ def head_volume(mh, clear, z0, z1):
     v = head_outline(clear, z0, z1)
     tb.transform(v, mh)
     return v
-def skin_top(d):                    # outer top surface height at depth d (flat at H_FRONT ahead of D_SLOPE)
-    return H_FRONT if d <= D_SLOPE else H_FRONT - SLOPE * (d - D_SLOPE)
+def skin_top(d):                    # outer top surface height at depth d
+    return H_FRONT - SLOPE * (d - D_SLOPE)
 
 # --- bay layout (mm) ---------------------------------------------------------
 PM_X0, PM_D0 = -3.8, 27.0                     # PMSA003I X -3.8..31.8 (air face 4.8 mm from the left wall), D 27..77.8, header row at the FRONT
@@ -471,10 +517,12 @@ RIB_XR = (128.5, 35.0, 67.0, 9.0)             # outer guide rib: X 128.5..chassi
 #   corners' centres, (-0.6, 88.7) and (125.9, 88.7); the left one is the only pillar on the PM board's side.
 SHELL_PILLARS = [(68.0, 30.0), (125.0, 30.0), (0.0, 88.7), (125.0, 88.7)]
 CSK_D, CSK_H = 6.2, 1.4                       # countersink for the M3 flat heads, 90 deg: an ISO 7046 head is 5.5 (5.6
-#   max) across, so 6.2 clears it, and taking 0.4 off the 6.6 first drawn is 0.2 mm more wall at every hole and 0.6 mm
-#   rather than 0.4 of floor left above the cone.
-AMS_POST = (AMS_X0 + 7.5, AMS_D0 + 4.25, 2.0, AMS_H + 1.4 - 0.15)   # on the board's centreline, between the two supports, so the
-#   two rather than pivoting about the pad - 0.15 mm of preload, on bare board between the header and R1
+#   max) across, so 6.2 clears it, and taking 0.4 off the 6.6 first drawn is 0.2 mm more wall at every hole.
+PILLAR_BOSS = 1.0                             # a boss on the chassis floor under each pillar, the pillar's own radius, so
+#   the floor the screw head bears on is 1.6 mm above the cone, not 0.6; the pillar starts on top of it
+AMS_POST = (AMS_X0 + 7.5, AMS_D0 + 4.25, 2.0, AMS_H + 1.4)   # on the board's centreline, between the two supports, so the
+#   two rather than pivoting about the pad - landing on the board's top face, on bare board between the header and R1:
+#   the pocket sets the board's height and the post only stops it lifting, so a print's 0.1 mm either way is fine
 PM_BOSSES = [(PM_X0 + 2.54, PM_D0 + 2.54), (PM_X0 + 33.02, PM_D0 + 2.54), (PM_X0 + 2.75, PM_D0 + 48.3), (PM_X0 + 32.75, PM_D0 + 15.3)]   # Adafruit 4632 holes
 PM_SEAL_D = (PM_D0 + 27.8, PM_D0 + 31.1)      # seal rib between the module's two ports (gap: 54.5..58.4)
 PM_SEAL_W, PM_SEAL_H = PM_X0 - 0.2 - B_XI0, 19.0   # fills the gap to the module face (0.2 mm short of it), up to 1 mm above the module
@@ -539,11 +587,13 @@ LED_BODY_D, LED_RIM_D, LED_RIM_T, LED_L = 3.0, 3.8, 1.0, 5.3   # a typical T-1 L
 LED_CLR = 0.2                                 # the pocket, each side, on both diameters
 LED_TIP = 1.2                                 # the LED's tip, behind the block's face: 0.3 clear of the tile's back
 TILE_D, TILE_T = 7.8, 3.2                     # LEGO 1x1 round tile (35380 / 98138), the published sizes
-TILE_FIT = 0.1                                # the shell's hole over the tile: a press fit once printed
+TILE_FIT = 0.2                                # the shell's hole over the tile, on the diameter: a printed hole comes out
+#   smaller than drawn, and 0.1 would not take the tile by hand. Raise this, not the tile, if a print is still tight
+TILE_LEAD = 0.4                               # lead-in chamfer at the hole's mouth, so the tile finds the hole and seats flush
 TILE_CLR = 0.25                               # the relief round the tile's back
-LOGO_PILL_L, LOGO_PILL_H, LOGO_DEPTH = 30.0, 9.5, 0.8   # the logo's pill recess in the front face: its white pieces
-#   (printed apart, 0.8 thick, 6.8 mm tall) are glued to its floor, flush with the face. It is centred across the
-#   shell and at the tile's height, which is within 0.2 mm of the face's middle.
+LOGO_PILL_L, LOGO_PILL_H, LOGO_DEPTH = 35.0, 9.6, 0.8   # the logo's pill recess in the front face: its white pieces
+#   (printed apart, 0.8 thick, 8 mm tall) are glued to its floor, flush with the face. It is centred across the
+#   shell and halfway up the face, 0.9 mm of face above and below it.
 LED_PIT = (5.0, 11.5, 2.3)                    # the access pit: half-width, front (D), floor (H). The front stays 0.6 behind the
 #   LED's step, and the floor is under the rim's bore where the two meet, so the LED can be pushed straight in.
 
@@ -620,15 +670,19 @@ def led_pocket(body):
     cut(body, boxb(LED_X - hw, LED_X + hw, d0, B_DBAY0 + 1.0, h0, H_FRONT + 1.0))
 
 def tile_hole():
-    """The shell's hole for the tile."""
-    return cyl(led_at(-(SKIN + CH_FRONT) - 2.0), led_at(0.0), (TILE_D + TILE_FIT) / 2)
+    """The shell's hole for the tile, with a lead-in at its mouth on the face."""
+    r = (TILE_D + TILE_FIT) / 2
+    face = -(SKIN + CH_FRONT)                                             # the shell's front face, along the LED's axis
+    hole = cyl(led_at(face - 2.0), led_at(0.0), r)
+    union(hole, tb.createCylinderOrCone(led_at(face - 0.01), (r + TILE_LEAD) * M, led_at(face + TILE_LEAD), r * M))
+    return hole
 
 def logo_centre():
     """The logo pill's centre: X across the shell, and its distance up the front face from the bezel plane's foot,
-    level with the tile's centre."""
-    c, s = math.cos(math.radians(TILT)), math.sin(math.radians(TILT))
-    tc = led_at(-(SKIN + CH_FRONT))                                       # the tile's centre, on the face
-    return (B_X0 + B_X1) / 2, tc.z / M * c + tc.y / M * s                 # H c + D s
+    halfway up the face. The face runs from the rim's chamfer to the head's opening, 11.5 mm along the slope."""
+    c = math.cos(math.radians(TILT))
+    lo, hi = GAP / c + C_RIM, HEAD_FRONT_H / c - HEAD_CLR
+    return (B_X0 + B_X1) / 2, (lo + hi) / 2
 
 def logo_recess():
     """The pill recess for the logo, LOGO_DEPTH into the front face and open outward."""
@@ -650,7 +704,7 @@ LOGO_COMP = 'Logo (white, printed apart)'
 STENCIL_COMP = 'Logo stencil (tool, printed apart)'
 STENCIL_T = LOGO_DEPTH + 0.8                  # the stencil: LOGO_DEPTH of it fills the recess round the pieces, the rest
 STENCIL_FIT = 0.15                            # stands proud. It is this much smaller than the pill all round
-STENCIL_ARCH = (12.6, 1.6, 1.2, 5.0, 1.5)     # a grab arch at each end, standing on the stencil's top face: its X from
+STENCIL_ARCH = (14.3, 1.6, 1.2, 5.0, 1.5)     # a grab arch at each end, standing on the stencil's top face: its X from
 #   the pill's centre, its width along X, each leg's width, the gap under the bar (a fingertip), and the bar's thickness.
 #   It stands past the openings, on the solid end of the pill, so nothing blocks a piece going in; the bar spans the
 #   pill's width there, so it prints as a short bridge.
@@ -724,7 +778,7 @@ def into_recess(comp, sk, bodies):
     comp.features.moveFeatures.add(mv)
 
 def build_logo(dockc):
-    """The logo's white pieces (canary-logo.svg, 6.8 mm tall, traced for a 0.2 mm nozzle), LOGO_DEPTH thick, lying
+    """The logo's white pieces (canary-logo.svg, 8 mm tall, traced for a 0.2 mm nozzle), LOGO_DEPTH thick, lying
     on the recess floor. A separate print: export these bodies and print them flat."""
     occ, sk, bodies = svg_part(dockc, LOGO_COMP, 'canary-logo.svg', LOGO_DEPTH, 'logo piece')
     into_recess(occ.component, sk, bodies)
@@ -849,10 +903,10 @@ def build_chassis(dockc, mh):
     #   there would open into a dead pocket, and trapped air insulates about three times better than the 2 mm of PLA it replaced.
     build_ts_cradle(body)
     build_pw_holder(body)
-    cut(body, boxb(B_XI0 - 1, B_XI1 + 1, B_DBAY0, D_SLOPE + 1, H_FRONT - SKIN - 0.3, H_FRONT + 10))   # under the flat skin
-    cut(body, hs_b((0.0, D_SLOPE, H_FRONT - SKIN - 0.3), (0.0, SLOPE, 1.0)))                # under the sloped skin
+    cut(body, hs_b((0.0, D_SLOPE, H_FRONT - SKIN - 0.3), (0.0, SLOPE, 1.0)))                # under the skin
     for (x, d) in SHELL_PILLARS:                                                             # shell screws, countersunk from below
-        cut(body, cylH(x, d, -1.0, 3.0, 1.7))
+        union(body, cylH(x, d, 2.0 - 0.01, 2.0 + PILLAR_BOSS, 3.5))                           # the boss the pillar stands on
+        cut(body, cylH(x, d, -1.0, 2.0 + PILLAR_BOSS + 1.0, 1.7))
         cut(body, coneH(x, d, -0.01, CSK_D / 2, CSK_H, 1.7))
     led_pocket(body)
     occ = get_or_make_comp(dockc, 'Dock chassis')
@@ -871,8 +925,8 @@ def build_shell(dockc, mh):
     cut(cavity, hs_b((0.0, SKIN / c, 0.0), (0.0, -c, sn)))                                  # keep the tilted front wall
     cut(outer, cavity)
     for (x, d) in SHELL_PILLARS:
-        union(outer, cylH(x, d, 2.0, skin_top(d) - SKIN + 0.5, 3.5))
-        cut(outer, cylH(x, d, 1.0, 8.0, 2.0))                                               # M3 heat-set insert from below
+        union(outer, cylH(x, d, 2.0 + PILLAR_BOSS, skin_top(d) - SKIN + 0.5, 3.5))          # standing on the chassis's boss
+        cut(outer, cylH(x, d, 1.0, 2.0 + PILLAR_BOSS + 6.0, 2.0))                            # M3 heat-set insert from below, 6 deep
     cut(outer, head_volume(mh, HEAD_CLR, HEAD_ZBACK - 1.6, HEAD_ZF + 0.3))                  # head opening, corners matching the head; after the pillars, which reach into it
     pt = skin_top(AMS_POST[1]) - SKIN + 0.5                                                # AMS retainer: 4 mm, not 2.4 - it is a
     union(outer, cylH(AMS_POST[0], AMS_POST[1], AMS_POST[3], pt, AMS_POST[2]))               # 17 mm tower printed off the skin, and PLA is brittle
@@ -1272,7 +1326,7 @@ def build_head_wiring(headc):
         bodies.append(('bridge %s-%s' % (a, b), bridge((tx[a], Y_END, zt), (tx[b], Y_END, zt)), 'silver'))
     return add_bodies(headc, 'Head wiring (toggle)', bodies)
 
-# --- dock wiring (dock frame X, D, H): the dock's wires, DOCK.md section 5 ---
+# --- dock wiring (dock frame X, D, H): the dock's wires; HARDWARE.md section 8 has the circuit ---
 #   Power comes from the USB-C socket through two splices, VBUS and GND, which feed the TinyS3, the AMS1117, the
 #   pogo female and (GND only) the status LED. The TinyS3's cradle channel, open at both ends under the board, is the dock's main
 #   duct: every wire that crosses the strip behind the sensors goes through it, in layers by height (the J3 joints
@@ -1444,7 +1498,7 @@ def build_dock_wiring(dockc, mh):
     h_top = H_PM + 2.54 + 14.0
     for name, x in PM_PINS.items():
         bodies.append(('Dupont PM %s' % name, boxb(x - 1.27, x + 1.27, d_hdr - 1.27, d_hdr + 1.27, H_PM + 2.54, h_top), 'dupont'))
-    H_OVER, R_OVER = 26.8, 3.5               # the over-lanes, 1 mm under the skin; the bend onto the inner one, 2 mm from SET's hairpin
+    H_OVER, R_OVER = 26.8, 3.5               # the over-lanes, 1.4 mm under the skin; the bend onto the inner one, 2 mm from SET's hairpin
     XE_IN, XE_OUT = 23.6, 25.1               # the two climb lines, between the SET housing and the PM's socket B
     d_j4 = TS_DC + TS_W / 2 - ts_row_y(False)                                    # 92.48, the J4 row
     J4_PIN = {'SCL': 5, 'SDA': 6, 'SET': 7, 'IO6': 8, 'GND1': 10}
@@ -1834,6 +1888,16 @@ def insertion_sweep(tray_body):
     tb.booleanOperation(prism, tb.copy(tray_body), adsk.fusion.BooleanTypes.IntersectionBooleanType)
     return round(prism.volume * 1000, 2)
 
+def cover_pullout(tray_body, cover_body):
+    """What stops the cover, and the Inkplate screwed to it, from dropping straight out of the back of the tray:
+    the cover moved 0.5 mm backwards, intersected with the tray. It must be more than 0 - hold the head with the
+    panel facing up and this is all that carries the Inkplate."""
+    moved = tb.copy(cover_body)
+    m = adsk.core.Matrix3D.create(); m.translation = V(0, 0, -0.5 * M)
+    tb.transform(moved, m)
+    tb.booleanOperation(moved, tb.copy(tray_body), adsk.fusion.BooleanTypes.IntersectionBooleanType)
+    return round(moved.volume * 1000, 2)
+
 def interference(des, root):
     names = {}
     def key(b): return (b.name, b.parentComponent.name, round(b.volume, 6))
@@ -2060,7 +2124,7 @@ def run(context):
         for o in top.component.occurrences:
             if o.component.bRepBodies.count == 1 and 'wiring' not in o.component.name and 'Logo' not in o.component.name and 'stencil' not in o.component.name:
                 lumps[o.component.name] = o.component.bRepBodies.item(0).lumps.count
-    print(json.dumps({'lumps_must_all_be_1': lumps, 'inkplate_insertion_blocked_mm3': insertion_sweep(t), 'head tray': bb_mm(t.boundingBox), 'head cover': bb_mm(c.boundingBox),
+    print(json.dumps({'lumps_must_all_be_1': lumps, 'inkplate_insertion_blocked_mm3': insertion_sweep(t), 'cover_pullout_blocked_mm3': cover_pullout(t, c), 'head tray': bb_mm(t.boundingBox), 'head cover': bb_mm(c.boundingBox),
                       'dock chassis': bb_mm(ch.boundingBox), 'dock shell': bb_mm(sh.boundingBox),
                       'finish': fin, 'interference': interference(des, root), 'printability': printability(app, head, dock),
                       'wiring': wiring_report(root)}))

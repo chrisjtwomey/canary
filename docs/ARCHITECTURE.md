@@ -17,14 +17,14 @@ server decides *when* (`X-Next-Refresh-Seconds`) and *what*
 | | Weather calendar | Env monitor |
 |---|---|---|
 | Power | LiPo, years | **USB mains** (HARDWARE §7) |
-| Data origin | server fetches from APIs | **the client holds the sensors** |
+| Data origin | server fetches from APIs | **the device holds the sensors**, in a dock the panel stands in |
 | Cadence | 7 wakes a day | readings every few seconds, display every few minutes |
 | Client between refreshes | deep sleep | **awake**: sensors need it (SCD41 periodic mode with ASC, BSEC calibration state, PM fan warm-up) |
 | Panel | Inkplate 10, 4 greys used | Inkplate 5 Gen2, **8 greys** |
 
 Three of those change the design. The panel is one config line.
 
-## 3. Three differences in the design
+## 3. Four differences in the design
 
 ### 3.1 The firmware runs an awake loop, not `run_app()`
 
@@ -66,6 +66,27 @@ keeps and `GET /calibration` hands back after the board restarts.
 `type: interval`. This device uses `interval` with `every: 300`, so refreshes
 land on :00, :05, … on the wall clock; the weather calendar keeps `times`.
 [CONTRIBUTING.md](../CONTRIBUTING.md) explains the pools.
+
+### 3.4 The device is a head and a dock
+
+The panel and the sensors are two boards, in two halves of one enclosure:
+
+- **Head**: the Inkplate 5 Gen2 and nothing else. Its I²C bus carries only its own expander, RTC and panel PMIC,
+  and its regulator carries only itself.
+- **Dock**: an ESP32-S3 (TinyS3), the four sensors on a regulator of their own, and the USB-C socket that powers
+  both halves. A magnetic pogo connector carries 5 V and ground up to the head, which sits in the dock's cradle.
+
+Three things forced it, all in [HARDWARE.md §7–§8](HARDWARE.md#7-power):
+
+- **The bus.** With the chain on the Inkplate's bus, a jammed sensor also stopped panel refreshes and the panel
+  temperature read, because the expander, the RTC and the PMIC share that bus.
+- **The rail.** The Inkplate's regulator is 500 mA and also carries its ESP32 and panel PMIC. The sensors peak at
+  ~470 mA on their own.
+- **Heat and quiet.** The SCD41 wants a supply free of Wi-Fi bursts, and the dock's own regulator would reach
+  thermal shutdown carrying the chain.
+
+Nothing else leaves the head: its only connections are the two wires soldered to its power pads, which meet the
+dock at the pogo connector.
 
 ## 4. What stays as the kit has it
 
@@ -218,3 +239,4 @@ Dated decisions and status behind the text above, oldest first.
 - **2026-09-04**: the build settled three of the four questions. Readings go by HTTP POST: one route in `DisplayServer`, testable with Flask's test client, and an MQTT republish can follow on the server when Home Assistant enters the picture, with no change to the firmware. The firmware sits at the repo root, like the weather calendar's. The PM fan runs all the time.
 - **2026-09-09**: the four drivers landed behind `II2cBus`, with host tests. The SCD41 board is the Adafruit 5190 (inventory item 92). The mocks were not corrected against logs of the real parts; that needs a log of each part.
 - **2026-09-12**: `ReadingsStore` and `IngestSource` are in epd from 0.5.0, and `source.kind: store` serves them to the pages. BSEC runs for the BME688's IAQ index.
+- **2026-09-15**: the device became a head and a dock (§3.4). One bus and one 500 mA rail could not carry both the panel and the sensor chain; each half now has its own.

@@ -1,24 +1,44 @@
 # Enclosure
 
-> **The exports are behind the model.** `stl/`, `step/` and `3mf/` were written before the dock's layout was
-> finished. Regenerate them from `enclosure.py` before printing.
-
 Desk enclosure for the Inkplate 5 Gen2 and the four sensor boards: a thin display head tilted 20° back, standing
 in a low sensor dock that extends behind it. Rounded plan corners, drafted walls, a continuous shadow gap instead
 of grilles, and no fixings visible from any normal angle.
-Designed in Fusion (project **Inkplate Env Monitor Enclosure**, design **Env Monitor Enclosure**);
-`enclosure.py` regenerates every part, every board placement and the wiring layer from the numbers in this file.
+Designed in Fusion (project **CANARY**, design **CANARY**); `enclosure.py` regenerates every part, every board
+placement and the wiring layers from the numbers in this file. See [Working on the model](#working-on-the-model).
 
 | | |
 |---|---|
-| `stl/` | The four printed parts, in print orientation, mm. |
+| `stl/` | The six printed parts, in print orientation, mm. |
 | `step/` | The same parts, upright in their own frames (head parts in the head frame, dock parts in the dock frame). |
-| `3mf/` | The same four parts again as 3MF, in print orientation, for slicers that prefer it. |
-| `enclosure.py` | Fusion script: downloads the Inkplate / Adafruit STEP models, builds the Soldered and AMS1117 block-outs, places every board, builds the four parts and the two wiring layers, applies the tilt. Run it from Fusion's script editor in an empty design. |
+| `3mf/` | The same six parts again as 3MF, in print orientation, for slicers that prefer it. |
+| `enclosure.py` | Fusion script: downloads the Inkplate / Adafruit STEP models, builds the Soldered and AMS1117 block-outs, places every board, builds the parts, the logo, the stencil and the two wiring layers, applies the tilt. Run it from Fusion's script editor in an empty design. |
+| `canary-logo.svg`, `canary-stencil.svg` | The logo's outlines and the stencil's, in millimetres. `enclosure.py` imports both. |
 
-On the desk: **150.7 wide × 87.3 deep × 89.8 tall mm**. Dock 30.5 mm tall at the front (flat over the cradle to
-D 25), sloping to 25 mm at the rear — the front height is set by the Dupont housings standing on the PMSA003I's
-header, see Wiring.
+The four enclosure parts print in **PLA+ with a 0.4 mm nozzle**; `logo` and `logo-stencil` need the **0.2 mm
+nozzle** and go on their own plate, the logo in white.
+
+On the desk: **150.7 wide × 87.3 deep × 89.8 tall mm**. The dock's top is one plane, 33.9 mm tall at the front
+edge and 25 mm at the rear, 5.15°. The rear is set by the TinyS3's USB-C under the skin; over the PMSA003I's
+header the Dupont housings and the wires arcing over them have 1.4 mm to spare, see Wiring.
+
+
+## Working on the model
+
+`enclosure.py` is the design. The Fusion document is not in this repository: the script builds the whole thing in
+an empty design, and downloads the Inkplate, Adafruit and pogo STEP models it places. Fusion's own copy holds the
+saved milestones.
+
+- Run it from **Fusion's script editor**: Utilities → Scripts and Add-Ins → the green **+** beside "My Scripts",
+  pick the file, then Run. A full run takes a few minutes and needs a network connection the first time, for the
+  STEP downloads.
+- It is **re-runnable**. Every part is rebuilt from scratch each time, and components are reused by name, so
+  nothing is duplicated. Edges rounded by Fusion features are found geometrically, not by index.
+- The report it prints at the end is the check: `lumps_must_all_be_1` (each printed part is one solid),
+  `inkplate_insertion_blocked_mm3` (the board can still go in), `cover_pullout_blocked_mm3` (the cover cannot
+  drop out of the tray), `interference`, `printability` and `wiring`. The pull-out figure must be more than 0.
+  All the others must be empty or 0: a part that touches another lands on it, it does not overlap it.
+- **Exports** are made in a second step, never in the same run as the build: the transformed bodies first, the
+  export calls after, or Fusion writes empty files.
 
 ## Shape
 
@@ -47,16 +67,16 @@ the dock rather than behind the panel is what buys that margin — carried in th
 
 | Part | Print orientation | Fixings |
 |---|---|---|
-| **Head tray** | face down | Bezel (2.4 mm lip) and four walls, 14.1 mm deep, 5 mm plan radii, 1.2 mm round on the bezel edge. Left wall 7.3 mm thick, carrying the USB-C, power-button and microSD pockets; right wall 2 mm with the wake-button hole. Relief in the bezel lip for the expander header's solder tails. No vents. |
-| **Head back cover** | flat, outside down | 2 mm plate resting on the Inkplate's four 7.2 mm SMT standoffs and screwed to them: 4 × M3 through clearance holes, counterbored 0.7 mm so the heads sit near flush in a 2 mm plate. Nothing screws into the tray — there is nothing in the tray to screw into, see below. One grille band over the ESP32 (8 capsule slots, X 74–94, Y 14–40) — the head's only opening, facing up and back. |
+| **Head tray** | face down | Bezel (2.4 mm lip) and four walls, 14.1 mm deep, 5 mm plan radii, 1.2 mm round on the bezel edge. Right wall 7.3 mm thick, carrying the USB-C, power-button and microSD pockets; left wall 2 mm with the wake-button hole. Relief in the bezel lip for the expander header's solder tails. The rear edge of the walls carries what holds the cover: a 1 mm step all round as its seat, two tongue slots in the thin wall, and two ear pockets with heat-set inserts in the thick wall's corners. No vents. |
+| **Head back cover** | flat, outside down | 2 mm plate resting on the Inkplate's four 7.2 mm SMT standoffs and screwed to them: 4 × M3 through clearance holes, counterbored 0.7 mm so the heads sit near flush in a 2 mm plate. It holds the tray with two 12 mm tongues on one side edge and two ears on the other, each ear screwed to an insert in the thick wall. It goes on tilted, tongues first, and swings down. One grille band over the ESP32 (8 capsule slots, X 74–94, Y 14–40) — the head's only opening, facing up and back. |
 | **Dock chassis** | upright (desk face down) | Floor, the solid 20° cradle block with the head pocket, and every bay feature: board bosses, the SCD41 compartment, the SHTC3 baffle, the AMS1117 pocket. It also carries the pogo plinth standing in the trench. Nothing fastens the head: the connector's two Ø5 magnets hold it down and the cradle pocket locates it. Behind the head it also carries the wire tunnel: a bore at floor level running from the trench to the PM end, with one mouth open towards the PMSA and solid block between that mouth and the trench. |
-| **Dock shell** | upside down (top skin on the bed) | The visible skin: rounded, drafted walls, the sloped top and a 2 mm front wall under the head, in one piece with no top-side fixings. 4 × M3×8 countersunk up from underneath into heat-set inserts in its internal pillars (×10 bottoms out — the insert ends at 7.7 mm). A Ø4 post holds the AMS1117 module down, and the PMSA003I's seal rib is part of this wall. |
+| **Dock shell** | upside down (top skin on the bed) | The visible skin: rounded, drafted walls, the sloped top and a 2 mm front wall under the head, in one piece with no top-side fixings. 4 × M3×8 countersunk up from underneath into heat-set inserts in its internal pillars, which stand on 1 mm bosses on the chassis floor (×10 bottoms out — the insert ends at 8.7 mm). A Ø4 post holds the AMS1117 module down, and the PMSA003I's seal rib is part of this wall. |
 
 0.4 mm nozzle, 2 mm walls and skin, 2.2 mm slots on a 3.4 mm pitch where slots remain. The shell prints upside
 down so its whole outer surface is either on the bed or a drafted wall — no supports; the STL is rotated 5.15° past
-the flip so the sloped skin lies flat. Everything is printed in **PLA+**: the only heat in the dock
+the flip so the whole skin lies flat on the bed. Everything is printed in **PLA+**: the only heat in the dock
 is the AMS1117's few hundred milliwatts, so PETG is the fallback if its pocket or the shell post over it ever
-softens (Unverified 10).
+softens.
 
 **Nothing stands inside the head's cavity, and nothing may.** The Inkplate is 130.59 × 75.23 in a 134.6 × 77.2
 opening — 2 mm a side in X, because SW2 and the wake switch stand 0.85 mm past the board's left and right edges,
@@ -65,17 +85,27 @@ the way to its seat. A boss is in the way however far behind
 the seated board it finally sits. So the cover screws to the Inkplate's own
 standoffs, and the head is held by magnets.
 
+The cover goes in from the back in a straight line, so only something that engages after it is in can keep it
+there. Two tongues on its thin-wall edge enter slots in that wall, and two ears at the other end sit in pockets in
+the thick wall and screw into inserts. All of it is cut into the walls, so the board still passes. Hold the head
+with the panel facing up and the tongues and the two ear screws carry the Inkplate; `enclosure.py` reports what
+blocks the cover from dropping straight out as `cover_pullout_blocked_mm3`, which must be **more than 0**.
+
+The bezel lip stands 0.15 mm clear of the panel, and the tongues have the same play in their slots. A wall that
+prints that much short therefore cannot make the ear screws press the lip on to the glass.
+
 ## Fasteners
 
-Four brass heat-set inserts carry the one screwed joint that gets opened: the shell on the chassis. The back cover
+Six brass heat-set inserts carry the screwed joints between printed parts: four for the shell on the chassis, two
+for the back cover's ears on the tray. The back cover also
 screws into the Inkplate's own standoffs, the pogo connector's two magnets hold the head down, and everything else
 threads straight into printed plastic.
 
 | Fastener | Qty | Where | Hole |
 |---|---|---|---|
-| M3 heat-set insert (≈ 5.7 long, 4.6 OD) | 4 | Dock shell, internal pillars | Ø 4.0 × 6.0 deep |
+| M3 heat-set insert (≈ 5.7 long, 4.6 OD) | 6 | Dock shell, internal pillars (4); head tray, thick wall corners (2) | Ø 4.0 × 6.0 deep |
 | M3 × 8 countersunk, 90° | 4 | Shell → chassis, up from underneath | Ø 3.4 clearance, Ø 6.2 × 1.4 cone |
-| M3 × 6 machine screw | 4 | Head back cover → the Inkplate's four SMT standoffs | Ø 3.4 clearance, Ø 6.2 × 0.7 counterbore |
+| M3 × 6 machine screw | 6 | Head back cover → the Inkplate's four SMT standoffs (4) and the tray's two inserts (2) | Ø 3.4 clearance; Ø 6.2 × 0.7 counterbore over the standoffs only |
 | M2 × 4 self-tapping, pan head | 8 | PMSA003I and SCD41, 4 each | Ø 2.1 pilot, 3 mm deep |
 | M2.5 × 4 self-tapping | 8 | BME688 and SHTC3, 4 each | Ø 2.6 pilot, 3 mm deep |
 
@@ -91,7 +121,7 @@ threads straight into printed plastic.
 - Every self-tapper is sized to stop **short of the blind end of its pilot**, not to fill the material: a tapered
   tip driven into the last millimetre wedges the boss open. A 1.57 mm board plus 3 mm of pilot leaves 4.6 mm,
   hence 4 mm screws and 2.4 mm of engagement — short of the usual 2 × diameter, but these are five-gram boards.
-- The shell screw stops at 8 mm: its insert ends at 7.7, so an M3 × 10 bottoms out.
+- The shell screw stops at 8 mm: it passes 3 mm of floor and boss and holds 5 mm of the insert, which ends at 8.7, so an M3 × 10 bottoms out.
 - The cover's counterbore leaves 1.3 mm of plate under each screw head, so an M3 × 6 puts about 4.7 mm of thread
   into the 7.2 mm standoff.
 - Self-tapping into PLA or PETG holds fine for a one-time build. If boards will come in and out repeatedly, those
@@ -150,7 +180,7 @@ There are no grilles on the top, the right side, the rear or the head.
   it as a detached island. The 3.1 mm of rib that reaches over the chassis floor starts 0.2 mm above it, so the
   shell still drops on freely.
 - **SCD41** breathes through its compartment's open front (≈ 500 mm² facing the bay) rather than a lid grille.
-  If its response turns out sluggish, the fix is a slot row low in the compartment's left wall — see Unverified.
+  If its response turns out sluggish, the fix is a slot row low in the compartment's left wall.
 - **Head.** Sealed except for one grille band in the back cover: 8 stadium slots, 2.2 × 20 mm on the usual 3.4 mm
   pitch, X 74–94 and Y 14–40, ≈ 344 mm². They sit over the **ESP32-WROVER** (X 75–93, Y −0.2–31.8), which at
   80–150 mA with Wi-Fi up is the only real heat source in the head and sits directly behind the panel. The slots run
@@ -161,7 +191,7 @@ There are no grilles on the top, the right side, the rear or the head.
 
 ## Bay layout
 
-Each board's place follows the placement rules in its section of [HARDWARE.md](../../../docs/HARDWARE.md)
+Each board's place follows the placement rules in its section of [HARDWARE.md](../docs/HARDWARE.md)
 (§2–§5):
 
 - **SHTC3**: at a corner or edge, in the incoming airflow, slit-isolated from any mounting plate, nowhere near the
@@ -181,7 +211,7 @@ Each board's place follows the placement rules in its section of [HARDWARE.md](.
 | SCD41 | 49.9…72.8 × 35…60.4, sockets facing front and rear | Middle, in its own compartment (walls X 47.3–48.8 and 74.3–75.8 from D 30, rear wall D 72–73.5, all to the skin). Both sockets in use. A 5-pin straight header on its right-hand edge (X 70.8; VIN · 3Vo · GND · SCL · SDA along D 42.6–52.8) carries one standing Dupont housing, on GND, for the second ground return. |
 | SHTC3 | 82.8…120.8 × 26.5…48.5 | Front-right: coolest corner, against the solid cradle block, farthest from the fan and the LDO, behind a full-height baffle at D 50–51.5. End of the chain, only its right socket used. |
 | BME688 | 82.8…120.8 × 53.5…75.5 | Rear-right, behind the baffle. Both sockets in use. |
-| AMS1117-3.3 | 35.3…43.8 × 61…73.5, **pins toward the head** | Centred in the strip between the PM board (X 31.8) and the SCD41 compartment wall (47.3). No mounting holes: it sits in a pocket 0.5 mm clear of the board on every side (9.5 × 13.5 in plan; 0.3 mm a side would give a 9.1 mm slot, too tight to trust an FDM print with), front and rear walls 1 mm thick to H 8, the sides only 2.5 mm corner tabs so the underside is open to the strip. The board rests on a pad under its two solder domes at the front (top H 4.8; the domes stand 1.2 mm proud) and on two solid corners at the rear either side of the SOT-223 (to H 6.0, the PCB's underside), so the regulator hangs in a 2.3 mm air passage open at both sides — no floor slots, nothing to bridge. A Ø4 shell post at (39.55, 66), on the board's centreline between the two supports, holds it down with 0.15 mm of preload (until the shell is on, the module is loose); a 3 mm cone at the post's root keeps it printable upside down. Dupont housings on its three pins run **forward**, D 47.3–61. |
+| AMS1117-3.3 | 35.3…43.8 × 61…73.5, **pins toward the head** | Centred in the strip between the PM board (X 31.8) and the SCD41 compartment wall (47.3). No mounting holes: it sits in a pocket 0.5 mm clear of the board on every side (9.5 × 13.5 in plan; 0.3 mm a side would give a 9.1 mm slot, too tight to trust an FDM print with), front and rear walls 1 mm thick to H 8, the sides only 2.5 mm corner tabs so the underside is open to the strip. The board rests on a pad under its two solder domes at the front (top H 4.8; the domes stand 1.2 mm proud) and on two solid corners at the rear either side of the SOT-223 (to H 6.0, the PCB's underside), so the regulator hangs in a 2.3 mm air passage open at both sides — no floor slots, nothing to bridge. A Ø4 shell post at (39.55, 66), on the board's centreline between the two supports, lands on it and stops it lifting (until the shell is on, the module is loose); a 3 mm cone at the post's root keeps it printable upside down. Dupont housings on its three pins run **forward**, D 47.3–61. |
 
 The four shell pillars sit at (68, 30), (125, 30), (50, 77.5) and (125, 76) — plan positions clear of every board,
 plug, ribbon and wire lane, **and far enough in from the chassis edge for the countersink on the underside to keep
@@ -211,7 +241,8 @@ you cannot change a wire. To change one, print a new chassis and wire it again.
   *(measured, calipers)*. The model uses 8.5 mm of plastic, 3 mm legs and 2.5 mm width.
 - 28 AWG wire, solder and glue.
 
-**Wires at the TinyS3** (from [DOCK.md §5](../../../docs/DOCK.md#5-wiring). Pin numbers count from the USB-C end.)
+**Wires at the TinyS3** ([HARDWARE.md §8](../docs/HARDWARE.md#8-wiring) has the circuit. Pin numbers count from
+the USB-C end.)
 
 | Strip | Pin | Signal | Wire goes to |
 |---|---|---|---|
@@ -262,7 +293,7 @@ Do all the soldering on the bench, away from the printed parts.
 
 ## Wiring and headers
 
-Follows the wiring table in [HARDWARE.md §8](../../../docs/HARDWARE.md#8-wiring). Two Fusion components hold every header,
+Follows the wiring table in [HARDWARE.md §8](../docs/HARDWARE.md#8-wiring). Two Fusion components hold every header,
 plug, Dupont housing and wire as separate coloured bodies — **Head wiring (toggle)** and **Dock wiring
 (toggle)**; switch their light bulbs off to hide the lot. Wires are drawn at their real size and bent the way a
 wire bends: jumpers Ø1.3 mm, Qwiic conductors Ø1.0 *(both measured)*, every corner an arc of four times the
@@ -330,7 +361,7 @@ The seven conductors use seven of its eight pins. The connector is rated 1 A and
 figure, so each pin is taken as good for 1 A. The two heavy pins are VIN (220 mA typical, 475 mA peak) and cable
 1's GND, the return for all four sensors (215 mA typical, 470 mA peak, less whatever the SCD41's second return
 takes); the other five carry a few milliamps or less. Nor does the listing give a contact resistance:
-[HARDWARE.md §8](../../../docs/HARDWARE.md#8-wiring) carries it into the voltage-drop estimate as an assumption.
+[HARDWARE.md §8](../docs/HARDWARE.md#8-wiring) carries it into the voltage-drop estimate as an assumption.
 
 Assembly order matters. **Fit the Inkplate before the connector**: the male's back band sits at the board's bottom
 edge, and with the connector already in, the board cannot pass it. Solder all seven wires to each half on the
@@ -367,19 +398,19 @@ under them all to the floor. From there they go three ways:
   drop. SET, whose housing is the last in the row, climbs behind it instead and hairpins over the top, the two
   bends sharing the housing's own depth: 3 mm each, the tightest bends in the dock. A housing is 14 mm tall and a
   wire needs ~3.7 mm above it to turn without strain — **17.7 mm clear above the header block** *(measured on the
-  real parts)* — which is what makes the dock 30.5 mm tall at the front; the over-lanes are 1 mm under the skin.
+  real parts)*; the over-lanes are 1.4 mm under the skin.
 - **To the AMS1117** (VIN and the expander GND): along the bay's front at H 5.6, under the PM → SCD41 ribbon
   (D 26 and D 27.5), up at the pin's X to H 11.6 and straight back into the open ends of the IN / GND housings at
   D 47.3 — 7.7 mm of climb for two bends, so each gets 3.8. AMS **OUT** leaves its housing the same way, forward to
   D 41.5, up to the H 25.2 lane, across and forward into the PM's VIN housing. There is no AMS GND → PM GND wire:
   the PM's ground comes down cable 1, so the regulator's GND pin carries one crimp (star grounding,
-  [HARDWARE.md §8](../../../docs/HARDWARE.md#8-wiring)).
+  [HARDWARE.md §8](../docs/HARDWARE.md#8-wiring)).
 - **To the SCD41** (the ESP32-group GND): the rightmost lane, so it turns right across nothing, slants to X 72.5 —
   past the shell pillar at (68, 30), inside the compartment's right wall — runs in through the compartment's
   open front, climbs in front of the board to H 25.2 (the skin is at 27.9 there), eases over to X 70.8 on the way
   back, and drops into a housing standing on a **5-pin straight header on the SCD41's right-hand edge** (X 70.8,
   GND the middle pin; housing top at H 22.1, 4.3 mm under the skin there). Which edge of the Adafruit board
-  actually carries the row is unverified — see below.
+  actually carries the row is unverified; the compartment has the room either way.
 
 The AMS1117 module is **rotated 180° from the obvious orientation so its pins face the head**. With the pins at the
 rear the head's two power wires would travel to D 78.9 and the regulator's outputs all the way forward again to
@@ -447,8 +478,7 @@ mouth to its seated position, intersects that with the tray, and reports the res
 
 - `knives`: edges where two faces meet at less than 30°. It must be empty.
 - `fail`: walls or gaps under 0.45 mm, about one extruded line. It must be empty.
-- `warn`: walls or gaps from 0.45 to 0.8 mm, under two lines. It holds four entries: the chassis floor's
-  countersinks, which leave 0.6 mm of floor at the edge of each bore. Anything else there is new.
+- `warn`: walls or gaps from 0.45 to 0.8 mm, under two lines. It is empty on all four parts, so anything there is new.
 
 Each entry is the thinnest point in a 3 mm cell, in the part's own frame (see Frames).
 
@@ -461,19 +491,6 @@ It also reports `wiring`, for the two wiring layers:
 - `joints`: the bends at the solder tails, which are made tight on purpose.
 
 Positions are in the layer's own frame (see Frames).
-
-## Unverified
-
-1. **Everything about how it looks and feels** is unverified until it is printed — the shape is a judgement no render settles. Print the shell first: it is the only part whose surface is on show.
-2. Active-area offset — from the panel's STEP; with the board rotated the narrow border should be on the left (USB-C) side. Check on the real panel before printing the head tray.
-3. The shadow gap doubles as a dust path. If it collects, a 1 mm tongue on the chassis edge inside the gap would baffle it without closing the air path.
-4. SCD41 response time: it vents into the bay, not through a lid grille of its own.
-5. Dupont housings are modelled as 2.54 × 2.54 × 14 mm single-position shells (14 mm measured, plus 3.7 mm for the wire to turn — the dock height follows from that); right-angle headers with the pin axis 4.2 mm off the board. Check the 1.7 mm margin to the head's back cover with the real housings before soldering the Inkplate headers.
-6. The Inkplate's expander pads are 0.8 mm drills (from the KiCad board): confirm the chosen header's pins fit, otherwise solder the two wires straight to the pads.
-7. The head sits 8 mm deep in the cradle pocket with 0.5 mm side clearance, located by the pocket and the block's rear lip and held down by the pogo connector's two Ø5 magnets — nothing is screwed. A ≈145 g head on a 20° lean is the thing to watch; if it creeps or lifts too easily the cure is a catch on the rear lip, not screws back through the cavity.
-8. The shell's left end is unsupported over ≈ 50 mm. If it lifts, the cure is a printed clip on the chassis edge rather than a fifth screw — there is no room for one past the PM board.
-9. The SCD41's header is modelled on the board's right-hand edge (X 70.8) as it sits in its compartment. Confirm which edge of the Adafruit 5190 carries the five pads before soldering; on the left-hand edge the ESP32-GND wire would come straight down the compartment's front instead of round its right wall, and the compartment has the room either way.
-10. PLA+ through a winter. The two places heat could tell are the AMS1117's pocket walls and the shell post over it; check them after the first warm spell, and go to PETG for the dock if they have moved.
 
 ## Decision Log
 
@@ -605,3 +622,13 @@ Dated findings and decisions behind the text above, oldest first.
     soldering to it; if it is not, the GND stub moves to the G pad underneath and the holder needs a slot for it.
   - The pogo connector carries GND on the two contacts nearest the head's USB-C end and VBUS on the other two, so
     that in the dock the GND wire runs in front of the VBUS wire, on the side of its splice.
+- **2026-09-18**, the top skin: one plane from the front edge to the rear. The first print had the skin flat over
+  the cradle and sloping from D 37.7, so printed upside down only one of the two planes could lie on the bed, and
+  the change of angle printed badly. Carrying the rear's 5.15° slope to the front edge puts the whole skin on the
+  bed; the front rises from 30.5 to 33.9 mm and the wiring over the PM header gains 0.4 mm. Lowering the front
+  instead was ruled out: the wire lanes over the header allow 0.5 mm at most.
+- **2026-09-19**, the head tray: on the printed head nothing held the Inkplate and the cover in the tray, because
+  the cover screws only to the Inkplate; held panel up, they dropped out of the back. The cover now hooks into the
+  thin wall with two tongues and screws to the thick wall through two ears. A step for the cover's edge alone was
+  tried first and held nothing: it and the bezel lip stop the same direction. Clips were ruled out because PLA+
+  ridges wear. The ear screws sit in line with the standoff screws.
