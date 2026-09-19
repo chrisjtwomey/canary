@@ -17,6 +17,8 @@ extern const uint8_t noticeUnreachable[] asm("_binary_include_head_notices_notic
 extern const uint8_t noticeUnreachableEnd[] asm("_binary_include_head_notices_notice_unreachable_png_end");
 extern const uint8_t noticeVersion[] asm("_binary_include_head_notices_notice_version_png_start");
 extern const uint8_t noticeVersionEnd[] asm("_binary_include_head_notices_notice_version_png_end");
+extern const uint8_t noticeNoFirmware[] asm("_binary_include_head_notices_notice_no_firmware_png_start");
+extern const uint8_t noticeNoFirmwareEnd[] asm("_binary_include_head_notices_notice_no_firmware_png_end");
 
 // Where the run-time lines go, on the Inkplate 5's 1280 x 720. The margin is
 // the page's 6cqw; the lines sit in the 20cqh the notice leaves free.
@@ -59,12 +61,13 @@ static bool showOnce(const char* key, const uint8_t* png, const uint8_t* end, co
     return true;
 }
 
-bool showVersionNotice(const char* ownVersion, const char* serverVersion) {
+bool showVersionNotice(const char* ownVersion, const char* serverVersion, bool offered) {
     char fact[112];
     snprintf(fact, sizeof(fact), "Server: %s    Display: %s", serverVersion, ownVersion);
     char key[128];
-    snprintf(key, sizeof(key), "version %s %s", ownVersion, serverVersion);
-    return showOnce(key, noticeVersion, noticeVersionEnd, fact);
+    snprintf(key, sizeof(key), "version %s %s %d", ownVersion, serverVersion, offered);
+    if (offered) return showOnce(key, noticeVersion, noticeVersionEnd, fact);
+    return showOnce(key, noticeNoFirmware, noticeNoFirmwareEnd, fact);
 }
 
 bool showUnreachableNotice(const char* lastPage) {

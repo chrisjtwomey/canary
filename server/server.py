@@ -8,6 +8,7 @@ config keys, its readings source, its pages, and one run() call.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import logging
 import os
 import sys
@@ -26,6 +27,7 @@ from pages.day import DayPage
 from pages.diagnostics import DiagnosticsPage, DiagnosticsTracePage
 from pages.dust import DustPage
 from pages.pool import CO2, IAQ, PM25, PRESSURE, TEMP, DeltaPage, TracePage
+from schedule import PostSchedule, parse_hhmm
 from sources.calibration import CalibrationStore
 from sources.corrections import SeaLevelSource
 from sources.mock import MockReadingsSource
@@ -41,6 +43,11 @@ DEFAULT_DISPLAY = {"pools": {"co2": ["breathe.png"]},
                    "schedule": {"type": "interval", "every": 3600}}
 
 SOURCE_KINDS = ("mock", "store")
+# The two boards, each with its images in a subdirectory of the firmware
+# directory named after it.
+FIRMWARE_PRODUCTS = ("canary-head", "canary-dock")
+# The dock posts every half hour overnight unless config.yaml says otherwise.
+DEFAULT_QUIET = {"from": "01:00", "to": "07:00", "every": 1800}
 # The history windows the pages ask for, as history_24h and history_72h.
 HISTORY_HOURS = (24, 72)
 
@@ -76,6 +83,17 @@ def make_source(seed: int, clock, reports: DeviceReports, altitude_m: float = 0.
     return CompositeSource(SeaLevelSource(readings, altitude_m), StatusSource(reports))
 
 
+def make_posts(config: dict, tz) -> PostSchedule:
+    """The dock's post schedule from the ``posts`` block: every five minutes,
+    and every half hour from 01:00 to 07:00, when the block says nothing."""
+    quiet = get_prop_by_keys(config, "posts", "quiet", default=DEFAULT_QUIET) or {}
+    every = int(get_prop_by_keys(config, "posts", "every", default=300))
+    if not quiet:
+        return PostSchedule(every, tz)
+    return PostSchedule(every, tz, parse_hhmm(quiet.get("from", "")),
+                        parse_hhmm(quiet.get("to", "")), int(quiet.get("every", every)))
+
+
 def parse_args():
     p = argparse.ArgumentParser(description="CANARY server")
     p.add_argument("--once", action="store_true",
@@ -108,6 +126,10 @@ def main():
         status_path = str(get_prop_by_keys(config, "status", "path", default="status.db"))
         status_days = float(get_prop_by_keys(config, "status", "keep_days", default=7))
         altitude_m = float(get_prop_by_keys(config, "site", "altitude_m", default=0))
+        posts = make_posts(config, core.server.timezone)
+        if not core.firmware.products:
+            core = dataclasses.replace(core, firmware=dataclasses.replace(
+                core.firmware, products=FIRMWARE_PRODUCTS))
     except (ConfigError, KeyError, ValueError) as exc:
         logging.basicConfig()
         log.error(exc.args[0] if exc.args else str(exc))
@@ -133,8 +155,8 @@ def main():
         log.info("readings from %s, %d held", store.path, store.count())
     source = make_source(seed, clock, reports, altitude_m, store)
     calibration = CalibrationStore(os.path.join(cwd, calibration_path), keep_days=calibration_days)
-    ingest = ReadingsIngest(reports, store, keep_days, calibration=calibration)
-    about = About(server_version(), core.firmware)
+    ingest = ReadingsIngest(reports, store, keep_days)
+    about = About(server_version(), core.firmware, posts=posts)
     pages = make_pages(tz, **core.image.page_kwargs())
 
     try:
@@ -147,12 +169,14 @@ def main():
             port=core.server.port,
             mqtt=core.mqtt,
             mqtt_client_id="canary-server",
-            ingest={"readings": ingest.accept},
+            ingest={"readings": ingest.accept, "calibration": calibration.accept},
             queries={"calibration": calibration.answer, "about": about.answer},
             firmware=core.firmware,
             header_prefix="Canary",
             server_version=about.version,
             version_gate=True,
+            sensor_poll=posts.seconds_until_next,
+            on_refused=reports.refused,
         )
     except ValueError as exc:
         log.error(str(exc))

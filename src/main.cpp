@@ -132,7 +132,10 @@ static bool drawFetchedPage() {
 
 static bool drawVersionNotice() {
     releaseImage();
-    return showVersionNotice(CLIENT_VERSION, fetched->response.serverVersion);
+    const PageResponse& rsp = fetched->response;
+    const bool offered = updateOffered(CLIENT_VERSION, rsp.firmwareVersion, rsp.firmwareURL,
+                                       otaRejectedVersion());
+    return showVersionNotice(CLIENT_VERSION, rsp.serverVersion, offered);
 }
 
 static void fetchSucceeded() {

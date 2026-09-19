@@ -17,29 +17,32 @@ bool RingBacklog::push(const char* doc, size_t len) {
     write((tail + kHeaderBytes) % size_, (const uint8_t*)doc, len);
     used_ += need;
     ++count_;
+    lastLen_ = len;
     return true;
 }
 
-size_t RingBacklog::peek(char* buf, size_t len) {
-    if (count_ == 0) return 0;
-    const size_t n = oldestLen();
+size_t RingBacklog::peekAt(uint32_t index, char* buf, size_t len) {
+    if (index >= count_) return 0;
+    size_t at = head_;
+    for (uint32_t i = 0; i < index; ++i) at = (at + kHeaderBytes + lengthAt(at)) % size_;
+    const size_t n = lengthAt(at);
     if (n >= len) return 0;
-    read((head_ + kHeaderBytes) % size_, (uint8_t*)buf, n);
+    read((at + kHeaderBytes) % size_, (uint8_t*)buf, n);
     buf[n] = '\0';
     return n;
 }
 
 void RingBacklog::pop() {
     if (count_ == 0) return;
-    const size_t n = kHeaderBytes + oldestLen();
+    const size_t n = kHeaderBytes + lengthAt(head_);
     head_ = (head_ + n) % size_;
     used_ -= n;
     --count_;
 }
 
-size_t RingBacklog::oldestLen() const {
+size_t RingBacklog::lengthAt(size_t at) const {
     uint8_t header[kHeaderBytes];
-    read(head_, header, kHeaderBytes);
+    read(at, header, kHeaderBytes);
     return (size_t)header[0] | (size_t)header[1] << 8;
 }
 
@@ -129,11 +132,15 @@ bool FileBacklog::push(const char* doc, size_t len) {
     return true;
 }
 
-size_t FileBacklog::peek(char* buf, size_t len) {
-    if (count_ == 0) return 0;
-    const size_t n = readChunk(head_);
+// Every chunk but the newest holds kPerChunk documents: kWorkBytes has room
+// for that many of the longest, so a document never starts a chunk early.
+size_t FileBacklog::peekAt(uint32_t index, char* buf, size_t len) {
+    if (index >= count_) return 0;
+    const uint32_t at = (uint32_t)headRec_ + index;
+    const size_t n = readChunk((uint16_t)((head_ + at / kPerChunk) % kChunks));
+    const uint16_t want = (uint16_t)(at % kPerChunk);
     size_t start = 0;
-    for (uint16_t line = 0; line < headRec_; ++line) {
+    for (uint16_t line = 0; line < want; ++line) {
         const char* nl = (const char*)memchr(work_ + start, '\n', n - start);
         if (!nl) return 0;
         start = (size_t)(nl - work_) + 1;
@@ -178,12 +185,67 @@ PostResult postResult(int httpStatus) {
     return TRY_LATER;
 }
 
-uint32_t drainBacklog(IBacklog& backlog, IPoster& poster, uint32_t max, char* buf, size_t len) {
-    uint32_t gone = 0;
-    while (gone < max && backlog.count() > 0) {
-        if (backlog.peek(buf, len) > 0 && postResult(poster.post(buf)) == TRY_LATER) break;
+SendResult drainBacklog(IBacklog& backlog, IPoster& poster, uint32_t max, char* buf, size_t len) {
+    SendResult r;
+    for (uint32_t tried = 0; tried < max && backlog.count() > 0; ++tried) {
+        if (backlog.peek(buf, len) == 0) {
+            backlog.pop();
+            ++r.dropped;
+            continue;
+        }
+        r.status = poster.post(buf);
+        const PostResult result = postResult(r.status);
+        if (result == TRY_LATER) {
+            r.wait = true;
+            break;
+        }
         backlog.pop();
-        ++gone;
+        ++(result == POSTED ? r.posted : r.dropped);
     }
-    return gone;
+    return r;
+}
+
+uint32_t batchJson(IBacklog& backlog, uint32_t max, char* out, size_t len) {
+    if (len < 3) return 0;
+    size_t used = 1;
+    uint32_t n = 0;
+    while (n < max && n < backlog.count()) {
+        // Room after the document for its terminator, and then for the ']'.
+        char* at = out + used + (n ? 1 : 0);
+        const size_t room = len - (size_t)(at - out);
+        const size_t docLen = room > 1 ? backlog.peekAt(n, at, room - 1) : 0;
+        if (docLen == 0) break;
+        if (n) at[-1] = ',';
+        used = (size_t)(at - out) + docLen;
+        ++n;
+    }
+    if (n == 0) return 0;
+    out[0] = '[';
+    out[used] = ']';
+    out[used + 1] = '\0';
+    return n;
+}
+
+SendResult sendBatch(IBacklog& backlog, IPoster& poster, uint32_t max, char* batch, size_t len) {
+    SendResult r;
+    if (backlog.count() == 0) return r;
+    const uint32_t n = batchJson(backlog, max, batch, len);
+    if (n == 0) {
+        backlog.pop();
+        r.dropped = 1;
+        return r;
+    }
+    r.status = poster.post(batch);
+    switch (postResult(r.status)) {
+        case POSTED:
+            for (uint32_t i = 0; i < n; ++i) backlog.pop();
+            r.posted = n;
+            return r;
+        case TRY_LATER:
+            r.wait = true;
+            return r;
+        case REFUSED:
+            break;
+    }
+    return drainBacklog(backlog, poster, n, batch, len);
 }

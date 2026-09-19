@@ -39,9 +39,16 @@ status:             # what each board says about itself, kept as readings are
   # path: status.db   # relative to this file
   keep_days: 7        # older reports are deleted, 0 keeps all
 
-calibration:        # sensor state the board backs up with each reading
+calibration:        # sensor state the dock backs up whenever BSEC saves a copy
   # path: calibration.db  # relative to this file
   keep_days: 3      # each copy is kept this long; the board asks for one after a restart
+
+posts:              # when the dock posts its readings, on the wall clock (:00, :05, :10 ...)
+  every: 300
+  quiet:            # a slower cadence overnight, in server.timezone; `quiet: {}` turns it off
+    from: "01:00"
+    to: "07:00"
+    every: 1800
 
 site:
   altitude_m: 10    # pressure is reduced to sea level, as forecasts quote it
@@ -49,7 +56,8 @@ site:
 client:             # what the board runs, not what this server does
   firmware:         # server-driven updates; the board flashes itself
     enabled: false
-    dir: firmware   # a directory of <version>.bin, newest wins
+    dir: firmware   # canary-head/ and canary-dock/, each of <version>.bin; every board is
+                    # offered the newest its product has that works with this server's version
     offer_dev_builds: false # true offers to boards not built from a tag
     # source:               # optional: fill dir from a repository's releases
     #   github: chrisjtwomey/canary

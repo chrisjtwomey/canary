@@ -51,6 +51,16 @@ def test_a_report_without_a_client_block_is_not_stored(tmp_path):
     assert store.count() == 0
 
 
+def test_a_report_the_store_already_holds_is_not_counted(tmp_path):
+    store = ReadingsStore(tmp_path / "status.db")
+    reports = DeviceReports(store=store)
+    doc = {"ts": 10, "device": "canary-dock", "client": {"rssi": -60}}
+    assert reports.accept_many([doc, {"ts": 11, "device": "canary-dock", "client": {}}]) == [True, True]
+    assert reports.accept_many([doc]) == [False]
+    assert reports.count == 2 and store.count() == 1
+    store.close()
+
+
 def test_a_held_reading_arriving_late_does_not_replace_the_newest():
     reports = DeviceReports(now=lambda: 1000.0)
     reports.accept({"ts": 10, "client": {"ip": "192.168.1.42"}})
@@ -84,7 +94,7 @@ def test_a_posted_report_reaches_the_diagnostics_page(tmp_path, tz):
         p.png_dir = str(tmp_path)
         p.html_dir = str(tmp_path / "static")
     server = DisplayServer(pages=pages, source=source, schedule=[("00:00:00", "breathe.png")],
-                           tz=tz, ingest={"readings": reports.accept})
+                           tz=tz, ingest={"readings": reports.accept_many})
     client = server._build_app().test_client()
 
     rsp = client.post("/readings", json={
@@ -92,7 +102,7 @@ def test_a_posted_report_reaches_the_diagnostics_page(tmp_path, tz):
         "client": {"board": "Inkplate5V2", "ip": "192.168.1.42", "rssi": -61,
                    "sensors": {"scd41": True}},
     })
-    assert rsp.status_code == 204
+    assert rsp.status_code == 200 and rsp.get_json() == [True]
 
     diag = next(p for p in pages if p.name == "diagnostics")
     diag.template(status=source.datasets()["status"]())
@@ -115,3 +125,59 @@ def test_status_history_groups_the_stored_reports_by_board(tmp_path):
     assert [d["client"]["rssi"] for d in history["canary-head"]] == [-62, -61, -60]   # oldest first, yesterday's out
     assert [d["client"]["rssi"] for d in history["canary-dock"]] == [-70]
     assert StatusSource(DeviceReports()).datasets()["status_history_24h"]() == {}
+
+
+def test_a_change_of_version_is_kept_and_a_step_back_called_one():
+    clock = [1000.0]
+    reports = DeviceReports(now=lambda: clock[0])
+    reports.accept({"ts": 1, "device": "canary-dock", "client": {"version": "v0.4.0"}})
+    reports.accept({"ts": 2, "device": "canary-dock", "client": {"version": "v0.4.0"}})
+    assert "changed" not in reports.device("canary-dock")
+    clock[0] = 1600.0
+    reports.accept({"ts": 3, "device": "canary-dock", "client": {"version": "v0.3.1"}})
+    clock[0] = 1660.0
+    assert reports.device("canary-dock")["changed"] == {
+        "from": "v0.4.0", "to": "v0.3.1", "at": 1600.0, "older": True, "age_s": 60}
+    reports.accept({"ts": 4, "device": "canary-dock", "client": {"version": "v0.3.2"}})
+    assert reports.device("canary-dock")["changed"]["older"] is False
+
+
+def test_a_refused_board_is_known_before_any_report_is_taken():
+    clock = [1000.0]
+    reports = DeviceReports(now=lambda: clock[0])
+    reports.refused("canary-dock", "v0.4.0")
+    clock[0] = 1030.0
+    reports.refused("canary-dock", "v0.4.0")
+    source = StatusSource(reports)
+
+    status = source.status()
+    assert status["doc"] is None and status["count"] == 0
+    dock = status["boards"]["canary-dock"]
+    assert dock["doc"] is None and dock["refused"] == {
+        "version": "v0.4.0", "count": 2, "at": 1030.0, "age_s": 0}
+
+
+def test_a_report_from_the_new_version_clears_the_refusal():
+    reports = DeviceReports(now=lambda: 1000.0)
+    reports.accept({"ts": 1, "device": "canary-dock", "client": {"version": "v0.4.0"}})
+    reports.refused("canary-dock", "v0.4.0")
+    reports.accept({"ts": 2, "device": "canary-dock", "client": {"version": "v0.4.0"}})
+    assert "refused" in reports.device("canary-dock"), "the same version is still refused"
+    reports.accept({"ts": 3, "device": "canary-dock", "client": {"version": "v0.3.1"}})
+    assert "refused" not in reports.device("canary-dock")
+
+
+def test_the_server_tells_the_reports_which_board_it_refused(tmp_path, tz):
+    reports = DeviceReports(now=lambda: 1000.0)
+    server = DisplayServer(pages=make_pages(tz, width=1280, height=720),
+                           source=make_source(7, lambda: AT, reports),
+                           schedule=[("00:00:00", "breathe.png")], tz=tz,
+                           ingest={"readings": reports.accept_many}, header_prefix="Canary",
+                           server_version="v0.3.1", version_gate=True, on_refused=reports.refused)
+    client = server._build_app().test_client()
+
+    rsp = client.post("/readings", json={"ts": AT, "device": "canary-dock"},
+                      headers={"Canary-Device": "canary-dock", "Canary-Device-Version": "v0.4.0"})
+
+    assert rsp.status_code == 409
+    assert reports.device("canary-dock")["refused"]["version"] == "v0.4.0"

@@ -34,10 +34,12 @@ a tweak to it; it is a different program, and each board has its own.
 The dock, `src/dock/main.cpp`, is the one the sensors need:
 
 ```
-setup:  80 MHz; wifi; ntp; I2C; BSEC; sensors.begin()
-loop:   every 5 s     sensors.sample()     (SCD41 periodic, BME688 via BSEC, PMSA003I frames, SHTC3)
-        every 60 s    POST /readings       one JSON document, with the dock's own status beside it;
-                                           a refused document waits in PSRAM for the next one the server takes
+setup:  80 MHz; wifi; I2C; BSEC; sensors.begin(); the first reading 35 s on
+loop:   until known   GET /about           every 30 s, for the server's time
+        every 60 s    sensors.sample()     to notice a sensor that stops (SCD41 periodic, BME688 via BSEC, SHTC3)
+        each slot     queue a reading      a fresh sample, PM included, with the dock's own status, into PSRAM
+        every pass    POST /readings       the oldest 100 in the queue as one batch, once the time is known
+                      POST /calibration    BSEC's state, after a batch, when BSEC has saved a new copy
         continuous    the PM fan and the status LED
 BSEC:   a FreeRTOS task of its own; its state goes to NVS when accuracy first reaches 3 and every six hours after
 LED:    a FreeRTOS task of its own, so the starting pattern runs while setup() blocks
@@ -47,11 +49,21 @@ The dock runs at 80 MHz rather than 240. Wi-Fi needs 80, and below it the
 APB clock follows the processor, which would move the LED's PWM frequency
 and the serial baud rate. So 80 is both the floor and the choice.
 
-The PM module's fan runs for the 35 seconds before each post and stops after
-it, which is 58% of the time. It is the dock's largest load, about 200 mA of
-the sensors' 215, and the window covers the module's 30 second warm-up and
-the sample that follows. `SensorSuite` counts no missed frame while the fan
-is off, so stopping it does not make the module look dead.
+The PM module's fan runs for the 35 seconds before each reading and stops
+after it: 12% of the time at five-minute slots, 2% overnight. It is the
+dock's largest load, about 200 mA of the sensors' 215. The window is
+Plantower's 30 second warm-up and a margin, counted back from the next slot,
+and each reading records in `pm_warmup_s` how long the fan had actually run,
+so the stored readings can show whether 30 seconds is enough. `SensorSuite`
+counts no missed frame while the fan is off, so stopping it does not make the
+module look dead.
+
+The dock has no clock and does not ask NTP. Every response from the server
+carries its time, and the dock holds it as an offset from its uptime, so the
+readings it stamps and the slots the server counts agree by construction.
+Until the first response it queues readings with their uptime and stamps them
+when the time arrives, so a dock that boots while the server is down keeps
+what it measured, correctly timed.
 
 The head, `src/main.cpp`, stays awake only because it is mains powered and
 has no reason to sleep:
@@ -69,10 +81,20 @@ does not need to know what a sensor is.
 
 ### 3.2 Readings travel client → server by HTTP POST
 
-The board posts one document a minute to `/readings`, in the layout of
-[READINGS.md](READINGS.md). epd's `DisplayServer(ingest=...)` hands it to
-`ReadingsIngest`, which keeps the newest document for the Diagnostics page
-and, with `source.kind: store`, appends it to epd's `ReadingsStore` (SQLite).
+The dock queues one document a minute in PSRAM, in the layout of
+[READINGS.md](READINGS.md), and each pass of its loop posts the oldest 100
+to `/readings` as one batch. A reading is kept before anything is sent, so
+one path covers the post that works and the outage that does not, and a
+queue that built up while the server was down drains a batch per pass
+without making a sample late by more than one request. The queue holds
+2 MB, about five days of readings; a restart empties it.
+
+epd's `DisplayServer(ingest=...)` hands a batch to `ReadingsIngest`, which
+keeps each document for the Diagnostics pages and, with `source.kind:
+store`, appends it to epd's `ReadingsStore` (SQLite) in one transaction. The
+store's key, the device and `ts`, is what makes the route safe to repeat:
+the same document posted twice is stored once, however the two requests
+were batched.
 `IngestSource` serves the store to the pages as the datasets `latest`,
 `history_24h` and `history_72h`, and `SeaLevelSource` reduces the pressure on
 the way. With `source.kind: mock`, `MockReadingsSource` serves the simulated
@@ -80,8 +102,9 @@ room under the same names. The Diagnostics page reads `status`.
 
 The reading schema is the project's (`co2_ppm`, `pm2_5`, `iaq`, `temp_c`, …);
 the kit stores a timestamped JSON document and does not interpret it. BSEC's
-learned state rides along in a `calibration` block, which `CalibrationStore`
-keeps and `GET /calibration` hands back after the board restarts.
+learned state goes to `POST /calibration` whenever BSEC saves a new copy;
+`CalibrationStore` keeps it and `GET /calibration` hands it back after the
+board restarts.
 
 ### 3.3 The schedule is an interval, not a list of times
 
@@ -90,6 +113,18 @@ keeps and `GET /calibration` hands back after the board restarts.
 `type: interval`. This device uses `interval` with `every: 300`, so refreshes
 land on :00, :05, … on the wall clock; the weather calendar keeps `times`.
 [CONTRIBUTING.md](../CONTRIBUTING.md) explains the pools.
+
+The dock's readings have a schedule of their own, the `posts` block in
+`config.yaml`: every 300 seconds, and every 1800 from 01:00 to 07:00. A
+slot is a local time whose seconds past midnight are a multiple of the
+interval, so readings land on :00, :05, … by day and on the hour and half
+hour by night, and 07:00 is a slot in both. Every response tells the dock
+how long until the next, in `Canary-Next-Sensor-Poll-Seconds`, rounded up so
+it is never early. `schedule.py` finds the slot by stepping through the
+minutes and asking of each whether it is inside the window, because some
+clocks change at 01:00, the window's own start: in spring that hour never
+happens, and in autumn it happens twice. Without an answer the dock keeps
+the last gap the server gave between two slots.
 
 ### 3.4 The device is a head and a dock
 
@@ -121,6 +156,7 @@ The dock drives a yellow LED on IO6, behind a clear tile in the shell's front fa
 | Pulsing at 120 a minute | Starting: `setup()` is connecting, or starting the sensors. |
 | Pulsing at 60 a minute | Working: it is reading, and the server is taking its posts. |
 | Three flashes, then five seconds steady | No network, a post the server would not take, or a sensor has stopped. |
+| Pulsing faster and brighter | Writing a new image: from 60 a minute at a quarter of the light to 240 at full light as it is written. |
 
 The slow pulse is the heartbeat: a dock that has died goes dark, which a steady working state would hide. A pulse
 is sixteen equal steps of light, spaced in time along a sine.
@@ -141,6 +177,7 @@ mismatch is silent, so both come from this repository.
 | Board to server | `Canary-Device`, `Canary-Device-Version` | which board, and what it runs |
 | Server to board | `Canary-Server-Version`, `Canary-Server-Epoch-Seconds` | on every response |
 | Server to head | `Canary-Next-Display-Refresh-Seconds`, `Canary-Next-URL` | when to fetch, and what |
+| Server to dock | `Canary-Next-Sensor-Poll-Seconds` | on every response: when to take the next reading |
 | Server to board | `Canary-Server-Firmware-Version`, `Canary-Server-Firmware-URL` | only when an update applies |
 
 `GET /about` answers with the same version and clock, plus the firmware on offer and the library version. A board
@@ -156,25 +193,38 @@ minor. Both ends apply the rule, the server through `epd_server.compat` and the 
 so they reach the same answer about each other. A version that cannot be read, such as `dev`, is never judged:
 refusing it would silently stop every development build.
 
-The server's own version is the one the boards follow. It offers every released board the firmware for its
-version, newer or older than what the board runs, so a mismatch clears itself once the board takes the offer.
-Development builds are left alone.
+The server's own version is the one the boards follow. It holds each board's images in a folder of its own,
+`firmware/canary-head/` and `firmware/canary-dock/`, keeps every one, and offers each released board the newest
+image of its product that can work with the server's version, newer or older than what the board runs. So a
+mismatch clears itself once the board takes the offer. The offer goes on any response to the board, a refusal
+included. Development builds are left alone. The server logs each offer of an older image, and the Diagnostics
+page shows each board's last change of version, marked when it was a downgrade, and the posts the server refused
+from it, even from a board it has never taken a report from.
 
-- **The dock** gets 409 from `/readings` and holds the document in PSRAM rather than dropping it, since the reading
-  is sound and only the pairing is wrong. The refused post puts the LED into its trouble pattern.
+- **The dock** gets 409 from `/readings` and leaves the batch in its queue rather than dropping it, since the
+  readings are sound and only the pairing is wrong. The refused post puts the LED into its trouble pattern, and the
+  same response offers the image that fixes it.
 - **The head** still gets its pages, since the server never refuses a fetch. It draws a notice in place of the page
   and then takes any update on offer exactly as it would after a page. The order is fixed in
   `include/head/AfterFetch.h` and tested: the update is what clears the notice, and the dock's wall covers the
-  head's USB-C socket.
+  head's USB-C socket. When the server offers no image the head will take, the notice says so and asks for one:
+  firmware for the server's version, or a server of the head's.
 
-The head draws a second notice when three fetches in a row go unanswered, about 26 minutes with the back-off, so a
-blip never replaces the page. It says when the last page arrived. Both notices come from the firmware, not the
+The dock takes an offer from the answer to a batch of readings, and only once its queue is empty, since the restart
+empties it. The exception is a 409: the server will not drain that queue until the dock runs another version, so
+the dock takes the image and loses the readings. While the image is written the LED pulses faster and brighter with
+the bytes written, from the working pulse at a quarter of the light to four pulses a second at full light. The new
+image boots on trial, as the head's does: the first batch the server takes confirms it, and three failures in a row
+roll it back, after which the dock refuses that version.
+
+The head draws another notice when three fetches in a row go unanswered, about 26 minutes with the back-off, so a
+blip never replaces the page. It says when the last page arrived. The notices come from the firmware, not the
 server, so they work when the server is what is wrong, and each is drawn once rather than on every retry, since
 every draw is a full refresh of the panel.
 
 They are pages. `server/pages/notice.py` sets each one like the others, a spaced-capitals label, an italic verdict
 and a line of detail, and `scripts/notices.py` renders them through the same pipeline, browser and quantiser as
-every page the server serves. The head holds the two PNGs in its firmware and draws them with the call that draws a
+every page the server serves. The head holds the three PNGs in its firmware and draws them with the call that draws a
 fetched page, so a notice is pixel for pixel what the server would have rendered. They are rendered again only when
 their wording or design changes, so the firmware build needs no browser.
 
@@ -206,8 +256,8 @@ include/sensors/  src/sensors/
   IBsec.h  BsecRunner  BsecLibrary              BSEC, in a task of its own
   SensorValidation                              the bench routine's checks
   mock/                                         EnvModel, LaggedValue and the four mocks
-include/net/  src/net/         Backlog, Calibration, ClientStatus, RefreshTimer, Url
-include/dock/StatusLed.h       what the status LED shows, as a duty cycle (§3.5)
+include/net/  src/net/         Backlog, Calibration, ClientStatus, RefreshTimer, ServerClock, Stamp, Url
+include/dock/                  StatusLed (§3.5), FanWindow and PostTimer: when the fan runs and the next reading falls
 include/head/  src/notice.cpp  what the head does after a fetch, and the notices it draws (§3.7)
 include/head/notices/          the notices, rendered by scripts/notices.py from server/pages/notice.py
 include/head/fonts/            the pages' face as a one-bit font, from scripts/gfxfont.py, for the notices' live lines
@@ -219,6 +269,7 @@ test/                          host tests, native env
 server/
   server.py                    config, sources, pages, DisplayServer(...).run()
   about.py  version.py         GET /about, and what this server calls itself
+  schedule.py                  the dock's reading slots, slower overnight (§3.3)
   sources/                     the mock room, readings ingest, calibration store, device status, sea-level pressure
   pages/                       Breathe, Comfort, Dust, Air, Day, Diagnostics, and the trace and delta pages
   metrics.py                   derived values and wording
@@ -245,7 +296,7 @@ checksum, and only after the fan's 30 s warm-up.
 
 The waits are real, so the clock is injected (`IClock`): `ArduinoClock` on the
 device, a fake the tests drive. A sample costs ~150 ms of wall clock, nearly
-all of it the BME688 heater — 3% of the 5 s cadence, and `::delay()` yields on
+all of it the BME688 heater, once a minute, and `::delay()` yields on
 ESP32, so WiFi keeps running. If that ever becomes a problem the interfaces
 already return false-when-not-ready, so `sample()` can become a state machine
 without touching the drivers.
@@ -340,3 +391,7 @@ Dated decisions and status behind the text above, oldest first.
 - **2026-09-09**: the four drivers landed behind `II2cBus`, with host tests. The SCD41 board is the Adafruit 5190 (inventory item 92). The mocks were not corrected against logs of the real parts; that needs a log of each part.
 - **2026-09-12**: `ReadingsStore` and `IngestSource` are in epd from 0.5.0, and `source.kind: store` serves them to the pages. BSEC runs for the BME688's IAQ index.
 - **2026-09-15**: the device became a head and a dock (§3.4). One bus and one 500 mA rail could not carry both the panel and the sensor chain; each half now has its own.
+- **2026-09-19**: every reading goes into the dock's queue when it is taken, and the loop posts the queue in batches of 100 (§3.2). This replaced a live post with a held copy on failure, which sent at most five held readings after each live one and stripped their `client` object. Held readings keep it: the server has stored every report since the trace pages, so a held one fills the outage in on them. The calibration block moved to its own route, because it is current state rather than part of a reading. Repeats are handled by the store's device-and-`ts` key, not by an idempotency key on the request: the one-at-a-time fallback resends documents in a differently shaped request, which a request key would store twice.
+- **2026-09-19**: the dock takes its readings on the server's slots, every five minutes and every half hour from 01:00 to 07:00 (§3.3), and its time from the server rather than NTP (§3.1). Overnight, fine readings are rarely needed. The server sends the seconds to the next slot rather than an interval, so a restart at 03:07 rejoins at 03:30 and readings land on tidy times. The time is a custom header rather than HTTP's `Date` because plain epoch seconds cost the TinyS3 no parsing. The fan now follows the next slot instead of the last post, and the reading is sampled fresh at the slot: at 228 readings a day that is about 809 fan hours and 83,000 starts a year, against 5,110 hours and 526,000 starts for the 60 s cadence before it. Plantower's 30 s warm-up stands, and `pm_warmup_s` lets the stored readings judge it.
+- **2026-09-19**: the dock's queue moved from the Sensors card to the Memory card, as a count against its capacity with a meter, since it is memory. The diagnostics trace page draws one chart per measure with both boards on it, the dock dark and the head light on one scale: free memory tallest, the queue, then the signal, which barely moves once the dock is placed. A page of changes since the last report was considered in its place and dropped. The queue's axis fits the day's highest, no lower than 10, because it is empty almost always and then climbs through an outage.
+- **2026-09-19**: the dock updates over the air like the head, and every board is offered the newest image of its product that works with the server's version, rather than the newest file (§3.7). The boards follow the server rather than work out which end is newer, so the server's version is the one dial. That needs the older images, so neither `build-firmware.sh` nor the server removes any. An accidental server downgrade therefore downgrades the boards within a request each: each update restarts the dock and empties its queue, BSEC may refuse state an older library did not write, and later features go until it is fixed. The Diagnostics page shows each downgrade and each refused post so such a day is visible. The dock takes an update only with its queue empty, except under a 409, when the queue cannot drain until it does.

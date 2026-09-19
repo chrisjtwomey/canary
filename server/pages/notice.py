@@ -1,7 +1,8 @@
 """The notices the head draws itself, rendered here so they look like pages.
 
 A notice replaces the page when the head cannot show one: the server is not
-answering, or it and the display run versions that cannot work together.
+answering, or it and the display run versions that cannot work together,
+with or without an image on the server that would bring them back together.
 The head holds each as a PNG in its firmware, drawn by the same call that
 draws a fetched page, and writes the facts it only knows at run time on the
 lines the layout leaves free at the bottom.
@@ -42,4 +43,7 @@ def notices(**kwargs) -> list[NoticePage]:
         NoticePage("notice-version", "VERSION MISMATCH",
                    "Server version not supported.",
                    "Waiting for a firmware update from the server.", **kwargs),
+        NoticePage("notice-no-firmware", "VERSION MISMATCH",
+                   "No matching firmware on server.",
+                   "Add firmware for the server's version, or update the server.", **kwargs),
     ]

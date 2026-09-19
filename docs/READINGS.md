@@ -35,11 +35,12 @@ thing unchanged.
 
 | Key | Source | Unit | Notes |
 |---|---|---|---|
-| `ts` | Inkplate RTC | epoch seconds | when the set was assembled |
+| `ts` | the server's clock | epoch seconds | when the set was taken; the dock keeps the server's time |
 | `temp_c`, `rh_pct` | **SHTC3** | °C, % | the reference temperature and humidity |
 | `co2_ppm` | SCD41 | ppm | pressure-compensated from the BME688 |
 | `pm1_0`, `pm2_5`, `pm10` | PMSA003I | µg/m³ | "atmospheric environment" values, not CF=1 |
 | `pc_*` | PMSA003I | count per 0.1 L | particles larger than 0.3 … 10 µm |
+| `pm_warmup_s` | the dock | s | how long the PM fan had run when the particle reading was taken; with the particles only |
 | `gas_ohm` | BME688 | Ω | raw heater-plate resistance; lower = more VOC |
 | `iaq`, `iaq_accuracy` | BME688 via BSEC | 0–500, 0–3 | absent until BSEC has produced an index; the mock emits them |
 | `pressure_hpa` | BME688 | hPa | present whenever the chip answered, even on a cold plate |
@@ -90,7 +91,7 @@ Diagnostics page shows it.
   "sensors": { "shtc3": true, "scd41": true, "pmsa003i": true, "bme688": true },
   "fetch": { "next_url": "http://h:8080/day.png", "next_in_s": 120, "backoff_step": 0,
              "ok": 12, "failed": 1 },
-  "backlog": { "held": 0, "store": "psram" },
+  "backlog": { "held": 0, "capacity": 1480, "store": "psram" },
   "bsec": { "running": true, "restored": true, "accuracy": 2, "late": 0, "saved": 1757443200 }
 }
 ```
@@ -99,44 +100,59 @@ Diagnostics page shows it.
 stops giving readings, and true again when a restart brings it back.
 `valid.*` says which are warm now. `panel_temp_c` is the e-paper power controller's sensor, which
 reads the board, not the air. `fetch` is the page loop's state. `backlog`
-is how many readings wait to be posted again, and where they wait: `sd`,
-`psram`, or empty when the board has nowhere to keep them. A held reading
-goes out later as its own document, without the `client` object, so the
-server keeps the report with the highest `ts` as the newest. `bsec` is
+is how many readings waited in the dock's queue when this one was taken,
+about how many it holds when full, at the size of the newest (0 before the
+first), and where they wait: `psram`, `ram` when the board has no PSRAM to
+spare, or empty on the head, which queues nothing. A reading keeps the `client` object
+it was queued with, so a batch that arrives after an outage fills in how the
+board fared through it; the server keeps the report with the highest `ts` as
+the newest. `bsec` is
 BSEC's own state: whether it runs, whether it took a saved state when it
 started, the accuracy of its index, how many of its samples were late, and
 when it last saved its state this boot (0 for not yet).
 
-The server accepts the document at `POST /readings` and answers 204. The
-newest document, whole, feeds the Diagnostics page. With `source.kind:
+The dock queues every document when it takes the reading, and posts the
+queue oldest first, up to 100 documents at a time as one JSON array. The
+head posts its single document as an object. The server takes either at
+`POST /readings`, writes a batch in one transaction, and answers
+`{"new": 3, "repeated": 0}`. A document is stored by its own device and
+`ts`, and a second copy of the same pair is ignored and counted as
+repeated, so sending one again after a lost reply changes nothing.
+
+A timeout, a 5xx or a 409 leaves the whole batch in the queue, and the dock
+tries again once the next reading is queued. Any other 4xx makes it send
+that batch again one document at a time, so a document the server refuses
+costs only itself.
+
+Every document, whole, feeds the Diagnostics pages. With `source.kind:
 store` in `config.yaml`, every document also goes into the readings store,
-without its `client` object and its `calibration` block, and the other pages
-draw from the store. A document is stored by its own `ts`, and a second
-copy of the same device and `ts` is ignored.
+without its `client` object, and the other pages draw from the store.
 
 ## The `calibration` block
 
-The live POST carries BSEC's learned state beside the measurements, so the
-server holds a copy that is never more than a minute old:
+BSEC's learned state is not a reading, so it has a route of its own. Each
+time BSEC saves a new copy, the dock posts it to `POST /calibration` once
+the server is taking its readings:
 
 ```json
-"calibration": {
-  "bme688": { "state": "<320 characters of base64>", "accuracy": 3, "saved": 1757443200 }
-}
+{ "device": "canary-dock",
+  "calibration": {
+    "bme688": { "state": "<320 characters of base64>", "accuracy": 3, "saved": 1757443200 } } }
 ```
 
 `state` is BSEC's 238-byte state, `accuracy` the IAQ accuracy when it was
-taken, and `saved` when it was taken, in UTC seconds, or 0 before NTP set
-the clock. A held reading goes out without it. The block is keyed by
-sensor so that other sensors can join it; only the BME688 has learned
-state the board can back up.
+taken, and `saved` when it was taken, in UTC seconds. A copy saved before
+the clock was set is not sent. The block is keyed by sensor so that other
+sensors can join it; only the BME688 has learned state the board can back
+up. A copy the server refuses is not sent again; one it could not take for
+now is sent after the next batch it takes.
 
-A `calibration` block goes to the calibration store, whatever the source
-kind. Every copy is kept for `calibration.keep_days`, and
+The calibration store keeps the block whatever the source kind. Every copy
+is kept for `calibration.keep_days`, and
 `GET /calibration?device=<device>&before=<epoch>` answers with the newest
 copy saved before that time, one at accuracy 3 first, or a 404.
 
-After a boot, once the server has taken a POST, the board asks for the
+After a boot, once the server has taken a batch, the board asks for the
 server's copy with `GET /calibration?device=<device>&before=<boot time>`,
 and restarts BSEC on it when it is better than the copy NVS gave it: more
 accurate, or as accurate and more than an hour newer.

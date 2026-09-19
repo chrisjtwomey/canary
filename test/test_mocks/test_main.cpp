@@ -372,6 +372,19 @@ void test_json_leaves_the_index_out_when_the_driver_has_none() {
         ",\"pressure\":true,\"gas\":true}}", buf);
 }
 
+void test_json_says_how_long_the_fan_ran_before_a_particle_reading() {
+    Readings r = {};
+    r.ts = 5;
+    r.pm = {4, 6, 8, 4, 6, 8, 900, 250, 40, 4, 1, 0, 0x97, 0}; r.pmValid = true;
+    r.pmWarmupS = 35;
+    char buf[400];
+    TEST_ASSERT_TRUE(readingsToJson(r, "x", buf, sizeof(buf)) > 0);
+    TEST_ASSERT_NOT_NULL(strstr(buf, "\"pc_10\":0,\"pm_warmup_s\":35,"));
+    r.pmValid = false;
+    readingsToJson(r, "x", buf, sizeof(buf));
+    TEST_ASSERT_NULL_MESSAGE(strstr(buf, "pm_warmup_s"), "no particle reading, no warm-up");
+}
+
 void test_json_too_small_buffer_returns_zero_and_empty() {
     Readings r = {};
     r.ts = 1; r.shtc3Valid = true;
@@ -407,6 +420,7 @@ int main(int, char**) {
     RUN_TEST(test_json_keeps_pressure_but_drops_gas_when_the_heater_is_cold);
     RUN_TEST(test_json_drops_gas_when_the_conversion_was_a_dummy_slot);
     RUN_TEST(test_json_leaves_the_index_out_when_the_driver_has_none);
+    RUN_TEST(test_json_says_how_long_the_fan_ran_before_a_particle_reading);
     RUN_TEST(test_json_too_small_buffer_returns_zero_and_empty);
     return UNITY_END();
 }

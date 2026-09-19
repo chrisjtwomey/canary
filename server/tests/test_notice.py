@@ -28,9 +28,20 @@ def test_a_notice_is_a_label_a_verdict_and_detail():
     assert one(soup, ".page-notice .detail").get_text(strip=True) == "Unable to connect to server."
 
 
-def test_the_two_notices_the_head_holds():
+def test_the_three_notices_the_head_holds():
     names = {p.name for p in notices(width=WIDTH, height=HEIGHT)}
-    assert names == {"notice-unreachable", "notice-version"}
+    assert names == {"notice-unreachable", "notice-version", "notice-no-firmware"}
+
+
+def test_each_notice_is_rendered_and_built_into_the_head():
+    import os
+    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    with open(os.path.join(root, "platformio.ini")) as f:
+        ini = f.read()
+    for page in notices(width=WIDTH, height=HEIGHT):
+        path = f"include/head/notices/{page.name}.png"
+        assert os.path.isfile(os.path.join(root, path)), f"{path}: run scripts/notices.py"
+        assert path in ini, f"{path} is not in board_build.embed_files"
 
 
 def test_a_notice_renders_to_its_own_file(tmp_path):

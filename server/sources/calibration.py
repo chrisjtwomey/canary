@@ -1,6 +1,7 @@
 """Sensor calibration the board sends, kept so it can have it back.
 
-Each live readings POST carries a ``calibration`` block keyed by sensor.
+The dock posts ``{"device": ..., "calibration": {...}}`` to /calibration
+whenever BSEC saves a new copy; the block is keyed by sensor.
 Only the BME688 has learned state the board can back up: BSEC's, as base64,
 with the IAQ accuracy and the time the copy was taken. This keeps every
 copy for ``keep_days``, and answers the board's
@@ -96,6 +97,21 @@ class CalibrationStore:
                 if row:
                     answer[sensor] = {"state": row[0], "accuracy": row[1], "saved": row[2]}
         return answer or None
+
+    def accept(self, docs: list[dict]) -> None:
+        """The POST /calibration handler: each document's block, for its device.
+
+        Raises:
+            ValueError: a document has no ``device`` string or no
+                ``calibration`` object; nothing is kept.
+        """
+        for doc in docs:
+            if not isinstance(doc.get("device"), str) or not doc["device"]:
+                raise ValueError("device is required")
+            if not isinstance(doc.get("calibration"), dict):
+                raise ValueError("calibration must be an object")
+        for doc in docs:
+            self.add(doc["device"], doc["calibration"])
 
     def answer(self, args: Mapping[str, str]) -> dict | None:
         """The GET /calibration handler, with ``device`` and ``before`` from

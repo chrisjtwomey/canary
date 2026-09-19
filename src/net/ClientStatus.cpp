@@ -12,7 +12,7 @@ size_t clientStatusJson(const ClientStatus& s, char* buf, size_t len) {
         ",\"panel_temp_c\":%d,\"width\":%d,\"height\":%d,\"rotation\":%u,\"mock_sensors\":%s"
         ",\"sensors\":{\"shtc3\":%s,\"scd41\":%s,\"pmsa003i\":%s,\"bme688\":%s}"
         ",\"fetch\":{\"next_url\":\"%s\",\"next_in_s\":%lu,\"backoff_step\":%d,\"ok\":%lu,\"failed\":%lu}"
-        ",\"backlog\":{\"held\":%lu,\"store\":\"%s\"}"
+        ",\"backlog\":{\"held\":%lu,\"capacity\":%lu,\"store\":\"%s\"}"
         ",\"bsec\":{\"running\":%s,\"restored\":%s,\"accuracy\":%u,\"late\":%lu,\"saved\":%lu}}",
         s.board ? s.board : "", s.version ? s.version : "", s.ip ? s.ip : "", s.rssi,
         (unsigned long)s.uptimeS,
@@ -22,7 +22,8 @@ size_t clientStatusJson(const ClientStatus& s, char* buf, size_t len) {
         b(s.shtc3), b(s.scd41), b(s.pm), b(s.bme688),
         s.nextUrl ? s.nextUrl : "", (unsigned long)s.nextInS, s.backoffStep,
         (unsigned long)s.fetchOk, (unsigned long)s.fetchFailed,
-        (unsigned long)s.backlogHeld, s.backlogStore ? s.backlogStore : "",
+        (unsigned long)s.backlogHeld, (unsigned long)s.backlogCapacity,
+        s.backlogStore ? s.backlogStore : "",
         b(s.bsecRunning), b(s.bsecRestored), (unsigned)s.iaqAccuracy,
         (unsigned long)s.bsecLateCalls, (unsigned long)s.bsecSavedEpoch);
     if (n < 0 || (size_t)n >= len) {

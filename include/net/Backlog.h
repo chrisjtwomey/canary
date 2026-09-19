@@ -2,20 +2,24 @@
 #include <cstddef>
 #include <cstdint>
 
-// Readings documents the board could not post, held until the server takes
-// them, oldest first. The code that posts does not know where they are kept.
+// Readings documents waiting for the server to take them, oldest first. The
+// code that posts does not know where they are kept.
 class IBacklog {
 public:
     virtual ~IBacklog() {}
     // Keep a document, dropping the oldest when there is no room. False when
     // this one cannot be kept at all.
     virtual bool push(const char* doc, size_t len) = 0;
-    // Copy the oldest document into buf as a C string and return its length.
-    // 0 when there is none, or when it does not fit.
-    virtual size_t peek(char* buf, size_t len) = 0;
+    // Copy the document `index` places after the oldest into buf as a C
+    // string and return its length. 0 when there is none, or when it does
+    // not fit.
+    virtual size_t peekAt(uint32_t index, char* buf, size_t len) = 0;
+    size_t peek(char* buf, size_t len) { return peekAt(0, buf, len); }
     // Forget the oldest document.
     virtual void pop() = 0;
     virtual uint32_t count() const = 0;
+    // About how many documents it holds when full, for the client status.
+    virtual uint32_t capacity() const = 0;
     // Where the documents are kept, for the client status.
     virtual const char* where() const = 0;
 };
@@ -28,16 +32,20 @@ public:
         : mem_(mem), size_(size), where_(where) {}
 
     bool push(const char* doc, size_t len) override;
-    size_t peek(char* buf, size_t len) override;
+    size_t peekAt(uint32_t index, char* buf, size_t len) override;
     void pop() override;
     uint32_t count() const override { return count_; }
+    // At the size of the newest document; 0 before the first.
+    uint32_t capacity() const override {
+        return lastLen_ ? (uint32_t)(size_ / (kHeaderBytes + lastLen_)) : 0;
+    }
     const char* where() const override { return where_; }
 
     // Each document is stored behind its length.
     static const size_t kHeaderBytes = 2;
 
 private:
-    size_t oldestLen() const;
+    size_t lengthAt(size_t at) const;
     void read(size_t at, uint8_t* out, size_t len) const;
     void write(size_t at, const uint8_t* in, size_t len);
 
@@ -47,6 +55,7 @@ private:
     size_t      head_ = 0;
     size_t      used_ = 0;
     uint32_t    count_ = 0;
+    size_t      lastLen_ = 0;
 };
 
 // Files read and written a whole file at a time, which is all the board
@@ -76,9 +85,10 @@ public:
     bool load();
 
     bool push(const char* doc, size_t len) override;
-    size_t peek(char* buf, size_t len) override;
+    size_t peekAt(uint32_t index, char* buf, size_t len) override;
     void pop() override;
     uint32_t count() const override { return count_; }
+    uint32_t capacity() const override { return (uint32_t)kChunks * kPerChunk; }
     const char* where() const override { return "sd"; }
 
     // The longest document kept, its newline included.
@@ -113,14 +123,33 @@ private:
 enum PostResult : uint8_t { POSTED, REFUSED, TRY_LATER };
 PostResult postResult(int httpStatus);
 
-// Sends one document and returns the HTTP status, or a negative client error.
+// Sends one request body and returns the HTTP status, or a negative client
+// error.
 class IPoster {
 public:
     virtual ~IPoster() {}
-    virtual int post(const char* doc) = 0;
+    virtual int post(const char* body) = 0;
 };
 
-// Post up to `max` held documents, oldest first. A refused one is dropped,
-// and so is one too long for `buf`; the first that must be tried later stays
-// and ends the pass. Returns how many left the backlog.
-uint32_t drainBacklog(IBacklog& backlog, IPoster& poster, uint32_t max, char* buf, size_t len);
+// What one pass of sending did.
+struct SendResult {
+    uint32_t posted = 0;    // documents the server took
+    uint32_t dropped = 0;   // documents it refused, or too long to send
+    bool     wait = false;  // the server must be tried again later
+    int      status = 0;    // the last answer: an HTTP status, or a client error
+};
+
+// Post up to `max` documents one at a time, oldest first. A refused one is
+// dropped, and so is one too long for `buf`; the first that must be tried
+// later stays and ends the pass.
+SendResult drainBacklog(IBacklog& backlog, IPoster& poster, uint32_t max, char* buf, size_t len);
+
+// The oldest documents, up to `max`, as one JSON array in `out`. Returns how
+// many went in: 0 when there are none, or the oldest does not fit.
+uint32_t batchJson(IBacklog& backlog, uint32_t max, char* out, size_t len);
+
+// Post up to `max` of the oldest documents as one array. A 2xx takes them all
+// and a timeout, a 5xx or a 409 keeps them all. Any other 4xx sends each of
+// them again alone, as drainBacklog does, so one document the server refuses
+// costs only itself. An oldest document too long for `batch` is dropped.
+SendResult sendBatch(IBacklog& backlog, IPoster& poster, uint32_t max, char* batch, size_t len);

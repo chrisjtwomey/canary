@@ -242,7 +242,7 @@ The sensor updates its registers itself; the host polls. **No I²C commands** fo
 
 ### Operating mode for this device (mains)
 
-Run the fan continuously (datasheet "active mode", MTTF ≥ 3 years) and poll every few seconds, keeping checksum-valid frames and averaging. SET is optional: the breakout's 100 k pull-up holds it high, so with no wire the fan runs from power-on. Wired to the TinyS3's J4 pin 7 (§8), it lets the firmware stop and start the fan; stopping it between readings saves dust, at a cost in accuracy per the field reports.
+The fan runs for the 35 s before each reading and stops after it: Plantower's 30 s warm-up and a margin. Each reading records how long the fan had run (`pm_warmup_s`), so the stored readings can show whether that is enough given the field reports above. SET is optional: the breakout's 100 k pull-up holds it high, so with no wire the fan runs from power-on and all the time. Wired to the TinyS3's J4 pin 7 (§8), it lets the firmware stop and start the fan.
 
 ### Gotchas
 

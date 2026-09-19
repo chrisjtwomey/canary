@@ -21,8 +21,9 @@ struct ClientStatus {
     uint32_t    nextInS;
     int         backoffStep;
     uint32_t    fetchOk, fetchFailed;
-    uint32_t    backlogHeld;     // readings waiting to be posted again
-    const char* backlogStore;    // where they wait: "sd", "psram", or "" for nowhere
+    uint32_t    backlogHeld;     // readings waiting in the queue
+    uint32_t    backlogCapacity; // about how many it holds when full
+    const char* backlogStore;    // where they wait: "psram", "ram", or "" for nowhere
     bool        bsecRunning;     // BSEC started, and the BME688 answering
     bool        bsecRestored;    // BSEC took a saved state at its last start
     uint8_t     iaqAccuracy;     // 0-3

@@ -1,11 +1,10 @@
 """The board's calibration copies: kept, pruned, and handed back."""
 import pytest
 
-from epd_server import DisplayServer, ReadingsStore
+from epd_server import DisplayServer
 
 from server import make_pages, make_source
 from sources.calibration import CalibrationStore
-from sources.readings import ReadingsIngest
 from sources.status import DeviceReports
 from tests.conftest import AT
 
@@ -28,7 +27,7 @@ def client_for(cal, tz):
     server = DisplayServer(pages=make_pages(tz, width=1280, height=720),
                            source=make_source(7, lambda: AT, reports),
                            schedule=[("00:00:00", "breathe.png")], tz=tz,
-                           ingest={"readings": ReadingsIngest(reports, calibration=cal).accept},
+                           ingest={"calibration": cal.accept},
                            queries={"calibration": cal.answer})
     return server._build_app().test_client()
 
@@ -100,16 +99,13 @@ def test_the_get_route_answers_with_the_block_the_board_sends(cal, tz):
 
 def test_a_posted_block_reaches_the_calibration_store(cal, tz):
     client = client_for(cal, tz)
-    rsp = client.post("/readings", json={"ts": AT, "device": DEVICE, "co2_ppm": 800,
-                                         "calibration": copy(AT - 30)})
+    rsp = client.post("/calibration", json={"device": DEVICE, "calibration": copy(AT - 30)})
     assert rsp.status_code == 204
     assert cal.lookup(DEVICE, before=AT) == copy(AT - 30)
 
 
-def test_the_readings_store_never_sees_the_block(cal, tmp_path):
-    store = ReadingsStore(tmp_path / "readings.db")
-    ReadingsIngest(DeviceReports(), store, calibration=cal).accept(
-        {"ts": AT, "device": DEVICE, "co2_ppm": 800, "calibration": copy(AT - 30)})
-    assert cal.count() == 1
-    assert "calibration" not in store.latest()
-    store.close()
+@pytest.mark.parametrize("doc", [{"calibration": copy(1)}, {"device": "", "calibration": copy(1)},
+                                 {"device": DEVICE}, {"device": DEVICE, "calibration": "x"}])
+def test_a_post_without_a_device_or_a_block_is_a_400(cal, tz, doc):
+    rsp = client_for(cal, tz).post("/calibration", json=[{"device": DEVICE, "calibration": copy(AT - 30)}, doc])
+    assert rsp.status_code == 400 and cal.count() == 0

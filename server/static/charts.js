@@ -35,6 +35,12 @@
     ctx.fillStyle = o.color || G[2];
     ctx.textAlign = o.align || 'left';
     ctx.textBaseline = o.baseline || 'alphabetic';
+    if (o.halo) {
+      ctx.strokeStyle = G[7];
+      ctx.lineWidth = 5;
+      ctx.lineJoin = 'round';
+      ctx.strokeText(s, x, y);
+    }
     ctx.fillText(s, x, y);
     ctx.restore();
   }
@@ -212,11 +218,12 @@
     }
   }
 
-  // A hatched fraction of a box.
+  // A hatched fraction of a box. The outline passes no fill at all: rough.js
+  // hatches any fill it is given, 'none' included.
   function meter(canvas, s) {
     var c = prepare(canvas);
     var m = 3, w = c.w - 2 * m, h = c.h - 2 * m;
-    c.rc.rectangle(m, m, w, h, { stroke: G[2], strokeWidth: 1.5, roughness: 1, fill: 'none' });
+    c.rc.rectangle(m, m, w, h, { stroke: G[2], strokeWidth: 1.5, roughness: 1 });
     var f = Math.max(0, Math.min(1, s.fraction));
     if (f > 0) {
       c.rc.rectangle(m, m, w * f, h, { fill: G[2], fillStyle: 'hachure', hachureGap: 6,
@@ -238,23 +245,26 @@
   }
 
   // Days of one measurement as a trace: thresholds as dashed lines, a rule
-  // at each midnight, the last hours drawn heavier, a companion series
-  // lighter on its own scale at the right.
+  // at each midnight, the last hours drawn heavier. A companion series goes
+  // lighter, on its own scale at the right when it has a y2, or on the main
+  // scale when it has none, with a legend naming the two.
   function trace(canvas, s) {
     var c = prepare(canvas);
-    var m = { l: 64, r: s.points2 ? 64 : 44, t: 16, b: 40 };
+    var ownScale = s.points2 && s.y2;
+    var m = { l: 64, r: ownScale ? 64 : 44, t: s.legend ? 30 : 16, b: 40 };
     var X = linear(s.x.min, s.x.max, m.l, c.w - m.r);
     var Y = linear(s.y.min, s.y.max, c.h - m.b, m.t);
-    (s.guides || []).forEach(function (g) {
-      if (g.y <= s.y.min || g.y >= s.y.max) return;
+    var guides = (s.guides || []).filter(function (g) { return g.y > s.y.min && g.y < s.y.max; });
+    guides.forEach(function (g) {
       var y = Y(g.y);
       c.rc.line(m.l, y, c.w - m.r, y, { stroke: G[4], strokeWidth: 1.5, roughness: 0.6, strokeLineDash: [9, 8] });
-      label(c.ctx, g.label, m.l + 8, y - 6, { size: 17, italic: true, color: G[3] });
     });
-    if (s.points2) {
-      var Y2 = linear(s.y2.min, s.y2.max, c.h - m.b, m.t);
+    var Y2 = ownScale ? linear(s.y2.min, s.y2.max, c.h - m.b, m.t) : Y;
+    if (s.points2 && s.points2.length > 1) {
       c.rc.curve(s.points2.map(function (p) { return [X(p[0]), Y2(p[1])]; }),
         { stroke: G[4], strokeWidth: 2, roughness: 0.6, bowing: 0.3, disableMultiStroke: true });
+    }
+    if (ownScale) {
       var v2 = Math.ceil(s.y2.min / 5) * 5;
       for (; v2 <= s.y2.max; v2 += 5) {
         c.rc.line(c.w - m.r, Y2(v2), c.w - m.r + 6, Y2(v2), { stroke: G[4], strokeWidth: 1.2, roughness: 0.4 });
@@ -262,6 +272,7 @@
       }
       if (s.label2) label(c.ctx, s.label2, c.w - m.r - 6, m.t + 14, { size: 15, italic: true, align: 'right', color: G[4] });
     }
+    if (s.legend) legend(c, s.legend, c.w - m.r, 2);
     (s.days || []).forEach(function (d) {
       var x = X(d.x);
       c.rc.line(x, m.t, x, c.h - m.b, { stroke: G[4], strokeWidth: 1.2, roughness: 0.5, strokeLineDash: [6, 6] });
@@ -281,7 +292,31 @@
     if (s.set) {
       c.rc.circle(X(s.set[0]), Y(s.set[1]), 16, { stroke: G[2], strokeWidth: 1.5, fill: 'none', roughness: 1 });
     }
+    // After the lines, on a halo, so a line that runs through a label does
+    // not hide it.
+    guides.forEach(function (g) {
+      label(c.ctx, g.label, m.l + 8, Y(g.y) - 6, { size: 17, italic: true, color: G[3], halo: true });
+    });
+    if (s.now2) dot(c.ctx, X(s.now2[0]), Y2(s.now2[1]), 6, G[4]);
     if (s.now) marker(c, X(s.now[0]), Y(s.now[1]));
+  }
+
+  // The two series' names at the top right, each after a stroke drawn as
+  // its line is: dark for the first, light for the second.
+  function legend(c, names, right, top) {
+    var styles = [{ color: G[0], width: 3 }, { color: G[4], width: 2 }];
+    var x = right;
+    for (var i = names.length - 1; i >= 0; i--) {
+      c.ctx.save();
+      c.ctx.font = 'italic 500 15px ' + FONT;
+      var w = c.ctx.measureText(names[i]).width;
+      c.ctx.restore();
+      label(c.ctx, names[i], x, top + 12, { size: 15, italic: true, align: 'right', color: G[2] });
+      x -= w + 8;
+      c.rc.line(x - 22, top + 7, x, top + 7, { stroke: styles[i].color, strokeWidth: styles[i].width,
+        roughness: 0.4, disableMultiStroke: true });
+      x -= 22 + 16;
+    }
   }
 
   // A vertical scale zoomed around now, a column up to the value, and

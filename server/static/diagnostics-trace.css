@@ -16,18 +16,17 @@
 .page-diagnostics-trace .stat .name { font-size: 2.6cqw; margin-right: 1cqw; }
 .page-diagnostics-trace .stat .detail { font-size: 1.9cqw; }
 
-/* Four charts: a row per measure, a column per board. */
+/* A row per measure, both boards on each: free memory tallest, the signal
+   shortest. */
 .page-diagnostics-trace .charts {
   position: absolute;
   left: 3cqw;
   right: 3cqw;
-  top: 23cqh;
-  bottom: 3cqh;
+  top: 21cqh;
+  bottom: 2cqh;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
-  column-gap: 2cqw;
-  row-gap: 1.5cqh;
+  grid-template-rows: 3fr 2fr 2fr;
+  row-gap: 1cqh;
 }
 
 .page-diagnostics-trace .chart {

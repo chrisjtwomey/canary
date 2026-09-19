@@ -9,22 +9,18 @@
 // the dock posts, so the fan runs for a window before each post and stops
 // after it.
 //
-// The window has to cover the module's 30 s warm-up and the sample that
-// follows it, so that the reading the post carries is taken with the fan
-// already settled.
+// The window is the module's 30 s warm-up and a margin, counted back from
+// the next post, so the reading the post carries is taken with the fan
+// settled however long the gap between posts is.
 class FanWindow {
 public:
-    FanWindow(uint32_t periodMs, uint32_t leadMs) : period_(periodMs), lead_(leadMs) {}
+    explicit FanWindow(uint32_t leadMs) : lead_(leadMs) {}
 
-    // sinceMs is the time since the last post.
-    bool shouldRun(uint32_t sinceMs) const { return sinceMs + lead_ >= period_; }
+    // untilPostMs is the time to the next post, 0 when it is due.
+    bool shouldRun(uint32_t untilPostMs) const { return untilPostMs <= lead_; }
 
-    // The share of each period the fan runs for, in percent.
-    uint32_t dutyPercent() const {
-        return lead_ >= period_ ? 100 : lead_ * 100 / period_;
-    }
+    uint32_t leadMs() const { return lead_; }
 
 private:
-    uint32_t period_;
     uint32_t lead_;
 };

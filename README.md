@@ -3,8 +3,9 @@
 An indoor air-quality display: CO₂, particulates, VOC and temperature on a
 5.2" e-paper panel, rendered server-side.
 
-The board samples the four sensors every five seconds, posts a readings
-document to the server once a minute, and shows the pages the server renders
+The dock checks the four sensors every minute and takes a reading on the
+server's slots, every five minutes and every half hour overnight. It posts
+the readings to the server, and the head shows the pages the server renders
 from them in turn. A simulated room stands in for the sensors on the host
 and on a board with nothing attached.
 

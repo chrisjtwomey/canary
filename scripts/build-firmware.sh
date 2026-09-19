@@ -4,13 +4,15 @@
 #   build-firmware.sh [options] <tag> [<dest>]
 #
 # <dest> is the directory a server offers images from, local or host:path.
-# The image goes there as <tag>.bin and replaces the one before it.
+# Each board's image goes there as <product>/<tag>.bin, beside the images
+# already there: a server offers the one its own version calls for, which
+# may be an older one.
 #
 #   --signed-by <fingerprint>  refuse a tag this key did not sign
 #   --key-url <url>            where to fetch the key (default: the owner's
 #                              keys on GitHub)
 #   --defaults <file>          build with this defaults.cpp, not the example
-#   --upload                   also flash the build over USB
+#   --upload <head|dock>       also flash that board's build over USB
 #
 # The build is of a fresh clone, never the working tree, so its version is
 # exactly the tag: epd offers an update only to a board on a tagged build.
@@ -33,7 +35,8 @@ while [ $# -gt 0 ]; do
         --signed-by) signed_by=$(printf '%s' "${2:?}" | tr -d ' ' | tr a-f A-F); shift 2 ;;
         --key-url)   key_url=${2:?}; shift 2 ;;
         --defaults)  defaults=${2:?}; shift 2 ;;
-        --upload)    upload=1; shift ;;
+        --upload)    upload=${2:?}; shift 2
+                     case $upload in head|dock) ;; *) echo "--upload takes head or dock" >&2; exit 2 ;; esac ;;
         -h|--help)   usage 0 ;;
         -*)          echo "unknown option: $1" >&2; usage 2 ;;
         *)           break ;;
@@ -79,27 +82,40 @@ checkout_tag "$epd_url" "$epd_tag" "$work/epd"
 
 cp "${defaults:-$src/src/defaults.example.cpp}" "$src/src/defaults.cpp"
 
-pio run -d "$src" -e esp32 | tee "$work/build.log"
-grep -qx "CLIENT_VERSION: $tag" "$work/build.log" \
-    || { echo "built $(grep -m1 '^CLIENT_VERSION:' "$work/build.log"), not $tag" >&2; exit 1; }
+# The PlatformIO environment each product builds in.
+env_of() { case $1 in canary-head) echo esp32 ;; canary-dock) echo dock ;; esac; }
 
-[ -z "$upload" ] || pio run -d "$src" -e esp32 -t upload
+for product in canary-head canary-dock; do
+    env=$(env_of "$product")
+    pio run -d "$src" -e "$env" | tee "$work/$env.log"
+    grep -qx "CLIENT_VERSION: $tag" "$work/$env.log" \
+        || { echo "$env built $(grep -m1 '^CLIENT_VERSION:' "$work/$env.log"), not $tag" >&2; exit 1; }
+done
 
-bin=$src/.pio/build/esp32/firmware.bin
+case $upload in
+    head) pio run -d "$src" -e esp32 -t upload ;;
+    dock) pio run -d "$src" -e dock -t upload ;;
+esac
+
 # Copied under another name, then renamed: the server offers any *.bin it
 # finds, even one half-written.
-case $dest in
-    "") ;;
-    *:*)
-        host=${dest%%:*}
-        dir=${dest#*:}
-        scp -q "$bin" "$host:$dir/$tag.bin.tmp"
-        ssh "$host" "cd '$dir' && mv -f '$tag.bin.tmp' '$tag.bin' && find . -maxdepth 1 -name '*.bin' ! -name '$tag.bin' -delete"
-        ;;
-    *)
-        cp "$bin" "$dest/$tag.bin.tmp"
-        mv -f "$dest/$tag.bin.tmp" "$dest/$tag.bin"
-        find "$dest" -maxdepth 1 -name '*.bin' ! -name "$tag.bin" -delete
-        ;;
-esac
-echo "$tag: $(wc -c < "$bin" | tr -d ' ') bytes${dest:+, in $dest}${upload:+, flashed over USB}"
+for product in canary-head canary-dock; do
+    bin=$src/.pio/build/$(env_of "$product")/firmware.bin
+    case $dest in
+        "") ;;
+        *:*)
+            host=${dest%%:*}
+            dir=${dest#*:}/$product
+            ssh "$host" "mkdir -p '$dir'"
+            scp -q "$bin" "$host:$dir/$tag.bin.tmp"
+            ssh "$host" "mv -f '$dir/$tag.bin.tmp' '$dir/$tag.bin'"
+            ;;
+        *)
+            mkdir -p "$dest/$product"
+            cp "$bin" "$dest/$product/$tag.bin.tmp"
+            mv -f "$dest/$product/$tag.bin.tmp" "$dest/$product/$tag.bin"
+            ;;
+    esac
+    echo "$product $tag: $(wc -c < "$bin" | tr -d ' ') bytes${dest:+, in $dest/$product}"
+done
+[ -z "$upload" ] || echo "flashed the $upload over USB"

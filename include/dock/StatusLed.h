@@ -24,6 +24,13 @@ public:
     static const uint32_t kFastPulseMs = 500;
     static const uint32_t kSlowPulseMs = 1000;
 
+    // Updating starts as the working pulse at a quarter of the light, and
+    // quickens and brightens with the image written, to four pulses a second
+    // at full light.
+    static const uint32_t kUpdateSlowestMs = 1000;
+    static const uint32_t kUpdateFastestMs = 250;
+    static const uint8_t  kUpdateDimmestStep = 4;
+
     // Trouble is three flashes filling the first second, then five steady.
     static const uint8_t  kTroubleFlashes = 3;
     static const uint32_t kTroubleFlashMs = 166;
@@ -33,6 +40,7 @@ public:
         STARTING,   // connecting, or starting the sensors
         WELL,       // reading and posting, with everything answering
         TROUBLE,    // no network, a post the server would not take, a dead sensor
+        UPDATING,   // writing a new image; see progress()
     };
 
     // Changing the state starts its pattern; repeating the current one does not.
@@ -44,12 +52,22 @@ public:
 
     State state() const { return state_; }
 
+    // How much of the image is written, in thousandths.
+    void progress(uint16_t permille) { progress_ = permille > 1000 ? 1000 : permille; }
+
     // Unsigned arithmetic, so the millis() rollover only shifts the phase.
     uint16_t dutyAt(uint32_t nowMs) const {
         const uint32_t since = nowMs - startedMs_;
         switch (state_) {
             case STARTING: return pulseDuty(since % kFastPulseMs, kFastPulseMs);
             case WELL:     return pulseDuty(since % kSlowPulseMs, kSlowPulseMs);
+            case UPDATING: {
+                const uint32_t period =
+                    kUpdateSlowestMs - (kUpdateSlowestMs - kUpdateFastestMs) * progress_ / 1000;
+                const uint8_t top = (uint8_t)(kUpdateDimmestStep +
+                    ((kSteps - 1 - kUpdateDimmestStep) * progress_ + 500) / 1000);
+                return pulseDuty(since % period, period, top);
+            }
             default:       return troubleDuty(since % kTroubleCycleMs);
         }
     }
@@ -66,10 +84,10 @@ private:
         return (uint16_t)(kMaxDuty * std::pow(level, gamma) + 0.5f);
     }
 
-    static uint16_t pulseDuty(uint32_t phase, uint32_t periodMs) {
+    static uint16_t pulseDuty(uint32_t phase, uint32_t periodMs, uint8_t top = kSteps - 1) {
         const float turn = 2.0f * 3.14159265f * phase / periodMs;
         const float light = 0.5f * (1.0f - std::cos(turn));
-        return stepDuty((uint8_t)((kSteps - 1) * light + 0.5f));
+        return stepDuty((uint8_t)(top * light + 0.5f));
     }
 
     static uint16_t troubleDuty(uint32_t phase) {
@@ -80,4 +98,5 @@ private:
 
     State    state_ = STARTING;
     uint32_t startedMs_ = 0;
+    uint16_t progress_ = 0;
 };

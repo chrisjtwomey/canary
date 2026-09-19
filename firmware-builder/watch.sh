@@ -22,7 +22,8 @@ while :; do
           | python3 -c 'import json, sys; print(json.load(sys.stdin)["tag_name"])') || tag=
     if [ -z "$tag" ]; then
         log "could not read the latest release of $repo"
-    elif [ ! -e "$dir/$tag.bin" ] && [ "$tag" != "$failed" ]; then
+    elif { [ ! -e "$dir/canary-head/$tag.bin" ] || [ ! -e "$dir/canary-dock/$tag.bin" ]; } \
+         && [ "$tag" != "$failed" ]; then
         log "building $tag"
         if build-firmware ${SIGNED_BY:+--signed-by "$SIGNED_BY"} "$tag" "$dir"; then
             failed=

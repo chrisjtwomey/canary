@@ -42,6 +42,9 @@ struct Readings {
     Scd41Data  scd41;   bool scd41Valid;
     PmData     pm;      bool pmValid;
     Bme688Data bme688;  bool bme688Valid;
+    // How long the PM fan had run when the particle reading was taken, in
+    // seconds; 0 when nobody measured it.
+    uint16_t   pmWarmupS;
 };
 
 // Encode to the JSON in docs/READINGS.md. Returns the length written, or 0

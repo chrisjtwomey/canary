@@ -17,8 +17,8 @@
 // that will run on the device, not a parallel copy of it.
 //
 // A sample takes roughly 150 ms of wall clock, nearly all of it the BME688
-// heater. At the intended 5 s cadence that is 3% of the time, and ::delay()
-// yields on ESP32, so WiFi keeps running.
+// heater. The dock samples once a minute, and ::delay() yields on ESP32, so
+// WiFi keeps running.
 class SensorSuite {
 public:
     SensorSuite(IClock& clock, IShtc3& shtc3, IScd41& scd41, IPmsa003i& pm, IBme688& bme)

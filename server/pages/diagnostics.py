@@ -1,8 +1,9 @@
 """Diagnostics: what each board says about itself, now and over the day.
 
-Both boards post a ``client`` object once a minute. DiagnosticsPage shows
-the newest from each; DiagnosticsTracePage draws each board's signal and
-free memory over the last 24 hours, with the restarts it counted.
+Both boards post a ``client`` object with every document. DiagnosticsPage
+shows the newest from each; DiagnosticsTracePage draws both boards' free
+memory and signal, and the dock's queue, over the last 24 hours, with the
+restarts each counted.
 """
 from __future__ import annotations
 
@@ -10,7 +11,10 @@ import os
 
 from airium import Airium
 
-from metrics import IAQ_ACCURACY, fmt_bytes, fmt_duration, fmt_stamp, hour_ticks, rssi_quality
+import math
+
+from metrics import (IAQ_ACCURACY, fmt_bytes, fmt_duration, fmt_int, fmt_stamp, hour_ticks,
+                     rssi_quality)
 from pages.base import EnvPage
 
 # key in client.sensors, its name, and the valid flag that says it is warm
@@ -42,6 +46,23 @@ def restarts(history: list[dict]) -> int:
     return sum(1 for a, b in zip(ups, ups[1:]) if b < a)
 
 
+def queue_of(c: dict) -> dict | None:
+    """The board's queue, ``{"held", "capacity", "store"}``, or None for a
+    board that queues nothing: the head reports an empty store."""
+    backlog = c.get("backlog")
+    if not isinstance(backlog, dict) or not backlog.get("store"):
+        return None
+    return backlog
+
+
+def about(n: int) -> str:
+    """A capacity to two figures, as the estimate it is: 1480 -> "~1,500"."""
+    if n < 100:
+        return fmt_int(n)
+    digits = int(math.log10(n)) - 1
+    return "~" + fmt_int(round(n, -digits))
+
+
 def kv(a: Airium, key: str, value: str, id: str | None = None) -> None:
     a.span(klass="k", _t=key)
     # Airium writes a None attribute as id="null", so an unnamed row would
@@ -67,28 +88,34 @@ class DiagnosticsPage(EnvPage):
         if status is None:
             with a.div(klass="empty"):
                 a.div(klass="verdict", _t="No report from either board yet.")
-                a.div(klass="detail", _t="Each posts to /readings once a minute after it connects.")
+                a.div(klass="detail", _t="Each posts to /readings once it connects.")
             return
         boards = status.get("boards") or {}
         for device in ordered_boards(boards):
             self._board(a, device, boards[device])
 
     def _board(self, a: Airium, device: str, entry: dict) -> None:
-        doc = entry["doc"]
+        doc = entry.get("doc") or {}
         k = board_key(device)
         c = doc.get("client") or {}
         valid = doc.get("valid") or {}
         with a.div(klass="board", id=f"board-{k}"):
             with a.div(klass="board-head"):
                 a.span(klass="name label", _t=f"{k}, {c.get('board', device)}")
-                a.span(klass="stamp", _t=f"reported {fmt_duration(entry['age_s'])} ago", id=f"{k}-age")
+                age = entry.get("age_s")
+                a.span(klass="stamp", id=f"{k}-age",
+                       _t=f"reported {fmt_duration(age)} ago" if age is not None else "no report taken")
 
             with a.div(klass="card"):
                 a.div(klass="label", _t="Client")
                 with a.div(klass="kv"):
                     kv(a, "version", str(c.get("version", "—")), id=f"{k}-version")
-                    kv(a, "up", fmt_duration(c.get("uptime_s", 0)), id=f"{k}-uptime")
+                    if doc:
+                        kv(a, "up", fmt_duration(c.get("uptime_s", 0)), id=f"{k}-uptime")
                     kv(a, "device", device or "—")
+                    self._version_history(a, k, entry)
+            if not doc:
+                return
 
             with a.div(klass="card"):
                 a.div(klass="label", _t="Network")
@@ -111,17 +138,37 @@ class DiagnosticsPage(EnvPage):
                     kv(a, "psram", f"{fmt_bytes(c.get('psram_free', 0))} free of {fmt_bytes(c.get('psram_size', 0))}", id=f"{k}-psram")
                 with a.div(klass="meter"):
                     a.canvas(id=f"{k}-psram-meter")
+                queue = queue_of(c)
+                if queue is not None:
+                    held, capacity = queue.get("held", 0), queue.get("capacity", 0)
+                    count = f"{fmt_int(held)} of {about(capacity)}" if capacity else fmt_int(held)
+                    with a.div(klass="kv"):
+                        kv(a, "queue", f"{count}, in {queue['store']}", id=f"{k}-queue")
+                    with a.div(klass="meter"):
+                        a.canvas(id=f"{k}-queue-meter")
 
-            # The head has a panel and fetches pages; the dock has sensors and
-            # a backlog. A board says which it is by what it reports.
+            # The head has a panel and fetches pages; the dock has sensors. A
+            # board says which it is by what it reports.
             if "sensors" in c:
                 self._sensors(a, k, c, valid)
             else:
                 self._panel_and_fetch(a, k, c)
 
+    @staticmethod
+    def _version_history(a: Airium, k: str, entry: dict) -> None:
+        """The board's last change of version, and posts the server refused
+        because of its version."""
+        changed = entry.get("changed")
+        if changed:
+            kv(a, "downgraded" if changed["older"] else "updated",
+               f"from {changed['from']}, {fmt_duration(changed['age_s'])} ago", id=f"{k}-changed")
+        refused = entry.get("refused")
+        if refused:
+            kv(a, "refused", f"{refused['count']} from {refused['version']}, "
+                             f"{fmt_duration(refused['age_s'])} ago", id=f"{k}-refused")
+
     def _sensors(self, a: Airium, k: str, c: dict, valid: dict) -> None:
         present = c.get("sensors") or {}
-        backlog = c.get("backlog")
         with a.div(klass="card"):
             a.div(klass="label", _t="Sensors")
             with a.div(klass="kv"):
@@ -137,10 +184,6 @@ class DiagnosticsPage(EnvPage):
                 if bsec.get("running"):
                     word = IAQ_ACCURACY[max(0, min(3, int(bsec.get("accuracy", 0))))]
                     kv(a, "index", f"{word} accuracy, {bsec.get('late', 0)} late", id=f"{k}-bsec")
-                if backlog is not None:
-                    held = backlog.get("held", 0)
-                    store = backlog.get("store") or "nowhere"
-                    kv(a, "unsent", f"{held}, in {store}" if held else "none", id=f"{k}-backlog")
 
     def _panel_and_fetch(self, a: Airium, k: str, c: dict) -> None:
         fetch = c.get("fetch") or {}
@@ -165,7 +208,10 @@ class DiagnosticsPage(EnvPage):
         boards = status.get("boards") or {}
         for device in ordered_boards(boards):
             k = board_key(device)
-            c = boards[device]["doc"].get("client") or {}
+            doc = boards[device].get("doc")
+            if not doc:
+                continue
+            c = doc.get("client") or {}
             rssi = c.get("rssi")
             if rssi is not None:
                 specs.append({"kind": "bars", "canvas": f"#{k}-rssi-bars",
@@ -175,19 +221,76 @@ class DiagnosticsPage(EnvPage):
                 free = c.get(f"{key}_free") or 0
                 specs.append({"kind": "meter", "canvas": f"#{k}-{key}-meter",
                               "fraction": (size - free) / size if size else 0.0})
+            queue = queue_of(c)
+            if queue is not None:
+                capacity = queue.get("capacity") or 0
+                specs.append({"kind": "meter", "canvas": f"#{k}-queue-meter",
+                              "fraction": queue.get("held", 0) / capacity if capacity else 0.0})
         return specs
 
 
-# What the trace page draws for each board: the client key, the chart's
-# title, how the value is scaled, its axis range and the guides on it.
+def free_memory_kb(c: dict) -> float | None:
+    v = c.get("heap_free")
+    return None if v is None else v / 1024
+
+
+def queued(c: dict) -> float | None:
+    queue = queue_of(c)
+    return None if queue is None else queue.get("held")
+
+
+def signal(c: dict) -> float | None:
+    return c.get("rssi")
+
+
+class Trace:
+    """One chart of the trace page: a value from each board's client object,
+    both boards on one scale.
+
+    Args:
+        key: names the canvas.
+        title: the chart's label.
+        value: the value from a client object, or None where it has none.
+        y: a fixed axis ``(min, max)``, or None to fit the day's highest,
+            no lower than ``floor``.
+        step: the tick interval on a fixed axis.
+        guides: ``(value, label)`` lines across the chart.
+    """
+
+    def __init__(self, key, title, value, y=None, step=0, guides=(), floor=10):
+        self.key, self.title, self.value = key, title, value
+        self.y, self.step, self.guides, self.floor = y, step, guides, floor
+
+    def axis(self, highest: float) -> tuple[int, int, list[int]]:
+        """``(min, max, ticks)``: the fixed axis, or one from 0 to the day's
+        highest rounded up to 1, 2 or 5 of a power of ten."""
+        if self.y is not None:
+            lo, hi = self.y
+            return lo, hi, [v for v in range(lo, hi + 1) if v % self.step == 0]
+        top = max(self.floor, highest)
+        power = 10 ** int(math.floor(math.log10(top)))
+        top = next(m * power for m in (1, 2, 5, 10) if m * power >= top)
+        return 0, int(top), [0, int(top) // 2, int(top)]
+
+
+# The trace page's charts, tallest first. Free memory is what a leak shows
+# in; the queue is empty unless the server was away; the signal barely moves
+# once the dock is placed.
 TRACES = (
-    ("rssi", "Wi-Fi signal, dBm", 1.0, (-95, -30), ((-55, "strong"), (-75, "weak")), 10),
-    ("heap_free", "free memory, KB", 1 / 1024, (0, 320), (), 100),
+    Trace("heap", "free memory, KB", free_memory_kb, y=(0, 320), step=100),
+    Trace("queue", "queue, readings", queued),
+    Trace("rssi", "Wi-Fi signal, dBm", signal, y=(-90, -40), step=20,
+          guides=((-55, "strong"), (-75, "weak"))),
 )
+
+# Which board is the dark line when both are on a chart: the dock, which is
+# the only one on the queue chart.
+TRACE_ORDER = ("canary-dock", "canary-head")
 
 
 class DiagnosticsTracePage(EnvPage):
-    """Each board's signal and free memory over the last day, and its restarts."""
+    """Both boards' free memory and signal, and the dock's queue, over the
+    last day, with each board's restarts."""
     title = "Diagnostics"
     stylesheet = "diagnostics-trace.css"
     css_class = "diagnostics-trace"
@@ -198,16 +301,16 @@ class DiagnosticsTracePage(EnvPage):
         status: dict | None = data["status"]
         history: dict = data["status_history_24h"] or {}
         a.div(klass="title label", _t="Boards, last 24 hours")
-        if status is None:
+        if status is None or status.get("doc") is None:
             a.div(klass="verdict", _t="No report from either board yet.")
-            a.div(klass="detail", _t="Each posts to /readings once a minute after it connects.")
+            a.div(klass="detail", _t="Each posts to /readings once it connects.")
             return
         a.div(klass="stamp", _t=fmt_stamp(status["doc"]["ts"], self.tz))
         boards = status.get("boards") or {}
         with a.div(klass="stats"):
             for device in ordered_boards(boards):
                 k = board_key(device)
-                c = boards[device]["doc"].get("client") or {}
+                c = (boards[device].get("doc") or {}).get("client") or {}
                 n = restarts(history.get(device, []))
                 with a.div(klass="stat", id=f"{k}-stat"):
                     a.span(klass="name", _t=k)
@@ -215,39 +318,47 @@ class DiagnosticsTracePage(EnvPage):
                         f"up {fmt_duration(c.get('uptime_s', 0))}, "
                         + (f"{n} restart{'s' if n != 1 else ''} today" if n else "no restarts today")))
         with a.div(klass="charts"):
-            for key, title, _scale, _rng, _guides, _step in TRACES:
-                for device in ordered_boards(boards):
-                    k = board_key(device)
-                    with a.div(klass="chart"):
-                        a.div(klass="label", _t=f"{k}, {title}")
-                        a.canvas(id=f"{k}-{key}")
+            for t in TRACES:
+                with a.div(klass=f"chart chart-{t.key}"):
+                    a.div(klass="label", _t=t.title)
+                    a.canvas(id=f"trace-{t.key}")
 
     def charts(self, **data) -> list[dict]:
         status: dict | None = data["status"]
         history: dict = data["status_history_24h"] or {}
-        if status is None:
+        if status is None or status.get("doc") is None:
             return []
         end = status["doc"]["ts"]
         start = end - self.HOURS * 3600
         ticks = hour_ticks(start, end, self.tz, 6)
         boards = status.get("boards") or {}
+        devices = [d for d in TRACE_ORDER if d in boards] + \
+                  [d for d in ordered_boards(boards) if d not in TRACE_ORDER]
         specs = []
-        for key, _title, scale, (lo, hi), guides, step in TRACES:
-            for device in ordered_boards(boards):
-                k = board_key(device)
+        for t in TRACES:
+            series = []
+            for device in devices:
                 pts = []
                 for d in history.get(device, []):
-                    v = (d.get("client") or {}).get(key)
+                    v = t.value(d.get("client") or {})
                     if v is not None and d["ts"] >= start:
-                        pts.append([d["ts"], round(v * scale, 1)])
-                now = pts[-1] if pts else None
-                specs.append({
-                    "kind": "trace", "canvas": f"#{k}-{key}", "points": pts,
-                    "x": {"min": start, "max": end}, "y": {"min": lo, "max": hi},
-                    "yticks": [v for v in range(lo, hi + 1) if v % step == 0],
-                    "guides": [{"y": g, "label": label} for g, label in guides],
-                    "days": [{"x": t["x"]} for t in ticks],
-                    "dayLabels": [{"x": t["x"], "label": t["label"]} for t in ticks],
-                    "now": now,
-                })
+                        pts.append([d["ts"], round(v, 1)])
+                if pts:
+                    series.append((board_key(device), pts))
+            lo, hi, yticks = t.axis(max((p[1] for _, pts in series for p in pts), default=0))
+            spec = {
+                "kind": "trace", "canvas": f"#trace-{t.key}",
+                "points": series[0][1] if series else [],
+                "x": {"min": start, "max": end}, "y": {"min": lo, "max": hi},
+                "yticks": yticks,
+                "guides": [{"y": g, "label": label} for g, label in t.guides],
+                "days": [{"x": tick["x"]} for tick in ticks],
+                "dayLabels": [{"x": tick["x"], "label": tick["label"]} for tick in ticks],
+                "now": series[0][1][-1] if series else None,
+            }
+            if len(series) > 1:
+                spec["points2"] = series[1][1]
+                spec["now2"] = series[1][1][-1]
+                spec["legend"] = [series[0][0], series[1][0]]
+            specs.append(spec)
         return specs

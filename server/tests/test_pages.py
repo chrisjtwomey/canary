@@ -277,7 +277,7 @@ DOCK_DOC = {
         "uptime_s": 8040, "heap_free": 120000, "heap_size": 327680,
         "psram_free": 4000000, "psram_size": 4194304, "mock_sensors": True,
         "sensors": {"shtc3": True, "scd41": True, "pmsa003i": True, "bme688": False},
-        "backlog": {"held": 7, "store": "psram"},
+        "backlog": {"held": 7, "capacity": 1480, "store": "psram"},
         "bsec": {"running": True, "restored": True, "accuracy": 2, "late": 1, "saved": 0},
     },
 }
@@ -290,6 +290,7 @@ HEAD_DOC = {
         "width": 1280, "height": 720, "rotation": 0,
         "fetch": {"next_url": "http://h:8080/day.png", "next_in_s": 120, "backoff_step": 0,
                   "ok": 12, "failed": 1},
+        "backlog": {"held": 0, "capacity": 0, "store": ""},
     },
 }
 STATUS = {
@@ -299,7 +300,8 @@ STATUS = {
 
 
 def status_history(hours=24):
-    """A day of reports from both boards: the head restarted once, the dock's signal sagged."""
+    """A day of reports from both boards: the head restarted once, the dock's
+    signal sagged, and the dock queued readings through one outage."""
     end = DOCK_DOC["ts"]
     out = {"canary-head": [], "canary-dock": []}
     for i in range(hours * 6):
@@ -307,8 +309,10 @@ def status_history(hours=24):
         up = (i * 600) if i < 100 else (i - 100) * 600
         out["canary-head"].append({"ts": ts, "device": "canary-head",
                                    "client": {"rssi": -70, "uptime_s": up, "heap_free": 100000}})
+        held = 3 * (i - 60) if 60 <= i < 72 else 0
         out["canary-dock"].append({"ts": ts, "device": "canary-dock",
-                                   "client": {"rssi": -61 - (i % 7), "uptime_s": i * 600, "heap_free": 120000 - i * 10}})
+                                   "client": {"rssi": -61 - (i % 7), "uptime_s": i * 600, "heap_free": 120000 - i * 10,
+                                              "backlog": {"held": held, "capacity": 1480, "store": "psram"}}})
     return out
 
 
@@ -329,7 +333,7 @@ class TestDiagnostics:
         assert text(soup, "#head-next-page") == "day.png"
         assert text(soup, "#head-fetches") == "12 ok, 1 failed"
         assert soup.select_one("#head-sensor-scd41") is None
-        # the dock: client, network, memory, sensors and its backlog
+        # the dock: client, network, memory with its queue, and sensors
         assert text(soup, "#dock-version") == "v0.1.0-dev"
         assert text(soup, "#dock-uptime") == "2 h 14 min"
         assert text(soup, "#dock-ip") == "192.168.1.42"
@@ -338,20 +342,56 @@ class TestDiagnostics:
         assert text(soup, "#dock-sensor-pmsa003i") == "warming up"
         assert text(soup, "#dock-sensor-bme688") == "missing"
         assert text(soup, "#dock-bsec") == "medium accuracy, 1 late"
-        assert text(soup, "#dock-backlog") == "7, in psram"
+        assert text(soup, "#dock-queue") == "7 of ~1,500, in psram"
+        assert soup.select_one("#head-queue") is None, "the head queues nothing"
         assert soup.select_one("#dock-fetches") is None
-        # three charts per board, the head's first
+        # the head's charts first, and the dock's queue meter after its memory
         assert [s["canvas"] for s in specs] == ["#head-rssi-bars", "#head-heap-meter", "#head-psram-meter",
-                                                "#dock-rssi-bars", "#dock-heap-meter", "#dock-psram-meter"]
+                                                "#dock-rssi-bars", "#dock-heap-meter", "#dock-psram-meter",
+                                                "#dock-queue-meter"]
         assert specs[3] == {"kind": "bars", "canvas": "#dock-rssi-bars", "filled": 3, "total": 4}
         assert specs[4]["fraction"] == pytest.approx((327680 - 120000) / 327680)
+        assert specs[6]["fraction"] == pytest.approx(7 / 1480)
+
+    def test_a_queue_before_its_capacity_is_known_is_a_count(self, tz):
+        client = dict(DOCK_DOC["client"], backlog={"held": 0, "capacity": 0, "store": "psram"})
+        dock = dict(DOCK_DOC, client=client)
+        status = dict(STATUS, boards={"canary-dock": {"doc": dock, "age_s": 5}})
+        soup, specs = render(DiagnosticsPage("diagnostics", tz=tz, width=WIDTH, height=HEIGHT),
+                             {"status": status})
+        assert text(soup, "#dock-queue") == "0, in psram"
+        assert specs[-1]["fraction"] == 0.0
+
+    def test_a_change_of_version_and_a_refusal_show_on_the_client_card(self, tz):
+        dock = dict(STATUS["boards"]["canary-dock"],
+                    changed={"from": "v0.4.0", "to": "v0.3.1", "at": 0, "older": True, "age_s": 7200},
+                    refused={"version": "v0.4.0", "count": 3, "at": 0, "age_s": 7300})
+        status = dict(STATUS, boards={"canary-dock": dock})
+        soup, _ = render(DiagnosticsPage("diagnostics", tz=tz, width=WIDTH, height=HEIGHT),
+                         {"status": status})
+        assert text(soup, "#dock-changed") == "from v0.4.0, 2 h ago"
+        assert soup.select_one("#dock-changed").find_previous_sibling().get_text() == "downgraded"
+        assert text(soup, "#dock-refused") == "3 from v0.4.0, 2 h 1 min ago"
+
+    def test_a_board_the_server_has_only_refused_still_shows(self, tz):
+        refused = {"doc": None, "age_s": None,
+                   "refused": {"version": "v0.4.0", "count": 1, "at": 0, "age_s": 30}}
+        status = {"doc": None, "age_s": None, "count": 0, "boards": {"canary-dock": refused}}
+        soup, specs = render(DiagnosticsPage("diagnostics", tz=tz, width=WIDTH, height=HEIGHT),
+                             {"status": status})
+        assert text(soup, "#dock-age") == "no report taken"
+        assert text(soup, "#dock-refused") == "1 from v0.4.0, 30 s ago"
+        assert soup.select_one("#dock-heap") is None and specs == []
+        trace = DiagnosticsTracePage("diagnostics-trace", tz=tz, width=WIDTH, height=HEIGHT)
+        soup, specs = render(trace, {"status": status, "status_history_24h": {}})
+        assert text(soup, ".verdict") == "No report from either board yet." and specs == []
 
     def test_one_board_alone_is_fine(self, tz):
         one_board = dict(STATUS, boards={"canary-dock": STATUS["boards"]["canary-dock"]})
         soup, specs = render(DiagnosticsPage("diagnostics", tz=tz, width=WIDTH, height=HEIGHT),
                              {"status": one_board})
         assert [b["id"] for b in soup.select(".board")] == ["board-dock"]
-        assert len(specs) == 3
+        assert len(specs) == 4
 
     def test_no_report_yet(self, tz):
         page = DiagnosticsPage("diagnostics", tz=tz, width=WIDTH, height=HEIGHT)
@@ -362,23 +402,44 @@ class TestDiagnostics:
 
 
 class TestDiagnosticsTrace:
-    def test_four_charts_over_the_day_and_the_restarts(self, tz):
+    def test_one_chart_per_measure_with_both_boards_on_it(self, tz):
         page = DiagnosticsTracePage("diagnostics-trace", tz=tz, width=WIDTH, height=HEIGHT)
         assert page.requires == ("status", "status_history_24h")
         soup, specs = render(page, {"status": STATUS, "status_history_24h": status_history()})
         assert text(soup, ".title") == "Boards, last 24 hours"
         assert text(soup, "#head-stat .detail") == "up 6 min, 1 restart today"
         assert text(soup, "#dock-stat .detail") == "up 2 h 14 min, no restarts today"
-        assert [s["canvas"] for s in specs] == ["#head-rssi", "#dock-rssi", "#head-heap_free", "#dock-heap_free"]
-        head_rssi, dock_rssi, head_heap, dock_heap = specs
+        assert [el.get_text() for el in soup.select(".chart .label")] == \
+            ["free memory, KB", "queue, readings", "Wi-Fi signal, dBm"]
+        assert [s["canvas"] for s in specs] == ["#trace-heap", "#trace-queue", "#trace-rssi"]
+        heap, queue, rssi = specs
         assert all(s["kind"] == "trace" for s in specs)
-        assert head_rssi["x"] == {"min": DOCK_DOC["ts"] - 86400, "max": DOCK_DOC["ts"]}
-        assert len(dock_rssi["points"]) == 144 and dock_rssi["points"][0][1] == -61
-        assert dock_rssi["now"] == dock_rssi["points"][-1]
-        assert [g["label"] for g in dock_rssi["guides"]] == ["strong", "weak"]
-        assert dock_heap["points"][0] == [DOCK_DOC["ts"] - 86400, pytest.approx(117.2, abs=0.05)]
-        assert head_heap["y"] == {"min": 0, "max": 320} and head_heap["yticks"] == [0, 100, 200, 300]
-        assert len(head_rssi["dayLabels"]) == 4   # every six hours across a day
+        assert heap["x"] == {"min": DOCK_DOC["ts"] - 86400, "max": DOCK_DOC["ts"]}
+        # the dock is the dark line, the head the light one, on the same scale
+        assert heap["legend"] == ["dock", "head"] and "y2" not in heap
+        assert heap["points"][0] == [DOCK_DOC["ts"] - 86400, pytest.approx(117.2, abs=0.05)]
+        assert heap["points2"][0][1] == pytest.approx(97.7, abs=0.05)
+        assert heap["now"] == heap["points"][-1] and heap["now2"] == heap["points2"][-1]
+        assert heap["y"] == {"min": 0, "max": 320} and heap["yticks"] == [0, 100, 200, 300]
+        assert len(rssi["points"]) == 144 and rssi["points"][0][1] == -61
+        assert [g["label"] for g in rssi["guides"]] == ["strong", "weak"]
+        assert len(rssi["dayLabels"]) == 4   # every six hours across a day
+
+    def test_the_queue_is_the_docks_alone_on_an_axis_fitted_to_the_day(self, tz):
+        specs = render(DiagnosticsTracePage("diagnostics-trace", tz=tz, width=WIDTH, height=HEIGHT),
+                       {"status": STATUS, "status_history_24h": status_history()})[1]
+        queue = specs[1]
+        assert "points2" not in queue and "legend" not in queue
+        assert max(p[1] for p in queue["points"]) == 33
+        assert queue["y"] == {"min": 0, "max": 50} and queue["yticks"] == [0, 25, 50]
+
+    def test_an_empty_queue_keeps_a_floor_under_its_axis(self, tz):
+        history = status_history()
+        for d in history["canary-dock"]:
+            d["client"]["backlog"]["held"] = 0
+        specs = render(DiagnosticsTracePage("diagnostics-trace", tz=tz, width=WIDTH, height=HEIGHT),
+                       {"status": STATUS, "status_history_24h": history})[1]
+        assert specs[1]["y"] == {"min": 0, "max": 10}
 
     def test_no_report_yet(self, tz):
         soup, specs = render(DiagnosticsTracePage("diagnostics-trace", tz=tz, width=WIDTH, height=HEIGHT),

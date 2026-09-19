@@ -91,6 +91,44 @@ void test_a_pattern_survives_the_millis_rollover() {
     TEST_ASSERT_EQUAL_UINT16(0, led.dutyAt(start + 1000));
 }
 
+// The brightest duty over one period of the current pattern.
+static uint16_t peakOver(StatusLed& led, uint32_t fromMs, uint32_t periodMs) {
+    uint16_t top = 0;
+    for (uint32_t t = fromMs; t < fromMs + periodMs; ++t) {
+        const uint16_t d = led.dutyAt(t);
+        if (d > top) top = d;
+    }
+    return top;
+}
+
+void test_an_update_brightens_and_quickens_as_the_image_is_written() {
+    StatusLed led;
+    led.state(StatusLed::UPDATING, 0);
+    // At the start: the working pulse's rate, at a quarter of the light.
+    TEST_ASSERT_EQUAL_UINT16(0, led.dutyAt(0));
+    TEST_ASSERT_TRUE(led.dutyAt(500) > 0 && led.dutyAt(500) < StatusLed::peakDuty() / 4);
+    TEST_ASSERT_EQUAL_UINT16(0, led.dutyAt(1000));
+    const uint16_t dim = peakOver(led, 0, 1000);
+
+    led.progress(1000);
+    // At the end: four pulses a second, at full light.
+    TEST_ASSERT_EQUAL_UINT16(StatusLed::peakDuty(), led.dutyAt(125));
+    TEST_ASSERT_EQUAL_UINT16(0, led.dutyAt(250));
+    TEST_ASSERT_TRUE(dim < StatusLed::peakDuty());
+
+    led.progress(500);
+    const uint16_t half = peakOver(led, 0, 625);
+    TEST_ASSERT_TRUE(half > dim && half < StatusLed::peakDuty());
+    TEST_ASSERT_EQUAL_UINT16(0, led.dutyAt(625));
+}
+
+void test_progress_past_the_end_is_the_end() {
+    StatusLed led;
+    led.state(StatusLed::UPDATING, 0);
+    led.progress(4000);
+    TEST_ASSERT_EQUAL_UINT16(StatusLed::peakDuty(), led.dutyAt(125));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_it_starts_in_the_starting_state);
@@ -102,5 +140,7 @@ int main(int, char**) {
     RUN_TEST(test_changing_state_starts_the_new_pattern_from_its_beginning);
     RUN_TEST(test_trouble_is_three_flashes_and_then_a_steady_glow);
     RUN_TEST(test_a_pattern_survives_the_millis_rollover);
+    RUN_TEST(test_an_update_brightens_and_quickens_as_the_image_is_written);
+    RUN_TEST(test_progress_past_the_end_is_the_end);
     return UNITY_END();
 }

@@ -139,51 +139,68 @@ forecasts quote it. The reading as measured stays under
 
 #### Firmware updates on the bench
 
-The board flashes itself from the server. To watch it happen:
+Both boards flash themselves from the server. Each is offered the newest
+image of its own product that can work with the server's version: the same
+major and minor while the major is 0. On the bench the server's version is
+what `git describe` says, `v0.2.2-51-gab12cd4` say, so an image in the
+v0.2 line is offered and one in v0.3 is not. To watch it happen:
 
 ```sh
-mkdir -p server/firmware
+mkdir -p server/firmware/canary-head server/firmware/canary-dock
 ```
 
 ```yaml
 client:
   firmware:
     enabled: true
-    offer_dev_builds: true  # this project builds v0.1.0-dev, not a tag
+    offer_dev_builds: true  # the bench boards run builds past a tag, not a tag
 ```
 
-Flash once over USB so the board stores its WiFi and server URL, then build
-an image that claims a different version and drop it in:
+Flash each board once over USB, so it stores its WiFi and server URL. Then,
+from a clean tree, tag a version in the server's line, build an image of
+each board with placeholder credentials, and take the tag away again:
 
 ```sh
-pio run -e esp32 -t upload                       # v0.1.0-dev, the running image
+pio run -e esp32 -t upload && pio run -e dock -t upload
 cp src/defaults.cpp /tmp/defaults.real.cpp       # keep your credentials
-cp src/defaults.example.cpp src/defaults.cpp     # CI builds have placeholders
-sed -i "" 's/v0.1.0-dev/v0.2.0/' platformio.ini
-pio run -e esp32
-cp .pio/build/esp32/firmware.bin server/firmware/v0.2.0.bin
-sed -i "" 's/v0.2.0/v0.1.0-dev/' platformio.ini  # put it all back
+cp src/defaults.example.cpp src/defaults.cpp     # release builds have placeholders
+git tag v0.2.99
+pio run -e esp32 && cp .pio/build/esp32/firmware.bin server/firmware/canary-head/v0.2.99.bin
+pio run -e dock && cp .pio/build/dock/firmware.bin server/firmware/canary-dock/v0.2.99.bin
+git tag -d v0.2.99
 cp /tmp/defaults.real.cpp src/defaults.cpp
 ```
 
-Press RST and watch the serial log: the offer, the progress, the restart,
-`trial boot of v0.2.0`, and `firmware v0.2.0 confirmed`. The server log then
-shows fetches carrying `v0.2.0`. The image had placeholder credentials, so
-a WiFi connection at all proves the board read its own store.
+The file's name must be the `CLIENT_VERSION` the build prints. A tree with
+uncommitted changes builds `v0.2.99-dirty`, which the board then reports,
+and a board that never runs the version it was offered is offered it again.
+
+The head takes the image after its next page, the dock after the next batch
+of readings the server takes with its queue empty; its LED pulses brighter
+and faster as the image is written. The serial log shows the offer, the
+progress, the restart, `trial boot of v0.2.99`, and `firmware v0.2.99
+confirmed` once the head has drawn a page or the server has taken the dock's
+readings. The image had placeholder credentials, so a WiFi connection at
+all proves the board read its own store.
 
 To watch a bad image roll back, give the trial image a server it cannot
 reach: set `serverURL` to `http://192.0.2.1:8080/breathe.png` before
-building it. That address is reserved for documentation and never answers,
-so every fetch fails. The board takes the image, fails three cycles, and
-boots the previous one again.
+building it. That address is reserved for documentation and never answers.
+The board takes the image, fails three times, and boots the previous one
+again.
 
-It then refuses that version for good, so the next fetch logs `firmware
-v0.3.0 is offered again; this board rolled back from it` rather than
+It then refuses that version for good, so the next offer logs `firmware
+v0.2.99 is offered again; this board rolled back from it` rather than
 looping. To try the same version number again, erase the board with
-`pio run -e esp32 -t erase`, or build under a new one.
+`pio run -e esp32 -t erase` (or `-e dock`), or build under a new one.
+
+To watch a board go back to the server's line, build an image under a tag
+the server's line is behind, flash it over USB, and leave the older image in
+the folder: the server offers it, logs that it is offering an older image,
+and the Diagnostics page says the board was downgraded.
 
 Leave `offer_dev_builds: false` anywhere real, or a bench board is flashed
-back to the last release at its next fetch.
+back to the last release at its next request.
 
 ### 4. On the Inkplate, end to end
 
@@ -222,18 +239,20 @@ simulated room in place of the sensors, for a board with nothing attached.
 The log shows the boot banner and User-Agent, WiFi and NTP, then
 `downloading file at URL ...`, `drawing image from buffer` and
 `next refresh in N s`. The panel works through the pools in turn, one page
-every five minutes on the wall clock (:00, :05, ...). Once a minute the board
-posts a readings document to the server's `/readings`, with a `client`
-object beside the measurements (`posted readings (204)`); the Diagnostics
-page is drawn from the last one. A fetch that fails leaves the last image
-on the panel and backs off (`back-off step N`).
+every five minutes on the wall clock (:00, :05, ...). A fetch that fails
+leaves the last image on the panel and backs off (`back-off step N`).
 
-A reading the server does not take waits on the SD card, or in PSRAM when
-there is no card, and goes out again once the server answers: oldest first,
-five after each live reading (`posting readings failed (-1); 12 held`, then
-`sent 5 held readings; 7 still held`). The card holds two weeks of readings
-and keeps them across a restart; PSRAM holds about 40 hours and loses them
-to a power cut. The Diagnostics page shows the count as `unsent`.
+The dock takes a reading 35 s after boot, once the PM fan has warmed up,
+and then on each of the server's slots (`posts` in `config.yaml`). It
+queues a readings document, with a `client` object beside the
+measurements, and the loop posts the queue to the server's
+`/readings` (`posted 1 reading (200); 0 queued`); the Diagnostics page is
+drawn from the newest. While the server is down the queue grows
+(`posting readings failed (-1); 12 queued`), and once it answers the dock
+sends up to 100 a request until the queue is empty. The queue is 2 MB of
+PSRAM, about five days of readings, and a restart empties it. The
+Diagnostics page shows the count against the queue's capacity under Memory
+(`queue 12 of ~1,500, in psram`), and its trace page draws it over the day.
 
 `kRotation` in `src/main.cpp` is 0: the enclosure holds the board as it
 comes, with the USB-C port on the right. A board mounted turned 180° needs
@@ -361,13 +380,15 @@ epd offers an update only to a board that runs a tagged build.
 
 ```sh
 scripts/build-firmware.sh v0.2.0 myserver:/path/to/server/firmware
-scripts/build-firmware.sh --defaults src/defaults.cpp --upload v0.2.0
+scripts/build-firmware.sh --defaults src/defaults.cpp --upload dock v0.2.0
 ```
 
-The first puts the image in a server's `firmware/` directory as `v0.2.0.bin`,
-in place of the one before. The second flashes it over USB with your own
-`defaults.cpp`, whose settings the board then keeps: the one USB flash a
-board needs. `--signed-by <fingerprint>` refuses a tag that key did not sign.
+The first builds both boards and puts their images in a server's `firmware/`
+directory as `canary-head/v0.2.0.bin` and `canary-dock/v0.2.0.bin`, beside
+the images already there: a server offers the one its own version calls for,
+which may be an older one, so none is removed. The second also flashes the
+dock over USB (`--upload head` for the head) with your own `defaults.cpp`,
+whose settings the board then keeps: the one USB flash a board needs. `--signed-by <fingerprint>` refuses a tag that key did not sign.
 The `firmware-builder` service in `docker-compose.yml` runs the first for
 each new release, signed by the key in its `SIGNED_BY`.
 

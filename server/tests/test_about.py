@@ -29,16 +29,20 @@ def test_a_firmware_directory_with_no_image_offers_nothing(tmp_path):
     settings = FirmwareSettings(enabled=True, dir=str(tmp_path), product="canary-head",
                                 offer_dev_builds=False)
 
-    assert About("v1.0.0", settings).answer({})["firmware"] is None
+    assert About("v1.0.0", settings).answer({})["firmware"] == {"canary-head": None}
 
 
-def test_it_names_the_image_on_offer(tmp_path):
-    (tmp_path / "v1.6.0.bin").write_bytes(b"\xe9firmware")
+def test_it_names_the_image_each_board_is_offered(tmp_path):
+    """The newest each product has that can work with the server, which is v1.0.0."""
+    for product, version in (("canary-head", "v1.6.0"), ("canary-head", "v2.0.0"),
+                             ("canary-dock", "v2.1.0")):
+        (tmp_path / product).mkdir(exist_ok=True)
+        (tmp_path / product / f"{version}.bin").write_bytes(b"\xe9firmware")
     settings = FirmwareSettings(enabled=True, dir=str(tmp_path), product="canary-head",
-                                offer_dev_builds=False)
+                                offer_dev_builds=False, products=("canary-head", "canary-dock"))
 
     assert About("v1.0.0", settings).answer({})["firmware"] == {
-        "product": "canary-head", "version": "v1.6.0"}
+        "canary-head": "v1.6.0", "canary-dock": None}
 
 
 def test_the_build_stamps_the_version(monkeypatch):
@@ -59,3 +63,16 @@ def test_a_blank_stamp_is_not_a_version(monkeypatch):
     monkeypatch.setenv("CANARY_VERSION", "   ")
 
     assert server_version() != "   "
+
+
+def test_it_gives_the_docks_schedule_and_the_next_slot():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    from schedule import PostSchedule
+    tz = ZoneInfo("Europe/Dublin")
+    now = datetime(2026, 6, 15, 12, 3, 10, tzinfo=tz).timestamp()
+
+    answer = About("v1.0.0", now=at(now), posts=PostSchedule(300, tz)).answer({})
+
+    assert answer["posts"] == {"every": 300, "quiet": None, "next_s": 110}
+    assert About("v1.0.0").answer({})["posts"] is None
