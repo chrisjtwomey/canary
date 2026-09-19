@@ -98,9 +98,10 @@ dock at the pogo connector.
 ## 5. Shape of the repo
 
 ```
-platformio.ini                 envs: esp32 (the drivers), esp32-mock (-DUSE_MOCK_SENSORS), esp32-validate, native, sim
+platformio.ini                 envs: esp32 (the head), dock (the TinyS3), esp32-mock (-DUSE_MOCK_SENSORS), esp32-validate, native, sim
 partitions.csv
 src/main.cpp                   the awake loop from §3.1
+src/dock/main.cpp              the dock's firmware
 src/defaults.example.cpp       copy to defaults.cpp: WiFi, server URL, MQTT logging
 include/sensors/  src/sensors/
   Readings.h  ReadingsJson.cpp                  what the sensors return, and the wire format in READINGS.md

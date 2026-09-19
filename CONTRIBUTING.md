@@ -6,8 +6,9 @@ A thin consumer of [epd](https://github.com/chrisjtwomey/epd), in the same
 shape as [inkplate10-weather-cal](https://github.com/chrisjtwomey/inkplate10-weather-cal):
 
 ```
-platformio.ini            -DARDUINO_INKPLATE5V2; lib_deps symlink://../epd/firmware
-src/main.cpp              the awake loop: sensors, readings, the page loop
+platformio.ini            one environment per board; lib_deps symlink://../epd/firmware
+src/main.cpp              the head: the awake loop over sensors, readings and the page loop
+src/dock/                 the dock: the TinyS3 that reads the sensors
 src/defaults.example.cpp  copy to defaults.cpp: WiFi, server URL, MQTT logging
 server/
   server.py               config keys, a DataSource, a page list, DisplayServer(...).run()
@@ -18,6 +19,11 @@ server/
 ```
 
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §5 has the whole tree.
+
+Each board is a PlatformIO environment, and each compiles its own files
+through `build_src_filter`: `esp32` takes everything but `src/dock/`, `dock`
+takes `src/dock/`. No build flag decides what a board runs, so code the head
+does not compile cannot reach the head.
 
 Everything generic — the client firmware, HTTP, scheduling, rendering — is
 epd. If a change is not about this device's sensors or pages, it goes there,

@@ -11,9 +11,11 @@ import os
 Import("env")  # noqa: F821 - injected by PlatformIO
 
 root = os.path.join(env.subst("$PROJECT_LIBDEPS_DIR"), env.subst("$PIOENV"), "bsec2")  # noqa: F821
-binary = os.path.join(root, "src", "esp32")
+# Bosch ships one binary per core. The head is an ESP32, the dock an ESP32-S3.
+mcu = env.BoardConfig().get("build.mcu")  # noqa: F821
+binary = os.path.join(root, "src", mcu)
 if not os.path.isdir(binary):
-    print(f"BSEC2 is not installed at {root}; lib_deps in platformio.ini names it")
+    print(f"BSEC2 has no binary for {mcu} at {binary}; lib_deps in platformio.ini names the package")
     env.Exit(1)  # noqa: F821
 
 env.Append(  # noqa: F821
