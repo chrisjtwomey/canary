@@ -3,9 +3,9 @@
 The dock queues a document for each reading and posts the queue to
 /readings, up to a hundred at a time. The whole document goes to
 DeviceReports, for the Diagnostics pages; the store gets the measurements
-only. The client object is the board's own state, and a calibration block
-is sensor state, not a reading of the room: the dock sends that to
-/calibration.
+only. The client and health objects are the board's own state, and a
+calibration block is sensor state, not a reading of the room: the dock
+sends that to /calibration.
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from epd_server.store import key
 from sources.status import DeviceReports
 
 # Keys of a posted document that describe the board, not the room.
-BOARD_KEYS = ("client", "calibration")
+BOARD_KEYS = ("client", "health", "calibration")
 
 
 def measurements(doc: dict) -> dict:

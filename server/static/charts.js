@@ -9,6 +9,8 @@
            '#929292', '#b6b6b6', '#dbdbdb', '#ffffff'];
   var FONT = 'Fraunces';
   var SEED = 7;
+  // An outline passes no fill at all: rough.js hatches any fill it is given,
+  // 'none' included.
 
   function prepare(canvas) {
     var r = canvas.getBoundingClientRect();
@@ -57,7 +59,7 @@
   function marker(c, x, y) {
     dot(c.ctx, x, y, 12, G[7]);
     dot(c.ctx, x, y, 8, G[0]);
-    c.rc.circle(x, y, 40, { stroke: G[0], strokeWidth: 2, roughness: 1.4, fill: 'none' });
+    c.rc.circle(x, y, 40, { stroke: G[0], strokeWidth: 2, roughness: 1.4 });
   }
 
   function area(c, pts, y0, color, gap) {
@@ -74,6 +76,21 @@
   function line(c, pts, width) {
     if (pts.length < 2) return;
     c.rc.curve(pts, {
+      stroke: G[0], strokeWidth: width || 3, roughness: 0.7, bowing: 0.4,
+      disableMultiStroke: true
+    });
+  }
+
+  // A value that holds until the next point and then jumps, as a count or a
+  // flag does: level runs and upright steps, where a curve would overshoot.
+  function steps(c, pts, width) {
+    if (pts.length < 2) return;
+    var path = [pts[0]];
+    for (var i = 1; i < pts.length; i++) {
+      path.push([pts[i][0], pts[i - 1][1]]);
+      path.push(pts[i]);
+    }
+    c.rc.linearPath(path, {
       stroke: G[0], strokeWidth: width || 3, roughness: 0.7, bowing: 0.4,
       disableMultiStroke: true
     });
@@ -218,8 +235,7 @@
     }
   }
 
-  // A hatched fraction of a box. The outline passes no fill at all: rough.js
-  // hatches any fill it is given, 'none' included.
+  // A hatched fraction of a box.
   function meter(canvas, s) {
     var c = prepare(canvas);
     var m = 3, w = c.w - 2 * m, h = c.h - 2 * m;
@@ -240,12 +256,13 @@
       var x = i * (bw + gap), y = c.h - bh;
       c.rc.rectangle(x, y, bw, bh, i < s.filled
         ? { fill: G[0], fillStyle: 'solid', stroke: G[0], roughness: 0.8 }
-        : { fill: 'none', stroke: G[4], strokeWidth: 1.2, roughness: 0.8 });
+        : { stroke: G[4], strokeWidth: 1.2, roughness: 0.8 });
     }
   }
 
   // Days of one measurement as a trace: thresholds as dashed lines, a rule
-  // at each midnight, the last hours drawn heavier. A companion series goes
+  // at each midnight, the last hours drawn heavier, and in steps when the
+  // spec says the value jumps. A companion series goes
   // lighter, on its own scale at the right when it has a y2, or on the main
   // scale when it has none, with a legend naming the two.
   function trace(canvas, s) {
@@ -285,12 +302,12 @@
       label(c.ctx, String(v), m.l - 12, Y(v) + 6, { size: 15, align: 'right', color: G[3] });
     });
     c.rc.line(m.l, c.h - m.b, c.w - m.r, c.h - m.b, { stroke: G[3], strokeWidth: 1.5, roughness: 0.6 });
-    line(c, s.points.map(function (p) { return [X(p[0]), Y(p[1])]; }), 2.5);
+    (s.step ? steps : line)(c, s.points.map(function (p) { return [X(p[0]), Y(p[1])]; }), 2.5);
     if (s.recent && s.recent.length > 1) {
       line(c, s.recent.map(function (p) { return [X(p[0]), Y(p[1])]; }), 5);
     }
     if (s.set) {
-      c.rc.circle(X(s.set[0]), Y(s.set[1]), 16, { stroke: G[2], strokeWidth: 1.5, fill: 'none', roughness: 1 });
+      c.rc.circle(X(s.set[0]), Y(s.set[1]), 16, { stroke: G[2], strokeWidth: 1.5, roughness: 1 });
     }
     // After the lines, on a halo, so a line that runs through a label does
     // not hide it.
@@ -337,7 +354,7 @@
       c.rc.line(x - 8, Y(v), x, Y(v), { stroke: G[2], strokeWidth: 1.5, roughness: 0.4 });
       label(c.ctx, String(v), x - 14, Y(v) + 7, { size: 18, align: 'right' });
     }
-    c.rc.rectangle(x, m.t, colW, c.h - m.t - m.b, { stroke: G[2], strokeWidth: 1.5, fill: 'none', roughness: 1 });
+    c.rc.rectangle(x, m.t, colW, c.h - m.t - m.b, { stroke: G[2], strokeWidth: 1.5, roughness: 1 });
     if (s.value != null) {
       var yv = Y(s.value);
       c.rc.rectangle(x, yv, colW, c.h - m.b - yv, { fill: G[2], fillStyle: 'hachure', hachureGap: 6,

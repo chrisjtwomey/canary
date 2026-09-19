@@ -4,6 +4,7 @@
 #include <cstring>
 
 #include "net/ClientStatus.h"
+#include "sensors/SensorHealth.h"
 #include "net/Url.h"
 
 static ClientStatus status() {
@@ -77,6 +78,49 @@ void test_url_origin_keeps_scheme_host_and_port() {
     TEST_ASSERT_EQUAL_UINT(0, urlOrigin("http:///x.png", out, sizeof(out)));
     char tiny[8];
     TEST_ASSERT_EQUAL_UINT(0, urlOrigin("http://host:8080/x", tiny, sizeof(tiny)));
+}
+
+// ─── The health object ───────────────────────────────────────────────────
+
+static SensorHealth fullHealth() {
+    SensorHealth h = {};
+    h.restarts = 2;
+    h.pmBadFrames = 5; h.shtc3CrcFailures = 1; h.scd41CrcFailures = 0;
+    h.bme688Seen = true; h.gasValid = true; h.heatStable = false;
+    h.scd41Read = true; h.scd41Serial = 0x9A3BC0FFEE41ull;
+    h.ascKnown = true; h.asc = true;
+    h.offsetKnown = true; h.offsetC = 4.0f;
+    return h;
+}
+
+void test_health_carries_the_counts_the_bme688_and_the_scd41() {
+    char buf[320];
+    TEST_ASSERT_TRUE(healthJson(fullHealth(), buf, sizeof(buf)) > 0);
+    TEST_ASSERT_EQUAL_STRING(
+        "{\"restarts\":2,\"checksum_failures\":{\"pmsa003i\":5,\"shtc3\":1,\"scd41\":0}"
+        ",\"bme688\":{\"gas_valid\":true,\"heat_stable\":false}"
+        ",\"scd41\":{\"serial\":\"9a3bc0ffee41\",\"asc\":true,\"offset_c\":4.0}}", buf);
+}
+
+void test_health_leaves_out_what_is_not_known() {
+    SensorHealth h = fullHealth();
+    h.bme688Seen = false;
+    h.ascKnown = false;
+    h.offsetKnown = false;
+    char buf[320];
+    healthJson(h, buf, sizeof(buf));
+    TEST_ASSERT_NULL(strstr(buf, "bme688"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "\"scd41\":{\"serial\":\"9a3bc0ffee41\"}"));
+    h.scd41Read = false;
+    healthJson(h, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING(
+        "{\"restarts\":2,\"checksum_failures\":{\"pmsa003i\":5,\"shtc3\":1,\"scd41\":0}}", buf);
+}
+
+void test_health_that_does_not_fit_writes_nothing() {
+    char buf[60];
+    TEST_ASSERT_EQUAL_UINT(0, healthJson(fullHealth(), buf, sizeof(buf)));
+    TEST_ASSERT_EQUAL_STRING("", buf);
 }
 
 int main(int, char**) {

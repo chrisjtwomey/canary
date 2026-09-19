@@ -32,7 +32,8 @@ def test_a_document_with_no_measurements_is_not_a_reading(store):
 
 
 def test_measurements_leave_out_what_describes_the_board():
-    doc = dict(DOC, calibration={"bme688": {"state": "AAEC", "accuracy": 3, "saved": AT - 60}})
+    doc = dict(DOC, calibration={"bme688": {"state": "AAEC", "accuracy": 3, "saved": AT - 60}},
+               health={"restarts": 0})
     assert measurements(doc) == {k: v for k, v in DOC.items() if k != "client"}
 
 

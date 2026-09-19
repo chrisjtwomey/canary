@@ -121,7 +121,27 @@ bool Scd41Driver::getSerialNumber(uint64_t& serial) {
     return true;
 }
 
+bool Scd41Driver::getAutomaticSelfCalibration(bool& on) {
+    if (mode_ != IDLE) return false;
+    if (!sensirion::sendCommand(bus_, addr_, kCmdGetAsc)) return false;
+    uint16_t word = 0;
+    if (!readAnswer(&word, 1)) return false;
+    on = word != 0;
+    return true;
+}
+
+bool Scd41Driver::getTemperatureOffset(float& degC) {
+    if (mode_ != IDLE) return false;
+    if (!sensirion::sendCommand(bus_, addr_, kCmdGetTemperatureOffset)) return false;
+    uint16_t word = 0;
+    if (!readAnswer(&word, 1)) return false;
+    degC = kMaxOffsetC * (float)word / 65535.0f;
+    return true;
+}
+
 bool Scd41Driver::readAnswer(uint16_t* words, size_t count) {
     clock_.waitMs(kCommandMs);
-    return sensirion::readWords(bus_, addr_, words, count);
+    const sensirion::ReadResult result = sensirion::readWordsChecked(bus_, addr_, words, count);
+    if (result == sensirion::BAD_CRC) ++crcFailures_;
+    return result == sensirion::READ_OK;
 }

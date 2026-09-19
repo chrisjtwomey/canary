@@ -28,6 +28,9 @@ public:
     bool powerDown() override;
     bool wakeUp(uint32_t nowMs) override;
     bool getSerialNumber(uint64_t& serial) override;
+    bool getAutomaticSelfCalibration(bool& on) override;
+    bool getTemperatureOffset(float& degC) override;
+    uint32_t crcFailures() const override { return crcFailures_; }
 
     enum Mode { IDLE, PERIODIC, LOW_POWER_PERIODIC, SINGLE_SHOT, POWERED_DOWN };
     Mode mode() const { return mode_; }
@@ -45,6 +48,8 @@ public:
     static const uint16_t kCmdPowerDown             = 0x36E0;
     static const uint16_t kCmdWakeUp                = 0x36F6;
     static const uint16_t kCmdGetSerialNumber       = 0x3682;
+    static const uint16_t kCmdGetAsc                = 0x2313;
+    static const uint16_t kCmdGetTemperatureOffset  = 0x2318;
 
     // The data-ready word is "not ready" only when its low eleven bits are
     // all zero; the top five are reserved and carry whatever they carry.
@@ -70,4 +75,5 @@ private:
     uint8_t  addr_;
     Mode     mode_ = POWERED_DOWN;
     uint32_t busyUntilMs_ = 0;
+    uint32_t crcFailures_ = 0;
 };

@@ -42,7 +42,7 @@ bool Shtc3Driver::measure(uint32_t nowMs, bool lowPower) {
 bool Shtc3Driver::read(uint32_t nowMs, Shtc3Data& out) {
     if (asleep_ || !measuring_ || nowMs < readyAtMs_) return false;
     uint16_t words[2];
-    if (!sensirion::readWords(bus_, addr_, words, 2)) return false;
+    if (!readAnswer(words, 2)) return false;
     measuring_ = false;
     out.tempC = -45.0f + 175.0f * (float)words[0] / 65536.0f;
     out.rhPct = 100.0f * (float)words[1] / 65536.0f;
@@ -53,6 +53,12 @@ uint16_t Shtc3Driver::readId() {
     if (asleep_) return 0;
     if (!sensirion::sendCommand(bus_, addr_, kCmdReadId)) return 0;
     uint16_t id = 0;
-    if (!sensirion::readWords(bus_, addr_, &id, 1)) return 0;
+    if (!readAnswer(&id, 1)) return 0;
     return id;
+}
+
+bool Shtc3Driver::readAnswer(uint16_t* words, size_t count) {
+    const sensirion::ReadResult result = sensirion::readWordsChecked(bus_, addr_, words, count);
+    if (result == sensirion::BAD_CRC) ++crcFailures_;
+    return result == sensirion::READ_OK;
 }

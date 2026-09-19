@@ -19,7 +19,7 @@ display:
     air: [air.png, air-trace.png, air-delta.png]
     pressure: [barometer-trace.png, barometer-delta.png]
     day: [day.png]
-    diagnostics: [diagnostics.png, diagnostics-trace.png]
+    diagnostics: [diagnostics.png, diagnostics-trace.png, health-trace.png]
   schedule:
     type: interval
     every: 300

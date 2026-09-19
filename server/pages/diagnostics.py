@@ -3,7 +3,8 @@
 Both boards post a ``client`` object with every document. DiagnosticsPage
 shows the newest from each; DiagnosticsTracePage draws both boards' free
 memory and signal, and the dock's queue, over the last 24 hours, with the
-restarts each counted.
+restarts each counted. HealthTracePage draws the dock's ``health`` object
+over the same day: how its sensors fare rather than what they measure.
 """
 from __future__ import annotations
 
@@ -361,4 +362,128 @@ class DiagnosticsTracePage(EnvPage):
                 spec["now2"] = series[1][1][-1]
                 spec["legend"] = [series[0][0], series[1][0]]
             specs.append(spec)
+        return specs
+
+
+def since_start(points: list[list]) -> list[list]:
+    """A count the dock keeps from its own start, as the running total of
+    what it added within the window. At a restart the count begins again at
+    0, so what it reads then is all new."""
+    out, total, before = [], 0, None
+    for ts, count in points:
+        if before is not None:
+            total += count - before if count >= before else count
+        before = count
+        out.append([ts, total])
+    return out
+
+
+def health_value(*path):
+    """The value at ``path`` in a health object, or None."""
+    def get(health: dict):
+        for key in path:
+            health = health.get(key) if isinstance(health, dict) else None
+        return health
+    return get
+
+
+def health_points(reports: list[dict], value, start: int) -> list[list]:
+    """``[ts, value]`` from each report since ``start`` whose health object has one."""
+    pts = []
+    for d in reports:
+        v = value(d["health"])
+        if v is not None and d["ts"] >= start:
+            pts.append([d["ts"], int(v)])
+    return pts
+
+
+# The health trace page's charts: a count added up over the day, or a flag.
+HEALTH_TRACES = (
+    ("restarts", "sensor restarts", health_value("restarts"), True),
+    ("pmsa003i", "PMSA003I damaged frames", health_value("checksum_failures", "pmsa003i"), True),
+    ("shtc3", "SHTC3 checksum failures", health_value("checksum_failures", "shtc3"), True),
+    ("heater", "BME688 heater at temperature", health_value("bme688", "heat_stable"), False),
+)
+HEALTH_DEVICE = "canary-dock"
+
+
+class HealthTracePage(EnvPage):
+    """How the dock's sensors fared over the last day: restarts, damaged
+    answers and the gas heater, with the SCD41's settings above them."""
+    title = "Sensor health"
+    stylesheet = "diagnostics-trace.css"
+    css_class = "health-trace"
+    requires = ("status", "status_history_24h")
+    HOURS = 24
+
+    def _dock(self, status: dict | None, history: dict) -> tuple[dict | None, list[dict]]:
+        """The dock's newest health object and its reports of the day that carry one."""
+        entry = ((status or {}).get("boards") or {}).get(HEALTH_DEVICE) or {}
+        newest = (entry.get("doc") or {}).get("health")
+        reports = [d for d in history.get(HEALTH_DEVICE, []) if isinstance(d.get("health"), dict)]
+        return (newest if isinstance(newest, dict) else None), reports
+
+    def body(self, a: Airium, **data) -> None:
+        status: dict | None = data["status"]
+        newest, reports = self._dock(status, data["status_history_24h"] or {})
+        a.div(klass="title label", _t="Sensors, last 24 hours")
+        if status is None:
+            a.div(klass="verdict", _t="No report from either board yet.")
+            a.div(klass="detail", _t="Each posts to /readings once it connects.")
+            return
+        if newest is None:
+            a.div(klass="verdict", _t="No health report from the dock yet.")
+            a.div(klass="detail", _t="The dock sends one with every reading.")
+            return
+        a.div(klass="stamp", _t=fmt_stamp(status["boards"][HEALTH_DEVICE]["doc"]["ts"], self.tz))
+        end = status["boards"][HEALTH_DEVICE]["doc"]["ts"]
+        added = since_start(health_points(reports, health_value("checksum_failures", "scd41"),
+                                          end - self.HOURS * 3600))
+        with a.div(klass="stats"):
+            self._scd41(a, newest, added[-1][1] if added else 0)
+        with a.div(klass="charts"):
+            for key, title, _value, _counted in HEALTH_TRACES:
+                with a.div(klass=f"chart chart-{key}"):
+                    a.div(klass="label", _t=title)
+                    a.canvas(id=f"health-{key}")
+
+    @staticmethod
+    def _scd41(a: Airium, health: dict, failures: int) -> None:
+        """What the SCD41 said at its last start, which decides its accuracy,
+        and its damaged answers of the day: too few to be worth a chart."""
+        scd41 = health.get("scd41") or {}
+        parts = [f"serial {scd41['serial']}"] if scd41.get("serial") else ["settings not read"]
+        if "asc" in scd41:
+            parts.append("self-calibration " + ("on" if scd41["asc"] else "off"))
+        if "offset_c" in scd41:
+            parts.append(f"offset {scd41['offset_c']:.1f} °C")
+        parts.append(f"{failures} checksum failure{'s' if failures != 1 else ''} today")
+        with a.div(klass="stat", id="scd41"):
+            a.span(klass="name", _t="SCD41")
+            a.span(klass="detail", _t=", ".join(parts))
+
+    def charts(self, **data) -> list[dict]:
+        status: dict | None = data["status"]
+        newest, reports = self._dock(status, data["status_history_24h"] or {})
+        if newest is None:
+            return []
+        end = status["boards"][HEALTH_DEVICE]["doc"]["ts"]
+        start = end - self.HOURS * 3600
+        ticks = hour_ticks(start, end, self.tz, 6)
+        specs = []
+        for key, _title, value, counted in HEALTH_TRACES:
+            pts = health_points(reports, value, start)
+            if counted:
+                pts = since_start(pts)
+                lo, hi, yticks = Trace(key, "", None).axis(max((p[1] for p in pts), default=0))
+            else:
+                lo, hi, yticks = 0, 1, [0, 1]
+            specs.append({
+                "kind": "trace", "canvas": f"#health-{key}", "points": pts, "step": True,
+                "x": {"min": start, "max": end}, "y": {"min": lo, "max": hi},
+                "yticks": yticks, "guides": [],
+                "days": [{"x": t["x"]} for t in ticks],
+                "dayLabels": [{"x": t["x"], "label": t["label"]} for t in ticks],
+                "now": pts[-1] if pts else None,
+            })
         return specs

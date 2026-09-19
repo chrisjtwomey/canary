@@ -7,6 +7,7 @@
 #include "sensors/IScd41.h"
 #include "sensors/IShtc3.h"
 #include "sensors/Readings.h"
+#include "sensors/SensorHealth.h"
 
 // The four sensors as one thing to start and one thing to sample.
 //
@@ -41,6 +42,10 @@ public:
 
     // Starts tried by restartFailed(), whether or not they worked.
     uint32_t restarts() const { return restarts_; }
+
+    // How the sensors are faring: the counts since start, the BME688's state
+    // at the last sample, and the SCD41's settings as read at its start.
+    SensorHealth health() const;
 
     // One reading set, stamped with `epoch`. Sensors that fail or are not
     // ready leave their `*Valid` flag false rather than filling in stale or
@@ -110,4 +115,14 @@ private:
     SensorState pmState_;
     SensorState bmeState_;
     uint32_t    restarts_ = 0;
+    uint32_t    pmBadFrames_ = 0;
+    // Written as samples and starts happen, read by health().
+    bool        bmeSeen_ = false;
+    bool        gasValid_ = false;
+    bool        heatStable_ = false;
+    bool        scd41Read_ = false;
+    uint64_t    scd41Serial_ = 0;
+    bool        ascKnown_ = false, asc_ = false;
+    bool        offsetKnown_ = false;
+    float       offsetC_ = 0.0f;
 };

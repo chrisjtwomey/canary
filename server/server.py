@@ -24,7 +24,7 @@ from pages.air import AirPage
 from pages.breathe import BreathePage
 from pages.comfort import ComfortPage
 from pages.day import DayPage
-from pages.diagnostics import DiagnosticsPage, DiagnosticsTracePage
+from pages.diagnostics import DiagnosticsPage, DiagnosticsTracePage, HealthTracePage
 from pages.dust import DustPage
 from pages.pool import CO2, IAQ, PM25, PRESSURE, TEMP, DeltaPage, TracePage
 from schedule import PostSchedule, parse_hhmm
@@ -63,6 +63,7 @@ def make_pages(tz, **geometry) -> list:
         DayPage("day", tz=tz, **geometry),
         DiagnosticsPage("diagnostics", tz=tz, **geometry),
         DiagnosticsTracePage("diagnostics-trace", tz=tz, **geometry),
+        HealthTracePage("health-trace", tz=tz, **geometry),
     ]
     for stem, metric in (("co2", CO2), ("comfort", TEMP), ("dust", PM25), ("air", IAQ),
                          ("barometer", PRESSURE)):

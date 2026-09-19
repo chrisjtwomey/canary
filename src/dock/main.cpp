@@ -355,7 +355,9 @@ static char     readingsURL[300];    // the server's /readings; empty disables p
 static uint32_t lastSampleMs = 0;
 static char     json[FileBacklog::kMaxDoc];
 static char     clientJson[768];
-static char     body[FileBacklog::kMaxDoc + 768 + 32];
+static char     healthJsonBuf[320];
+static char     withClient[FileBacklog::kMaxDoc + 768 + 32];
+static char     body[sizeof(withClient) + sizeof(healthJsonBuf) + 16];
 static char     ipText[16];
 
 // BSEC's state as base64 is about 380 bytes of calibration block.
@@ -501,7 +503,9 @@ static void queueReading(Readings& r, uint32_t nowMs) {
     r.pmWarmupS = fanRunning ? (uint16_t)((nowMs - fanOnSinceMs) / 1000) : 0;
     if (!readingsToJson(r, CLIENT_NAME, json, sizeof(json)) ||
         !clientStatusJson(clientStatus(nowMs), clientJson, sizeof(clientJson)) ||
-        !withClientStatus(json, clientJson, body, sizeof(body))) {
+        !withClientStatus(json, clientJson, withClient, sizeof(withClient)) ||
+        !healthJson(sensors.health(), healthJsonBuf, sizeof(healthJsonBuf)) ||
+        !withMember(withClient, "health", healthJsonBuf, body, sizeof(body))) {
         log(LOG_WARNING, "readings document too large to queue");
         return;
     }

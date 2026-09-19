@@ -10,9 +10,14 @@ bool SensorSuite::begin() {
 
 bool SensorSuite::startShtc3() { return shtc3_.begin(clock_.millis()); }
 
+// The part answers questions about its settings only while idle, so they
+// are asked here, once a start, before it begins measuring.
 bool SensorSuite::startScd41() {
     if (!scd41_.begin(clock_.millis())) return false;
     clock_.waitMs(kScd41WakeMs);
+    scd41Read_ = scd41_.getSerialNumber(scd41Serial_);
+    ascKnown_ = scd41_.getAutomaticSelfCalibration(asc_);
+    offsetKnown_ = scd41_.getTemperatureOffset(offsetC_);
     return scd41_.startPeriodicMeasurement(clock_.millis());
 }
 
@@ -105,6 +110,9 @@ void SensorSuite::sampleBme688(Readings& r) {
     if (!bme_.startForced(clock_.millis())) return;
     clock_.waitMs(bme_.measurementMs());
     r.bme688Valid = bme_.fetchData(clock_.millis(), r.bme688);
+    bmeSeen_ = r.bme688Valid;
+    gasValid_ = r.bme688Valid && r.bme688.gasValid;
+    heatStable_ = r.bme688Valid && r.bme688.heatStable;
 }
 
 void SensorSuite::sampleScd41(Readings& r) {
@@ -127,6 +135,25 @@ void SensorSuite::samplePm(Readings& r) {
     for (int attempt = 0; attempt < kPmReadAttempts && !r.pmValid; ++attempt) {
         if (pm_.readFrame(clock_.millis(), frame)) {
             r.pmValid = IPmsa003i::parseFrame(frame, r.pm);
+            if (!r.pmValid) ++pmBadFrames_;
         }
     }
+}
+
+SensorHealth SensorSuite::health() const {
+    SensorHealth h = {};
+    h.restarts = restarts_;
+    h.pmBadFrames = pmBadFrames_;
+    h.shtc3CrcFailures = shtc3_.crcFailures();
+    h.scd41CrcFailures = scd41_.crcFailures();
+    h.bme688Seen = bmeSeen_;
+    h.gasValid = gasValid_;
+    h.heatStable = heatStable_;
+    h.scd41Read = scd41Read_;
+    h.scd41Serial = scd41Serial_;
+    h.ascKnown = ascKnown_;
+    h.asc = asc_;
+    h.offsetKnown = offsetKnown_;
+    h.offsetC = offsetC_;
+    return h;
 }

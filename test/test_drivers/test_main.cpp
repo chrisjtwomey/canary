@@ -137,6 +137,25 @@ void test_shtc3_rejects_a_corrupt_answer() {
     TEST_ASSERT_FALSE(drv.read(t + Shtc3Driver::kNormalMs, d));
 }
 
+void test_shtc3_counts_a_corrupt_answer_but_not_a_silent_part() {
+    FakeShtc3 part;
+    bus->attach(Shtc3Driver::kAddress, &part);
+    Shtc3Driver drv(*bus, *clk);
+    drv.begin(0);
+    drv.wakeup(clk->now);
+    Shtc3Data d;
+
+    part.corruptNextAnswer();
+    drv.measure(clk->now, false);
+    drv.read(clk->now + Shtc3Driver::kNormalMs, d);
+    TEST_ASSERT_EQUAL_UINT32(1, drv.crcFailures());
+
+    bus->setPresent(Shtc3Driver::kAddress, false);
+    drv.measure(clk->now, false);
+    drv.read(clk->now + Shtc3Driver::kNormalMs, d);
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(1, drv.crcFailures(), "no answer is not a damaged one");
+}
+
 void test_shtc3_sleep_and_wake_track_the_part() {
     FakeShtc3 part;
     bus->attach(Shtc3Driver::kAddress, &part);
@@ -254,6 +273,36 @@ void test_scd41_temperature_offset_is_refused_while_measuring() {
     TEST_ASSERT_TRUE(drv->setTemperatureOffset(4.0f));
     // 4 C as the part stores it: degrees x 65535/175.
     TEST_ASSERT_EQUAL_UINT16(1498, part.lastOffsetWord);
+    delete drv;
+}
+
+void test_scd41_reads_its_settings_only_while_idle() {
+    FakeScd41 part;
+    part.asc = false;
+    Scd41Driver* drv = startedScd41(part);
+    bool asc = true;
+    float offset = 0.0f;
+
+    TEST_ASSERT_FALSE(drv->getAutomaticSelfCalibration(asc));
+    TEST_ASSERT_FALSE(drv->getTemperatureOffset(offset));
+    drv->stopPeriodicMeasurement(clk->now);
+    clk->advance(Scd41Driver::kStopBusyMs);
+    TEST_ASSERT_TRUE(drv->getAutomaticSelfCalibration(asc));
+    TEST_ASSERT_FALSE(asc);
+    TEST_ASSERT_TRUE(drv->getTemperatureOffset(offset));
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 4.0f, offset);
+    delete drv;
+}
+
+void test_scd41_counts_a_corrupt_answer() {
+    FakeScd41 part;
+    Scd41Driver* drv = startedScd41(part);
+    Scd41Data d;
+    part.corruptNextAnswer();
+    TEST_ASSERT_FALSE(drv->readMeasurement(clk->now, d));
+    TEST_ASSERT_EQUAL_UINT32(1, drv->crcFailures());
+    TEST_ASSERT_TRUE(drv->readMeasurement(clk->now, d));
+    TEST_ASSERT_EQUAL_UINT32(1, drv->crcFailures());
     delete drv;
 }
 
@@ -614,6 +663,7 @@ int main(int, char**) {
     RUN_TEST(test_shtc3_normal_mode_takes_13ms_and_converts_the_words);
     RUN_TEST(test_shtc3_low_power_is_ready_in_one_millisecond);
     RUN_TEST(test_shtc3_rejects_a_corrupt_answer);
+    RUN_TEST(test_shtc3_counts_a_corrupt_answer_but_not_a_silent_part);
     RUN_TEST(test_shtc3_sleep_and_wake_track_the_part);
 
     RUN_TEST(test_scd41_begin_stops_a_part_left_measuring_by_a_warm_reset);
@@ -624,6 +674,8 @@ int main(int, char**) {
     RUN_TEST(test_scd41_read_measurement_fails_when_the_part_nacks_it);
     RUN_TEST(test_scd41_pressure_goes_out_in_hectopascals_and_is_range_checked);
     RUN_TEST(test_scd41_temperature_offset_is_refused_while_measuring);
+    RUN_TEST(test_scd41_reads_its_settings_only_while_idle);
+    RUN_TEST(test_scd41_counts_a_corrupt_answer);
     RUN_TEST(test_scd41_stop_leaves_the_part_busy_for_half_a_second);
     RUN_TEST(test_scd41_single_shot_is_refused_while_periodic_runs);
     RUN_TEST(test_scd41_single_shot_yields_one_measurement_after_five_seconds);

@@ -251,7 +251,7 @@ include/sensors/  src/sensors/
   Readings.h  ReadingsJson.cpp                  what the sensors return, and the wire format in READINGS.md
   IShtc3.h  IScd41.h  IPmsa003i.h  IBme688.h    one interface per part, shaped by its datasheet
   IClock.h  II2cBus.h                           the clock and bus seams
-  SensorSuite                                   the four sensors as one begin() and one sample()
+  SensorSuite  SensorHealth                     the four sensors as one begin() and one sample(), and how they fare
   Shtc3Driver  Scd41Driver  Pmsa003iDriver  Bme688Driver  SensirionI2c  Pmsa003iFrame
   IBsec.h  BsecRunner  BsecLibrary              BSEC, in a task of its own
   SensorValidation                              the bench routine's checks
@@ -271,7 +271,7 @@ server/
   about.py  version.py         GET /about, and what this server calls itself
   schedule.py                  the dock's reading slots, slower overnight (§3.3)
   sources/                     the mock room, readings ingest, calibration store, device status, sea-level pressure
-  pages/                       Breathe, Comfort, Dust, Air, Day, Diagnostics, and the trace and delta pages
+  pages/                       Breathe, Comfort, Dust, Air, Day, the Diagnostics pages, and the trace and delta pages
   metrics.py                   derived values and wording
   static/                      CSS, fonts, charts.js
   config.example.yaml
@@ -395,3 +395,4 @@ Dated decisions and status behind the text above, oldest first.
 - **2026-09-19**: the dock takes its readings on the server's slots, every five minutes and every half hour from 01:00 to 07:00 (§3.3), and its time from the server rather than NTP (§3.1). Overnight, fine readings are rarely needed. The server sends the seconds to the next slot rather than an interval, so a restart at 03:07 rejoins at 03:30 and readings land on tidy times. The time is a custom header rather than HTTP's `Date` because plain epoch seconds cost the TinyS3 no parsing. The fan now follows the next slot instead of the last post, and the reading is sampled fresh at the slot: at 228 readings a day that is about 809 fan hours and 83,000 starts a year, against 5,110 hours and 526,000 starts for the 60 s cadence before it. Plantower's 30 s warm-up stands, and `pm_warmup_s` lets the stored readings judge it.
 - **2026-09-19**: the dock's queue moved from the Sensors card to the Memory card, as a count against its capacity with a meter, since it is memory. The diagnostics trace page draws one chart per measure with both boards on it, the dock dark and the head light on one scale: free memory tallest, the queue, then the signal, which barely moves once the dock is placed. A page of changes since the last report was considered in its place and dropped. The queue's axis fits the day's highest, no lower than 10, because it is empty almost always and then climbs through an outage.
 - **2026-09-19**: the dock updates over the air like the head, and every board is offered the newest image of its product that works with the server's version, rather than the newest file (§3.7). The boards follow the server rather than work out which end is newer, so the server's version is the one dial. That needs the older images, so neither `build-firmware.sh` nor the server removes any. An accidental server downgrade therefore downgrades the boards within a request each: each update restarts the dock and empties its queue, BSEC may refuse state an older library did not write, and later features go until it is fixed. The Diagnostics page shows each downgrade and each refused post so such a day is visible. The dock takes an update only with its queue empty, except under a 409, when the queue cannot drain until it does.
+- **2026-09-19**: each dock document carries a `health` object beside `client` (READINGS.md): sensor restarts, the checksum failures the drivers used to drop without counting, the BME688's gas and heater flags, and the SCD41's serial, self-calibration and offset from its start. The bus jam of 2026-09-15 showed as missing sensors only once it was bad; damaged answers come first, so they are counted. Nothing here costs extra bus traffic but two SCD41 reads at each of its starts. The server keeps the object with the rest of each report, and a `health-trace` page draws the day: restarts and damaged answers as running totals, since the dock's own counts begin again at each of its restarts, and the heater as a flag, all in steps; the SCD41's settings and its few damaged answers go on one line above them.

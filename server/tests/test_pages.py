@@ -448,6 +448,66 @@ class TestDiagnosticsTrace:
         assert specs == []
 
 
+from pages.diagnostics import HealthTracePage, since_start  # noqa: E402
+
+
+def health_history():
+    """A day of dock reports, every ten minutes. The dock restarted halfway,
+    so its counts began again; the heater was cold for one report."""
+    end = DOCK_DOC["ts"]
+    out = []
+    for i in range(144):
+        before = i < 72
+        n = i if before else i - 72          # reports since the dock's start
+        health = {"restarts": (1 if n > 10 else 0) if before else 0,
+                  "checksum_failures": {"pmsa003i": n // 20, "shtc3": 0, "scd41": 1 if n > 5 else 0},
+                  "bme688": {"gas_valid": True, "heat_stable": i != 100},
+                  "scd41": {"serial": "9a3bc0ffee41", "asc": True, "offset_c": 4.0}}
+        out.append({"ts": end - 86400 + i * 600, "device": "canary-dock",
+                    "client": {"rssi": -60}, "health": health})
+    return {"canary-dock": out}
+
+
+def health_status():
+    dock = dict(DOCK_DOC, health=health_history()["canary-dock"][-1]["health"])
+    return dict(STATUS, boards={"canary-dock": {"doc": dock, "age_s": 40}})
+
+
+def test_a_count_from_the_docks_start_adds_up_across_a_restart():
+    assert since_start([[1, 3], [2, 5], [3, 5], [4, 1], [5, 2]]) == \
+        [[1, 0], [2, 2], [3, 2], [4, 3], [5, 4]]
+    assert since_start([]) == []
+
+
+class TestHealthTrace:
+    def test_four_charts_and_the_scd41_settings(self, tz):
+        page = HealthTracePage("health-trace", tz=tz, width=WIDTH, height=HEIGHT)
+        assert page.requires == ("status", "status_history_24h")
+        soup, specs = render(page, {"status": health_status(),
+                                    "status_history_24h": health_history()})
+        assert text(soup, ".title") == "Sensors, last 24 hours"
+        assert text(soup, "#scd41 .detail") == \
+            "serial 9a3bc0ffee41, self-calibration on, offset 4.0 °C, 2 checksum failures today"
+        assert [s["canvas"] for s in specs] == \
+            ["#health-restarts", "#health-pmsa003i", "#health-shtc3", "#health-heater"]
+        restarts, pm, shtc3, heater = specs
+        assert all(s["step"] for s in specs), "counts and flags jump, so they are drawn in steps"
+        # One restart before the dock's own restart, none after: a total of 1.
+        assert restarts["points"][-1][1] == 1 and restarts["y"] == {"min": 0, "max": 10}
+        # 71 // 20 = 3 before the restart, 71 // 20 = 3 after it.
+        assert pm["points"][-1][1] == 6
+        assert shtc3["points"][-1][1] == 0
+        assert heater["y"] == {"min": 0, "max": 1} and heater["yticks"] == [0, 1]
+        assert [p[1] for p in heater["points"]].count(0) == 1
+
+    def test_before_the_dock_sends_health(self, tz):
+        page = HealthTracePage("health-trace", tz=tz, width=WIDTH, height=HEIGHT)
+        soup, specs = render(page, {"status": STATUS, "status_history_24h": {}})
+        assert text(soup, ".verdict") == "No health report from the dock yet." and specs == []
+        soup, specs = render(page, {"status": None, "status_history_24h": {}})
+        assert text(soup, ".verdict") == "No report from either board yet." and specs == []
+
+
 from metrics import NO_SENSOR_TAG, NO_SENSOR_VERDICT, sensor_absent  # noqa: E402
 from pages.pool import CO2, IAQ, PM25, RH  # noqa: E402
 

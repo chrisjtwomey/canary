@@ -108,12 +108,14 @@ everything time-zone or unit related in Python, where it is tested.
 
 The pages: Breathe (CO₂), Comfort (temperature and humidity), Dust
 (particulates), Air (the VOC index), a trace and a delta page for each of
-those and for pressure, Day (24 h ribbons), and Diagnostics (the board's
-own report). All but Diagnostics read the measurements: the simulated room
-by default, or what the board has posted with `source.kind: store` in
-`config.yaml`, which keeps them in `server/readings.db`. Before the first
-reading, every one of those pages says "No readings yet." Diagnostics
-reads the `status` dataset, the last document the board posted.
+those and for pressure, Day (24 h ribbons), and three Diagnostics pages
+(each board's own report now, both boards over the day, and the dock's
+sensor health over the day). All but Diagnostics read the measurements: the
+simulated room by default, or what the board has posted with `source.kind:
+store` in `config.yaml`, which keeps them in `server/readings.db`. Before
+the first reading, every one of those pages says "No readings yet."
+Diagnostics reads the `status` dataset, the last document each board
+posted, and the reports of the day behind it.
 
 A metric's *pool* is its main page plus two pages of the same two shapes,
 both in `pages/pool.py` and driven by a `Metric` spec: `TracePage`, the
@@ -126,9 +128,10 @@ show: named lists of images, each read in turn on its own count from a
 random start that moves every `reshuffle_hours`, so a pass is never all of
 one shape. `schedule` is when: `type: interval` visits the pools in `order`
 every `every` seconds. The randomness is seeded from the clock, so a
-restart changes nothing. Day and Diagnostics ride along as pools of one;
-leave a pool out of `order` to keep it off the panel. The weather calendar
-uses the same block with `type: times` and one image per pool.
+restart changes nothing. Day rides along as a pool of one, and Diagnostics
+as a pool of its three pages; leave a pool out of `order` to keep it off the
+panel. The weather calendar uses the same block with `type: times` and one
+image per pool.
 
 To review pages on the panel quickly, set `every: 20` in `config.yaml`
 and restart the server; the board follows whatever it is told.

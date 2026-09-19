@@ -181,3 +181,13 @@ def test_the_server_tells_the_reports_which_board_it_refused(tmp_path, tz):
 
     assert rsp.status_code == 409
     assert reports.device("canary-dock")["refused"]["version"] == "v0.4.0"
+
+
+def test_the_health_object_is_kept_beside_the_client_one(tmp_path):
+    store = ReadingsStore(tmp_path / "status.db")
+    reports = DeviceReports(store=store)
+    reports.accept({"ts": 10, "device": "canary-dock", "co2_ppm": 700,
+                    "client": {"rssi": -60}, "health": {"restarts": 1}})
+    assert store.latest() == {"ts": 10, "device": "canary-dock", "client": {"rssi": -60},
+                              "health": {"restarts": 1}}
+    store.close()

@@ -27,16 +27,20 @@ bool sendCommandWithArg(II2cBus& bus, uint8_t addr, uint16_t cmd, uint16_t arg) 
     return bus.write(addr, tx, sizeof(tx));
 }
 
-bool readWords(II2cBus& bus, uint8_t addr, uint16_t* words, size_t count) {
-    if (count == 0 || count > kMaxWords) return false;
+ReadResult readWordsChecked(II2cBus& bus, uint8_t addr, uint16_t* words, size_t count) {
+    if (count == 0 || count > kMaxWords) return NO_ANSWER;
     uint8_t rx[kMaxWords * 3];
-    if (!bus.read(addr, rx, count * 3)) return false;
+    if (!bus.read(addr, rx, count * 3)) return NO_ANSWER;
     for (size_t i = 0; i < count; ++i) {
         const uint8_t* w = &rx[i * 3];
-        if (crc8(w, 2) != w[2]) return false;
+        if (crc8(w, 2) != w[2]) return BAD_CRC;
         words[i] = (uint16_t)(w[0] << 8 | w[1]);
     }
-    return true;
+    return READ_OK;
+}
+
+bool readWords(II2cBus& bus, uint8_t addr, uint16_t* words, size_t count) {
+    return readWordsChecked(bus, addr, words, count) == READ_OK;
 }
 
 }  // namespace sensirion

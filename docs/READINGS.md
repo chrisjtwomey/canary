@@ -128,6 +128,40 @@ Every document, whole, feeds the Diagnostics pages. With `source.kind:
 store` in `config.yaml`, every document also goes into the readings store,
 without its `client` object, and the other pages draw from the store.
 
+## The `health` object
+
+Beside the `client` object, each dock document carries how its sensors are
+faring, as opposed to what they measure:
+
+```json
+"health": {
+  "restarts": 2,
+  "checksum_failures": { "pmsa003i": 5, "shtc3": 1, "scd41": 0 },
+  "bme688": { "gas_valid": true, "heat_stable": true },
+  "scd41": { "serial": "9a3bc0ffee41", "asc": true, "offset_c": 4.0 }
+}
+```
+
+`restarts` is how many times the dock started a sensor again after it
+stopped answering. `checksum_failures` counts the answers that arrived
+damaged: a PMSA003I frame with a bad start, length or checksum, and an
+SHTC3 or SCD41 word with a bad CRC. A sound bus never produces one, so a
+rising count is a loose or noisy wire before it becomes a missing sensor.
+The counts run from the dock's start, so they fall to 0 at each restart.
+
+`bme688` is the state of its last reading: whether the gas conversion took
+place and whether the heater reached its target. Without both the gas
+resistance, and the index built on it, is noise; `valid.gas` says only that
+one of them failed. It is absent when the last sample had no BME688 reading.
+
+`scd41` is what the part said at its last start: its serial number, whether
+its automatic self-calibration is on, and its temperature offset. The part
+answers these only while idle, so the dock asks before it starts measuring.
+A value it did not get is left out.
+
+The server keeps it with the rest of each report in the status store, out
+of the readings store, and the `health-trace` page draws it over the day.
+
 ## The `calibration` block
 
 BSEC's learned state is not a reading, so it has a route of its own. Each

@@ -1,10 +1,11 @@
 """What each board says about itself, kept the way readings are kept.
 
 Both boards POST to ``/readings``: the dock sends measurements with a
-``client`` object beside them, the head sends the ``client`` object alone.
-That object is the board's own state — network, memory, panel, fetch counts
-— so it goes to a store of its own, keyed by board and timestamp, and the
-newest from each board is held in memory for the pages.
+``client`` object and a ``health`` object beside them, the head sends the
+``client`` object alone. Those are the board's own state — network, memory,
+panel, fetch counts, how its sensors fare — so they go to a store of their
+own, keyed by board and timestamp, and the newest from each board is held in
+memory for the pages.
 """
 from __future__ import annotations
 
@@ -25,7 +26,10 @@ def status_doc(doc: dict) -> dict | None:
     client = doc.get("client")
     if not isinstance(client, dict) or not client:
         return None
-    return {"ts": doc["ts"], "device": str(doc.get("device", "")), "client": client}
+    kept = {"ts": doc["ts"], "device": str(doc.get("device", "")), "client": client}
+    if isinstance(doc.get("health"), dict):
+        kept["health"] = doc["health"]
+    return kept
 
 
 class DeviceReports:

@@ -35,6 +35,8 @@ public:
         ++pressureCalls;
         return MockScd41::setAmbientPressure(pa);
     }
+    bool getAutomaticSelfCalibration(bool& on) override { on = true; return true; }
+    bool getTemperatureOffset(float& degC) override { degC = 4.0f; return true; }
 };
 
 // Not a mock of the real part: just enough of the interface to prove the
@@ -182,6 +184,34 @@ void test_sample_retries_a_corrupt_pm_frame() {
     TEST_ASSERT_EQUAL_UINT16(7, r.pm.pm2_5);
 }
 
+void test_health_counts_a_bad_pm_frame() {
+    FlakyPm flaky;
+    SensorSuite s(*clk, *shtc3, *scd41, flaky, *bme);
+    s.begin();
+    settle();
+    s.sample(room->epoch());
+    TEST_ASSERT_EQUAL_UINT32(1, s.health().pmBadFrames);
+    s.sample(room->epoch());
+    TEST_ASSERT_EQUAL_UINT32(2, s.health().pmBadFrames);
+}
+
+void test_health_holds_the_scd41_settings_from_its_start_and_the_bme688s_last_state() {
+    suite->begin();
+    SensorHealth h = suite->health();
+    TEST_ASSERT_TRUE(h.scd41Read);
+    TEST_ASSERT_TRUE(h.ascKnown && h.asc);
+    TEST_ASSERT_TRUE(h.offsetKnown);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 4.0f, h.offsetC);
+    TEST_ASSERT_FALSE_MESSAGE(h.bme688Seen, "no sample yet");
+    settle();
+    Readings r = suite->sample(room->epoch());
+    h = suite->health();
+    TEST_ASSERT_TRUE(h.bme688Seen);
+    TEST_ASSERT_EQUAL(r.bme688.gasValid, h.gasValid);
+    TEST_ASSERT_EQUAL(r.bme688.heatStable, h.heatStable);
+    TEST_ASSERT_EQUAL_UINT32(0, h.restarts);
+}
+
 void test_sample_reports_nothing_for_a_dead_sensor_and_still_reads_the_rest() {
     DeadShtc3 dead;
     SensorSuite s(*clk, dead, *scd41, *pm, *bme);
@@ -239,6 +269,8 @@ int main(int, char**) {
     RUN_TEST(test_sample_feeds_bme_pressure_to_the_scd41);
     RUN_TEST(test_sample_skips_pm_during_the_fan_warm_up);
     RUN_TEST(test_sample_retries_a_corrupt_pm_frame);
+    RUN_TEST(test_health_counts_a_bad_pm_frame);
+    RUN_TEST(test_health_holds_the_scd41_settings_from_its_start_and_the_bme688s_last_state);
     RUN_TEST(test_sample_reports_nothing_for_a_dead_sensor_and_still_reads_the_rest);
     RUN_TEST(test_scd41_reports_only_when_the_5s_conversion_is_ready);
     RUN_TEST(test_fan_can_be_stopped_and_restarts_its_warm_up);

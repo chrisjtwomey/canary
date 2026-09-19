@@ -19,4 +19,9 @@ public:
     virtual bool powerDown() = 0;
     virtual bool wakeUp(uint32_t nowMs) = 0;                // not ACKed on the real part
     virtual bool getSerialNumber(uint64_t& serial) = 0;
+    // The settings its accuracy rests on. Idle only; false when not read.
+    virtual bool getAutomaticSelfCalibration(bool& on) { (void)on; return false; }
+    virtual bool getTemperatureOffset(float& degC) { (void)degC; return false; }
+    // Answers that arrived with a bad CRC, since start.
+    virtual uint32_t crcFailures() const { return 0; }
 };

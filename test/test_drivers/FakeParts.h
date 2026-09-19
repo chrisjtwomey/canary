@@ -59,6 +59,8 @@ public:
     float    tempC = 25.0f;
     float    rhPct = 40.0f;
     uint64_t serial = 0xC0FFEE41ull;
+    bool     asc = true;          // the part's default
+    uint16_t offsetWord = 1498;   // 4 C, the part's default
     bool     dataReady = false;
     bool     periodic = false;
     bool     poweredDown = false;
@@ -130,7 +132,17 @@ public:
                 return true;
             case 0x241D:
                 if (periodic || len != 5 || !argCrcOk(data)) return false;
-                lastOffsetWord = arg(data);
+                lastOffsetWord = offsetWord = arg(data);
+                return true;
+            case 0x2313: {   // get automatic self-calibration, idle only
+                if (periodic) return false;
+                uint16_t word = asc ? 1 : 0;
+                queue(&word, 1);
+                return true;
+            }
+            case 0x2318:     // get temperature offset, idle only
+                if (periodic) return false;
+                queue(&offsetWord, 1);
                 return true;
             case 0x36E0:
                 if (periodic) return false;

@@ -16,4 +16,6 @@ public:
     // Read the result. False until the measurement time has elapsed.
     virtual bool read(uint32_t nowMs, Shtc3Data& out) = 0;
     virtual uint16_t readId() = 0;                   // (id & 0x083F) == 0x0807 for an SHTC3
+    // Answers that arrived with a bad CRC, since start.
+    virtual uint32_t crcFailures() const { return 0; }
 };

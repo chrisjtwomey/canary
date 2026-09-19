@@ -1,4 +1,5 @@
 #pragma once
+#include <cstddef>
 #include <cstdint>
 
 #include "IClock.h"
@@ -18,6 +19,7 @@ public:
     bool measure(uint32_t nowMs, bool lowPower) override;
     bool read(uint32_t nowMs, Shtc3Data& out) override;
     uint16_t readId() override;
+    uint32_t crcFailures() const override { return crcFailures_; }
 
     bool asleep() const { return asleep_; }
 
@@ -48,4 +50,7 @@ private:
     bool     asleep_ = true;
     bool     measuring_ = false;
     uint32_t readyAtMs_ = 0;
+    uint32_t crcFailures_ = 0;
+
+    bool readAnswer(uint16_t* words, size_t count);
 };
