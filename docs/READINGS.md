@@ -9,7 +9,7 @@ thing unchanged.
 ```json
 {
   "ts": 1756900000,
-  "device": "inkplate5-env-monitor",
+  "device": "canary-dock",
 
   "temp_c": 21.3,
   "rh_pct": 44.1,

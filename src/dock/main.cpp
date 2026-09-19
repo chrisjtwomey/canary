@@ -404,8 +404,9 @@ void setup() {
     connectNetworkForever();
     configureTime(config.ntpHost, config.ntpTimezone);
     if (config.mqttEnabled && mqttSettingsAreSet(config.mqttBroker)) {
-        configureMQTT(config.mqttBroker, config.mqttPort, config.mqttTopic, config.mqttClientID,
-                      config.mqttRetries);
+        // The head connects as the config's mqttClientID; a second board with the
+        // same id would knock it off the broker, so the dock connects as itself.
+        configureMQTT(config.mqttBroker, config.mqttPort, config.mqttTopic, CLIENT_NAME, config.mqttRetries);
     }
 
     if (urlOrigin(config.serverURL, readingsURL, sizeof(readingsURL) - 10)) {

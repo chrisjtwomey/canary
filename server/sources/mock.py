@@ -165,7 +165,7 @@ def _iaq_from_gas(gas_ohm: float) -> float:
     return max(0.0, min(500.0, 25.0 + (5.176 - lg) * 275.0))
 
 
-def reading_from(room: EnvModel, device: str = "inkplate5-env-monitor") -> dict:
+def reading_from(room: EnvModel, device: str = "canary-dock") -> dict:
     """One docs/READINGS.md document from the room's current state, with the
     per-sensor quirks the firmware mocks add: SCD41 T runs +4 C less its
     default offset (net zero), BME688 T runs +1.5 C, repeatability noise."""
@@ -207,7 +207,7 @@ class MockReadingsSource(DataSource):
     minute, oldest first). Deterministic for a seed and a clock."""
 
     def __init__(self, seed: int = 7, now: Callable[[], float] = time.time,
-                 device: str = "inkplate5-env-monitor"):
+                 device: str = "canary-dock"):
         self.seed = seed
         self.now = now
         self.device = device

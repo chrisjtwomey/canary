@@ -305,10 +305,10 @@ void test_json_matches_readings_md() {
     r.pm = {4, 6, 8, 4, 6, 8, 900, 250, 40, 4, 1, 0, 0x97, 0}; r.pmValid = true;
     r.bme688 = {22.8f, 1011.2f, 40.2f, 132000.0f, true, true, 63.4f, 2, true}; r.bme688Valid = true;
     char buf[640];
-    size_t n = readingsToJson(r, "inkplate5-env-monitor", buf, sizeof(buf));
+    size_t n = readingsToJson(r, "canary-dock", buf, sizeof(buf));
     TEST_ASSERT_TRUE(n > 0);
     const char* want =
-        "{\"ts\":1756900000,\"device\":\"inkplate5-env-monitor\""
+        "{\"ts\":1756900000,\"device\":\"canary-dock\""
         ",\"temp_c\":21.3,\"rh_pct\":44.1,\"co2_ppm\":812"
         ",\"pm1_0\":4,\"pm2_5\":6,\"pm10\":8,\"pc_0_3\":900,\"pc_0_5\":250,\"pc_1_0\":40,\"pc_2_5\":4,\"pc_5_0\":1,\"pc_10\":0"
         ",\"gas_ohm\":132000,\"iaq\":63,\"iaq_accuracy\":2,\"pressure_hpa\":1011.2"
@@ -376,7 +376,7 @@ void test_json_too_small_buffer_returns_zero_and_empty() {
     Readings r = {};
     r.ts = 1; r.shtc3Valid = true;
     char buf[40];
-    TEST_ASSERT_EQUAL_UINT32(0, readingsToJson(r, "inkplate5-env-monitor", buf, sizeof(buf)));
+    TEST_ASSERT_EQUAL_UINT32(0, readingsToJson(r, "canary-dock", buf, sizeof(buf)));
     TEST_ASSERT_EQUAL_STRING("", buf);
 }
 

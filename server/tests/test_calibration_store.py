@@ -9,7 +9,7 @@ from sources.readings import ReadingsIngest
 from sources.status import DeviceReports
 from tests.conftest import AT
 
-DEVICE = "inkplate5-env-monitor"
+DEVICE = "canary-dock"
 
 
 def copy(saved, accuracy=3, state="AAEC"):

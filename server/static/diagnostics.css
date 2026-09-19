@@ -1,19 +1,18 @@
 .page-diagnostics {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: 11cqh repeat(2, minmax(0, 1fr));
-  column-gap: 3cqw;
-  row-gap: 2.5cqh;
-  padding: 0 4.2cqw 3cqh 4.2cqw;
+  grid-template-columns: 1fr;
+  grid-template-rows: 9cqh;
+  grid-auto-rows: minmax(0, 1fr);
+  row-gap: 1.5cqh;
+  padding: 0 4.2cqw 2.5cqh 4.2cqw;
   box-sizing: border-box;
 }
 
 .page-diagnostics .head {
-  grid-column: 1 / -1;
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  padding-bottom: 1.4cqh;
+  padding-bottom: 1cqh;
 }
 
 .page-diagnostics .head .title {
@@ -21,24 +20,46 @@
   color: var(--ink);
 }
 
-.page-diagnostics .card {
+/* One board: its name across the top, then its four cards in a row. */
+.page-diagnostics .board {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: max-content minmax(0, 1fr);
+  column-gap: 2.6cqw;
+  row-gap: 0.8cqh;
+  min-height: 0;
+}
+
+.page-diagnostics .board-head {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
   border-top: 2px solid var(--ink-faint);
-  padding-top: 1.2cqh;
+  padding-top: 1cqh;
+}
+
+.page-diagnostics .board-head .name {
+  font-size: 1.8cqw;
+  color: var(--ink);
+}
+
+.page-diagnostics .card {
   min-height: 0;
 }
 
 .page-diagnostics .card .label {
-  font-size: 1.4cqw;
-  margin-bottom: 1cqh;
+  font-size: 1.3cqw;
+  margin-bottom: 0.8cqh;
 }
 
 .page-diagnostics .kv {
   display: grid;
   grid-template-columns: max-content 1fr;
-  column-gap: 1.4cqw;
-  row-gap: 0.7cqh;
+  column-gap: 1.2cqw;
+  row-gap: 0.5cqh;
   align-items: baseline;
-  font-size: 1.9cqw;
+  font-size: 1.6cqw;
 }
 
 .page-diagnostics .k {
@@ -51,19 +72,17 @@
 }
 
 .page-diagnostics .bars {
-  width: 8cqw;
-  height: 5cqh;
-  margin-top: 1.4cqh;
+  width: 7cqw;
+  height: 4cqh;
+  margin-top: 1cqh;
 }
 
 .page-diagnostics .meter {
-  height: 2.4cqh;
-  margin: 0.8cqh 0 1.4cqh 0;
+  height: 2cqh;
+  margin: 0.6cqh 0 1cqh 0;
 }
 
 .page-diagnostics .empty {
-  grid-column: 1 / -1;
-  grid-row: 2 / -1;
   display: flex;
   flex-direction: column;
   justify-content: center;

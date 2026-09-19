@@ -164,7 +164,7 @@ from metrics import (barometer_word, classify_rate, iaq_verdict, pm25_verdict, p
                      rate_words, value_at)
 from pages.air import AirPage  # noqa: E402
 from pages.pool import PRESSURE, TEMP, DeltaPage, TracePage  # noqa: E402
-from pages.diagnostics import DiagnosticsPage  # noqa: E402
+from pages.diagnostics import DiagnosticsPage, DiagnosticsTracePage  # noqa: E402
 from pages.dust import MAX_DOTS, DustPage  # noqa: E402
 
 
@@ -269,57 +269,121 @@ class TestBarometerPool:
         assert text(soup, "#delta-pressure_hpa .value") == "—" and specs[0]["value"] is None
 
 
-STATUS = {
-    "doc": {
-        "ts": 1788511219, "device": "inkplate5-env-monitor",
-        "valid": {"temp_humidity": True, "co2": True, "particulates": False, "pressure": True, "gas": True},
-        "client": {
-            "board": "Inkplate5V2", "version": "v0.1.0-dev", "ip": "192.168.1.42", "rssi": -61,
-            "uptime_s": 8040, "heap_free": 120000, "heap_size": 327680,
-            "psram_free": 4000000, "psram_size": 4194304, "panel_temp_c": 27,
-            "width": 1280, "height": 720, "rotation": 0, "mock_sensors": True,
-            "sensors": {"shtc3": True, "scd41": True, "pmsa003i": True, "bme688": False},
-            "fetch": {"next_url": "http://h:8080/day.png", "next_in_s": 120, "backoff_step": 0,
-                      "ok": 12, "failed": 1},
-            "backlog": {"held": 7, "store": "psram"},
-            "bsec": {"running": True, "restored": True, "accuracy": 2, "late": 1, "saved": 0},
-        },
+DOCK_DOC = {
+    "ts": 1788511219, "device": "canary-dock",
+    "valid": {"temp_humidity": True, "co2": True, "particulates": False, "pressure": True, "gas": True},
+    "client": {
+        "board": "TinyS3", "version": "v0.1.0-dev", "ip": "192.168.1.42", "rssi": -61,
+        "uptime_s": 8040, "heap_free": 120000, "heap_size": 327680,
+        "psram_free": 4000000, "psram_size": 4194304, "mock_sensors": True,
+        "sensors": {"shtc3": True, "scd41": True, "pmsa003i": True, "bme688": False},
+        "backlog": {"held": 7, "store": "psram"},
+        "bsec": {"running": True, "restored": True, "accuracy": 2, "late": 1, "saved": 0},
     },
-    "age_s": 40,
-    "count": 3,
+}
+HEAD_DOC = {
+    "ts": 1788511200, "device": "canary-head",
+    "client": {
+        "board": "Inkplate5V2", "version": "v0.1.0-dev", "ip": "192.168.1.43", "rssi": -70,
+        "uptime_s": 400, "heap_free": 100000, "heap_size": 327680,
+        "psram_free": 4000000, "psram_size": 4194304, "panel_temp_c": 27,
+        "width": 1280, "height": 720, "rotation": 0,
+        "fetch": {"next_url": "http://h:8080/day.png", "next_in_s": 120, "backoff_step": 0,
+                  "ok": 12, "failed": 1},
+    },
+}
+STATUS = {
+    "doc": DOCK_DOC, "age_s": 40, "count": 3,
+    "boards": {"canary-dock": {"doc": DOCK_DOC, "age_s": 40}, "canary-head": {"doc": HEAD_DOC, "age_s": 59}},
 }
 
 
+def status_history(hours=24):
+    """A day of reports from both boards: the head restarted once, the dock's signal sagged."""
+    end = DOCK_DOC["ts"]
+    out = {"canary-head": [], "canary-dock": []}
+    for i in range(hours * 6):
+        ts = end - hours * 3600 + i * 600
+        up = (i * 600) if i < 100 else (i - 100) * 600
+        out["canary-head"].append({"ts": ts, "device": "canary-head",
+                                   "client": {"rssi": -70, "uptime_s": up, "heap_free": 100000}})
+        out["canary-dock"].append({"ts": ts, "device": "canary-dock",
+                                   "client": {"rssi": -61 - (i % 7), "uptime_s": i * 600, "heap_free": 120000 - i * 10}})
+    return out
+
+
 class TestDiagnostics:
-    def test_every_card_reads_the_report(self, tz):
+    def test_each_board_has_its_cards_head_first(self, tz):
         soup, specs = render(DiagnosticsPage("diagnostics", tz=tz, width=WIDTH, height=HEIGHT),
                              {"status": STATUS})
-        assert text(soup, ".title") == "Inkplate5V2"
-        assert text(soup, ".stamp") == "reported 40 s ago, report 3"
-        assert text(soup, "#version") == "v0.1.0-dev"
-        assert text(soup, "#uptime") == "2 h 14 min"
-        assert text(soup, "#mock") == "mocks"
-        assert text(soup, "#ip") == "192.168.1.42"
-        assert text(soup, "#rssi") == "-61 dBm, good"
-        assert text(soup, "#heap") == "117 KB free of 320 KB"
-        assert text(soup, "#panel-temp") == "27 °C"
-        assert text(soup, "#sensor-shtc3") == "ok"
-        assert text(soup, "#sensor-pmsa003i") == "warming up"
-        assert text(soup, "#sensor-bme688") == "missing"
-        assert text(soup, "#next-page") == "day.png"
-        assert text(soup, "#fetches") == "12 ok, 1 failed"
-        assert text(soup, "#backlog") == "7, in psram"
-        assert text(soup, "#bsec") == "medium accuracy, 1 late"
-        bars, heap, psram = specs
-        assert bars == {"kind": "bars", "canvas": "#rssi-bars", "filled": 3, "total": 4}
-        assert heap["fraction"] == pytest.approx((327680 - 120000) / 327680)
-        assert psram["canvas"] == "#psram-meter"
+        assert text(soup, ".head .title") == "Boards"
+        assert text(soup, ".head .stamp") == "3 reports"
+        boards = [b["id"] for b in soup.select(".board")]
+        assert boards == ["board-head", "board-dock"]
+        # the head: client, network, memory, panel and fetch
+        assert text(soup, "#board-head .name") == "head, Inkplate5V2"
+        assert text(soup, "#head-age") == "reported 59 s ago"
+        assert text(soup, "#head-uptime") == "6 min"
+        assert text(soup, "#head-rssi") == "-70 dBm, fair"
+        assert text(soup, "#head-panel-temp") == "27 °C"
+        assert text(soup, "#head-next-page") == "day.png"
+        assert text(soup, "#head-fetches") == "12 ok, 1 failed"
+        assert soup.select_one("#head-sensor-scd41") is None
+        # the dock: client, network, memory, sensors and its backlog
+        assert text(soup, "#dock-version") == "v0.1.0-dev"
+        assert text(soup, "#dock-uptime") == "2 h 14 min"
+        assert text(soup, "#dock-ip") == "192.168.1.42"
+        assert text(soup, "#dock-heap") == "117 KB free of 320 KB"
+        assert text(soup, "#dock-sensor-shtc3") == "ok"
+        assert text(soup, "#dock-sensor-pmsa003i") == "warming up"
+        assert text(soup, "#dock-sensor-bme688") == "missing"
+        assert text(soup, "#dock-bsec") == "medium accuracy, 1 late"
+        assert text(soup, "#dock-backlog") == "7, in psram"
+        assert soup.select_one("#dock-fetches") is None
+        # three charts per board, the head's first
+        assert [s["canvas"] for s in specs] == ["#head-rssi-bars", "#head-heap-meter", "#head-psram-meter",
+                                                "#dock-rssi-bars", "#dock-heap-meter", "#dock-psram-meter"]
+        assert specs[3] == {"kind": "bars", "canvas": "#dock-rssi-bars", "filled": 3, "total": 4}
+        assert specs[4]["fraction"] == pytest.approx((327680 - 120000) / 327680)
+
+    def test_one_board_alone_is_fine(self, tz):
+        one_board = dict(STATUS, boards={"canary-dock": STATUS["boards"]["canary-dock"]})
+        soup, specs = render(DiagnosticsPage("diagnostics", tz=tz, width=WIDTH, height=HEIGHT),
+                             {"status": one_board})
+        assert [b["id"] for b in soup.select(".board")] == ["board-dock"]
+        assert len(specs) == 3
 
     def test_no_report_yet(self, tz):
         page = DiagnosticsPage("diagnostics", tz=tz, width=WIDTH, height=HEIGHT)
         assert page.requires == ("status",)
         soup, specs = render(page, {"status": None})
-        assert text(soup, ".empty .verdict") == "No report from the board yet."
+        assert text(soup, ".empty .verdict") == "No report from either board yet."
+        assert specs == []
+
+
+class TestDiagnosticsTrace:
+    def test_four_charts_over_the_day_and_the_restarts(self, tz):
+        page = DiagnosticsTracePage("diagnostics-trace", tz=tz, width=WIDTH, height=HEIGHT)
+        assert page.requires == ("status", "status_history_24h")
+        soup, specs = render(page, {"status": STATUS, "status_history_24h": status_history()})
+        assert text(soup, ".title") == "Boards, last 24 hours"
+        assert text(soup, "#head-stat .detail") == "up 6 min, 1 restart today"
+        assert text(soup, "#dock-stat .detail") == "up 2 h 14 min, no restarts today"
+        assert [s["canvas"] for s in specs] == ["#head-rssi", "#dock-rssi", "#head-heap_free", "#dock-heap_free"]
+        head_rssi, dock_rssi, head_heap, dock_heap = specs
+        assert all(s["kind"] == "trace" for s in specs)
+        assert head_rssi["x"] == {"min": DOCK_DOC["ts"] - 86400, "max": DOCK_DOC["ts"]}
+        assert len(dock_rssi["points"]) == 144 and dock_rssi["points"][0][1] == -61
+        assert dock_rssi["now"] == dock_rssi["points"][-1]
+        assert [g["label"] for g in dock_rssi["guides"]] == ["strong", "weak"]
+        assert dock_heap["points"][0] == [DOCK_DOC["ts"] - 86400, pytest.approx(117.2, abs=0.05)]
+        assert head_heap["y"] == {"min": 0, "max": 320} and head_heap["yticks"] == [0, 100, 200, 300]
+        assert len(head_rssi["dayLabels"]) == 4   # every six hours across a day
+
+    def test_no_report_yet(self, tz):
+        soup, specs = render(DiagnosticsTracePage("diagnostics-trace", tz=tz, width=WIDTH, height=HEIGHT),
+                             {"status": None, "status_history_24h": {}})
+        assert text(soup, ".verdict") == "No report from either board yet."
         assert specs == []
 
 

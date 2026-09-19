@@ -25,6 +25,12 @@ def measurements(doc: dict) -> dict:
     return {k: v for k, v in doc.items() if k not in BOARD_KEYS}
 
 
+def has_measurements(doc: dict) -> bool:
+    """Whether ``doc`` says anything about the room. The head posts its own
+    state and no readings, and that is not a reading of anything."""
+    return any(k not in ("ts", "device") for k in measurements(doc))
+
+
 class ReadingsIngest:
     """The /readings handler: the newest report for Diagnostics, the
     calibration block to its own store, every reading into the readings
@@ -45,7 +51,7 @@ class ReadingsIngest:
         block = doc.get("calibration")
         if self.calibration is not None and isinstance(block, dict):
             self.calibration.add(str(doc.get("device", "")), block)
-        if self.store is None:
+        if self.store is None or not has_measurements(doc):
             return
         self.store.add(measurements(doc))
         if self.keep_days:

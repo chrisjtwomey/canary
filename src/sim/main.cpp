@@ -153,7 +153,7 @@ int main(int argc, char** argv) {
         Readings r = sensors.sample(epoch);
 
         if (o.json) {
-            if (readingsToJson(r, "inkplate5-env-monitor", json, sizeof(json))) printf("%s\n", json);
+            if (readingsToJson(r, "canary-dock", json, sizeof(json))) printf("%s\n", json);
             else fprintf(stderr, "json buffer too small\n");
         } else {
             if (rows && rows % 24 == 0) printHeader();

@@ -25,6 +25,6 @@ mqtt_logger:
   enabled: false
   broker: XXXX
   port: 1883
-  clientId: inkplate5-env-monitor
+  clientId: canary-head
   topic: mqtt/env-monitor-client
   retries: 3

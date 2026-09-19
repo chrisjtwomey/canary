@@ -34,7 +34,8 @@ epd must be checked out beside this repo.
 
 ```sh
 pio test -e native     # host tests: room model, mocks, drivers
-pio run -e esp32       # firmware with the sensor drivers; -e esp32-mock uses the simulated room
+pio run -e esp32       # the head: fetches and draws the pages
+pio run -e dock        # the dock: the sensor drivers; -e dock-mock uses the simulated room
 ```
 
 ```sh
@@ -55,10 +56,11 @@ python3 server.py --only breathe.png --at 2026-09-03T21:45  # one page, clock pi
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the pages and the render loop.
 
-`pio run -e esp32 -t upload` then `pio device monitor` shows the board
-fetch a page every five minutes and print one readings document a minute.
-`-e esp32-mock` does the same with the simulated room in place of the
-sensors. [CONTRIBUTING.md](CONTRIBUTING.md) has the setup.
+`pio run -e dock -t upload` then `pio device monitor` shows the dock print
+one readings document a minute; `-e dock-mock` does the same with the
+simulated room in place of the sensors. `pio run -e esp32 -t upload` shows
+the head fetch a page every five minutes. [CONTRIBUTING.md](CONTRIBUTING.md)
+has the setup.
 
 ## The mocks
 

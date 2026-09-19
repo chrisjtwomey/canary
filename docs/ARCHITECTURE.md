@@ -26,22 +26,34 @@ Three of those change the design. The panel is one config line.
 
 ## 3. Four differences in the design
 
-### 3.1 The firmware runs an awake loop, not `run_app()`
+### 3.1 The firmware runs awake loops, not `run_app()`
 
-`run_app()` is epd's deep-sleep state machine. Keeping the ESP32 awake is not
-a tweak to it; it is a different program, and `src/main.cpp` owns it:
+`run_app()` is epd's deep-sleep state machine. Keeping an ESP32 awake is not
+a tweak to it; it is a different program, and each board has its own.
+
+The dock, `src/dock/main.cpp`, is the one the sensors need:
 
 ```
-setup:  board.begin(); wifi; ntp; sensors.begin()
-loop:   every 5 s                        sensors.sample()     (SCD41 periodic, BME688 via BSEC, PMSA003I frames, SHTC3)
-        every 60 s                       POST /readings       one JSON document, with the board's own status beside it
-        when X-Next-Refresh-Seconds ends GET the named page → draw; a failed fetch keeps the old image and backs off
+setup:  wifi; ntp; I2C; BSEC; sensors.begin()
+loop:   every 5 s     sensors.sample()     (SCD41 periodic, BME688 via BSEC, PMSA003I frames, SHTC3)
+        every 60 s    POST /readings       one JSON document, with the dock's own status beside it;
+                                           a refused document waits in PSRAM for the next one the server takes
 BSEC:   a FreeRTOS task of its own; its state goes to NVS when accuracy first reaches 3 and every six hours after
 ```
 
-The loop composes epd's WiFi, time, download, `postJson`, image and back-off
-helpers, the logger and `IBoard`. The kit stays a library, not a framework:
-it does not need to know what a sensor is.
+The head, `src/main.cpp`, stays awake only because it is mains powered and
+has no reason to sleep:
+
+```
+setup:  board.begin(); wifi; ntp
+loop:   when X-Next-Refresh-Seconds ends   GET the named page → draw; a failed fetch keeps the old image and backs off
+        every 60 s                         POST /readings     the head's own status and nothing else
+```
+
+Both loops compose epd's WiFi, time, download, `postJson` and back-off
+helpers and the logger; the head adds the image helpers and `IBoard`, the
+dock needs no board at all. The kit stays a library, not a framework: it
+does not need to know what a sensor is.
 
 ### 3.2 Readings travel client → server by HTTP POST
 
@@ -98,10 +110,10 @@ dock at the pogo connector.
 ## 5. Shape of the repo
 
 ```
-platformio.ini                 envs: esp32 (the head), dock (the TinyS3), esp32-mock (-DUSE_MOCK_SENSORS), esp32-validate, native, sim
+platformio.ini                 envs: esp32 (the head), dock (the TinyS3), dock-mock (-DUSE_MOCK_SENSORS), esp32-validate, native, sim
 partitions.csv
-src/main.cpp                   the awake loop from §3.1
-src/dock/main.cpp              the dock's firmware
+src/main.cpp                   the head: fetch, draw, post its own state
+src/dock/main.cpp              the dock: the awake loop from §3.1
 src/defaults.example.cpp       copy to defaults.cpp: WiFi, server URL, MQTT logging
 include/sensors/  src/sensors/
   Readings.h  ReadingsJson.cpp                  what the sensors return, and the wire format in READINGS.md
@@ -131,7 +143,7 @@ docs/
 
 ## 5.1 The sensor seam
 
-`main.cpp` names a concrete sensor type in exactly one place, a
+`src/dock/main.cpp` names a concrete sensor type in exactly one place, a
 `#if defined(USE_MOCK_SENSORS)` block that constructs either the mocks or the
 real drivers and binds them to `IShtc3&`, `IScd41&`, `IPmsa003i&`, `IBme688&`.
 Everything else — including the whole sampling protocol — is written against
@@ -152,7 +164,7 @@ already return false-when-not-ready, so `sample()` can become a state machine
 without touching the drivers.
 
 `-DUSE_MOCK_SENSORS` picks the mocks; without it the drivers talk to the
-parts. The `esp32` and `esp32-mock` environments are that one flag apart.
+parts. The `dock` and `dock-mock` environments are that one flag apart.
 
 The drivers reach the bus through `II2cBus`, for the reason `IClock` exists:
 the command sequences, the CRCs and the conversions are what a driver gets

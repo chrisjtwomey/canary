@@ -45,7 +45,7 @@ jobs:
       # nothing is attached, and the wiring check. The validation image needs
       # epd 0.4.0 for writeExpanderPin() and enableWakeOnTimer().
       - name: Build firmware
-        run: pio run -e esp32 -e esp32-mock -e esp32-validate
+        run: pio run -e esp32 -e dock -e dock-mock -e esp32-validate
 
       # This project's own logic, on the host: the room model, the sensor
       # mocks, the drivers against a fake I2C bus, the suite that reads

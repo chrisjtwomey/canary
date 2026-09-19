@@ -19,7 +19,7 @@ display:
     air: [air.png, air-trace.png, air-delta.png]
     pressure: [barometer-trace.png, barometer-delta.png]
     day: [day.png]
-    diagnostics: [diagnostics.png]
+    diagnostics: [diagnostics.png, diagnostics-trace.png]
   schedule:
     type: interval
     every: 300
@@ -34,6 +34,10 @@ source:
   seed: 7           # mock only
   # path: readings.db   # store only; relative to this file
   # keep_days: 0        # store only; readings older than this are deleted, 0 keeps all
+
+status:             # what each board says about itself, kept as readings are
+  # path: status.db   # relative to this file
+  keep_days: 7        # older reports are deleted, 0 keeps all
 
 calibration:        # sensor state the board backs up with each reading
   # path: calibration.db  # relative to this file

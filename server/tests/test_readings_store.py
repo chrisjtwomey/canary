@@ -10,7 +10,7 @@ from sources.status import DeviceReports
 from tests.conftest import AT
 from tests.html import one
 
-DOC = {"ts": AT, "device": "inkplate5-env-monitor", "co2_ppm": 812, "pressure_hpa": 1011.2,
+DOC = {"ts": AT, "device": "canary-dock", "co2_ppm": 812, "pressure_hpa": 1011.2,
        "valid": {"co2": True, "pressure": True},
        "client": {"board": "Inkplate5V2", "sensors": {"scd41": True}},
        "calibration": {"bme688": {"state": "AAEC", "accuracy": 3, "saved": AT - 60}}}
@@ -21,6 +21,15 @@ def store(tmp_path):
     s = ReadingsStore(tmp_path / "readings.db")
     yield s
     s.close()
+
+
+def test_a_document_with_no_measurements_is_not_a_reading(store):
+    """The head posts its own state and no readings."""
+    reports = DeviceReports(now=lambda: float(AT))
+    ingest = ReadingsIngest(reports, store)
+    ingest.accept({"ts": AT, "device": "canary-head", "client": {"rssi": -55}})
+    assert store.count() == 0
+    assert reports.device("canary-head")["doc"]["client"] == {"rssi": -55}
 
 
 def test_measurements_leave_out_what_describes_the_board():
@@ -80,7 +89,7 @@ def test_before_the_first_reading_every_page_says_so(store, tz):
         if "latest" in page.requires:
             assert one(soup, ".page-waiting .verdict").get_text() == "No readings yet.", page.name
         else:
-            assert one(soup, ".empty .verdict").get_text() == "No report from the board yet."
+            assert one(soup, ".verdict").get_text() == "No report from either board yet.", page.name
 
 
 def test_a_posted_reading_reaches_the_pages_through_the_server(store, tz):

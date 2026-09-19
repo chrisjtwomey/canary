@@ -27,10 +27,10 @@ def test_regenerate_writes_eight_grey_pngs_for_every_page(tmp_path, source, tz):
     rendered = regenerate(pages, source)
 
     assert [p.name for p in rendered] == [
-        "breathe", "comfort", "dust", "air", "day", "diagnostics",
+        "breathe", "comfort", "dust", "air", "day", "diagnostics", "diagnostics-trace",
         "co2-trace", "co2-delta", "comfort-trace", "comfort-delta", "dust-trace", "dust-delta",
         "air-trace", "air-delta", "barometer-trace", "barometer-delta"]
-    assert [c[1:] for c in renderer.calls] == [(1280, 720)] * 16
+    assert [c[1:] for c in renderer.calls] == [(1280, 720)] * 17
     for page in pages:
         html = (tmp_path / "static" / f"{page.name}.html").read_text()
         assert "charts.js" in html and f"page-{page.css_class}" in html

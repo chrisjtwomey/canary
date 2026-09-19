@@ -22,7 +22,7 @@ from pages.air import AirPage
 from pages.breathe import BreathePage
 from pages.comfort import ComfortPage
 from pages.day import DayPage
-from pages.diagnostics import DiagnosticsPage
+from pages.diagnostics import DiagnosticsPage, DiagnosticsTracePage
 from pages.dust import DustPage
 from pages.pool import CO2, IAQ, PM25, PRESSURE, TEMP, DeltaPage, TracePage
 from sources.calibration import CalibrationStore
@@ -53,6 +53,7 @@ def make_pages(tz, **geometry) -> list:
         AirPage("air", tz=tz, **geometry),
         DayPage("day", tz=tz, **geometry),
         DiagnosticsPage("diagnostics", tz=tz, **geometry),
+        DiagnosticsTracePage("diagnostics-trace", tz=tz, **geometry),
     ]
     for stem, metric in (("co2", CO2), ("comfort", TEMP), ("dust", PM25), ("air", IAQ),
                          ("barometer", PRESSURE)):
@@ -90,7 +91,7 @@ def main():
 
     try:
         core = load_core_config(config, default_display=DEFAULT_DISPLAY,
-                                default_firmware_product="inkplate5-env-monitor",
+                                default_firmware_product="canary-head",
                                 base_dir=cwd,
                                 default_width=1280, default_height=720)
         kind = get_prop_by_keys(config, "source", "kind", default="mock")
@@ -102,6 +103,8 @@ def main():
         calibration_path = str(get_prop_by_keys(config, "calibration", "path",
                                                 default="calibration.db"))
         calibration_days = float(get_prop_by_keys(config, "calibration", "keep_days", default=3))
+        status_path = str(get_prop_by_keys(config, "status", "path", default="status.db"))
+        status_days = float(get_prop_by_keys(config, "status", "keep_days", default=7))
         altitude_m = float(get_prop_by_keys(config, "site", "altitude_m", default=0))
     except (ConfigError, KeyError, ValueError) as exc:
         logging.basicConfig()
@@ -119,7 +122,9 @@ def main():
         clock = lambda: pinned  # noqa: E731
         log.info("clock pinned to %s", args.at)
 
-    reports = DeviceReports()
+    status_store = ReadingsStore(os.path.join(cwd, status_path))
+    reports = DeviceReports(store=status_store, keep_days=status_days)
+    log.info("board reports in %s, %d held", status_store.path, status_store.count())
     store = None
     if kind == "store":
         store = ReadingsStore(os.path.join(cwd, store_path))

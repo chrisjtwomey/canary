@@ -187,11 +187,11 @@ back to the last release at its next fetch.
 
 ### 4. On the Inkplate, end to end
 
-The board fetches the pages from the server, draws them, and reads the four
-sensors over I2C. Three things to set up. See
-[docs/HARDWARE.md](docs/HARDWARE.md) §8 for the wiring; `pio run -e
-esp32-mock -t upload` builds the same firmware with the simulated room in
-place of the sensors, for a board with nothing attached.
+Two boards: the head (`esp32`) fetches the pages from the server and draws
+them; the dock (`dock`) reads the four sensors over I2C and posts them.
+Three things to set up. See [docs/HARDWARE.md](docs/HARDWARE.md) §8 for the
+wiring; `pio run -e dock-mock -t upload` builds the dock's firmware with the
+simulated room in place of the sensors, for a board with nothing attached.
 
 1. **Credentials.** Copy `src/defaults.example.cpp` to `src/defaults.cpp`
    (gitignored) and fill in the WiFi SSID and password. Point `serverURL`
