@@ -206,6 +206,10 @@ void test_post_result_reads_the_status() {
     TEST_ASSERT_EQUAL_INT_MESSAGE(TRY_LATER, postResult(-1), "no connection");
 }
 
+void test_a_version_mismatch_is_held_not_dropped() {
+    TEST_ASSERT_EQUAL_INT(TRY_LATER, postResult(409));
+}
+
 void test_drain_sends_the_oldest_few_per_pass() {
     uint8_t mem[1024];
     RingBacklog ring(mem, sizeof(mem), "psram");
@@ -246,6 +250,19 @@ void test_drain_drops_a_document_the_server_refuses() {
     TEST_ASSERT_EQUAL_UINT(3, server.received.size());
 }
 
+void test_drain_keeps_everything_while_the_versions_differ() {
+    uint8_t mem[1024];
+    RingBacklog ring(mem, sizeof(mem), "psram");
+    for (int i = 1; i <= 3; ++i) push(ring, i);
+    FakeServer server;
+    server.answers = {409};
+    char buf[640];
+
+    TEST_ASSERT_EQUAL_UINT32(0, drainBacklog(ring, server, 5, buf, sizeof(buf)));
+    TEST_ASSERT_EQUAL_UINT32(3, ring.count());
+    TEST_ASSERT_EQUAL_STRING(doc(1).c_str(), peek(ring).c_str());
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_ring_hands_documents_back_oldest_first);
@@ -258,6 +275,8 @@ int main(int, char**) {
     RUN_TEST(test_file_backlog_drops_the_oldest_chunk_when_every_chunk_is_full);
     RUN_TEST(test_file_backlog_refuses_what_it_cannot_store_as_one_line);
     RUN_TEST(test_post_result_reads_the_status);
+    RUN_TEST(test_a_version_mismatch_is_held_not_dropped);
+    RUN_TEST(test_drain_keeps_everything_while_the_versions_differ);
     RUN_TEST(test_drain_sends_the_oldest_few_per_pass);
     RUN_TEST(test_drain_stops_at_the_first_that_must_wait_and_keeps_it);
     RUN_TEST(test_drain_drops_a_document_the_server_refuses);

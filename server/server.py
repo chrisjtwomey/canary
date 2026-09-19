@@ -18,6 +18,7 @@ from epd_server import DisplayServer, ReadingsStore, align_process_timezone
 from epd_server.config import ConfigError, get_prop_by_keys, load_core_config, load_yaml
 from epd_server.source import CompositeSource, IngestSource
 
+from about import About
 from pages.air import AirPage
 from pages.breathe import BreathePage
 from pages.comfort import ComfortPage
@@ -30,6 +31,7 @@ from sources.corrections import SeaLevelSource
 from sources.mock import MockReadingsSource
 from sources.readings import ReadingsIngest
 from sources.status import DeviceReports, StatusSource
+from version import server_version
 
 cwd = os.path.dirname(os.path.realpath(__file__))
 log = logging.getLogger("server")
@@ -132,6 +134,7 @@ def main():
     source = make_source(seed, clock, reports, altitude_m, store)
     calibration = CalibrationStore(os.path.join(cwd, calibration_path), keep_days=calibration_days)
     ingest = ReadingsIngest(reports, store, keep_days, calibration=calibration)
+    about = About(server_version(), core.firmware)
     pages = make_pages(tz, **core.image.page_kwargs())
 
     try:
@@ -145,8 +148,11 @@ def main():
             mqtt=core.mqtt,
             mqtt_client_id="canary-server",
             ingest={"readings": ingest.accept},
-            queries={"calibration": calibration.answer},
+            queries={"calibration": calibration.answer, "about": about.answer},
             firmware=core.firmware,
+            header_prefix="Canary",
+            server_version=about.version,
+            version_gate=True,
         )
     except ValueError as exc:
         log.error(str(exc))

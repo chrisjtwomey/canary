@@ -9,8 +9,8 @@ came out of, and what it builds on the kit. [HARDWARE.md](HARDWARE.md) has the n
 `epd` was extracted from a weather calendar, and its client model is that
 device's: **wake, fetch a PNG, draw it, deep-sleep until the server says.**
 The client is dumb and battery-powered. All data lives server-side. The
-server decides *when* (`X-Next-Refresh-Seconds`) and *what*
-(`X-Next-URL`) from a daily list of wall-clock times.
+server decides *when* (`Canary-Next-Display-Refresh-Seconds`) and *what*
+(`Canary-Next-URL`) from a daily list of wall-clock times.
 
 ## 2. What is different here
 
@@ -58,7 +58,7 @@ has no reason to sleep:
 
 ```
 setup:  board.begin(); wifi; ntp
-loop:   when X-Next-Refresh-Seconds ends   GET the named page → draw; a failed fetch keeps the old image and backs off
+loop:   when the refresh header ends      GET the named page → draw; a failed fetch keeps the old image and backs off
         every 60 s                         POST /readings     the head's own status and nothing else
 ```
 
@@ -129,9 +129,62 @@ is sixteen equal steps of light, spaced in time along a sine.
 Brightness is perceived brightness, mapped through gamma 2.2 onto a 14-bit channel at 1 kHz. A task of its own
 drives the pin, because `setup()` blocks for as long as the network takes and the starting pulse runs through it.
 
+### 3.6 The headers carry canary's name, not the library's
+
+Every header on the wire starts with `Canary-`, because the server's responses are canary's interface and a reader
+of the traffic should not have to know which library built it. The kit builds the names from a prefix each product
+sets: the server takes `header_prefix="Canary"`, the firmware takes `-DEPD_HEADER_PREFIX='"Canary"'`, and a
+mismatch is silent, so both come from this repository.
+
+| Direction | Header | Carries |
+|---|---|---|
+| Board to server | `Canary-Device`, `Canary-Device-Version` | which board, and what it runs |
+| Server to board | `Canary-Server-Version`, `Canary-Server-Epoch-Seconds` | on every response |
+| Server to head | `Canary-Next-Display-Refresh-Seconds`, `Canary-Next-URL` | when to fetch, and what |
+| Server to board | `Canary-Server-Firmware-Version`, `Canary-Server-Firmware-URL` | only when an update applies |
+
+`GET /about` answers with the same version and clock, plus the firmware on offer and the library version. A board
+asks at boot, after a post the server would not take, and once an hour.
+
+The server's version is canary's own, from `git describe` when the image is built. It is not the `epd-server`
+package's version: that package is a library this server is built with, and the two move independently.
+
+### 3.7 When the two ends cannot work together
+
+A board and the server work together when their major versions match, or, while the major is 0, their major and
+minor. Both ends apply the rule, the server through `epd_server.compat` and the boards through `version_compat.h`,
+so they reach the same answer about each other. A version that cannot be read, such as `dev`, is never judged:
+refusing it would silently stop every development build.
+
+The server's own version is the one the boards follow. It offers every released board the firmware for its
+version, newer or older than what the board runs, so a mismatch clears itself once the board takes the offer.
+Development builds are left alone.
+
+- **The dock** gets 409 from `/readings` and holds the document in PSRAM rather than dropping it, since the reading
+  is sound and only the pairing is wrong. The refused post puts the LED into its trouble pattern.
+- **The head** still gets its pages, since the server never refuses a fetch. It draws a notice in place of the page
+  and then takes any update on offer exactly as it would after a page. The order is fixed in
+  `include/head/AfterFetch.h` and tested: the update is what clears the notice, and the dock's wall covers the
+  head's USB-C socket.
+
+The head draws a second notice when three fetches in a row go unanswered, about 26 minutes with the back-off, so a
+blip never replaces the page. It says when the last page arrived. Both notices come from the firmware, not the
+server, so they work when the server is what is wrong, and each is drawn once rather than on every retry, since
+every draw is a full refresh of the panel.
+
+They are pages. `server/pages/notice.py` sets each one like the others, a spaced-capitals label, an italic verdict
+and a line of detail, and `scripts/notices.py` renders them through the same pipeline, browser and quantiser as
+every page the server serves. The head holds the two PNGs in its firmware and draws them with the call that draws a
+fetched page, so a notice is pixel for pixel what the server would have rendered. They are rendered again only when
+their wording or design changes, so the firmware build needs no browser.
+
+The layout leaves its bottom free for the two facts the head only knows at run time: when the last page arrived, or
+the server's version, and then the board's own name, version and address. The head writes those in the pages' face
+at the size of their detail text, from a one-bit font `scripts/gfxfont.py` makes out of the server's font file.
+
 ## 4. What stays as the kit has it
 
-- The wire contract: `GET /<page>.png` with `X-Next-Refresh-Seconds` and `X-Next-URL`. The awake client honours the header by waiting instead of sleeping.
+- The wire contract: `GET /<page>.png` with the refresh and next-URL headers. The awake client honours the header by waiting instead of sleeping.
 - `DisplayServer`, `Page`, `regenerate()`, `DataSource`, the config loader, the MQTT log relay.
 - `IBoard` and `EpdBoardInkplate`. Inkplate 5 Gen2 is `-DARDUINO_INKPLATE5V2`; GPIO39 RTC wake matches the schematic, though this device does not sleep.
 - Rendering: `GreyscaleQuantiser` at eight levels for the panel's eight greys, one argument.
@@ -155,13 +208,17 @@ include/sensors/  src/sensors/
   mock/                                         EnvModel, LaggedValue and the four mocks
 include/net/  src/net/         Backlog, Calibration, ClientStatus, RefreshTimer, Url
 include/dock/StatusLed.h       what the status LED shows, as a duty cycle (§3.5)
+include/head/  src/notice.cpp  what the head does after a fetch, and the notices it draws (§3.7)
+include/head/notices/          the notices, rendered by scripts/notices.py from server/pages/notice.py
+include/head/fonts/            the pages' face as a one-bit font, from scripts/gfxfont.py, for the notices' live lines
 src/sim/main.cpp               the sensor loop as a host binary
 src/validate/main.cpp          the bench routine
 lib/bme68x/                    Bosch's BME68x API
-scripts/                       bsec.py, version.py
+scripts/                       bsec.py, gfxfont.py, notices.py, version.py
 test/                          host tests, native env
 server/
   server.py                    config, sources, pages, DisplayServer(...).run()
+  about.py  version.py         GET /about, and what this server calls itself
   sources/                     the mock room, readings ingest, calibration store, device status, sea-level pressure
   pages/                       Breathe, Comfort, Dust, Air, Day, Diagnostics, and the trace and delta pages
   metrics.py                   derived values and wording

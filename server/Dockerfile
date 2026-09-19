@@ -1,5 +1,10 @@
 FROM python:3.13-slim-bookworm
 
+# The release tag, so the server can say what it is on every response and in
+# GET /about. Unset, it falls back to git, then to "dev".
+ARG CANARY_VERSION=dev
+ENV CANARY_VERSION=${CANARY_VERSION}
+
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \

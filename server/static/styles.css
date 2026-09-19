@@ -176,3 +176,23 @@ canvas {
   font-size: 2.1cqw;
   margin-top: 2cqh;
 }
+
+/* A notice the head holds in its firmware. Set like the waiting page, but
+   lifted, so the two lines the head writes at run time sit under it. */
+.page-notice {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 6cqw 20cqh;
+  box-sizing: border-box;
+}
+
+.page-notice .verdict {
+  font-size: 5cqw;
+  margin-top: 2cqh;
+}
+
+.page-notice .detail {
+  font-size: 2.1cqw;
+  margin-top: 2cqh;
+}

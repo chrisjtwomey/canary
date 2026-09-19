@@ -168,6 +168,10 @@ void FileBacklog::pop() {
 // cannot change, except for a timeout (408) or a request to slow down (429).
 PostResult postResult(int httpStatus) {
     if (httpStatus >= 200 && httpStatus < 300) return POSTED;
+    // 409 is the server saying this board's version cannot work with its own.
+    // The document is sound and only the pairing is wrong, so it is held
+    // until the two match again rather than dropped.
+    if (httpStatus == 409) return TRY_LATER;
     if (httpStatus >= 400 && httpStatus < 500 && httpStatus != 408 && httpStatus != 429) {
         return REFUSED;
     }

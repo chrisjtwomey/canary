@@ -236,7 +236,7 @@ Three parts agree on 300 s:
 
 - **SCD41** ASC is "optimized for single shot measurements performed every 5 minutes"; shorter intervals wear the ASC EEPROM proportionally *(datasheet §3.11)*.
 - **BSEC ULP** is built for a 300 s sample period with the MCU asleep between samples; the `generic_33v_300s_4d` config allows exactly that *(integration guide §1)*. Sample timing must stay within ±50 % of target, i.e. 150–450 s between BME688 measurements, or accuracy drops to 0 *(guide §3.2)*.
-- The **wire contract**: the server's `X-Next-Refresh-Seconds` sets the cadence, as it does for weather-cal. It says 300.
+- The **wire contract**: the server's refresh header sets the cadence, as it does for weather-cal. It says 300.
 
 ### Fan: every 6th cycle, with the ESP32 asleep
 
@@ -399,7 +399,7 @@ point; weather-cal's sleep loop is.
 - **BSEC:** config `generic_33v_300s_4d`, ULP. State blob (238 B, HARDWARE.md §4) in RTC slow memory every cycle and in NVS every ~6 h; restore from RTC memory on wake, from NVS on cold boot. Timestamps in ns from the RTC epoch, never from `millis()`, so they stay monotonic across sleep.
 - **BME688 before the network.** Its measurement must sit at a fixed offset from the 300 s mark (§8).
 - **Battery cutoff** at 3.1 V via `readBattery()`, then a recharge notice and an unscheduled deep sleep — weather-cal's existing behaviour.
-- **Readings POST** every wake as now, or buffered six-at-a-time in RTC memory and posted with the fan cycle (§7 lever). The server's `X-Next-Refresh-Seconds` is the cadence.
+- **Readings POST** every wake as now, or buffered six-at-a-time in RTC memory and posted with the fan cycle (§7 lever). The server's refresh header is the cadence.
 - **Network failures** must not stretch the cycle: give up fast, sleep to the next mark, keep the reading. The mains loop's 30 s retry-forever is wrong here.
 
 ---

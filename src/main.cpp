@@ -8,6 +8,10 @@
 // sensors, so its document holds the client object and nothing else. A
 // failed fetch leaves the last image on the panel and backs off before the
 // next try.
+//
+// Two things replace the page with a notice the firmware draws itself: a
+// server whose version this display cannot work with, and a server that has
+// not answered three fetches in a row.
 #include <Arduino.h>
 #include <WiFi.h>
 #include <ezTime.h>
@@ -26,6 +30,10 @@
 #include "user_agent.h"
 #include "version.h"
 
+#include "version_compat.h"
+
+#include "head/AfterFetch.h"
+#include "head/Notice.h"
 #include "net/Backlog.h"        // postResult: what an HTTP status means for the sender
 #include "net/ClientStatus.h"
 #include "net/RefreshTimer.h"
@@ -55,6 +63,13 @@ static int      trialFailures = 0;
 
 // Three failures in a row is enough to call a new image broken.
 static const int kTrialFailureLimit = 3;
+
+// Fetches the server has not answered, in a row. The back-off makes three of
+// them about 26 minutes, long enough that a blip never replaces the page.
+static const int kUnreachableAfter = 3;
+static int      unanswered = 0;
+// When the last page arrived, in RFC 3339, for the unreachable notice.
+static char     lastPageAt[32] = "";
 static char     readingsURL[300];    // the server's /readings; empty disables posting
 static uint32_t lastReportMs = 0;
 static uint32_t fetchOk = 0;
@@ -95,6 +110,57 @@ static void failedFetch(const char* why) {
     abandonTrialAfterRepeatedFailures(why);
 }
 
+// The fetch afterFetch() is working on. Its steps are plain functions, so
+// they find the page here.
+static PageFetch*  fetched = nullptr;
+static const char* drawError = nullptr;
+
+// The image is freed as soon as it is drawn, or skipped, so the memory is
+// there for an update's download.
+static void releaseImage() {
+    free(fetched->data);
+    fetched->data = nullptr;
+}
+
+static bool drawFetchedPage() {
+    // Nothing over the page: this board has no battery to report.
+    const bool drawn = drawPage(*fetched, nullptr, 0, nullptr, &drawError);
+    releaseImage();
+    if (drawn) noticeReplaced();
+    return drawn;
+}
+
+static bool drawVersionNotice() {
+    releaseImage();
+    return showVersionNotice(CLIENT_VERSION, fetched->response.serverVersion);
+}
+
+static void fetchSucceeded() {
+    ++fetchOk;
+    trialFailures = 0;
+    unanswered = 0;
+    refresh.succeeded(millis(), fetched->response.nextRefreshSeconds);
+    logf(LOG_INFO, "next refresh in %u s",
+         fetched->response.nextRefreshSeconds ? fetched->response.nextRefreshSeconds
+                                              : config.defaultRefreshSeconds);
+    if (timeStatus() != timeNotSet) strlcpy(lastPageAt, nowTzFmt().c_str(), sizeof(lastPageAt));
+
+    // Something is on the panel, so a freshly written image has proved itself.
+    // Confirming it also frees the idle slot for the next update.
+    if (onTrial) {
+        otaConfirm();
+        onTrial = false;
+    }
+}
+
+static void takeOffer() {
+    // Mains power, so no battery to wait for.
+    takeOfferedUpdate(fetched->response, clientUserAgent(epdBoard().deviceName()), 100, 0);
+}
+
+static const AfterFetchSteps kAfterFetch = {drawFetchedPage, drawVersionNotice,
+                                            fetchSucceeded, takeOffer};
+
 static void fetchAndDraw() {
     if (WiFi.status() != WL_CONNECTED) {
         log(LOG_WARNING, "wifi down; reconnecting");
@@ -109,36 +175,27 @@ static void fetchAndDraw() {
     const char* url = nextURL[0] ? nextURL : config.serverURL;
 
     if (!fetchPage(url, clientUserAgent(epdBoard().deviceName()), 0, &page, &errMsg)) {
+        if (++unanswered >= kUnreachableAfter) showUnreachableNotice(lastPageAt);
         failedFetch(errMsg);
         return;
     }
     if (page.response.nextURL[0])
         snprintf(nextURL, sizeof(nextURL), "%s", page.response.nextURL);
 
-    // Nothing over the page: this board has no battery to report.
-    bool drawn = drawPage(page, nullptr, 0, nullptr, &errMsg);
-    free(page.data);
-    if (!drawn) {
-        failedFetch(errMsg);
-        return;
-    }
+    // A server whose version cannot be read is not judged: that is every
+    // development build.
+    const bool compatible =
+        versionsMatch(CLIENT_VERSION, page.response.serverVersion) != VERSIONS_DIFFER;
+    if (!compatible)
+        logf(LOG_WARNING, "server runs %s; this display runs %s", page.response.serverVersion,
+             CLIENT_VERSION);
 
-    ++fetchOk;
-    trialFailures = 0;
-    refresh.succeeded(millis(), page.response.nextRefreshSeconds);
-    logf(LOG_INFO, "next refresh in %u s",
-         page.response.nextRefreshSeconds ? page.response.nextRefreshSeconds
-                                          : config.defaultRefreshSeconds);
-
-    // A page is on the panel, so a freshly written image has proved itself.
-    // Confirming it also frees the idle slot for the next update.
-    if (onTrial) {
-        otaConfirm();
-        onTrial = false;
-    }
-
-    // Mains power, so no battery to wait for.
-    takeOfferedUpdate(page.response, clientUserAgent(epdBoard().deviceName()), 100, 0);
+    fetched = &page;
+    drawError = nullptr;
+    const bool drawn = afterFetch(compatible, kAfterFetch);
+    free(page.data);   // null unless the draw never ran
+    fetched = nullptr;
+    if (!drawn) failedFetch(drawError);
 }
 
 static ClientStatus clientStatus(uint32_t nowMs) {

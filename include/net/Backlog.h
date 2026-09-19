@@ -108,7 +108,8 @@ private:
 
 // What an HTTP status says about the document a POST carried: taken, never
 // to be taken, or worth sending again. A status below 100 is the client's
-// own error, no answer at all.
+// own error, no answer at all. 409, a version mismatch, is worth sending
+// again: the document is sound and only the pairing is wrong.
 enum PostResult : uint8_t { POSTED, REFUSED, TRY_LATER };
 PostResult postResult(int httpStatus);
 
