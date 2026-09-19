@@ -34,12 +34,24 @@ a tweak to it; it is a different program, and each board has its own.
 The dock, `src/dock/main.cpp`, is the one the sensors need:
 
 ```
-setup:  wifi; ntp; I2C; BSEC; sensors.begin()
+setup:  80 MHz; wifi; ntp; I2C; BSEC; sensors.begin()
 loop:   every 5 s     sensors.sample()     (SCD41 periodic, BME688 via BSEC, PMSA003I frames, SHTC3)
         every 60 s    POST /readings       one JSON document, with the dock's own status beside it;
                                            a refused document waits in PSRAM for the next one the server takes
+        continuous    the PM fan and the status LED
 BSEC:   a FreeRTOS task of its own; its state goes to NVS when accuracy first reaches 3 and every six hours after
+LED:    a FreeRTOS task of its own, so the starting pattern runs while setup() blocks
 ```
+
+The dock runs at 80 MHz rather than 240. Wi-Fi needs 80, and below it the
+APB clock follows the processor, which would move the LED's PWM frequency
+and the serial baud rate. So 80 is both the floor and the choice.
+
+The PM module's fan runs for the 35 seconds before each post and stops after
+it, which is 58% of the time. It is the dock's largest load, about 200 mA of
+the sensors' 215, and the window covers the module's 30 second warm-up and
+the sample that follows. `SensorSuite` counts no missed frame while the fan
+is off, so stopping it does not make the module look dead.
 
 The head, `src/main.cpp`, stays awake only because it is mains powered and
 has no reason to sleep:
@@ -100,6 +112,23 @@ Three things forced it, all in [HARDWARE.md §7–§8](HARDWARE.md#7-power):
 Nothing else leaves the head: its only connections are the two wires soldered to its power pads, which meet the
 dock at the pogo connector.
 
+### 3.5 One LED says whether the dock is well
+
+The dock drives a yellow LED on IO6, behind a clear tile in the shell's front face. It shows one of three states:
+
+| What the LED does | What it means |
+|---|---|
+| Pulsing at 120 a minute | Starting: `setup()` is connecting, or starting the sensors. |
+| Pulsing at 60 a minute | Working: it is reading, and the server is taking its posts. |
+| Three flashes, then five seconds steady | No network, a post the server would not take, or a sensor has stopped. |
+
+The slow pulse is the heartbeat: a dock that has died goes dark, which a steady working state would hide. A pulse
+is sixteen equal steps of light, spaced in time along a sine.
+
+`StatusLed` turns the time into an LEDC duty and holds no hardware, so the pattern is tested on the host.
+Brightness is perceived brightness, mapped through gamma 2.2 onto a 14-bit channel at 1 kHz. A task of its own
+drives the pin, because `setup()` blocks for as long as the network takes and the starting pulse runs through it.
+
 ## 4. What stays as the kit has it
 
 - The wire contract: `GET /<page>.png` with `X-Next-Refresh-Seconds` and `X-Next-URL`. The awake client honours the header by waiting instead of sleeping.
@@ -125,6 +154,7 @@ include/sensors/  src/sensors/
   SensorValidation                              the bench routine's checks
   mock/                                         EnvModel, LaggedValue and the four mocks
 include/net/  src/net/         Backlog, Calibration, ClientStatus, RefreshTimer, Url
+include/dock/StatusLed.h       what the status LED shows, as a duty cycle (§3.5)
 src/sim/main.cpp               the sensor loop as a host binary
 src/validate/main.cpp          the bench routine
 lib/bme68x/                    Bosch's BME68x API

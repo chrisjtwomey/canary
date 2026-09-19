@@ -5,7 +5,10 @@
 // readings document once a minute to the server's /readings, with its own
 // status beside it. Readings the server will not take wait in PSRAM and go
 // out with the next one it takes. The head fetches the pages the server
-// renders from them and knows nothing about any of this.
+// renders from them and knows nothing about any of this. The status LED
+// under the head's right end pulses slowly while the dock works, and gives
+// three flashes and a steady glow while anything is wrong. The PM module's
+// fan, the dock's largest load, runs only for the window before each post.
 #include <Arduino.h>
 #include <WiFi.h>
 #include <Wire.h>
@@ -18,6 +21,8 @@
 #include "user_agent.h"
 #include "version.h"
 
+#include "dock/FanWindow.h"
+#include "dock/StatusLed.h"
 #include "net/Backlog.h"
 #include "net/Calibration.h"
 #include "net/ClientStatus.h"
@@ -30,11 +35,13 @@
 // The settings this image was built with, from src/defaults.cpp.
 ClientConfig builtInSettings();
 
-// hardware/README.md, "Wires at the TinyS3": the bus on J4 pins 5 and 6, the
-// PM module's SET line on pin 7, the status LED on pin 8.
+// hardware/README.md, "Wires at the TinyS3", which names the same lines by
+// their header pin: SCL on J4.5, SDA on J4.6, SET on J4.7, the LED on J4.8.
 static const uint8_t kSdaPin = 8;
 static const uint8_t kSclPin = 9;
 static const uint8_t kPmSetPin = 7;
+// Through a 1 kOhm resistor to the LED's anode, so a duty of 0 is dark.
+static const uint8_t kLedPin = 6;
 
 static ArduinoClock wallClock;
 
@@ -242,7 +249,66 @@ static const bool kMockSensors = false;
 static const uint32_t kSampleIntervalMs = 5000;
 static const uint32_t kReportIntervalMs = 60000;
 
+// Wi-Fi needs 80 MHz, and below it the APB clock follows the processor,
+// which would move the LED's PWM frequency and the serial baud rate. So 80
+// is both the floor and the choice: the bench board ran warm at 240.
+static const uint32_t kCpuMhz = 80;
+
+// The fan settles in 30 s (Pmsa003iDriver::kWarmupMs), and the post carries
+// the sample taken at the end of the window, so the window is the warm-up
+// plus one sample interval.
+static const uint32_t kFanWarmupMs = 30000;
+static FanWindow fanWindow(kReportIntervalMs, kFanWarmupMs + kSampleIntervalMs);
+static bool fanRunning = true;    // the module's own pull-up holds it on until told otherwise
+
 static SensorSuite sensors(wallClock, shtc3Impl, scd41Impl, pmImpl, bmeImpl);
+
+// One of the ESP32-S3's eight LEDC channels. Nothing else on this board uses
+// one, so the first will do.
+static const uint8_t kLedChannel = 0;
+static StatusLed statusLed;
+
+// Set once setup() has connected and started the sensors.
+static volatile bool running = false;
+// Set by a post the server would not take, and by having nowhere to post.
+static volatile bool postFailed = false;
+
+// Trouble is anything that stops a reading reaching the server.
+static StatusLed::State ledState() {
+    if (!running) return StatusLed::STARTING;
+    const bool well = WiFi.status() == WL_CONNECTED && !postFailed &&
+                      sensors.shtc3Present() && sensors.scd41Present() &&
+                      sensors.pmPresent() && sensors.bme688Present();
+    return well ? StatusLed::WELL : StatusLed::TROUBLE;
+}
+
+// The fast pulse's shortest step lasts about 11 ms, so a 5 ms tick keeps
+// every step of every pattern.
+static const uint32_t kLedTickMs = 5;
+static const uint32_t kLedStackBytes = 2048;
+
+// A task of its own, because setup() blocks for as long as the network takes
+// and the starting pattern has to run through it.
+static void ledTask(void*) {
+    uint16_t written = 0xFFFF;
+    for (;;) {
+        const uint32_t nowMs = millis();
+        statusLed.state(ledState(), nowMs);
+        const uint16_t duty = statusLed.dutyAt(nowMs);
+        if (duty != written) {
+            written = duty;
+            ledcWrite(kLedChannel, duty);
+        }
+        vTaskDelay(pdMS_TO_TICKS(kLedTickMs));
+    }
+}
+
+static void startLed() {
+    ledcSetup(kLedChannel, StatusLed::kFrequencyHz, StatusLed::kResolutionBits);
+    ledcAttachPin(kLedPin, kLedChannel);
+    // Core 0: the loop and the BSEC task both run on core 1.
+    xTaskCreatePinnedToCore(ledTask, "led", kLedStackBytes, nullptr, 1, nullptr, 0);
+}
 
 static ClientConfig config;
 static char     readingsURL[300];    // the server's /readings; empty disables posting
@@ -341,11 +407,15 @@ static void postReadings(const Readings& r, uint32_t nowMs) {
         return;
     }
     log(LOG_DEBUG, body);
-    if (!readingsURL[0]) return;
+    if (!readingsURL[0]) {
+        postFailed = true;      // nowhere to post is a fault, not a quiet success
+        return;
+    }
     int code = postJson(readingsURL, clientUserAgent(CLIENT_NAME), body);
     switch (postResult(code)) {
         case POSTED:
             logf(LOG_INFO, "posted readings (%d)", code);
+            postFailed = false;
             if (backlog && backlog->count()) {
                 uint32_t sent = drainBacklog(*backlog, readingsPoster, kBacklogPerPass, heldJson,
                                              sizeof(heldJson));
@@ -355,11 +425,13 @@ static void postReadings(const Readings& r, uint32_t nowMs) {
             restoreFromServer();
             break;
         case REFUSED:
+            postFailed = true;
             logf(LOG_ERROR, "the server refused the readings (%d)", code);
             break;
         case TRY_LATER:
             // The held copy leaves out the client object: the dock's state
             // then is not news when it finally arrives.
+            postFailed = true;
             if (backlog) backlog->push(json, strlen(json));
             logf(LOG_ERROR, "posting readings failed (%d); %u held", code,
                  (unsigned)(backlog ? backlog->count() : 0));
@@ -382,6 +454,16 @@ static void logSensorChanges() {
     }
 }
 
+// The suite counts no missed frame while the fan is off, so stopping it does
+// not make the module look dead.
+static void driveFan(uint32_t nowMs) {
+    const bool wanted = fanWindow.shouldRun(nowMs - lastReportMs);
+    if (wanted == fanRunning) return;
+    fanRunning = wanted;
+    sensors.setFanEnabled(wanted);
+    logf(LOG_INFO, "PM fan %s", wanted ? "on" : "off");
+}
+
 static void sampleSensors(uint32_t nowMs) {
     uint32_t epoch = epochNow();
     advanceSimulation(epoch);
@@ -399,7 +481,13 @@ void setup() {
     delay(200);
     logf(LOG_NOTICE, "##### %s boot #####", CLIENT_NAME);
     logf(LOG_NOTICE, "Client version: %s", CLIENT_VERSION);
+    if (setCpuFrequencyMhz(kCpuMhz)) {
+        logf(LOG_INFO, "processor at %u MHz", (unsigned)kCpuMhz);
+    } else {
+        logf(LOG_WARNING, "processor stays at %u MHz", (unsigned)getCpuFrequencyMhz());
+    }
 
+    startLed();
     config = loadConfig(builtInSettings());
     connectNetworkForever();
     configureTime(config.ntpHost, config.ntpTimezone);
@@ -429,6 +517,8 @@ void setup() {
     }
     logSensorChanges();
     logSensorBanner();
+    logf(LOG_INFO, "PM fan runs %u%% of each report period", (unsigned)fanWindow.dutyPercent());
+    running = true;
 }
 
 void loop() {
@@ -437,6 +527,7 @@ void loop() {
     uint32_t nowMs = millis();
     if (!bootEpoch && timeStatus() != timeNotSet) bootEpoch = (uint32_t)now() - nowMs / 1000;
 
+    driveFan(nowMs);
     if (nowMs - lastSampleMs >= kSampleIntervalMs) {
         lastSampleMs = nowMs;
         sampleSensors(nowMs);
