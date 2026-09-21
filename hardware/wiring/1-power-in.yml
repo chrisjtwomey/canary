@@ -1,0 +1,44 @@
+# 5 V in at the dock's USB-C socket, out to the two boards.
+connectors:
+  USBC:
+    type: USB-C breakout
+    subtype: dock rear wall
+    pinlabels: [V, G]
+  SPL_V:
+    style: simple
+    type: VBUS splice
+    pinlabels: [VBUS]
+  SPL_G:
+    style: simple
+    type: GND splice
+    pinlabels: [GND]
+  TINYS3:
+    type: TinyS3
+    subtype: the BAT-GND-5V-3V3 row
+    pins: [5V, GND]
+  AMS1117:
+    type: AMS1117-3.3
+    pinlabels: [IN, GND, OUT]
+cables:
+  W_IN:
+    gauge: 28 AWG
+    wirecount: 2
+    colors: [RD, BK]
+  W_S3:
+    gauge: 28 AWG
+    wirecount: 2
+    colors: [RD, BK]
+  W_REG:
+    gauge: 28 AWG
+    wirecount: 2
+    colors: [RD, BK]
+connections:
+  - - USBC: [V, G]
+    - W_IN: [1, 2]
+    - [SPL_V, SPL_G]
+  - - [SPL_V, SPL_G]
+    - W_S3: [1, 2]
+    - TINYS3: [5V, GND]
+  - - [SPL_V, SPL_G]
+    - W_REG: [1, 2]
+    - AMS1117: [IN, GND]

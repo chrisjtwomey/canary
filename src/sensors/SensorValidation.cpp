@@ -22,7 +22,7 @@ const char* SensorValidation::outcomeName(Outcome o) {
 }
 
 // ---------------------------------------------------------------------------
-// Ranges (docs/HARDWARE.md 2-5)
+// Ranges (hardware/bom.md, per sensor)
 // ---------------------------------------------------------------------------
 
 SensorValidation::Outcome SensorValidation::check(const Shtc3Data& d) {

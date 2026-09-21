@@ -1,0 +1,48 @@
+# The rest of the chain, on stock Qwiic cables.
+connectors:
+  PM:
+    type: PMSA003I
+    subtype: socket B
+    show_pincount: false
+    pinlabels: [GND, "3V3", SDA, SCL]
+  SCD41:
+    type: SCD41
+    show_pincount: false
+    pinlabels: [GND, "3V3", SDA, SCL]
+  BME688:
+    type: BME688
+    show_pincount: false
+    pinlabels: [GND, "3V3", SDA, SCL]
+  SHTC3:
+    type: SHTC3
+    show_pincount: false
+    pinlabels: [GND, "3V3", SDA, SCL]
+cables:
+  Q2:
+    category: bundle
+    gauge: 28 AWG
+    wirecount: 4
+    colors: [BK, RD, BU, YE]
+    show_wirecount: false
+  Q3:
+    category: bundle
+    gauge: 28 AWG
+    wirecount: 4
+    colors: [BK, RD, BU, YE]
+    show_wirecount: false
+  Q4:
+    category: bundle
+    gauge: 28 AWG
+    wirecount: 4
+    colors: [BK, RD, BU, YE]
+    show_wirecount: false
+connections:
+  - - PM: [1-4]
+    - Q2: [1-4]
+    - SCD41: [1-4]
+  - - SCD41: [1-4]
+    - Q3: [1-4]
+    - BME688: [1-4]
+  - - BME688: [1-4]
+    - Q4: [1-4]
+    - SHTC3: [1-4]

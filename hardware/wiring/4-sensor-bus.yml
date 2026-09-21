@@ -1,0 +1,38 @@
+# The TinyS3 and the regulator to the first sensor board.
+connectors:
+  AMS1117:
+    type: AMS1117-3.3
+    pinlabels: [OUT]
+  TINYS3:
+    type: TinyS3
+    subtype: the 9-8-7-6 row
+    pins:      [9, 8, GND, 7]
+    pinlabels: [SCL, SDA, GND, SET]
+  PM:
+    type: PMSA003I
+    subtype: 7-pin header
+    pins:      [1,   2,     3,   4,   5,   6,     7]
+    pinlabels: [VIN, "3Vo", GND, SCL, SDA, "RST", SET]
+cables:
+  W_33:
+    gauge: 28 AWG
+    wirecount: 1
+    colors: [RD]
+  W_BUS:
+    gauge: 28 AWG
+    wirecount: 3
+    colors: [BK, BU, YE]
+  W_SET:
+    gauge: 28 AWG
+    wirecount: 1
+    colors: [GN]
+connections:
+  - - AMS1117: [OUT]
+    - W_33: [1]
+    - PM: [1]
+  - - TINYS3: [GND, 8, 9]
+    - W_BUS: [1-3]
+    - PM: [3, 5, 4]
+  - - TINYS3: [7]
+    - W_SET: [1]
+    - PM: [7]

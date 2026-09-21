@@ -18,16 +18,18 @@ and on a board with nothing attached.
 | Display / controller | Soldered Inkplate 5 Gen2 (ESP32-WROVER-E) |
 
 All four sensors hang off one I²C bus over Qwiic/easyC, and the device runs
-from USB-C; [docs/HARDWARE.md](docs/HARDWARE.md) §7 has the power budget.
+from USB-C; [hardware/bom.md](hardware/bom.md) has the power budget.
 
 ## Documentation
 
 | | |
 |---|---|
-| [docs/HARDWARE.md](docs/HARDWARE.md) | Every datasheet distilled: wiring, commands, timing, currents, gotchas. The reference to reach for instead of searching. |
+| [hardware/](hardware/README.md) | The two boards and the desk enclosure they sit in, and where the rest of the hardware docs are. |
+| [hardware/bom.md](hardware/bom.md) | What to buy, what each part does, what else would do, and roughly what it costs. |
+| [hardware/assembly.md](hardware/assembly.md) | How to build one, in order, with a picture at each step. |
+| [hardware/enclosure.md](hardware/enclosure.md) | The printed parts: shape, fit, fasteners and the rules the Fusion model follows. |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How this departs from the weather calendar's model, and how it builds on [epd](https://github.com/chrisjtwomey/epd). |
 | [docs/READINGS.md](docs/READINGS.md) | The JSON the firmware posts. |
-| [hardware/](hardware/README.md) | The printed desk enclosure (display head + sensor dock): Fusion generator, STL, STEP and 3MF, sensor layout, fasteners, wiring and 3D model sources. |
 
 ## Build and test
 

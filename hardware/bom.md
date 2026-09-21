@@ -1,49 +1,61 @@
-# Hardware reference — CANARY
+# Bill of materials
 
-Working shorthand for development, distilled from the datasheets. Every
-section links its sources. Facts are from the datasheet unless marked
-*(product page)*, *(schematic)*, *(derived)*, *(measured)*, *(bench)* or
-*(unverified)*. Dates, and the history behind the text, are in the
-[Decision Log](#decision-log).
+Everything one CANARY needs, what each part is for, and what else would do instead. The prices are what the
+makers asked in September 2026, before tax and delivery, and they are here for planning rather than for
+ordering: a device costs roughly €220 in parts, and two thirds of that is the panel and the two Adafruit
+sensors.
 
-- [0. At a glance](#0-at-a-glance)
-- [1. Inkplate 5 Gen2](#1-inkplate-5-gen2)
-- [2. SCD41 — CO₂](#2-scd41--co)
-- [3. PMSA003I — particulates](#3-pmsa003i--particulates)
-- [4. BME688 — VOC / gas, pressure](#4-bme688--voc--gas-pressure)
-- [5. SHTC3 — temperature and humidity](#5-shtc3--temperature-and-humidity)
-- [6. The I²C bus](#6-the-ic-bus)
-- [7. Power](#7-power)
-- [8. Wiring](#8-wiring)
-- [9. The enclosure](#9-the-enclosure)
-- [10. Open questions](#10-open-questions)
-- [Decision Log](#decision-log)
+The printed parts, the fasteners and the fit are in [enclosure.md](enclosure.md); building it is
+[assembly.md](assembly.md).
 
----
+## What to buy
 
-## 0. At a glance
+| Part | Qty | Where | Rough cost |
+|---|---|---|---|
+| Soldered Inkplate 5 Gen2 (333333) | 1 | [soldered.com](https://soldered.com/products/inkplate-5-gen2) | €75 |
+| Unexpected Maker TinyS3 (ESP32-S3, 8 MB PSRAM) | 1 | [unexpectedmaker.com](https://unexpectedmaker.com/shop.html), Adafruit 5398, Pimoroni | €20–35 |
+| Adafruit PMSA003I (4632) | 1 | [adafruit.com](https://www.adafruit.com/product/4632) | $45 |
+| Adafruit SCD-41 (5190) | 1 | [adafruit.com](https://www.adafruit.com/product/5190) | $50 |
+| Soldered BME688 (333203) | 1 | [soldered.com](https://soldered.com/products/bme688-environmental-sensor) | €21 |
+| Soldered SHTC3 (333032) | 1 | [soldered.com](https://soldered.com/products/temperature-and-humidity-sensor-shtc3-breakout) | €6 |
+| AMS1117-3.3 module | 1 | any marketplace, sold in tens | under €1 each |
+| USB-C female breakout, 24-pin, 15 × 14.5 mm | 1 | any marketplace, sold in fives or tens | about €1 each |
+| 8-pin magnetic pogo pair, 2.3 mm pitch, panel mount | 1 | any marketplace | €3–6 |
+| Qwiic / easyC cable: 45 mm, 30 mm, 40–45 mm, plus one to cut up | 4 | Soldered, Adafruit, SparkFun | €1–2 each |
+| Single-row female header strip, 20-way, standard height | 2 | any marketplace | pennies |
+| Dupont housing, 1-pin, with crimp contact | 8 | any marketplace, sold in kits | pennies |
+| 3 mm diffused yellow LED | 1 | any marketplace | pennies |
+| Resistor, ¼ W: 1 kΩ ×1, 5.1 kΩ ×2 | 3 | any marketplace | pennies |
+| LEGO 1×1 round tile, clear (35380 / 98138) | 1 | BrickLink, or a spare brick | pennies |
+| 28 AWG stranded wire, heat-shrink, glue | — | — | — |
+| 5 V USB power supply, 2 A, and its cable | 1 | any | €10 |
+| Fasteners and heat-set inserts | — | see [enclosure.md](enclosure.md#fasteners) | — |
+| Filament: PLA+, and a little white for the logo | — | — | — |
 
-| Device | Board | I²C addr | Supply | Current, typical | Current, peak | Library |
-|---|---|---|---|---|---|---|
-| Inkplate 5 Gen2 | Soldered | head; 0x20 0x48 0x51 on its own bus | 5 V through the pogo connector | 18 µA deep sleep *(product page)* | not published | Inkplate-Arduino-library ≥ 11.1 |
-| TinyS3 | Unexpected Maker | the sensors' host | 5 V on its 5V pin | ~100 mA awake *(typical ESP32-S3 figure)* | ~350 mA TX bursts | Arduino-ESP32 |
-| SCD41 CO₂ | Adafruit 5190 | 0x62 | 2.4–5.5 V | 15 mA @ 5 s periodic; 0.45 mA single-shot every 5 min | **175 mA typ, 205 mA max** (3.3 V) | Sensirion I2C SCD4x |
-| PMSA003I PM | Adafruit 4632 | 0x12 | 5 V module; board makes its own 5 V from 3–5 V | ≤ 100 mA @ 5 V → **~200 mA from 3.3 V** *(derived)* | 250 mA / 100 ms fan start *(charge pump rating)* | Adafruit PM25AQI |
-| BME688 gas | Soldered 333203 | 0x76 (JP1 → 0x77) | 1.7–3.6 V (board takes 3.3–5 V) | 0.9 mA (BSEC LP), 0.09 mA (ULP) | 17 mA heater | Bosch BME68x + BSEC2 |
-| SHTC3 T/RH | Soldered 333032 | 0x70 fixed | 1.62–3.6 V (board takes 3.3–5 V) | 430 µA measuring, 0.3 µA sleep | 0.9 mA | Adafruit_SHTC3 |
+**The 5.1 kΩ resistors are only for a USB-C to USB-C cable or a USB-C charger.** They tell the source to turn
+its 5 V on. A USB-A to USB-C cable needs neither: its plug carries the resistor, and a USB-A port always
+supplies 5 V. Use a 2 A supply: a computer's USB-A port gives 0.5–0.9 A and the dock peaks near 1.3 A.
 
-**Bus:** no address conflicts. The four sensor boards' 10 kΩ pull-ups in parallel
-are 2.5 kΩ, within spec at 100 kHz. All four connector systems (easyC, Qwiic,
-STEMMA QT) are the same JST-SH 4-pin in the same order.
+**What the enclosure fixes.** The printed parts are modelled around these exact boards, the pogo pair's outline
+and the USB-C module's ears, so those five are not free choices: another board of the same job needs its pocket,
+its bosses or its opening changed in `enclosure.py`. Everything else — wire, headers, resistors, the LED, the
+supply — is ordinary stock.
 
-**Power:** the sensors run from an AMS1117-3.3 module on the dock's 5 V rail,
-and each processor board's own regulator carries only that board. Sensor peaks
-alone reach ~470 mA, against 500 mA for the Inkplate's regulator and a 1 × 1 mm
-package for the TinyS3's. Details in §7.
+## Alternatives
 
----
+| Part | What else would do |
+|---|---|
+| Inkplate 5 Gen2 | No drop-in. Any panel changes the head tray, the window and the frames. The firmware needs an `IBoard` for it. |
+| TinyS3 | Any ESP32-S3 board with PSRAM and USB-C. The ProS3 was considered and rejected: its second regulator would have put the SCD41 back on the processor's rail. A different board changes the cradle and the pin table. |
+| SCD41 | Any Sensirion SCD4x breakout, or the SCD40 for a cheaper part with wider tolerance. Soldered sell an SCD43 rather than an SCD41: the chip is a drop-in and more accurate, but their board's holes and sockets are in different places, so the chassis would have to change. |
+| PMSA003I | The Plantower PMS5003 is the same sensor with a UART instead of the breakout's I²C, so it needs a serial port and a driver of its own. The Sensirion SPS30 is the higher-grade alternative. |
+| BME688 | Adafruit 5046 is the same sensor on a STEMMA QT board. A BME680 fits the sockets and answers the same chip ID, but BSEC's gas index differs, so check the variant byte. |
+| SHTC3 | Adafruit 4636, or any SHT4x breakout: a better part, with a driver of its own to write. |
+| AMS1117-3.3 module | Any 3.3 V regulator that takes 5 V in and carries 500 mA. An LDO wastes about 0.37 W as heat here; a small buck module would not, and would need its own pocket. |
+| Magnetic pogo pair | Any 8-pin pair of the same outline and pitch. The tray, the plinth and the key shape are modelled to this one. |
+| LEGO tile | Any clear 8 mm disc, or a drop of clear resin, sanded on the front. |
 
-## 1. Inkplate 5 Gen2
+## Inkplate 5 Gen2 — the head
 
 Sources: [product page](https://soldered.com/products/inkplate-5-gen2) ·
 [docs](https://docs.soldered.com/inkplate/5v2/overview/) ·
@@ -123,7 +135,20 @@ No conflict with 0x12, 0x62, 0x70, 0x76/0x77.
 
 ---
 
-## 2. SCD41 — CO₂
+## TinyS3 — the dock
+
+[Unexpected Maker's board](https://unexpectedmaker.com/tinys3): an ESP32-S3 with 8 MB of flash and 8 MB of
+PSRAM, USB-C, and two 12-way header rows. It hosts the four sensors, keeps the reading queue in its PSRAM and
+posts to the server.
+
+- **Supply**: 5 V on its 5V pin, from the dock's USB-C socket. About 100 mA awake, with bursts near 350 mA when
+  the radio transmits *(typical ESP32-S3 figures)*.
+- **Pins used**, by the labels printed on the board: **9** SCL, **8** SDA, **7** the PM fan's SET line,
+  **6** the status LED, both **GND** pins, and **5V** the 5 V in. Nothing else is wired.
+- **Headers**: soldered long pins down, so the board drops into the female strips in its cradle and lifts out
+  again for flashing.
+
+## SCD41 — CO₂
 
 Sources: [SCD4x datasheet v1.7](https://sensirion.com/media/documents/48C4B7FB/67FE0194/CD_DS_SCD4x_Datasheet_D1.pdf) ·
 [low-power app note](https://sensirion.com/media/documents/077BC86F/62BF01B9/CD_AN_SCD4x_Low_Power_Operation_D1.pdf) ·
@@ -194,7 +219,7 @@ Run **periodic measurement (5 s)**, or low-power periodic (30 s) if 15 mA averag
 
 ---
 
-## 3. PMSA003I — particulates
+## PMSA003I — particulates
 
 Sources: [Plantower PMSA003I manual V2.6](https://cdn-shop.adafruit.com/product-files/4632/4505_PMSA003I_series_data_manual_English_V2.6.pdf) ·
 [Adafruit 4632](https://www.adafruit.com/product/4632) · [learn guide](https://learn.adafruit.com/pmsa003i) ·
@@ -242,7 +267,7 @@ The sensor updates its registers itself; the host polls. **No I²C commands** fo
 
 ### Operating mode for this device (mains)
 
-The fan runs for the 35 s before each reading and stops after it: Plantower's 30 s warm-up and a margin. Each reading records how long the fan had run (`pm_warmup_s`), so the stored readings can show whether that is enough given the field reports above. SET is optional: the breakout's 100 k pull-up holds it high, so with no wire the fan runs from power-on and all the time. Wired to the TinyS3's J4 pin 7 (§8), it lets the firmware stop and start the fan.
+The fan runs for the 35 s before each reading and stops after it: Plantower's 30 s warm-up and a margin. Each reading records how long the fan had run (`pm_warmup_s`), so the stored readings can show whether that is enough given the field reports above. SET is optional: the breakout's 100 k pull-up holds it high, so with no wire the fan runs from power-on and all the time. Wired to the TinyS3's pin 7 ([assembly.md](assembly.md)), it lets the firmware stop and start the fan.
 
 ### Gotchas
 
@@ -263,7 +288,7 @@ The fan runs for the 35 s before each reading and stops after it: Plantower's 30
 
 ---
 
-## 4. BME688 — VOC / gas, pressure
+## BME688 — VOC, gas and pressure
 
 Sources: [Bosch datasheet rev 1.3](https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bme688-ds000.pdf) ·
 [BSEC software](https://www.bosch-sensortec.com/software-tools/software/bme688-and-bme690-software/) ·
@@ -314,7 +339,7 @@ Bosch `BME68x Sensor library` (`setTPH(2x,16x,1x)`, `setHeaterProf(300,100)`, `s
 
 ---
 
-## 5. SHTC3 — temperature and humidity
+## SHTC3 — temperature and humidity
 
 Sources: [SHTC3 datasheet v4](https://sensirion.com/media/documents/643F9C8E/63A5A436/Datasheet_SHTC3.pdf) ·
 [low-power app note](https://sensirion.com/media/documents/00887EF5/6164030A/Sensirion_AppNotes_Humidity_Sensors_SHTC3_Low_Power_Measurement_Mode.pdf) ·
@@ -364,7 +389,72 @@ Sequence from sleep: wakeup → ≥ 240 µs → measure → ≥ 12.1 ms (0.8 ms 
 
 ---
 
-## 6. The I²C bus
+## The small parts
+
+**AMS1117-3.3 module.** The sensors' 3.3 V comes from here, not from the TinyS3's own regulator: see the
+decision log in [CLAUDE.md](../CLAUDE.md). It is an LDO, so it drops 1.7 V and turns about 0.37 W into heat at
+215 mA; [enclosure.md](enclosure.md#ventilation) has the air passage under it. Buy the plain 3-pin module, no
+mounting holes: 12.5 × 8.5 mm, which is what its pocket is drawn to. Its pins read **GND, OUT, VIN** along the
+header. The middle one is OUT on every one of these boards, so it is what tells the two ends apart. **5 V on the
+GND pin destroys the part in seconds**, and there is no protection against it, so read the silkscreen on the
+board in your hand rather than trusting a drawing.
+
+**USB-C female breakout, 24-pin.** The dock's only power input, and its only opening in the rear wall. It is a
+mid-mount receptacle in a notch between two ears, and its pads are a row along the front edge on each face: ten
+on top, nine underneath. Only two pads are used, V and the wide end pad, taken as ground —
+[assembly.md](assembly.md) says to check that with a meter.
+
+**8-pin magnetic pogo pair.** The head-to-dock junction. Four contacts carry power and four stay empty; the pins
+are 0.5 mm, about 1 A each *(measured)*. The magnets hold the head down, and the contact block's own outline
+keys it, so a head turned end for end will not close.
+
+**Status LED and its window.** A 3 mm diffused yellow LED through a 1 kΩ resistor, behind a clear LEGO 1×1 round
+tile pressed into the shell's front face.
+
+**Headers, housings and wire.** Two 20-way female strips, cut to 12 and 11 ways, hold the TinyS3 in its cradle.
+Eight 1-pin Dupont housings land on the PM board's 7-pin header and the AMS1117's pins. Everything else is 28 AWG
+stranded wire, twisted and soldered into two splices under heat-shrink.
+
+## Power and the bus
+
+### Budget on the sensors' 3.3 V rail
+
+| Load | Typical | Peak |
+|---|---|---|
+| PMSA003I via its charge pump, fan running | ~200 mA *(derived)* | 250 mA / 100 ms |
+| SCD41, periodic 5 s | 15 mA | **175–205 mA** during each measurement |
+| BME688, BSEC LP | 0.9 mA | 17 mA |
+| SHTC3 | 0.4 mA | 0.9 mA |
+| **Total** | **~215 mA** | **~470 mA** |
+
+The dock is fed 5 V over USB-C. The TinyS3 takes it on its 5V pin, the AMS1117 turns it into the sensors'
+3.3 V, and two pogo contacts carry it up to the head's VIN pads. [assembly.md](assembly.md) has the circuit
+and every joint.
+
+### One ground return
+
+The chain returns through a single conductor, cable 1's GND. At worst the whole chain returns under 300 mA — the
+PM fan about 100 mA, an SCD41 burst about 200 mA — through 28 AWG, which is a few millivolts of shift. That is
+below anything I²C notices. The AMS1117's own GND wire carries only the regulator's few mA, and the head's
+ground crosses the pogo pair on its own two contacts.
+
+### 5 V on the Inkplate's VIN pads
+
+This is Soldered's own answer for this circuit
+([forum thread 1934](https://community.soldered.com/t/externally-powering-the-inkplate-5v2-with-5v/1934)). The
+5 V reaches the charger's output through the source-select transistor; Soldered say that is harmless. The
+board's own USB-C is blocked by the dock's side wall while the head is docked.
+
+### Why the sensors do not hang off the head
+
+Every sensor runs at 3.3 V on an ordinary Qwiic cable, so for bring-up the whole chain can hang off any 3.3 V
+I²C host, the Inkplate's own easyC socket included, with nothing to change on any board. What that arrangement
+cannot do is *run*. The host's rail cannot carry the sensor peaks on top of its own processor and Wi-Fi bursts,
+and the PM board's ~200 mA would cross every upstream board's connectors. The symptom is an intermittent
+brown-out when the fan, an SCD41 measurement peak and a Wi-Fi transmit coincide — the hardest kind of fault to
+find later. That is why the dock has its own regulator.
+
+## The I²C bus
 
 Sources: [NXP UM10204](https://www.nxp.com/docs/en/user-guide/UM10204.pdf) ·
 [SparkFun Qwiic](https://www.sparkfun.com/qwiic) · [Adafruit STEMMA QT](https://learn.adafruit.com/introducing-adafruit-stemma-qt/technical-specs) ·
@@ -372,7 +462,7 @@ Sources: [NXP UM10204](https://www.nxp.com/docs/en/user-guide/UM10204.pdf) ·
 
 ### Connectors
 
-easyC, Qwiic and STEMMA QT are all **JST SH 1.0 mm 4-pin, same order: black GND, red 3V3, blue SDA, yellow SCL**. A stock cable chains a Soldered board to an Adafruit board. Every sensor board here has two connectors in parallel (pass-through); the Inkplate has one. Cable 28 AWG; SparkFun's conservative cable limit **226 mA**, JST contact rating 1 A. The 226 mA is a bundled, long-run derating for 28 AWG — a single short conductor in free air is good to ~1 A, which is also the contact limit. §8's cable 1 carries the whole chain's ground return, up to ~470 mA at peak, on that basis; it is the most heavily loaded Qwiic conductor in the build and the reason the second return (step 9) exists. STEMMA (non-QT, JST PH 2 mm) is a different thing.
+easyC, Qwiic and STEMMA QT are all **JST SH 1.0 mm 4-pin, same order: black GND, red 3V3, blue SDA, yellow SCL**. A stock cable chains a Soldered board to an Adafruit board. Every sensor board here has two connectors in parallel (pass-through); the Inkplate has one. Cable 28 AWG; SparkFun's conservative cable limit **226 mA**, JST contact rating 1 A. The 226 mA is a bundled, long-run derating for 28 AWG — a single short conductor in free air is good to ~1 A, which is also the contact limit. [assembly.md](assembly.md)'s cable 1 carries the whole chain's ground return, up to ~470 mA at peak, on that basis; it is the most heavily loaded Qwiic conductor in the build and the reason the head's ground crosses the pogo pair on its own contacts. STEMMA (non-QT, JST PH 2 mm) is a different thing.
 
 ### Addresses
 
@@ -395,225 +485,3 @@ Parallel total **2.5 kΩ** per line; sink 1.3 mA at 3.3 V. Spec minimum 967 Ω (
 400 pF bus limit; ~40–100 pF per metre of cable *(unverified)* plus ~10 pF per device pin. Four cables of 50–200 mm keep the chain under 0.8 m — fine.
 
 ---
-
-## 7. Power
-
-One 5 V rail enters the dock at its USB-C socket and feeds three loads. A 5 V / 2 A adaptor covers them.
-
-| Load | Typical | Peak | Fed by |
-|---|---|---|---|
-| Head: Inkplate, no sensors | ≤ 170 mA *(measured: 162 mA mean was Inkplate **plus** sensors at 4.2 V)* | 525 mA for 10 ms per refresh; 1.66 A sub-millisecond at power-on *(measured)* | the pogo connector, into the VIN pads |
-| Sensors, through the AMS1117 | ~215 mA | ~470 mA | the regulator's 3.3 V |
-| TinyS3, awake with Wi-Fi | ~100 mA *(typical ESP32-S3 figure, not measured)* | ~350 mA TX bursts | its 5V header pin |
-| **Total** | **~500 mA** | **~1.3 A** | |
-
-### Budget on the sensors' 3.3 V rail
-
-| Load | Typical | Peak |
-|---|---|---|
-| PMSA003I via its charge pump, fan running | ~200 mA *(derived)* | 250 mA / 100 ms |
-| SCD41, periodic 5 s | 15 mA | **175–205 mA** during each measurement |
-| BME688, BSEC LP | 0.9 mA | 17 mA |
-| SHTC3 | 0.4 mA | 0.9 mA |
-| **Total** | **~215 mA** | **~470 mA** |
-
-### Why the sensors have a regulator of their own
-
-The sensors run from an **AMS1117-3.3 module**, 800 mA maximum and about 1.1 V of dropout, fed straight from the
-dock's 5 V. Neither processor board's own regulator carries them:
-
-- **The Inkplate's TPS7A2633 is 500 mA** and must also carry the ESP32 and the panel PMIC. Sensor peaks plus a
-  Wi-Fi burst exceed it, and the SCD41 wants a quiet supply: Sensirion asks for < 30 mV of ripple and recommends
-  a regulator of its own.
-- **The TinyS3's NCP167 is a 1 × 1 mm XDFN4** with 198 °C/W junction-to-air and thermal shutdown at 160 °C
-  *(datasheet)*. On the dock's 5 V it would rise +60 °C at the sensors' typical load and +130 °C at their peak,
-  which is the shutdown threshold. It carries the TinyS3 alone.
-
-SparkFun's guidance for a high-current Qwiic chain is the same: inject power from a separate supply and cut the
-chain's 3V3 wire, which is what cable 1 does (§8).
-
-### Heat in the dock
-
-| Source | Dissipation | Note |
-|---|---|---|
-| TinyS3, awake with Wi-Fi | ~0.5 W | ~100 mA at 5 V. The dock's largest heater. |
-| AMS1117 | 0.37 W at 215 mA, ~0.2 W at 120 mA | 1.7 V dropped. A SOT-223 on the module's copper runs ~70 °C/W, so the tab sits 25–30 °C above the room, about 55 °C. Rated 125 °C. |
-| PMSA003I | ≤ 0.5 W | vents straight out through the left wall |
-| Sensors | < 0.1 W | |
-
-There is no fan. Under a watt in a vented dock lifts the air near the parts by a degree or two and the far corner
-by nothing. A fan would blow over the SHTC3, stir the SCD41's compartment and pull the BME688's heater about, so
-both heaters instead sit on the PM side, as far from the SHTC3 as the layout allows.
-
----
-
-## 8. Wiring
-
-### Circuit
-
-```
- USB-C socket (dock, rear wall)
-    │
-    ├─ VBUS ─┬─ splice ─┬─────────► TinyS3 5V        J3 pin 3
-    │        │          ├─────────► AMS1117 IN
-    │        │          └─────────► pogo, two contacts ──► Inkplate VIN pads   5 V for the head
-    │        │                      AMS1117 OUT ─────────► PMSA003I header VIN   3.3 V for the whole chain
-    │        │
-    └─ GND ──┴─ splice ─┬─────────► TinyS3 GND       J3 pin 2
-                        ├─────────► AMS1117 GND
-                        ├─────────► pogo, two contacts ──► Inkplate GND pad
-                        └─────────► status LED, through its resistor
-
- TinyS3
-    ├─ J4 pins 5, 6, 10 ── cable 1: SCL · SDA · GND ─────► PMSA003I header SCL · SDA · GND   bus in, chain's ground return out
-    ├─ J4 pin 7 ─────────────────────────────────────────► PMSA003I header SET   fan control
-    └─ J4 pin 8 (IO6) ── 1 kΩ ───────────────────────────► status LED
-
-   ┌─ PMSA003I  (Adafruit 4632)   0x12   heaviest load first: power enters at its header, ground leaves by cable 1
-   │     cable 2: stock, from socket B
-   │     ▼
-   ├─ SCD41     (Adafruit 5190)   0x62   second heaviest; gets BME688 pressure each cycle
-   │     cable 3: stock
-   │     ▼
-   ├─ BME688    (Soldered)        0x76   JP1 moves it to 0x77 if 0x76 is ever taken
-   │     cable 4: stock
-   │     ▼
-   └─ SHTC3     (Soldered)        0x70   LAST — at the enclosure edge, upstream of the fan,
-                                         away from the heater and the TinyS3. Second socket unused.
-```
-
-### What connects to what
-
-| # | From | To | Wire |
-|---|---|---|---|
-| 1 | USB-C socket **V pad** | VBUS splice | 28 AWG, soldered |
-| 2 | USB-C socket **G pad** | GND splice | 28 AWG, soldered |
-| 3 | VBUS splice | TinyS3 **5V**, J3 pin 3 | 28 AWG, soldered to the leg |
-| 4 | GND splice | TinyS3 **GND**, J3 pin 2 | 28 AWG, soldered to the leg |
-| 5 | VBUS splice | AMS1117 **IN** | 28 AWG, Dupont at the AMS1117 |
-| 6 | GND splice | AMS1117 **GND** | 28 AWG, Dupont at the AMS1117 |
-| 7 | VBUS splice | pogo female, two contacts | 28 AWG, soldered; a bare bridge joins the pair |
-| 8 | GND splice | pogo female, two contacts | 28 AWG, soldered; a bare bridge joins the pair |
-| 9 | AMS1117 **OUT** | PMSA003I header **VIN** | 28 AWG, Dupont both ends |
-| 10 | TinyS3 **J4 pins 5, 6, 10** | PMSA003I header **SCL, SDA, GND** | cable 1: a Qwiic cable with its plug kept at the PM end, the other end cut and soldered to the legs; **3V3 conductor removed** |
-| 11 | TinyS3 **J4 pin 7** | PMSA003I header **SET** | 28 AWG, Dupont at the header |
-| 12 | TinyS3 **J4 pin 8 (IO6)** | status LED, through a 1 kΩ resistor | 28 AWG, the resistor spliced in |
-| 13 | GND splice | status LED, other leg | 28 AWG |
-| 14 | PMSA003I **easyC socket B** | SCD41 either socket | cable 2: stock Qwiic |
-| 15 | SCD41 other socket | BME688 either socket | cable 3: stock Qwiic |
-| 16 | BME688 other socket | SHTC3 either socket | cable 4: stock Qwiic |
-| 17 | pogo male, two contacts each net | Inkplate **VIN pad** and **GND pad** | 28 AWG, soldered to the 4 × 4 mm pads above the reset button |
-
-Every sensor board has two easyC sockets wired in parallel, so "either" is literal. The SHTC3 is last, so one of
-its sockets stays empty. The PM board's 7-pin header is VIN, 3Vo, GND, SCL, SDA, RST, SET: rows 9, 10 and 11 use
-**VIN, GND, SCL, SDA and SET**, and 3Vo and RST stay empty. Cable 1 lands on that header, not on a socket: socket
-B carries cable 2, and in the enclosure socket A faces a wall.
-
-The [enclosure README](../hardware/README.md) has the routing: which lane each wire takes, and where the splices
-and the resistor sit.
-
-**One wire per joint.** Every pad, leg and Dupont crimp takes a single wire. Where one net feeds several places,
-the wires are twisted, soldered end to end and covered with heat-shrink — the two splices in the middle of the
-dock's wiring channel. The exceptions are the pogo's bare bridges, which are soldered across a pair of tails in
-one go.
-
-**5 V on the Inkplate's VIN pads** is Soldered's own answer for this circuit
-([forum thread 1934](https://community.soldered.com/t/externally-powering-the-inkplate-5v2-with-5v/1934)). The
-5 V reaches the charger's output through the source-select transistor; Soldered say that is harmless, and the
-board's own USB-C is blocked by the dock's side wall while the head is docked.
-
-**The SET wire is optional.** The PM breakout pulls SET high through 100 kΩ (§3), so without it the fan runs from
-power-on and every reading is valid. With it, the firmware stops the fan between readings and the 30 s warm-up
-counts from when it starts.
-
-**Cable 1** keeps its JST-SH plug at the PM end only. Cut the other plug off, strip GND, SDA and SCL, and solder
-each to its TinyS3 leg. The 3V3 conductor is cut back and insulated: leave it in and the chain is fed by both the
-AMS1117 and the TinyS3's own regulator at once, which is the fault this section exists to avoid. On a standard
-cable 3V3 is the **red** wire (black GND, red 3V3, blue SDA, yellow SCL); on a cable with other colours, find it
-by position against the socket's silkscreen, or with a meter, before cutting.
-
-### Ground
-
-The chain has **one ground return**, cable 1's GND conductor. At worst the whole chain returns under 300 mA (the
-PM fan about 100 mA, an SCD41 burst about 200 mA) through 28 AWG, which is a few millivolts of shift — below
-anything I²C notices. The AMS1117's own GND wire carries only the regulator's few mA, and the head's ground
-crosses the pogo on its own pair of contacts.
-
-### Current in each wire
-
-| Wire | typ / peak | Carrier | Margin |
-|---|---|---|---|
-| 1, 2 · socket to the splices | ~500 mA / ~1.3 A | 28 AWG, soldered | fine — 28 AWG is ~1.4 A in free air; the 1.3 A peak is sub-millisecond |
-| 7, 8, 17 · the head's supply | ≤ 170 mA / 1.66 A | 28 AWG over two pogo contacts per net | fine — the pair is rated 1 A *(assumed: the connector is rated 1 A, per pin unstated)*; the spike is sub-millisecond |
-| 5, 9 · the sensors' supply | 215 / 470 mA | 28 AWG, Dupont | fine — Dupont ≥ 1 A |
-| 10 · cable 1 GND (chain return) | 215 / 470 mA | 28 AWG, JST-SH 1 A/contact | fine |
-| 3, 4 · the TinyS3's supply | ~100 / ~350 mA | 28 AWG | fine |
-| 11, 12, 13 · SET, IO6, the LED | < 2 mA | — | — |
-| 14 · PM → SCD41 | 16 / 225 mA | 28 AWG, JST-SH | fine |
-| 15, 16 · onward | 1.3 / 18 mA · 0.4 / 0.9 mA | — | — |
-
-Ampacity is not the constraint anywhere; a Dupont jumper only *looks* heavier than a Qwiic conductor because its
-insulation is thicker — the copper is the same 28 AWG.
-
-**Voltage drop is mostly contacts.** The SCD41's own 175 mA measurement pulse goes out AMS OUT → PM header →
-socket B → cable 2 → SCD41 and returns the same way to cable 1. Over runs of a few centimetres the copper is a
-few tens of mΩ; the crimp and plug contacts at 10–20 mΩ each are what add up, to roughly 130–210 mΩ, or
-**25–35 mV** at the sensor during its pulse. That is a ripple figure, not an operating limit — the part runs from
-2.4–5.5 V — so it is margin, not a fault, and clean crimps matter more than cable length.
-
-Chain order is chosen for **cable voltage drop** (heavy loads nearest the injection point) and **heat**
-(the reference sensor farthest from everything warm).
-
-### Bench bring-up on one board
-
-Every sensor runs at 3.3 V on an ordinary Qwiic cable, so for bring-up the whole chain can hang off any 3.3 V
-I²C host, the Inkplate's easyC socket included, with nothing to change on any board. What that arrangement cannot
-do is run: the host's rail cannot carry the sensor peaks on top of its own processor and Wi-Fi bursts, and ~200 mA
-for the PM board would cross every upstream board's connectors. The symptom is an intermittent brown-out when the
-fan, an SCD41 measurement peak and a Wi-Fi transmit coincide, which is the hardest kind of fault to find later.
-
----
-
-## 9. The enclosure
-
-The desk enclosure is in [`hardware/`](../hardware/README.md): where each board
-sits and why, the fasteners, the cable routing, the head-to-dock pogo connector, and the 3D models it is
-built from. The placement rules it follows come from each part's section here: §2 (SCD41), §3 (PMSA003I),
-§4 (BME688) and §5 (SHTC3).
-
----
-
-## 10. Open questions
-
-1. **PMSA003I input current at 3.3 V** is derived from the charge-pump datasheet, not measured. Measure; it sets the regulator's rating.
-2. **TinyS3 awake current** is a typical ESP32-S3 figure. Measure the dock alone on the Power Profiler once it runs.
-3. **5 V on the Inkplate's VIN pads**, on the bench, with no battery connected: measure VIN and the battery connector, and check that the charger chip stays cool through a few refreshes. Soldered say the path is harmless (§8); this confirms it on this board.
-4. **Pull-ups on the TinyS3's bus.** §6 assumes the board adds none. Measure SDA and SCL to 3.3 V with the sensors unplugged.
-5. **What the BME688 board's JP2 joins** (§4). Soldered's docs say only that it powers the regulator from 5 V, and no schematic is public. A continuity check across JP2, or the hardware files Soldered sends on request, would settle it.
-6. **Pogo contact resistance.** The connector's listing gives none, so §8 assumes 30–100 mΩ. Measure across a mated pair with ~200 mA flowing.
-7. **Flash size** of the Inkplate's ESP32-WROVER-E: 4, 8 or 16 MB by variant, and the module's shield prints no suffix. `esptool.py flash_id` over USB settles it; it resets the board.
-
----
-
-## Decision Log
-
-Dated findings and decisions behind the text above, oldest first.
-
-- **2026-09-03**: distilled from the datasheets.
-- **2026-09-03**: the first wiring plan chained Inkplate → BME688 → SHTC3 → SCD41 → PMSA003I and fed all four from the Inkplate's 3V3 through the chain. Order, connectors, addresses and pull-ups were fine. Power was not: the Inkplate's 500 mA LDO also carries the ESP32, the SCD41 wants a quiet supply, and the two heavy loads sat at the far end, where the drop is worst. Nor was the SHTC3's place: the reference sat between the BME688's heater and the SCD41. The PM fan's SET pin was unused. §8's circuit replaced the plan.
-- **2026-09-09**: the RTC alarm wakes this board on GPIO39, though Soldered does not guarantee it on the 5 Gen2. `pio run -e esp32-validate` sleeps 10 s on the alarm and wakes on `ESP_SLEEP_WAKEUP_EXT0` every cycle; an ESP32 timer armed at 15 s as a backstop has never had to fire.
-- **2026-09-09**: the SCD41 board is the Adafruit 5190. Soldered sells no SCD41; their CO₂ board is the SCD43.
-- **2026-09-10**: the Soldered BME688 and SHTC3 boards carry `103` resistors beside their pull-up jumpers, so 10 kΩ, and the §6 total of 2.0 kΩ stands.
-- **2026-09-12**: on the bench, BSEC with `bme688_sel_33v_3s_4d` reached accuracy 1 in about 4 minutes and 3 in about 40, and took 1019 hPa as its pressure input without an error.
-- **2026-09-12**: with calipers, the Soldered SHTC3 and BME688 boards are both 38.0 × 22.0 mm with four Ø3.2 mm holes on a 32 × 16 mm pitch. For the SHTC3 this overrides Soldered's product page and docs, which give 22 × 22 mm and two holes.
-- **2026-09-13**: on the bench, BSEC restarted from the state in NVS was back at accuracy 3 within 3 minutes.
-- **2026-09-13**: the wiring became one wire per crimp, with ground starred at the Inkplate and cable 1 landing on the PM header. The draft before it chained ground Inkplate → AMS1117 → PM, which put two wires on the regulator's one GND pin.
-- **2026-09-14**: Soldered's pages checked again. Neither Soldered sensor board has a public hardware repo, their docs describe the BME688's JP2 only as feeding the regulator from 5 V, and the Inkplate's BOM names its module only as "ESP32-WROVER", so the PSRAM size stays unverified.
-- **2026-09-14**: the head-to-dock pogo connector is rated 1 A, with no per-pin figure and no contact resistance. §8 takes 1 A per pin and assumes 30–100 mΩ per contact.
-- **2026-09-14**: the module is an ESP32-WROVER-E; its shield prints the name but no variant suffix. The board's Diagnostics report shows 4.0 MB of PSRAM, which rules out the 2 MB variants, so it carries 8 MB. The flash stays 4, 8 or 16 MB.
-- **2026-09-15**: the sensors moved off the Inkplate onto a dock of their own, after the full chain jammed the I²C bus on the Inkplate's rail while each board alone was healthy. One bus carried the panel, the expander, the RTC and the chain, and one 500 mA rail carried the ESP32 and the chain; splitting the device gives each half its own bus and its own regulator.
-- **2026-09-15**: the TinyS3 runs the sensors, with the AMS1117 for their 3.3 V. Its own NCP167 cannot carry the chain: 198 °C/W in a 1 × 1 mm package is +60 °C at the typical load and +130 °C at the peak, which is thermal shutdown. A ProS3, whose second regulator could be switched off, was the alternative; it would have put the SCD41 back on the processor's rail beside the Wi-Fi bursts, which is the fault this design exists to avoid. A 40 mAh cell in the head was ruled out: the Inkplate charges at ~400 mA (10 C) and draws 2.5–40 C from it.
-- **2026-09-15**: no fan in the dock. Under a watt of dissipation does not need one, and moving air would disturb the SHTC3, the SCD41's compartment and the BME688's heater.
-- **2026-09-17**: the head takes 5 V at its VIN pads, on Soldered's own advice for this circuit (forum thread 1934). The alternatives were the 0.8 mm VUSB test pad, too small to solder safely, and the battery connector, which is limited to 4.2 V. A Schottky against back-feed was dropped: the dock's side wall covers the head's USB-C socket while it is docked, so nothing can feed it from a computer.
-- **2026-09-17**: the chain keeps one ground return, cable 1's GND conductor. A second return existed when seven loose wires crossed the pogo joint; with the sensors in the dock the whole chain returns under 300 mA through 28 AWG, a few millivolts.
-- **2026-09-18**: the right-angle pins on the TinyS3's battery pads are not a fit constraint, so nothing in the enclosure accounts for them. They hang in the 2.5 mm between the board's underside and the tops of the female header strips, where the only things that can meet them are wires and resistors. Both flex, so neither stops the board seating. If the pins ever do get in the way, they come off the board.

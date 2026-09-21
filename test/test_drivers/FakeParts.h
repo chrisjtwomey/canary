@@ -257,7 +257,7 @@ public:
     }
 
     // Calibration and a raw conversion, so the compensated values Bosch's
-    // API returns are inside the ranges docs/HARDWARE.md 4 gives the part.
+    // API returns are inside the ranges hardware/bom.md gives the part.
     // The coefficients are a real unit's; the ADC counts are chosen to land
     // near room conditions.
     void loadCalibration(uint32_t tempAdc = kTempAdc, uint32_t presAdc = kPresAdc,

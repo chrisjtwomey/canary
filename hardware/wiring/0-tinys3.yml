@@ -1,0 +1,74 @@
+# Every wire soldered to the TinyS3's two header strips, and where each one ends.
+connectors:
+  PWR_ROW:
+    type: TinyS3
+    subtype: 5V-GND row
+    show_name: false
+    pins: [5V, GND]
+  IO_ROW:
+    type: TinyS3
+    subtype: 9-8-7-6 row
+    show_name: false
+    pins:      [9,   8,   GND, 7,   6]
+    pinlabels: [SCL, SDA, GND, SET, LED]
+  SPL_V:
+    style: simple
+    type: VBUS splice
+    pinlabels: [VBUS]
+  SPL_G:
+    style: simple
+    type: GND splice
+    pinlabels: [GND]
+  PM:
+    type: PMSA003I
+    subtype: 7-pin header
+    pins:      [3,   4,   5,   7]
+    pinlabels: [GND, SCL, SDA, SET]
+  R1:
+    style: simple
+    type: 1 k
+    pinlabels: ["1 k"]
+  LED:
+    type: LED 3 mm
+    subtype: yellow
+    pinlabels: [A]
+cables:
+  W_5V:
+    gauge: 28 AWG
+    wirecount: 1
+    colors: [RD]
+  W_GND:
+    gauge: 28 AWG
+    wirecount: 1
+    colors: [BK]
+  W_BUS:
+    gauge: 28 AWG
+    wirecount: 3
+    colors: [BK, BU, YE]
+  W_SET:
+    gauge: 28 AWG
+    wirecount: 1
+    colors: [GN]
+  W_LED:
+    gauge: 28 AWG
+    wirecount: 1
+    colors: [OG]
+connections:
+  - - PWR_ROW: [5V]
+    - W_5V: [1]
+    - SPL_V: [VBUS]
+  - - PWR_ROW: [GND]
+    - W_GND: [1]
+    - SPL_G: [GND]
+  - - IO_ROW: [GND, 8, 9]
+    - W_BUS: [1-3]
+    - PM: [3, 5, 4]
+  - - IO_ROW: [7]
+    - W_SET: [1]
+    - PM: [7]
+  - - IO_ROW: [6]
+    - W_LED: [1]
+    - R1: ["1 k"]
+  - - R1: ["1 k"]
+    - W_LED: [1]
+    - LED: [A]

@@ -24,7 +24,7 @@ jobs:
           path: epd
           # The same version the server core is pinned to in
           # server/requirements.txt; the two share the header contract.
-          ref: v0.5.1
+          ref: v0.6.0
       - uses: actions/cache@v5
         with:
           path: |
@@ -45,7 +45,7 @@ jobs:
       # nothing is attached, and the wiring check. The validation image needs
       # epd 0.4.0 for writeExpanderPin() and enableWakeOnTimer().
       - name: Build firmware
-        run: pio run -e esp32 -e dock -e dock-mock -e esp32-validate
+        run: pio run -e esp32 -e dock -e dock-mock -e dock-validate
 
       # This project's own logic, on the host: the room model, the sensor
       # mocks, the drivers against a fake I2C bus, the suite that reads
@@ -61,6 +61,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          # Tags, so server_version() describes the checkout the way it does
+          # on a machine. Without them git describe --always returns a bare
+          # SHA, which is not a version.
+          fetch-depth: 0
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'

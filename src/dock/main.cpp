@@ -46,7 +46,7 @@
 // The settings this image was built with, from src/defaults.cpp.
 ClientConfig builtInSettings();
 
-// hardware/README.md, "Wires at the TinyS3", which names the same lines by
+// hardware/assembly.md, "The TinyS3 on its strips", which names the same lines by
 // their header pin: SCL on J4.5, SDA on J4.6, SET on J4.7, the LED on J4.8.
 static const uint8_t kSdaPin = 8;
 static const uint8_t kSclPin = 9;
@@ -134,7 +134,7 @@ static void startI2c() {
     pinMode(kPmSetPin, OUTPUT);
     digitalWrite(kPmSetPin, LOW);        // the fan stays off until the suite starts it
     Wire.begin(kSdaPin, kSclPin);
-    Wire.setClock(100000);               // docs/HARDWARE.md 6: 100 kHz, and nothing cut
+    Wire.setClock(100000);               // hardware/bom.md, the I2C bus: 100 kHz, and nothing cut
     // A sensor that drops off the bus would otherwise slow every sample.
     Wire.setTimeOut(ArduinoI2cBus::kTimeoutMs);
 }

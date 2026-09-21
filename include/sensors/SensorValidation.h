@@ -12,7 +12,7 @@
 
 // One pass over the sensors that says whether the bench is wired and working:
 // which parts answered, whether each reads sensibly running and in its
-// low-power state (docs/HARDWARE.md 2-5), and one reading set from them all.
+// low-power state (hardware/bom.md, per sensor), and one reading set from them all.
 // It holds interfaces, so the same pass runs against the drivers on the board
 // and against the fake parts in the host tests.
 //
@@ -58,7 +58,7 @@ public:
 
     Report run(uint32_t epoch);
 
-    // Against the ranges in docs/HARDWARE.md 2-5. WARN is outside the range
+    // Against the ranges in hardware/bom.md, per sensor. WARN is outside the range
     // the sensor is specified for, FAIL is outside what it can report at all.
     static Outcome check(const Shtc3Data& d);
     static Outcome check(const Scd41Data& d);

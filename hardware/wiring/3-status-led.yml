@@ -1,0 +1,41 @@
+# The dock's status LED.
+connectors:
+  TINYS3:
+    type: TinyS3
+    subtype: the 9-8-7-6 row
+    pins: [6]
+  R1:
+    style: simple
+    type: 1 k
+    pinlabels: ["1 k"]
+  LED:
+    type: LED 3 mm
+    subtype: yellow
+    pinlabels: [A, K]
+  SPL_G:
+    style: simple
+    type: GND splice
+    pinlabels: [GND]
+cables:
+  W_LEDA:
+    gauge: 28 AWG
+    wirecount: 1
+    colors: [OG]
+  W_LEDB:
+    gauge: 28 AWG
+    wirecount: 1
+    colors: [OG]
+  W_LEDK:
+    gauge: 28 AWG
+    wirecount: 1
+    colors: [BK]
+connections:
+  - - TINYS3: [6]
+    - W_LEDA: [1]
+    - R1: ["1 k"]
+  - - R1: ["1 k"]
+    - W_LEDB: [1]
+    - LED: [A]
+  - - LED: [K]
+    - W_LEDK: [1]
+    - SPL_G: [GND]

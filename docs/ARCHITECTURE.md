@@ -1,7 +1,7 @@
 # Architecture — where CANARY departs from the kit, and how
 
 How this device differs from the weather calendar that [epd](https://github.com/chrisjtwomey/epd)
-came out of, and what it builds on the kit. [HARDWARE.md](HARDWARE.md) has the numbers; the
+came out of, and what it builds on the kit. [the hardware docs](../hardware/README.md) have the numbers; the
 [Decision Log](#decision-log) has the history.
 
 ## 1. What the kit assumes
@@ -16,7 +16,7 @@ server decides *when* (`Canary-Next-Display-Refresh-Seconds`) and *what*
 
 | | Weather calendar | Env monitor |
 |---|---|---|
-| Power | LiPo, years | **USB mains** (HARDWARE §7) |
+| Power | LiPo, years | **USB mains** ([hardware/bom.md](../hardware/bom.md)) |
 | Data origin | server fetches from APIs | **the device holds the sensors**, in a dock the panel stands in |
 | Cadence | 7 wakes a day | readings every few seconds, display every few minutes |
 | Client between refreshes | deep sleep | **awake**: sensors need it (SCD41 periodic mode with ASC, BSEC calibration state, PM fan warm-up) |
@@ -135,7 +135,7 @@ The panel and the sensors are two boards, in two halves of one enclosure:
 - **Dock**: an ESP32-S3 (TinyS3), the four sensors on a regulator of their own, and the USB-C socket that powers
   both halves. A magnetic pogo connector carries 5 V and ground up to the head, which sits in the dock's cradle.
 
-Three things forced it, all in [HARDWARE.md §7–§8](HARDWARE.md#7-power):
+Three things forced it, all in [hardware/bom.md](../hardware/bom.md):
 
 - **The bus.** With the chain on the Inkplate's bus, a jammed sensor also stopped panel refreshes and the panel
   temperature read, because the expander, the RTC and the PMIC share that bus.
@@ -242,7 +242,7 @@ at the size of their detail text, from a one-bit font `scripts/gfxfont.py` makes
 ## 5. Shape of the repo
 
 ```
-platformio.ini                 envs: esp32 (the head), dock (the TinyS3), dock-mock (-DUSE_MOCK_SENSORS), esp32-validate, native, sim
+platformio.ini                 envs: esp32 (the head), dock (the TinyS3), dock-mock (-DUSE_MOCK_SENSORS), dock-validate, native, sim
 partitions.csv
 src/main.cpp                   the head: fetch, draw, post its own state
 src/dock/main.cpp              the dock: the awake loop from §3.1
@@ -275,8 +275,8 @@ server/
   metrics.py                   derived values and wording
   static/                      CSS, fonts, charts.js
   config.example.yaml
-hardware/                      the desk enclosure
-docs/
+hardware/                      the boards, the desk enclosure and how to build it: README, bom, assembly, enclosure, enclosure.py, images/
+docs/                          ARCHITECTURE and READINGS
 ```
 
 ## 5.1 The sensor seam
@@ -388,7 +388,7 @@ Dated decisions and status behind the text above, oldest first.
 - **2026-09-03**: the first draft planned one `ISensor` (`begin()` / `poll(now)` / `read(out)` / `sleep()`) with one `Reading` struct for all four parts. It was never built. The sensors could not share an interface because they do not share the same sampling sequence. The code has one interface for each part, and `SensorSuite` runs each part's sequence in turn. It also gives the SCD41 the BME688's pressure, and it drives the PM module's fan.
 - **2026-09-04**: epd's `display` block landed: `pools` of images and a `schedule` of type `times` or `interval`, round-robin over pools and within them, with random starts reshuffled every few hours. `postJson` and `DisplayServer(ingest=...)` landed. `refresh_cycle()` was not needed: the awake loop composes the kit's WiFi, download, draw and back-off helpers directly. The awake loop ran end to end against the mocks, drawing on the server's cadence and posting one readings document a minute with the board's `client` status. Until the store existed, the server kept only the newest document, for the Diagnostics page.
 - **2026-09-04**: the build settled three of the four questions. Readings go by HTTP POST: one route in `DisplayServer`, testable with Flask's test client, and an MQTT republish can follow on the server when Home Assistant enters the picture, with no change to the firmware. The firmware sits at the repo root, like the weather calendar's. The PM fan runs all the time.
-- **2026-09-09**: the four drivers landed behind `II2cBus`, with host tests. The SCD41 board is the Adafruit 5190 (inventory item 92). The mocks were not corrected against logs of the real parts; that needs a log of each part.
+- **2026-09-09**: the four drivers landed behind `II2cBus`, with host tests. The SCD41 board is the Adafruit 5190. The mocks were not corrected against logs of the real parts; that needs a log of each part.
 - **2026-09-12**: `ReadingsStore` and `IngestSource` are in epd from 0.5.0, and `source.kind: store` serves them to the pages. BSEC runs for the BME688's IAQ index.
 - **2026-09-15**: the device became a head and a dock (§3.4). One bus and one 500 mA rail could not carry both the panel and the sensor chain; each half now has its own.
 - **2026-09-19**: every reading goes into the dock's queue when it is taken, and the loop posts the queue in batches of 100 (§3.2). This replaced a live post with a held copy on failure, which sent at most five held readings after each live one and stripped their `client` object. Held readings keep it: the server has stored every report since the trace pages, so a held one fills the outage in on them. The calibration block moved to its own route, because it is current state rather than part of a reading. Repeats are handled by the store's device-and-`ts` key, not by an idempotency key on the request: the one-at-a-time fallback resends documents in a differently shaped request, which a request key would store twice.

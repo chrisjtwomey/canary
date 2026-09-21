@@ -166,7 +166,7 @@ PG_PLINTH_WALL = 2.20
 
 PG_TAILS = {'GND': (3.45, -1.15), 'GND2': (1.15, -1.15), 'VBUS': (-1.15, -1.15), 'VBUS2': (-3.45, -1.15)}
 #   (dx, dz) in the head: dz -1.15 is the row nearer the back cover. The dock carries only power over the junction,
-#   each net on two adjacent contacts of that row (the pair is rated 1 A and the Inkplate's power-on spike is 1.66 A):
+#   each net on two adjacent contacts of that row (a 0.5 mm pin is good for about 1 A, and the Inkplate's power-on spike is 1.66 A):
 #   GND on the two nearest the USB-C end, VBUS on the other two (so that in the dock GND runs in front of VBUS, on the
 #   side its splice is). The row nearer the board stays empty.
 PG_WAYS = tuple((dx, dz) for dz in (1.15, -1.15) for dx in (-3.45, -1.15, 1.15, 3.45))   # all eight, as the part is bought
@@ -390,7 +390,7 @@ SLOPE = (H_FRONT - H_REAR) / (B_D1 - D_SLOPE)   # TinyS3's USB-C (1.5 mm under t
 #   header (H_OVER) have 1.4 mm under it, and the front is where that slope arrives.
 #   Set by the connectors, not the boards: a Dupont housing standing on a straight header needs 14 mm for itself and
 #   3.7 mm for the wire to turn (measured), so on a board at H 5.6 the wire's crown is at H 25.8, and the skin's
-#   underside has to clear that wherever a housing stands - at the PM header (D 29.5) and the SCD41 header (D ~48).
+#   underside has to clear that wherever a housing stands - over the PM header, at D 29.5.
 #   At the rear, the TinyS3's USB-C is the highest thing: H 22.3 at D 89.3, with the skin 1.5 mm above it.
 SKIN = 2.0
 TILT = 20.0
@@ -576,7 +576,7 @@ PW_MOUTH_D = B_DBAY1 - 0.3                    # just inside the rear wall, so th
 CC_SEAT_D0 = 88.1                             # the left ear's seat starts here, 0.3 behind the B5 resistor (USB-C to USB-C only)
 PLUG_W_MAX, PLUG_T_MAX, PLUG_CLR = 12.35, 7.5, 0.25   # a USB-C plug's moulded body, as allowed for, and the opening's clearance round it
 
-# --- status LED: a 3 mm diffused yellow LED (item 142) on IO6, behind a clear LEGO 1x1 round tile set flush in the
+# --- status LED: a 3 mm diffused yellow LED on IO6, behind a clear LEGO 1x1 round tile set flush in the
 #   front face under the display's right end, where the head never hides it. The tile presses into the shell, front
 #   sanded, so it glows evenly and the LED behind it does not show. It is thicker than the wall, so its back stands in a
 #   shallow relief in the cradle block, which lets the shell still slide down over the block. The LED goes in from an
@@ -1326,7 +1326,7 @@ def build_head_wiring(headc):
         bodies.append(('bridge %s-%s' % (a, b), bridge((tx[a], Y_END, zt), (tx[b], Y_END, zt)), 'silver'))
     return add_bodies(headc, 'Head wiring (toggle)', bodies)
 
-# --- dock wiring (dock frame X, D, H): the dock's wires; HARDWARE.md section 8 has the circuit ---
+# --- dock wiring (dock frame X, D, H): the dock's wires; hardware/assembly.md has the circuit ---
 #   Power comes from the USB-C socket through two splices, VBUS and GND, which feed the TinyS3, the AMS1117, the
 #   pogo female and (GND only) the status LED. The TinyS3's cradle channel, open at both ends under the board, is the dock's main
 #   duct: every wire that crosses the strip behind the sensors goes through it, in layers by height (the J3 joints
@@ -1470,15 +1470,19 @@ def build_dock_wiring(dockc, mh):
     add('wire GND: splice -> TinyS3 J3.2', [(SPLICE_X1 + 0.2, SPL_G[0] + SLOT, SPL_G[1] - SLOT), (xj[2], 82.6, 5.2), (xj[2], d_end3, H_CH_LOW)], 'black')
     # ---- the splices to the AMS1117: IN on the rear pin, GND on the front one, straight along the channel from the
     #      left end of their splices and into the housings at pin height ----
-    ams_d = {'IN': AMS_D0 + 4.25 + 2.54, 'OUT': AMS_D0 + 4.25, 'GND': AMS_D0 + 4.25 - 2.54}
+    # Read off the board: GND, OUT, VIN along the header, GND at the rear. The middle pin is OUT on every
+    # one of these modules, which is how the two ends are told apart.
+    ams_d = {'GND': AMS_D0 + 4.25 + 2.54, 'OUT': AMS_D0 + 4.25, 'IN': AMS_D0 + 4.25 - 2.54}
     x_open = AMS_X0 + 12.5 + 1.27 + 14.0                                         # the housings' open ends
     hams = H_AMS_CH
     for name, dd in ams_d.items():
         bodies.append(('Dupont AMS %s' % name, boxb(AMS_X0 + 12.5 + 1.27, x_open, dd - 1.27, dd + 1.27, hams - 1.27, hams + 1.27), 'dupont'))
-    add('wire VBUS: splice -> AMS IN', [(SPLICE_X0 - 0.2, SPL_V[0] + SLOT, SPL_V[1] - SLOT), (52.0, SPL_V[0] + SLOT, 11.3), (CH_X0, ams_d['IN'], hams),
-                                       (x_open + 0.5, ams_d['IN'], hams), (x_open - 1.0, ams_d['IN'], hams)], 'red', lead=(0.0, 1.0))
-    add('wire GND: splice -> AMS GND', [(SPLICE_X0 - 0.2, SPL_G[0] - SLOT, SPL_G[1] - SLOT), (52.0, SPL_G[0] - SLOT, 11.3), (CH_X0, ams_d['GND'], hams),
-                                       (x_open + 0.5, ams_d['GND'], hams), (x_open - 1.0, ams_d['GND'], hams)], 'black', lead=(0.0, 1.0))
+    # The splices are in the other order from the pins - VBUS is the rear splice, GND the rear pin - so the two
+    # wires trade sides on the way. They cross at X 52, VBUS over GND, on lanes 2.8 mm apart.
+    add('wire VBUS: splice -> AMS VIN', [(SPLICE_X0 - 0.2, SPL_V[0] + SLOT, SPL_V[1] - SLOT), (56.0, SPL_V[0] + SLOT, 13.0), (52.0, ams_d['IN'], 13.0),
+                                         (CH_X0, ams_d['IN'], hams), (x_open + 0.5, ams_d['IN'], hams), (x_open - 1.0, ams_d['IN'], hams)], 'red', lead=(0.0, 1.0))
+    add('wire GND: splice -> AMS GND', [(SPLICE_X0 - 0.2, SPL_G[0] - SLOT, SPL_G[1] - SLOT), (56.0, SPL_G[0] - SLOT, 10.2), (52.0, ams_d['GND'], 10.2),
+                                        (CH_X0, ams_d['GND'], hams), (x_open + 0.5, ams_d['GND'], hams), (x_open - 1.0, ams_d['GND'], hams)], 'black', lead=(0.0, 1.0))
     # ---- the TinyS3 to the PMSA003I: cable 1 (SCL, SDA, GND off J4 pins 5, 6, 10, three Qwiic conductors) and SET
     #      (J4 pin 7). Each solders to the leg's lower half pointing into the channel, runs 1 mm off the leg and turns
     #      left onto its lane: the further left a leg, the nearer its lane to the row, so no wire's short leg crosses
@@ -1540,7 +1544,7 @@ def build_dock_wiring(dockc, mh):
     hi, lo = leg(1.27), leg(-1.27)
     D_LED, LED_OFF = 78.1, 1.1                                                      # the straight behind the BME688, and each wire's offset
     X_IO6, X_LEDG = 118.2 - LED_OFF, 118.2 + LED_OFF                               # the bundle's two lanes as it leaves the pit
-    RES_X = 104.0                                                                   # the 1 k resistor's centre (item 167)
+    RES_X = 104.0                                                                   # the 1 k resistor's centre
     SHRINK_L, SHRINK_R = 6.0, 1.0                                                   # heat-shrink over a lead and its joint, from the body's end
     d_io6 = D_LED - LED_OFF
     bodies += resistor('resistor 1k', '1k', RES_X - RES_L / 2, d_io6, H_LED_CH)

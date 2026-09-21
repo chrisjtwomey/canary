@@ -1,0 +1,35 @@
+# The splices up to the head, across the magnetic connector.
+connectors:
+  SPL_V:
+    style: simple
+    type: VBUS splice
+    pinlabels: [VBUS]
+  SPL_G:
+    style: simple
+    type: GND splice
+    pinlabels: [GND]
+  POGO:
+    type: Pogo pair
+    subtype: mated
+    pincount: 8
+    pinlabels: [GND, GND, VBUS, VBUS, "-", "-", "-", "-"]
+  INKPLATE:
+    type: Inkplate 5 Gen2
+    subtype: solder pads
+    pinlabels: [VIN, GND]
+cables:
+  W_POGO:
+    gauge: 28 AWG
+    wirecount: 4
+    colors: [BK, BK, RD, RD]
+  W_HEAD:
+    gauge: 28 AWG
+    wirecount: 4
+    colors: [BK, BK, RD, RD]
+connections:
+  - - [SPL_G, SPL_G, SPL_V, SPL_V]
+    - W_POGO: [1-4]
+    - POGO: [1-4]
+  - - POGO: [1-4]
+    - W_HEAD: [1-4]
+    - INKPLATE: [GND, GND, VIN, VIN]

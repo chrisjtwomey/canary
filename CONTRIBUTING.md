@@ -209,7 +209,7 @@ back to the last release at its next request.
 
 Two boards: the head (`esp32`) fetches the pages from the server and draws
 them; the dock (`dock`) reads the four sensors over I2C and posts them.
-Three things to set up. See [docs/HARDWARE.md](docs/HARDWARE.md) §8 for the
+Three things to set up. See [hardware/assembly.md](hardware/assembly.md) for the
 wiring; `pio run -e dock-mock -t upload` builds the dock's firmware with the
 simulated room in place of the sensors, for a board with nothing attached.
 
@@ -303,48 +303,47 @@ datasheets describe. The BME688's compensation is Bosch's own C API, in
 
 ### 5. Validating the wiring
 
-A separate image that runs the bench routine instead of the awake loop. Use
-it when the hardware is new or has been re-wired, and to take a current
-capture: it has no network and no panel, so what the log shows is the
+A separate image that runs the bench routine instead of the dock's awake loop.
+Use it when the hardware is new or has been re-wired, and to take a current
+capture: it has no network and no server, so what the log shows is the
 sensors and nothing else.
 
 ```sh
-pio run -e esp32-validate -t upload
+pio run -e dock-validate -t upload
 pio device monitor -b 115200
 ```
 
-Every wake it scans the bus, checks each sensor running and in its low-power
-state, takes one reading set, puts everything to sleep and deep-sleeps for
-ten seconds. Then it does it again, so a capture can bracket the same
-sequence as often as you like. A pass looks like this:
+Every pass it scans the bus, checks each sensor running and in its low-power
+state, takes one reading set and puts everything back to sleep; ten seconds
+later it does it again, so a capture can bracket the same sequence as often
+as you like. A pass looks like this:
 
 ```
-wakeup caused by external signal using RTC_IO.
-##### Inkplate5V2 hardware validation #####
-battery voltage: 4.09v   panel 27 C
-i2c scan: 0x12 0x20 0x48 0x51 0x62 0x70 0x76 (7 devices)
+##### canary-dock hardware validation #####
+Client version: 0.6.0
+i2c timeout 50 ms; SDA IO8, SCL IO9, PM fan SET IO7
+i2c scan: 0x12 0x62 0x70 0x76 (4 devices)
 [validate]       0 ms  phase 1: probing the bus
 [validate] shtc3 present
 ...
 [validate] summary: 0 failures, 0 warnings in 42000 ms
-arming deep sleep timer wakeup in 15 seconds
-sleeping for 10 seconds (RTC alarm at epoch 1757443210)
 ```
 
 The phase markers carry milliseconds so a PPK2 trace lines up with the phase
 it was taken in. Three things worth knowing when it does not pass:
 
 - **A sensor is absent.** Its address is missing from the scan and it counts
-  as a failure. The rest of the pass still runs.
+  as a failure. The rest of the pass still runs. The four the dock should
+  show are the PM module at 0x12, the SCD41 at 0x62, the SHTC3 at 0x70 and
+  the BME688 at 0x76.
 - **The PM fan's SET line.** `PM still answers with SET low; SET wire not
   connected` is a warning, not a failure — the fan is simply not
-  controllable, and every PM reading is still valid. docs/HARDWARE.md §8
-  puts that wire on expander P1_3.
-- **The RTC alarm.** The next boot should say `wakeup caused by external
-  signal using RTC_IO` about ten seconds later. `wakeup caused by timer`
-  after fifteen means the alarm did not reach GPIO 39, which Soldered does
-  not guarantee on this board; the timer is armed as a backstop so the loop
-  carries on either way.
+  controllable, and every PM reading is still valid. It is the TinyS3's pin
+  7 (hardware/assembly.md).
+- **Nothing sleeps.** The serial port is on the board's own USB, which a deep
+  sleep would drop mid-bench, so the board stays up between passes. The first
+  pass waits up to three seconds for the host to open the port; if the head
+  of the log is still missing, start the monitor before plugging the board in.
 
 ## Setup
 
@@ -368,6 +367,34 @@ in: a line starting `-e` is the checkout.
 and adds `server/` and `../epd/server` to the import path, so Pylance
 resolves `epd_server` and `sources.*`. Without it both show as unresolved
 even though the tests pass, because Pylance does not read `pytest.ini`.
+
+## The wiring diagrams
+
+The circuit drawings in `hardware/images/` are generated, not painted.
+[hardware/wiring/](hardware/wiring/) holds it as one YAML file per run of
+wire, which [WireViz](https://github.com/wireviz/WireViz) turns into a harness
+drawing. Edit the YAML, never the PNG.
+
+```sh
+pip install wireviz          # and graphviz: brew install graphviz
+hardware/wiring/render.sh    # rewrites the drawings in hardware/images/
+```
+
+`render.sh` takes WireViz's Graphviz source, turns the layout top to bottom
+and runs `dot` itself. WireViz's own left-to-right layout gives a strip too
+wide and too short to read on a page.
+
+**Keep each drawing near 1200 px.** That is what stays legible at page width.
+One run of wire per file does it; the whole circuit in one file does not, and
+neither does a chain of four identical cables — say that in a sentence
+instead.
+
+**Every wire gets a colour, and never `WH`.** White draws as a white line on
+a white page, which reads as no wire at all. Red is a supply, black is ground,
+blue and yellow are SDA and SCL; anything else picks a colour that stands out.
+
+The same joints are listed in `hardware/assembly.md`, under "Appendix:
+every joint". Change one and change the other.
 
 ## Releases
 
