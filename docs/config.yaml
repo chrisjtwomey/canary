@@ -6,11 +6,11 @@
 # the file is ignored whole.
 server:
   # Required. The first page the board fetches. The server names the next one
-  # in its X-Next-URL header, so this is only the way in.
+  # in its Canary-Next-URL header, so this is only the way in.
   url: http://YOUR_SERVER_HOST:8080/breathe.png
   # How many times to retry a fetch before the wake gives up.
   retries: 3
-  # How long to wait when the server sends no X-Next-Refresh-Seconds.
+  # How long to wait when the server sends no Canary-Next-Display-Refresh-Seconds.
   default_refresh_seconds: 300
 wifi:
   ssid: XXXX          # required

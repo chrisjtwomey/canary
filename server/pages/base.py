@@ -53,7 +53,7 @@ class EnvPage(_Page):
         """The page before the board has posted a reading."""
         a.div(klass="title label", _t=self.title or self.name)
         a.div(klass="verdict", _t="No readings yet.")
-        a.div(klass="detail", _t="The board posts to /readings once a minute after it connects.")
+        a.div(klass="detail", _t="The board posts once it connects.")
 
     def template(self, **data):
         waiting = "latest" in self.requires and data.get("latest") is None

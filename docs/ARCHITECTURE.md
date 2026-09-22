@@ -38,7 +38,7 @@ setup:  80 MHz; wifi; I2C; BSEC; sensors.begin(); the first reading 35 s on
 loop:   until known   GET /about           every 30 s, for the server's time
         every 60 s    sensors.sample()     to notice a sensor that stops (SCD41 periodic, BME688 via BSEC, SHTC3)
         each slot     queue a reading      a fresh sample, PM included, with the dock's own status, into PSRAM
-        every pass    POST /readings       the oldest 100 in the queue as one batch, once the time is known
+        every pass    POST /sensor-readings       the oldest 100 in the queue as one batch, once the time is known
                       POST /calibration    BSEC's state, after a batch, when BSEC has saved a new copy
         continuous    the PM fan and the status LED
 BSEC:   a FreeRTOS task of its own; its state goes to NVS when accuracy first reaches 3 and every six hours after
@@ -71,7 +71,7 @@ has no reason to sleep:
 ```
 setup:  board.begin(); wifi; ntp
 loop:   when the refresh header ends      GET the named page → draw; a failed fetch keeps the old image and backs off
-        every 60 s                         POST /readings     the head's own status and nothing else
+        every 60 s                         POST /sensor-readings     the head's own status and nothing else
 ```
 
 Both loops compose epd's WiFi, time, download, `postJson` and back-off
@@ -83,7 +83,7 @@ does not need to know what a sensor is.
 
 The dock queues one document a minute in PSRAM, in the layout of
 [READINGS.md](READINGS.md), and each pass of its loop posts the oldest 100
-to `/readings` as one batch. A reading is kept before anything is sent, so
+to `/sensor-readings` as one batch. A reading is kept before anything is sent, so
 one path covers the post that works and the outage that does not, and a
 queue that built up while the server was down drains a batch per pass
 without making a sample late by more than one request. The queue holds
@@ -201,7 +201,7 @@ included. Development builds are left alone. The server logs each offer of an ol
 page shows each board's last change of version, marked when it was a downgrade, and the posts the server refused
 from it, even from a board it has never taken a report from.
 
-- **The dock** gets 409 from `/readings` and leaves the batch in its queue rather than dropping it, since the
+- **The dock** gets 409 from `/sensor-readings` and leaves the batch in its queue rather than dropping it, since the
   readings are sound and only the pairing is wrong. The refused post puts the LED into its trouble pattern, and the
   same response offers the image that fixes it.
 - **The head** still gets its pages, since the server never refuses a fetch. It draws a notice in place of the page
@@ -269,11 +269,15 @@ test/                          host tests, native env
 server/
   server.py                    config, sources, pages, DisplayServer(...).run()
   about.py  version.py         GET /about, and what this server calls itself
+  web.py                       /web/: the pages in a browser, the explorer, and GET /history
+  config_page.py               /web/config: config.yaml as a form in tabs and as text, checked, saved, and restarted on
+  config_form.py               the form's fields, and how a filled-in form edits config.yaml
+  transfer.py                  a store out to a file and back in, from the Storage tab
   schedule.py                  the dock's reading slots, slower overnight (§3.3)
   sources/                     the mock room, readings ingest, calibration store, device status, sea-level pressure
   pages/                       Breathe, Comfort, Dust, Air, Day, the Diagnostics pages, and the trace and delta pages
   metrics.py                   derived values and wording
-  static/                      CSS, fonts, charts.js
+  static/                      CSS, fonts, charts.js; web.css, browse.js, explore.js and config.js for /web/
   config.example.yaml
 hardware/                      the boards, the desk enclosure and how to build it: README, bom, assembly, enclosure, enclosure.py, images/
 docs/                          ARCHITECTURE and READINGS
@@ -396,3 +400,9 @@ Dated decisions and status behind the text above, oldest first.
 - **2026-09-19**: the dock's queue moved from the Sensors card to the Memory card, as a count against its capacity with a meter, since it is memory. The diagnostics trace page draws one chart per measure with both boards on it, the dock dark and the head light on one scale: free memory tallest, the queue, then the signal, which barely moves once the dock is placed. A page of changes since the last report was considered in its place and dropped. The queue's axis fits the day's highest, no lower than 10, because it is empty almost always and then climbs through an outage.
 - **2026-09-19**: the dock updates over the air like the head, and every board is offered the newest image of its product that works with the server's version, rather than the newest file (§3.7). The boards follow the server rather than work out which end is newer, so the server's version is the one dial. That needs the older images, so neither `build-firmware.sh` nor the server removes any. An accidental server downgrade therefore downgrades the boards within a request each: each update restarts the dock and empties its queue, BSEC may refuse state an older library did not write, and later features go until it is fixed. The Diagnostics page shows each downgrade and each refused post so such a day is visible. The dock takes an update only with its queue empty, except under a 409, when the queue cannot drain until it does.
 - **2026-09-19**: each dock document carries a `health` object beside `client` (READINGS.md): sensor restarts, the checksum failures the drivers used to drop without counting, the BME688's gas and heater flags, and the SCD41's serial, self-calibration and offset from its start. The bus jam of 2026-09-15 showed as missing sensors only once it was bad; damaged answers come first, so they are counted. Nothing here costs extra bus traffic but two SCD41 reads at each of its starts. The server keeps the object with the rest of each report, and a `health-trace` page draws the day: restarts and damaged answers as running totals, since the dock's own counts begin again at each of its restarts, and the heater as a flag, all in steps; the SCD41's settings and its few damaged answers go on one line above them.
+- **2026-09-22**: the server shows its pages in a browser at `/web/`, and an explorer at `/web/explore` draws one measurement over any window from `GET /history`. A page is built from the readings when it is asked for, on a copy of the page object, so the PNGs and the browser never share a document. The explorer reuses the trace chart and its Python, so a window in the browser is drawn as the panel draws three days. There is no login: the view shows what the PNGs show, on the same port. `GET /readings` and `GET /status` answer with the stored readings and the boards' reports as JSON (READINGS.md), so a board can be diagnosed without reading a page.
+- **2026-09-22**: `/web/config` edits `config.yaml` in the browser. An edit is checked by `load_settings`, the code the server runs at start, and any error it meets refuses the edit, so a saved config always starts the server. Save restarts the process in place with `os.execv`; the container stays up. The page has no login yet.
+- **2026-09-22**: `/web/config` is a form in tabs, one for each block of the file, each about one screen, and the file as text in a last tab for the keys the form does not show. The form edits the file with ruamel.yaml, a new dependency, because PyYAML cannot write it back with its comments. The server still reads it with PyYAML, and the two read some plain scalars differently, so each edit is read back with PyYAML and refused if a value reads differently or a key the form did not change has changed. An empty field takes its key out, so the server uses the default that the field shows. A field that an environment variable sets is locked, since the variable wins. The firmware token is never sent to the form. A save first lists each change, old and new; Restore puts `config.yaml.bak` back.
+- **2026-09-22**: the boards post to `/sensor-readings`, and the default store is `sensor-readings.db`, so the route and the file say what they hold. There is no `/readings` for older firmware: before 1.0 a minor release may break the contract with no transition, and a dock on older firmware is flashed by USB.
+- **2026-09-22**: the Storage tab downloads each store as a file and takes one back. The file is one JSON document a line, in the shape the board posted, and not the SQLite file: a store keeps a document under its board and its time and ignores a second with that key, so a file goes into another store of the same kind and adds only what is missing. An import writes the whole file or none of it, so a corrupt line leaves nothing behind, and when the store already holds some of them it writes nothing until the person says to put the file over them. The size beside Download is taken from the first lines and how many documents are held, so drawing the page costs the same whatever the store holds. An upload weighs at most 64 MB.
+- **2026-09-22**: the menu gives each group a row of its own, with the headings in a column beside the pages. Three days and Changes name the same five measurements, so they share one row and the heading is a switch between them; a hidden radio holds the choice, which keeps the switch working without JavaScript. On the browse page, `browse.js` moves the shown page to the same measurement over the other span, and flips the switch when a page from the other span is opened.

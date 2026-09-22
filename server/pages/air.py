@@ -50,7 +50,7 @@ class AirPage(EnvPage):
                 a.span(klass="value", _t="—")
                 a.span(klass="unit", _t="IAQ")
             if not valid:
-                a.span(klass="cold-tag", _t=NO_SENSOR_TAG if absent else "heater warming up")
+                a.span(klass="cold-tag", _t=NO_SENSOR_TAG if absent else "warming up")
 
         if iaq is not None:
             a.div(klass="verdict", _t=iaq_verdict(iaq))
@@ -66,7 +66,7 @@ class AirPage(EnvPage):
             word = IAQ_ACCURACY[max(0, min(3, int(accuracy)))]
             parts.append(f"Index accuracy {word}, {int(accuracy)} of 3.")
         elif gas is not None and iaq is None:
-            parts.append("The index needs the BSEC library on the board.")
+            parts.append("Index needs a firmware update.")
         if parts:
             a.div(klass="detail", _t=" ".join(parts))
 

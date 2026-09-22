@@ -12,14 +12,19 @@
   // An outline passes no fill at all: rough.js hatches any fill it is given,
   // 'none' included.
 
+  // Drawn in CSS pixels, on a bitmap as fine as the screen's. The panel's
+  // renderer has one device pixel to the CSS pixel.
   function prepare(canvas) {
     var r = canvas.getBoundingClientRect();
-    canvas.width = Math.round(r.width);
-    canvas.height = Math.round(r.height);
+    var k = window.devicePixelRatio || 1;
+    canvas.width = Math.round(r.width * k);
+    canvas.height = Math.round(r.height * k);
+    var ctx = canvas.getContext('2d');
+    ctx.setTransform(k, 0, 0, k, 0, 0);
     return {
-      w: canvas.width,
-      h: canvas.height,
-      ctx: canvas.getContext('2d'),
+      w: Math.round(r.width),
+      h: Math.round(r.height),
+      ctx: ctx,
       rc: rough.canvas(canvas, { options: { seed: SEED } })
     };
   }
@@ -264,7 +269,8 @@
   // at each midnight, the last hours drawn heavier, and in steps when the
   // spec says the value jumps. A companion series goes
   // lighter, on its own scale at the right when it has a y2, or on the main
-  // scale when it has none, with a legend naming the two.
+  // scale when it has none, with a legend naming the two. Returns the plot's
+  // edges, for a caller that maps a pointer back to a time.
   function trace(canvas, s) {
     var c = prepare(canvas);
     var ownScale = s.points2 && s.y2;
@@ -316,6 +322,7 @@
     });
     if (s.now2) dot(c.ctx, X(s.now2[0]), Y2(s.now2[1]), 6, G[4]);
     if (s.now) marker(c, X(s.now[0]), Y(s.now[1]));
+    return { l: m.l, r: c.w - m.r, t: m.t, b: c.h - m.b };
   }
 
   // The two series' names at the top right, each after a stroke drawn as
@@ -390,5 +397,11 @@
     });
   }
 
-  window.Charts = { render: render };
+  // One spec on one canvas, now: for a page that has loaded the fonts and
+  // redraws as its viewer moves. Returns what the kind's drawing returns.
+  function draw(canvas, s) {
+    return KINDS[s.kind] ? KINDS[s.kind](canvas, s) : undefined;
+  }
+
+  window.Charts = { render: render, draw: draw, grey: G };
 })();

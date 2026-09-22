@@ -105,6 +105,16 @@ The test: a comment that would read the same in any codebase isn't earning its p
 
 Ask yourself: "Does the metaphor explain this better than plain words would?" If you have to weigh it up, it doesn't.
 
+## Words in the interface
+
+**A page says what other web interfaces say. Our words are for the code.**
+
+- The code has a store that holds a document under a key. The page says `4 of 4 records already exist`, and the button says `Replace`.
+- Use the word the rest of the web uses for the act: Download, Upload, Replace, Delete, Cancel.
+- A label, a button and a message are a few words each. Nothing explains the design.
+
+Ask yourself: "Is this the language I would expect from a web interface?" If it is not, it belongs in the code, not on the page.
+
 ## Open hardware questions
 
 Unsettled, and each one names what would settle it.

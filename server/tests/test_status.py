@@ -94,10 +94,10 @@ def test_a_posted_report_reaches_the_diagnostics_page(tmp_path, tz):
         p.png_dir = str(tmp_path)
         p.html_dir = str(tmp_path / "static")
     server = DisplayServer(pages=pages, source=source, schedule=[("00:00:00", "breathe.png")],
-                           tz=tz, ingest={"readings": reports.accept_many})
+                           tz=tz, ingest={"sensor-readings": reports.accept_many})
     client = server._build_app().test_client()
 
-    rsp = client.post("/readings", json={
+    rsp = client.post("/sensor-readings", json={
         "ts": AT, "device": "canary-dock", "valid": {"co2": True},
         "client": {"board": "Inkplate5V2", "ip": "192.168.1.42", "rssi": -61,
                    "sensors": {"scd41": True}},
@@ -172,11 +172,11 @@ def test_the_server_tells_the_reports_which_board_it_refused(tmp_path, tz):
     server = DisplayServer(pages=make_pages(tz, width=1280, height=720),
                            source=make_source(7, lambda: AT, reports),
                            schedule=[("00:00:00", "breathe.png")], tz=tz,
-                           ingest={"readings": reports.accept_many}, header_prefix="Canary",
+                           ingest={"sensor-readings": reports.accept_many}, header_prefix="Canary",
                            server_version="v0.3.1", version_gate=True, on_refused=reports.refused)
     client = server._build_app().test_client()
 
-    rsp = client.post("/readings", json={"ts": AT, "device": "canary-dock"},
+    rsp = client.post("/sensor-readings", json={"ts": AT, "device": "canary-dock"},
                       headers={"Canary-Device": "canary-dock", "Canary-Device-Version": "v0.4.0"})
 
     assert rsp.status_code == 409

@@ -17,7 +17,7 @@ DOC = {"ts": AT, "device": "canary-dock", "co2_ppm": 812, "pressure_hpa": 1011.2
 
 @pytest.fixture
 def store(tmp_path):
-    s = ReadingsStore(tmp_path / "readings.db")
+    s = ReadingsStore(tmp_path / "sensor-readings.db")
     yield s
     s.close()
 
@@ -117,14 +117,14 @@ def test_a_posted_reading_reaches_the_pages_through_the_server(store, tz):
     pages = make_pages(tz, width=1280, height=720)
     server = DisplayServer(pages=pages, source=make_source(7, lambda: AT, reports, store=store),
                            schedule=[("00:00:00", "breathe.png")], tz=tz,
-                           ingest={"readings": ReadingsIngest(reports, store).accept})
+                           ingest={"sensor-readings": ReadingsIngest(reports, store).accept})
     client = server._build_app().test_client()
 
-    assert client.post("/readings", json=DOC).get_json() == {"new": 1, "repeated": 0}
+    assert client.post("/sensor-readings", json=DOC).get_json() == {"new": 1, "repeated": 0}
     # Sent again after a lost reply, alone and then inside a batch.
-    rsp = client.post("/readings", json=DOC)
+    rsp = client.post("/sensor-readings", json=DOC)
     assert rsp.status_code == 200 and rsp.get_json() == {"new": 0, "repeated": 1}
-    assert client.post("/readings", json=[DOC, dict(DOC, ts=AT - 60)]).get_json() == \
+    assert client.post("/sensor-readings", json=[DOC, dict(DOC, ts=AT - 60)]).get_json() == \
         {"new": 1, "repeated": 1}
     assert store.count() == 2
 

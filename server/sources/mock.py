@@ -234,6 +234,14 @@ class MockReadingsSource(DataSource):
         _, docs = self._room_at(end - hours * 3600, end)
         return docs
 
+    def between(self, start: int, end: int) -> list[dict]:
+        """One document a minute from ``start`` to ``end``, or to now if that is sooner."""
+        end = min(end, int(self.now())) // 60 * 60
+        if end < start:
+            return []
+        _, docs = self._room_at(start // 60 * 60, end)
+        return [d for d in docs if d["ts"] >= start]
+
     def datasets(self) -> Mapping[str, Fetcher]:
         return {
             "latest": self.latest,

@@ -4,7 +4,7 @@
 // draws it, and waits the seconds the server sends before fetching again.
 // Mains powered through the dock, so nothing sleeps. Once a minute it posts
 // its own state — network, memory, panel, fetch counts — to the server's
-// /readings, where the dock's readings also go; the head carries no
+// /sensor-readings, where the dock's readings also go; the head carries no
 // sensors, so its document holds the client object and nothing else. A
 // failed fetch leaves the last image on the panel and backs off before the
 // next try.
@@ -56,7 +56,7 @@ static const int32_t  kDownloadFallbackBytes = 512 * 1024;
 static RefreshTimer refresh(builtInSettings().defaultRefreshSeconds);
 
 static ClientConfig config;          // this board's own server URL and wifi
-static char     nextURL[256];        // from X-Next-URL; empty means the server URL
+static char     nextURL[256];        // from Canary-Next-URL; empty means the server URL
 // True until this boot proves a freshly written image works.
 static bool     onTrial = false;
 static int      trialFailures = 0;
@@ -70,7 +70,8 @@ static const int kUnreachableAfter = 3;
 static int      unanswered = 0;
 // When the last page arrived, in RFC 3339, for the unreachable notice.
 static char     lastPageAt[32] = "";
-static char     readingsURL[300];    // the server's /readings; empty disables posting
+static const char kReadingsPath[] = "/sensor-readings";
+static char     readingsURL[300];    // the server's /sensor-readings; empty disables posting
 static uint32_t lastReportMs = 0;
 static uint32_t fetchOk = 0;
 static uint32_t fetchFailed = 0;
@@ -260,8 +261,8 @@ void setup() {
     applySdConfig(&config);
 
     connectNetworkForever();
-    if (urlOrigin(config.serverURL, readingsURL, sizeof(readingsURL) - 10)) {
-        strcat(readingsURL, "/readings");
+    if (urlOrigin(config.serverURL, readingsURL, sizeof(readingsURL) - sizeof(kReadingsPath))) {
+        strcat(readingsURL, kReadingsPath);
         logf(LOG_INFO, "posting status to %s", readingsURL);
     } else {
         log(LOG_WARNING, "the server URL has no host; status stays on the serial log");

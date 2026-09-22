@@ -32,7 +32,7 @@ image:
 source:
   kind: mock        # mock: the simulated room; store: what the board posts
   seed: 7           # mock only
-  # path: readings.db   # store only; relative to this file
+  # path: sensor-readings.db  # store only; relative to this file
   # keep_days: 0        # store only; readings older than this are deleted, 0 keeps all
 
 status:             # what each board says about itself, kept as readings are

@@ -87,6 +87,27 @@ The HTML is written to `server/static/<page>.html` beside its CSS, so open
 it in a browser to iterate on layout without a render. The PNG is what the
 panel shows: 1280×720, eight greys, dithered.
 
+While the server runs, `http://localhost:8080/web/` shows every page in a
+browser, built from the readings when it is asked for, and reloads it every
+minute; the arrow keys step through them. `/web/explore` draws one
+measurement over any window: pick a window, drag the chart to move through
+time, scroll or pinch to zoom. It asks `GET /history` for each window, which
+answers with the chart spec `charts.js` draws.
+
+`/web/config` shows `config.yaml` as a form in tabs, and as text in the YAML
+tab for the keys the form does not show. The form keeps the file's comments
+and layout. Check tests an edit as the server tests the file when it starts;
+Save and restart lists the changes, keeps the old file as `config.yaml.bak`,
+writes the new one, and restarts the server on it. Restore puts the `.bak`
+back. With the file mounted into a container on its own, the `.bak` stays
+inside the container and goes when the container is recreated. The page has
+no login yet, so anyone who can reach the server can change its config.
+
+The Storage tab downloads each store as a file, one JSON document a line,
+and takes such a file back. A store keeps a document under its board and its
+time, so an import adds what is missing and asks before it puts anything
+over what is held.
+
 Selenium needs a chromedriver that matches Chrome. If a stale one is on
 your PATH (Homebrew's, say) it is used and fails; `brew upgrade
 chromedriver`, or take it off the PATH and Selenium fetches the right one.
@@ -112,7 +133,7 @@ those and for pressure, Day (24 h ribbons), and three Diagnostics pages
 (each board's own report now, both boards over the day, and the dock's
 sensor health over the day). All but Diagnostics read the measurements: the
 simulated room by default, or what the board has posted with `source.kind:
-store` in `config.yaml`, which keeps them in `server/readings.db`. Before
+store` in `config.yaml`, which keeps them in `server/sensor-readings.db`. Before
 the first reading, every one of those pages says "No readings yet."
 Diagnostics reads the `status` dataset, the last document each board
 posted, and the reports of the day behind it.
@@ -249,7 +270,7 @@ The dock takes a reading 35 s after boot, once the PM fan has warmed up,
 and then on each of the server's slots (`posts` in `config.yaml`). It
 queues a readings document, with a `client` object beside the
 measurements, and the loop posts the queue to the server's
-`/readings` (`posted 1 reading (200); 0 queued`); the Diagnostics page is
+`/sensor-readings` (`posted 1 reading (200); 0 queued`); the Diagnostics page is
 drawn from the newest. While the server is down the queue grows
 (`posting readings failed (-1); 12 queued`), and once it answers the dock
 sends up to 100 a request until the queue is empty. The queue is 2 MB of
@@ -425,7 +446,7 @@ each new release, signed by the key in its `SIGNED_BY`.
 The image runs `python server.py` with the example config on port 8080.
 Mount your own `config.yaml` at `/app/config.yaml`, and volumes at
 `/app/data` and `/app/firmware` to keep the stores and the OTA images; point
-`source.path` and `calibration.path` at `data/readings.db` and
+`source.path` and `calibration.path` at `data/sensor-readings.db` and
 `data/calibration.db`. `docker-compose.yml`, at the repo root, runs the image
 this way, with `server/config.yaml` as the config and `server/firmware/` as
 the firmware directory.

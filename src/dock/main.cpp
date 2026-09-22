@@ -6,7 +6,7 @@
 // it, with its own status beside it. The server names the slots, every five
 // minutes and every half hour overnight, and the time: the dock has no clock
 // and asks for none elsewhere. The queue is in PSRAM, and each pass of the
-// loop posts the oldest hundred of it to the server's /readings as one
+// loop posts the oldest hundred of it to the server's /sensor-readings as one
 // batch. BSEC's state goes to /calibration whenever BSEC saves a new copy.
 // The server offers the image its own version calls for on any answer, and
 // the dock takes it once its queue is empty, then keeps it only if it posts.
@@ -351,7 +351,8 @@ static void startLed() {
 }
 
 static ClientConfig config;
-static char     readingsURL[300];    // the server's /readings; empty disables posting
+static const char kReadingsPath[] = "/sensor-readings";
+static char     readingsURL[300];    // the server's /sensor-readings; empty disables posting
 static uint32_t lastSampleMs = 0;
 static char     json[FileBacklog::kMaxDoc];
 static char     clientJson[768];
@@ -707,10 +708,10 @@ void setup() {
         configureMQTT(config.mqttBroker, config.mqttPort, config.mqttTopic, CLIENT_NAME, config.mqttRetries);
     }
 
-    if (urlOrigin(config.serverURL, readingsURL, sizeof(readingsURL) - 10)) {
+    if (urlOrigin(config.serverURL, readingsURL, sizeof(readingsURL) - sizeof(kReadingsPath))) {
         snprintf(calibrationURL, sizeof(calibrationURL), "%s/calibration", readingsURL);
         snprintf(aboutURL, sizeof(aboutURL), "%s/about", readingsURL);
-        strcat(readingsURL, "/readings");
+        strcat(readingsURL, kReadingsPath);
         logf(LOG_INFO, "posting readings to %s", readingsURL);
     } else {
         log(LOG_WARNING, "the server URL has no host; readings stay on the serial log");

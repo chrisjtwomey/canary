@@ -6,8 +6,10 @@ services:
       - "8080:8080"
     volumes:
       # Without it the image runs its example config, the simulated room.
-      # CONTRIBUTING.md, Releases, says which keys a deployment sets.
-      - ./server/config.yaml:/app/config.yaml:ro
+      # CONTRIBUTING.md, Releases, says which keys a deployment sets. Writable,
+      # so /web/config can save it: the container's user (uid 1000) must be
+      # able to write the host file. Mount it :ro to allow checks only.
+      - ./server/config.yaml:/app/config.yaml
       # The readings and calibration stores. A named volume, not a host path:
       # the container runs as uid 1000 and could not write to a directory the
       # host owns.

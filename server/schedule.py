@@ -20,6 +20,8 @@ from datetime import datetime, time as clock_time, tzinfo
 MINUTE = 60
 # Two days of minutes: further than any gap between two slots can be.
 LOOK_AHEAD_MINUTES = 2 * 24 * 60
+# The dock posts every half hour overnight unless config.yaml says otherwise.
+DEFAULT_QUIET = {"from": "01:00", "to": "07:00", "every": 1800}
 
 
 def parse_hhmm(text: str) -> clock_time:

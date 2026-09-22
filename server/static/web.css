@@ -1,0 +1,1102 @@
+/* The browser's pages: the menu, the scaled panel page, and the explorer.
+   The panel's greys and type come from styles.css. */
+
+body.web {
+  overflow: auto;
+  min-height: 100vh;
+}
+
+/* ── The menu ────────────────────────────────────────────────── */
+.bar {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 20px 24px 16px;
+  box-sizing: border-box;
+  border-bottom: 2px solid var(--ink-faint);
+}
+
+.bar .top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 40px;
+}
+
+.bar .brand {
+  font-size: 22px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.bar .views {
+  display: flex;
+  gap: 24px;
+}
+
+/* One group a row: its heading in the first column, its pages in the second.
+   The groups lay out on one grid, so every heading takes the same width. */
+.bar nav {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  gap: 6px 18px;
+  margin-top: 12px;
+}
+
+.bar .group {
+  display: contents;
+}
+
+.bar .links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+}
+
+/* Two spans of the same measurements, one row: the heading is the switch.
+   The radios hold the choice, out of the grid's way and off the screen. */
+.bar .spans input {
+  position: absolute;
+  opacity: 0;
+}
+
+.bar .switcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+}
+
+.bar .switcher .heading {
+  cursor: pointer;
+}
+
+#span-trace:checked ~ .links#links-delta,
+#span-delta:checked ~ .links#links-trace {
+  display: none;
+}
+
+#span-trace:checked ~ .switcher label[for="span-trace"],
+#span-delta:checked ~ .switcher label[for="span-delta"] {
+  color: var(--ink);
+  border-bottom: 2px solid var(--ink);
+}
+
+#span-trace:focus-visible ~ .switcher label[for="span-trace"],
+#span-delta:focus-visible ~ .switcher label[for="span-delta"] {
+  outline: 2px solid var(--ink-mid);
+  outline-offset: 2px;
+}
+
+.bar .heading {
+  font-size: 15px;
+  font-style: italic;
+  color: var(--ink-mid);
+}
+
+.bar nav a,
+.bar .views a {
+  font-size: 17px;
+  color: var(--ink-soft);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+}
+
+.bar nav a:hover,
+.bar .views a:hover {
+  color: var(--ink);
+}
+
+.bar nav a[aria-current="page"],
+.bar .views a[aria-current="page"] {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+
+/* ── One page at a time ──────────────────────────────────────── */
+/* browse.js scales the page to the stage's width and sets the stage's
+   height to match. */
+.stage {
+  position: relative;
+  max-width: 1280px;
+  margin: 24px auto;
+  overflow: hidden;
+}
+
+.stage iframe {
+  display: block;
+  border: 0;
+  transform-origin: 0 0;
+  background: var(--paper);
+}
+
+/* ── The explorer ────────────────────────────────────────────── */
+.explorer {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 20px 24px 32px;
+  box-sizing: border-box;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+}
+
+.choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.choice button,
+.choice .button {
+  display: inline-block;
+  font: inherit;
+  font-size: 16px;
+  font-style: italic;
+  color: var(--ink-soft);
+  background: var(--paper);
+  border: 2px solid var(--ink-mid);
+  border-radius: 1em;
+  padding: 0.2em 0.8em;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.choice button:hover,
+.choice .button:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+.choice button[aria-pressed="true"],
+.choice button.primary {
+  color: var(--paper);
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+.readout {
+  margin-top: 28px;
+}
+
+.readout .top {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 24px;
+}
+
+.readout .label,
+.readout .stamp {
+  font-size: 18px;
+}
+
+.readout .stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 28px;
+  margin-top: 14px;
+}
+
+.readout .hero {
+  font-size: clamp(56px, 8vw, 96px);
+}
+
+.readout .verdict {
+  font-size: clamp(22px, 3vw, 34px);
+}
+
+.readout .detail {
+  flex-basis: 100%;
+  font-size: 18px;
+  margin-top: 10px;
+}
+
+.chart {
+  position: relative;
+  height: clamp(260px, calc(100vh - 470px), 560px);
+  margin-top: 18px;
+  touch-action: none;
+}
+
+.chart canvas {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+}
+
+#overlay {
+  cursor: grab;
+}
+
+#overlay.dragging {
+  cursor: grabbing;
+}
+
+.chart.loading #trace {
+  opacity: 0.6;
+}
+
+.hint {
+  font-size: 15px;
+  font-style: italic;
+  color: var(--ink-mid);
+  margin: 10px 0 0;
+}
+
+/* ── The config ──────────────────────────────────────────────── */
+/* config.js shows one tab's panel at a time and adds .js to <html>;
+   without it every panel shows, one after another. */
+.settings {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 18px 24px 0;
+  box-sizing: border-box;
+}
+
+.settings [hidden] {
+  display: none !important;
+}
+
+.settings .top {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 4px 24px;
+}
+
+.settings h1 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.settings .where {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 2px 14px;
+  font-size: 15px;
+  color: var(--ink-soft);
+}
+
+.settings .where .stamp {
+  font-size: 16px;
+}
+
+.restore {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  margin: 0;
+  font-style: italic;
+}
+
+.link {
+  font: inherit;
+  font-style: italic;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-bottom: 1.5px solid var(--ink-mid);
+  padding: 0;
+  cursor: pointer;
+}
+
+.link:hover {
+  border-bottom-color: var(--ink);
+}
+
+/* ── Tabs ── */
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 30px;
+  margin-top: 12px;
+  border-bottom: 2px solid var(--ink-faint);
+}
+
+.tabs a {
+  position: relative;
+  padding: 6px 0 8px;
+  margin-bottom: -2px;
+  font-size: 18px;
+  color: var(--ink-soft);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+}
+
+.tabs a:hover {
+  color: var(--ink);
+}
+
+.tabs a[aria-selected="true"] {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+
+.tabs a:focus-visible {
+  outline: 2px solid var(--ink-mid);
+  outline-offset: 2px;
+}
+
+/* A tab with unsaved changes has a grey dot; one with a problem, a black "!". */
+.tabs a.changed::after,
+.tabs a.problem::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  right: -11px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ink-mid);
+}
+
+.tabs a.problem::after {
+  content: "!";
+  top: 4px;
+  right: -17px;
+  width: 14px;
+  height: 14px;
+  font-size: 11px;
+  font-weight: 700;
+  font-style: normal;
+  line-height: 14px;
+  text-align: center;
+  color: var(--paper);
+  background: var(--ink);
+}
+
+/* ── Messages ── */
+.banner {
+  margin: 14px 0 0;
+  padding: 6px 0 6px 12px;
+  font-size: 17px;
+  border-left: 4px solid var(--ink-mid);
+}
+
+.banner.problem {
+  border-left-color: var(--ink);
+}
+
+/* ── Panels and fields ── */
+.panel {
+  padding-bottom: 6px;
+}
+
+html:not(.js) .panel + .panel {
+  border-top: 2px solid var(--ink-faint);
+  margin-top: 24px;
+}
+
+.settings .group {
+  margin: 22px 0 10px;
+  font-size: 14px;
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+  gap: 18px 32px;
+  margin-top: 18px;
+}
+
+.group + .fields {
+  margin-top: 0;
+}
+
+.field {
+  min-width: 0;
+}
+
+.field.wide {
+  grid-column: 1 / -1;
+}
+
+/* Three pills do not fit one column on one line; two wrap well enough. */
+@media (min-width: 700px) {
+  .field:has(.segments label:nth-of-type(3)) {
+    grid-column: span 2;
+  }
+}
+
+.field .name {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 17px;
+}
+
+.field .head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  margin-bottom: 6px;
+}
+
+.field .head .name {
+  margin-bottom: 0;
+}
+
+.field .reset {
+  font: inherit;
+  font-size: 13px;
+  font-style: italic;
+  padding: 0;
+  color: var(--ink-soft);
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--ink-faint);
+  cursor: pointer;
+}
+
+.field .reset:hover {
+  color: var(--ink);
+  border-bottom-color: var(--ink-mid);
+}
+
+.field.changed .name::after {
+  content: " •";
+  color: var(--ink-mid);
+}
+
+.field .control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.field .unit {
+  font-size: 15px;
+  font-style: italic;
+  color: var(--ink-mid);
+}
+
+.field .control .button {
+  display: inline-block;
+  font: inherit;
+  font-size: 15px;
+  font-style: italic;
+  color: var(--ink-soft);
+  background: var(--paper);
+  border: 2px solid var(--ink-mid);
+  border-radius: 1em;
+  padding: 0.15em 0.8em;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.field .control .button:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+.field .control .button.off,
+.field .control .button.off:hover {
+  color: var(--ink-faint);
+  border-color: var(--ink-faint);
+  cursor: default;
+}
+
+/* Only a page without config.js shows these: with it, the button is the
+   picker and the dialog asks about overwriting. */
+.field .control input[type="file"] {
+  max-width: 100%;
+  font-size: 13px;
+}
+
+.field .control .over {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-style: italic;
+  color: var(--ink-mid);
+}
+
+form:empty {
+  display: none;
+}
+
+.field .help,
+.field .env {
+  margin: 5px 0 0;
+  font-size: 14px;
+  font-style: italic;
+  line-height: 1.35;
+  color: var(--ink-mid);
+}
+
+.field .env {
+  color: var(--ink-soft);
+}
+
+.field .error {
+  margin: 6px 0 0;
+  padding-left: 8px;
+  font-size: 15px;
+  border-left: 3px solid var(--ink);
+}
+
+.settings input[type="text"],
+.settings input[type="number"],
+.settings input[type="password"],
+.settings input[type="time"],
+.settings select {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 22em;
+  min-height: 38px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 16px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 2px solid var(--ink-faint);
+  border-radius: 6px;
+}
+
+.settings input[type="number"],
+.settings input[type="time"] {
+  max-width: 7.5em;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings input::placeholder {
+  font-style: italic;
+  color: var(--g5);
+  opacity: 1;
+}
+
+.settings input:focus,
+.settings select:focus,
+.settings textarea:focus {
+  outline: none;
+  border-color: var(--ink-mid);
+}
+
+.settings input:disabled {
+  color: var(--ink-mid);
+  border-style: dashed;
+}
+
+.field.invalid input,
+.field.invalid select {
+  border-color: var(--ink);
+}
+
+.settings select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 30px;
+  background: var(--paper) no-repeat right 10px center / 12px 8px
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23494949' stroke-width='1.8'/%3E%3C/svg%3E");
+}
+
+/* A choice of a few: pills, like the explorer's. */
+.segments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.segments label {
+  position: relative;
+  cursor: pointer;
+}
+
+.segments input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.segments span {
+  display: inline-block;
+  padding: 0.2em 0.8em;
+  font-size: 16px;
+  font-style: italic;
+  color: var(--ink-soft);
+  border: 2px solid var(--ink-mid);
+  border-radius: 1em;
+}
+
+.segments label:hover span {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+.segments input:checked + span {
+  color: var(--paper);
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+.segments input:focus-visible + span {
+  outline: 2px solid var(--ink-mid);
+  outline-offset: 2px;
+}
+
+.segments input:disabled + span {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* On and off. */
+.switch {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex: none;
+  width: 46px;
+  height: 26px;
+  margin: 0;
+  border: 2px solid var(--ink-mid);
+  border-radius: 13px;
+  background: var(--paper);
+  cursor: pointer;
+}
+
+.switch::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--ink-mid);
+  transition: transform 0.15s;
+}
+
+.switch:checked {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+.switch:checked::before {
+  transform: translateX(20px);
+  background: var(--paper);
+}
+
+.switch:focus-visible {
+  outline: 2px solid var(--ink-mid);
+  outline-offset: 2px;
+}
+
+.switch:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.switch + .state::after {
+  content: "Off";
+  font-style: italic;
+  color: var(--ink-mid);
+}
+
+.switch:checked + .state::after {
+  content: "On";
+  color: var(--ink);
+}
+
+/* ── Rows: the pools, and the wake times ── */
+fieldset.rows {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+fieldset.rows legend {
+  padding: 0;
+}
+
+/* Read out, not shown: the group's heading above says the same. */
+fieldset.rows legend.hide {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.rows .list {
+  display: grid;
+  column-gap: 32px;
+  border-top: 1px solid var(--ink-faint);
+}
+
+.pools .list {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 520px), 1fr));
+}
+
+.rows .row {
+  display: grid;
+  grid-template-columns: 7em minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--ink-faint);
+}
+
+.times .row {
+  grid-template-columns: 9em minmax(0, 14em) auto;
+}
+
+.settings .rows .row input,
+.settings .rows .row select {
+  max-width: none;
+  min-height: 34px;
+  padding: 4px 8px;
+}
+
+.settings .rows .pool-name {
+  font-style: italic;
+  border-color: transparent;
+}
+
+.settings .rows .pool-name:hover {
+  border-color: var(--ink-faint);
+}
+
+.rows .remove,
+.chip .x {
+  font: inherit;
+  font-style: normal;
+  color: var(--ink-mid);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.rows .remove {
+  width: 24px;
+  height: 30px;
+  font-size: 20px;
+  line-height: 1;
+  border-radius: 50%;
+}
+
+.rows .remove:hover,
+.chip .x:hover {
+  color: var(--ink);
+}
+
+.rows .foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  margin-top: 10px;
+}
+
+.rows .foot .help {
+  margin: 0;
+}
+
+.rows .add {
+  padding: 0.15em 0.8em;
+  font: inherit;
+  font-size: 15px;
+  font-style: italic;
+  color: var(--ink-soft);
+  background: var(--paper);
+  border: 1.5px dashed var(--ink-mid);
+  border-radius: 1em;
+  cursor: pointer;
+}
+
+.rows .add::before {
+  content: "+ ";
+}
+
+.rows .add:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+html:not(.js) .rows .add,
+html:not(.js) .rows .remove {
+  display: none;
+}
+
+/* Tags: config.js turns a comma-separated input into these. */
+.chiplist {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  border-radius: 6px;
+}
+
+.chiplist.over {
+  box-shadow: 0 0 0 2px var(--ink-faint);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.05em 0.1em 0.05em 0.6em;
+  font-size: 14px;
+  font-style: italic;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1.5px solid var(--ink-mid);
+  border-radius: 1em;
+  cursor: grab;
+  user-select: none;
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--ink-mid);
+  outline-offset: 2px;
+}
+
+.chip.dragging {
+  opacity: 0.35;
+}
+
+.chip.over {
+  box-shadow: -4px 0 0 var(--ink);
+}
+
+.chip .x {
+  padding: 0 5px 0 3px;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.settings .chiplist .adder {
+  width: 2.2em;
+  max-width: none;
+  min-height: 26px;
+  padding: 0;
+  font-size: 17px;
+  line-height: 1;
+  text-align: center;
+  text-align-last: center;
+  color: var(--ink-soft);
+  background-image: none;
+  border: 1.5px dashed var(--ink-mid);
+  border-radius: 1em;
+  cursor: pointer;
+}
+
+.settings .chiplist .adder:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+.chiplist .empty {
+  font-size: 15px;
+  font-style: italic;
+  color: var(--g5);
+}
+
+/* ── The YAML tab ── */
+.settings .detail {
+  max-width: 60em;
+  margin: 16px 0 0;
+  font-size: 15px;
+  font-style: italic;
+  color: var(--ink-mid);
+}
+
+.settings textarea {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: clamp(280px, calc(100vh - 430px), 900px);
+  margin: 12px 0 0;
+  padding: 12px;
+  font: 14px/1.45 ui-monospace, Menlo, Consolas, monospace;
+  color: var(--ink);
+  background: var(--paper);
+  border: 2px solid var(--ink-faint);
+  border-radius: 6px;
+  resize: vertical;
+}
+
+/* ── The bar along the bottom ── */
+.savebar {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 24px;
+  margin-top: 18px;
+  padding: 12px 0 16px;
+  background: var(--paper);
+  border-top: 2px solid var(--ink-faint);
+}
+
+.savebar .status {
+  margin: 0;
+  font-size: 16px;
+  font-style: italic;
+  color: var(--ink-soft);
+}
+
+.choice button:disabled,
+.choice .button.off {
+  color: var(--ink-faint);
+  background: var(--paper);
+  border-color: var(--ink-faint);
+  cursor: default;
+}
+
+/* Saving, and waiting for the server to come back. */
+.busy {
+  cursor: progress;
+}
+
+.busy::before {
+  content: "";
+  display: inline-block;
+  width: 0.75em;
+  height: 0.75em;
+  margin-right: 0.45em;
+  vertical-align: -0.05em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .busy::before {
+    animation-duration: 2.4s;
+  }
+}
+
+/* ── What a save changes ── */
+#review {
+  box-sizing: border-box;
+  width: min(640px, calc(100vw - 32px));
+  max-width: none;
+  padding: 22px 24px 20px;
+  font-family: inherit;
+  color: var(--ink);
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+}
+
+#review::backdrop {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+#review h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+#review .lead {
+  margin: 12px 0 6px;
+  font-size: 17px;
+}
+
+#review .lead:empty {
+  display: none;
+}
+
+#review .choice {
+  margin-top: 16px;
+  justify-content: flex-end;
+}
+
+.changes-box {
+  max-height: 50vh;
+  overflow: auto;
+}
+
+.changes {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+
+.changes th,
+.changes td {
+  padding: 6px 10px 6px 0;
+  vertical-align: top;
+  text-align: left;
+  border-top: 1px solid var(--ink-faint);
+}
+
+.changes th {
+  font-weight: 500;
+}
+
+.changes .old {
+  color: var(--ink-mid);
+}
+
+.changes .to {
+  color: var(--ink-mid);
+}
+
+.changes .new {
+  padding-right: 0;
+}
+
+/* ── A phone ── */
+@media (max-width: 640px) {
+  .settings {
+    padding: 14px 16px 0;
+  }
+
+  .settings .where {
+    justify-content: flex-start;
+  }
+
+  .tabs {
+    gap: 0 22px;
+  }
+
+  .tabs a {
+    font-size: 17px;
+  }
+
+  .fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rows .row,
+  .times .row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .pools .row .chiplist {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .changes th {
+    display: block;
+    border-top: 1px solid var(--ink-faint);
+  }
+
+  .changes td {
+    border-top: 0;
+  }
+}

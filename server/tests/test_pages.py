@@ -210,7 +210,7 @@ class TestAir:
         assert text(soup, "#iaq .value") == f"{latest['gas_ohm'] / 1000:.0f}"
         assert text(soup, "#iaq .unit") == "kΩ"
         assert text(soup, ".verdict") == "No index yet."
-        assert "BSEC" in text(soup, ".detail")
+        assert text(soup, ".detail") == "Index needs a firmware update."
         assert specs[1]["value"] is None
 
     def test_heater_cold(self, data, tz):
@@ -218,7 +218,7 @@ class TestAir:
         latest["valid"] = dict(data["latest"]["valid"], gas=False)
         soup, _ = render(AirPage("air", tz=tz, width=WIDTH, height=HEIGHT), dict(data, latest=latest))
         assert text(soup, "#iaq .value") == "—"
-        assert text(soup, "#iaq .cold-tag") == "heater warming up"
+        assert text(soup, "#iaq .cold-tag") == "warming up"
 
 
 class TestBarometerPool:
@@ -379,7 +379,7 @@ class TestDiagnostics:
         status = {"doc": None, "age_s": None, "count": 0, "boards": {"canary-dock": refused}}
         soup, specs = render(DiagnosticsPage("diagnostics", tz=tz, width=WIDTH, height=HEIGHT),
                              {"status": status})
-        assert text(soup, "#dock-age") == "no report taken"
+        assert text(soup, "#dock-age") == "no report yet"
         assert text(soup, "#dock-refused") == "1 from v0.4.0, 30 s ago"
         assert soup.select_one("#dock-heap") is None and specs == []
         trace = DiagnosticsTracePage("diagnostics-trace", tz=tz, width=WIDTH, height=HEIGHT)

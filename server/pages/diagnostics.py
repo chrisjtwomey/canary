@@ -89,7 +89,7 @@ class DiagnosticsPage(EnvPage):
         if status is None:
             with a.div(klass="empty"):
                 a.div(klass="verdict", _t="No report from either board yet.")
-                a.div(klass="detail", _t="Each posts to /readings once it connects.")
+                a.div(klass="detail", _t="Each posts once it connects.")
             return
         boards = status.get("boards") or {}
         for device in ordered_boards(boards):
@@ -105,7 +105,7 @@ class DiagnosticsPage(EnvPage):
                 a.span(klass="name label", _t=f"{k}, {c.get('board', device)}")
                 age = entry.get("age_s")
                 a.span(klass="stamp", id=f"{k}-age",
-                       _t=f"reported {fmt_duration(age)} ago" if age is not None else "no report taken")
+                       _t=f"reported {fmt_duration(age)} ago" if age is not None else "no report yet")
 
             with a.div(klass="card"):
                 a.div(klass="label", _t="Client")
@@ -304,7 +304,7 @@ class DiagnosticsTracePage(EnvPage):
         a.div(klass="title label", _t="Boards, last 24 hours")
         if status is None or status.get("doc") is None:
             a.div(klass="verdict", _t="No report from either board yet.")
-            a.div(klass="detail", _t="Each posts to /readings once it connects.")
+            a.div(klass="detail", _t="Each posts once it connects.")
             return
         a.div(klass="stamp", _t=fmt_stamp(status["doc"]["ts"], self.tz))
         boards = status.get("boards") or {}
@@ -429,7 +429,7 @@ class HealthTracePage(EnvPage):
         a.div(klass="title label", _t="Sensors, last 24 hours")
         if status is None:
             a.div(klass="verdict", _t="No report from either board yet.")
-            a.div(klass="detail", _t="Each posts to /readings once it connects.")
+            a.div(klass="detail", _t="Each posts once it connects.")
             return
         if newest is None:
             a.div(klass="verdict", _t="No health report from the dock yet.")

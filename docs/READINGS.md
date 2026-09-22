@@ -1,6 +1,6 @@
 # Readings — the JSON the firmware posts
 
-One document per sample set, `POST /readings`, `Content-Type: application/json`.
+One document per sample set, `POST /sensor-readings`, `Content-Type: application/json`.
 The firmware encodes it (`readingsToJson` in `src/sensors/ReadingsJson.cpp`),
 the server stores it as-is, and the pages read it. The Python mock source
 produces the same keys, so pages developed against the mock render the real
@@ -114,7 +114,7 @@ when it last saved its state this boot (0 for not yet).
 The dock queues every document when it takes the reading, and posts the
 queue oldest first, up to 100 documents at a time as one JSON array. The
 head posts its single document as an object. The server takes either at
-`POST /readings`, writes a batch in one transaction, and answers
+`POST /sensor-readings`, writes a batch in one transaction, and answers
 `{"new": 3, "repeated": 0}`. A document is stored by its own device and
 `ts`, and a second copy of the same pair is ignored and counted as
 repeated, so sending one again after a lost reply changes nothing.
@@ -127,6 +127,32 @@ costs only itself.
 Every document, whole, feeds the Diagnostics pages. With `source.kind:
 store` in `config.yaml`, every document also goes into the readings store,
 without its `client` object, and the other pages draw from the store.
+
+## Reading them back
+
+`GET /sensor-readings?from=<epoch>&to=<epoch>&device=<device>` answers with the
+stored documents in that window, oldest first: the last day by default, and
+every board unless `device` names one.
+
+```json
+{ "from": 1756813600, "to": 1756900000, "count": 288, "left_out": 0,
+  "readings": [ { "ts": 1756813654, "device": "canary-dock", "co2_ppm": 640, ... } ] }
+```
+
+They are the documents as the store keeps them: no `client` object, and
+pressure as measured, not reduced to sea level. One answer holds at most
+5,000, the newest; `left_out` counts the older ones.
+
+`GET /status` answers with the newest report of each board, as the
+Diagnostics pages read them, or a 404 before the first:
+
+```json
+{ "doc": { ... the newest report of any board ... }, "age_s": 12, "count": 40,
+  "boards": { "canary-dock": { "doc": { "ts": ..., "client": { ... }, "health": { ... } }, "age_s": 12 },
+              "canary-head": { "doc": { ... }, "age_s": 48 } } }
+```
+
+`age_s` is the seconds since the report arrived.
 
 ## The `health` object
 

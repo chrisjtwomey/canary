@@ -40,6 +40,10 @@ class Metric:
     cold_tag: str = "warming up"
     sensor: str = ""                 # its key in the board's client.sensors block
 
+    @property
+    def decimals(self) -> int:
+        return 1 if self.fmt is _f1 else 0
+
 
 def _f1(v):
     return f"{v:.1f}"
@@ -94,6 +98,50 @@ def _window_words(hours: float) -> str:
     return f"{int(hours)} h" if hours >= 1 else f"{int(hours * 60)} min"
 
 
+def trace_points(history: list[dict], key: str, start: int, latest: dict | None,
+                 step_s: int = 900) -> list[list]:
+    """``[ts, value]`` from ``start`` on, one per ``step_s``, and ``latest`` last."""
+    pts = [p for p in series(history, key, step_s) if p[0] >= start]
+    if latest is not None and latest.get(key) is not None:
+        pts.append([latest["ts"], latest[key]])
+    return pts
+
+
+def value_range(pts, m: Metric) -> dict:
+    """The trace's y extent: the values padded, and at least floor to ceiling."""
+    values = [v for _, v in pts]
+    if not values:
+        return {"min": m.floor or 0, "max": (m.ceil or 1)}
+    lo, hi = min(values) - m.pad, max(values) + m.pad
+    if m.floor is not None:
+        lo = min(m.floor, lo)
+    if m.ceil is not None:
+        hi = max(m.ceil, hi)
+    return {"min": lo, "max": hi}
+
+
+def value_ticks(y: dict) -> list[int]:
+    """Round values inside ``y``, spaced so that a few of them fit."""
+    span = y["max"] - y["min"]
+    step = 1 if span <= 12 else 5 if span <= 30 else 10 if span <= 150 else 100 if span <= 1000 else 500
+    return [v for v in range(int(y["min"]) - 1, int(y["max"]) + 2) if v % step == 0 and y["min"] <= v <= y["max"]]
+
+
+def weekday_axis(start: int, end: int, tz, fmt: str = "%A") -> tuple[list[dict], list[dict]]:
+    """A rule at each local midnight inside the window, and each day's name at its noon."""
+    day = datetime.fromtimestamp(start, tz).replace(hour=0, minute=0, second=0, microsecond=0)
+    days, labels = [], []
+    while day.timestamp() <= end:
+        ts = int(day.timestamp())
+        if ts > start:
+            days.append({"x": ts})
+        noon = int((day + timedelta(hours=12)).timestamp())
+        if start < noon < end:
+            labels.append({"x": noon, "label": day.strftime(fmt)})
+        day += timedelta(days=1)
+    return days, labels
+
+
 class TracePage(EnvPage):
     """The value now, three days behind it, the thresholds as dashed lines."""
     stylesheet = "trace.css"
@@ -135,61 +183,32 @@ class TracePage(EnvPage):
             return f"yesterday at {fmt_hm(ts, self.tz)}"
         return f"{datetime.fromtimestamp(ts, self.tz).strftime('%A')} at {fmt_hm(ts, self.tz)}"
 
-    def _series(self, history: list[dict], key: str, start: int, latest: dict):
-        pts = [p for p in series(history, key, 900) if p[0] >= start]
-        if latest.get(key) is not None:
-            pts.append([latest["ts"], latest[key]])
-        return pts
-
-    def _range(self, pts, m: Metric) -> dict:
-        values = [v for _, v in pts]
-        if not values:
-            return {"min": m.floor or 0, "max": (m.ceil or 1)}
-        lo, hi = min(values) - m.pad, max(values) + m.pad
-        if m.floor is not None:
-            lo = min(m.floor, lo)
-        if m.ceil is not None:
-            hi = max(m.ceil, hi)
-        return {"min": lo, "max": hi}
-
     def charts(self, **data) -> list[dict]:
         latest: dict = data["latest"]
         history_72h: list[dict] = data["history_72h"]
         m = self.metric
         end = latest["ts"]
         start = end - self.DAYS * 86400
-        pts = self._series(history_72h, m.key, start, latest)
+        pts = trace_points(history_72h, m.key, start, latest)
         recent = [p for p in series(history_72h, m.key, 300) if p[0] >= end - m.window_h * 3600]
         if latest.get(m.key) is not None:
             recent.append([end, latest[m.key]])
-        y = self._range(pts, m)
-        span = y["max"] - y["min"]
-        step = 1 if span <= 12 else 5 if span <= 30 else 10 if span <= 150 else 100 if span <= 1000 else 500
-        yticks = [v for v in range(int(y["min"]) - 1, int(y["max"]) + 2) if v % step == 0 and y["min"] <= v <= y["max"]]
-        day = datetime.fromtimestamp(start, self.tz).replace(hour=0, minute=0, second=0, microsecond=0)
-        days, labels = [], []
-        while day.timestamp() <= end:
-            ts = int(day.timestamp())
-            if ts > start:
-                days.append({"x": ts})
-            noon = int((day + timedelta(hours=12)).timestamp())
-            if start < noon < end:
-                labels.append({"x": noon, "label": day.strftime("%A")})
-            day += timedelta(days=1)
+        y = value_range(pts, m)
+        days, labels = weekday_axis(start, end, self.tz)
         then = value_at(history_72h, m.key, end - int(m.window_h * 3600))
         spec = {
             "kind": "trace", "canvas": "#trace",
             "points": pts, "recent": recent,
-            "x": {"min": start, "max": end}, "y": y, "yticks": yticks,
+            "x": {"min": start, "max": end}, "y": y, "yticks": value_ticks(y),
             "guides": [{"y": v, "label": label} for v, label in m.guides],
             "days": days, "dayLabels": labels,
             "set": [end - int(m.window_h * 3600), then] if then is not None else None,
             "now": [end, latest[m.key]] if latest.get(m.key) is not None else None,
         }
         if m.second is not None:
-            pts2 = self._series(history_72h, m.second.key, start, latest)
+            pts2 = trace_points(history_72h, m.second.key, start, latest)
             spec["points2"] = pts2
-            spec["y2"] = self._range(pts2, m.second)
+            spec["y2"] = value_range(pts2, m.second)
             spec["label2"] = f"{m.second.title.lower()}, {m.second.unit}"
         return [spec]
 
@@ -210,7 +229,7 @@ class DeltaPage(EnvPage):
         ok = _valid(latest, m)
         delta = change_over(history, latest, m.key, m.window_h) if ok else None
         rate = classify_rate(delta, m.slow, m.fast)
-        decimals = 1 if m.fmt is _f1 else 0
+        decimals = m.decimals
         shown = round(delta, decimals) + 0.0 if delta is not None else None   # no "-0"
         with a.div(klass="hero" + ("" if ok else " cold"), id=f"delta-{m.key}"):
             a.span(klass="value", _t=f"{shown:+.{decimals}f}" if shown is not None else "—")
