@@ -159,7 +159,7 @@ class DeviceReports:
         before = ((entry or {}).get("doc", {}).get("client") or {}).get("version")
         if not before or not version or before == version:
             return
-        older = (version_order(version) or (0, 0, 0)) < (version_order(before) or (0, 0, 0))
+        older = (version_order(version) or (0, 0, 0, 0)) < (version_order(before) or (0, 0, 0, 0))
         self.changes[device] = {"from": before, "to": version, "at": self.now(), "older": older}
         if older:
             log.warning("%s went back from %s to %s", device or "?", before, version)

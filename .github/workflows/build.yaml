@@ -24,7 +24,7 @@ jobs:
           path: epd
           # The same version the server core is pinned to in
           # server/requirements.txt; the two share the header contract.
-          ref: v0.7.0
+          ref: v0.7.1
       - uses: actions/cache@v5
         with:
           path: |
