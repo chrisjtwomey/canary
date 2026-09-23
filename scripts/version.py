@@ -7,8 +7,8 @@ so a device's boot log always identifies the commit it was built from:
     v1.5.1-3-gab12cd4         three commits past it
     v1.5.1-3-gab12cd4-dirty   with uncommitted changes
 
-Only tags that start with "v" are versions; the repository also tags
-hardware, such as enclosure-v1.0.
+Only tags that start with "v" are versions; any other tag, such as one
+that names a hardware revision, is ignored.
 
 Falls back to "dev" when git cannot answer — no binary, no repository, or a
 shallow clone with no tags. CI needs fetch-depth: 0 to see tags.

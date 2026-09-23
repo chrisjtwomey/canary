@@ -166,8 +166,8 @@ forecasts quote it. The reading as measured stays under
 Both boards flash themselves from the server. Each is offered the newest
 image of its own product that can work with the server's version: the same
 major and minor while the major is 0. On the bench the server's version is
-what `git describe` says, `v0.2.2-51-gab12cd4` say, so an image in the
-v0.2 line is offered and one in v0.3 is not. To watch it happen:
+what `git describe` says, `v0.3.0-51-gab12cd4` say, so an image in the
+v0.3 line is offered and one in v0.4 is not. To watch it happen:
 
 ```sh
 mkdir -p server/firmware/canary-head server/firmware/canary-dock
@@ -188,21 +188,21 @@ each board with placeholder credentials, and take the tag away again:
 pio run -e esp32 -t upload && pio run -e dock -t upload
 cp src/defaults.cpp /tmp/defaults.real.cpp       # keep your credentials
 cp src/defaults.example.cpp src/defaults.cpp     # release builds have placeholders
-git tag v0.2.99
-pio run -e esp32 && cp .pio/build/esp32/firmware.bin server/firmware/canary-head/v0.2.99.bin
-pio run -e dock && cp .pio/build/dock/firmware.bin server/firmware/canary-dock/v0.2.99.bin
-git tag -d v0.2.99
+git tag v0.3.99
+pio run -e esp32 && cp .pio/build/esp32/firmware.bin server/firmware/canary-head/v0.3.99.bin
+pio run -e dock && cp .pio/build/dock/firmware.bin server/firmware/canary-dock/v0.3.99.bin
+git tag -d v0.3.99
 cp /tmp/defaults.real.cpp src/defaults.cpp
 ```
 
 The file's name must be the `CLIENT_VERSION` the build prints. A tree with
-uncommitted changes builds `v0.2.99-dirty`, which the board then reports,
+uncommitted changes builds `v0.3.99-dirty`, which the board then reports,
 and a board that never runs the version it was offered is offered it again.
 
 The head takes the image after its next page, the dock after the next batch
 of readings the server takes with its queue empty; its LED pulses brighter
 and faster as the image is written. The serial log shows the offer, the
-progress, the restart, `trial boot of v0.2.99`, and `firmware v0.2.99
+progress, the restart, `trial boot of v0.3.99`, and `firmware v0.3.99
 confirmed` once the head has drawn a page or the server has taken the dock's
 readings. The image had placeholder credentials, so a WiFi connection at
 all proves the board read its own store.
@@ -214,7 +214,7 @@ The board takes the image, fails three times, and boots the previous one
 again.
 
 It then refuses that version for good, so the next offer logs `firmware
-v0.2.99 is offered again; this board rolled back from it` rather than
+v0.3.99 is offered again; this board rolled back from it` rather than
 looping. To try the same version number again, erase the board with
 `pio run -e esp32 -t erase` (or `-e dock`), or build under a new one.
 
@@ -433,19 +433,19 @@ Publishing a GitHub release runs `.github/workflows/release.yaml`. It builds
 `server/` into `ghcr.io/chrisjtwomey/canary-server` and
 `firmware-builder/` into
 `ghcr.io/chrisjtwomey/canary-firmware-builder`, each tagged
-with the release's version (`0.2.0` and `0.2` for `v0.2.0`) and `latest`. No
+with the release's version (`0.3.0` and `0.3` for `v0.3.0`) and `latest`. No
 release carries a firmware image: the firmware links Bosch's BSEC binary,
 which this project does not hand out. `scripts/build-firmware.sh` builds one
 instead, from a tag in a clean checkout, so the version is exactly the tag:
 epd offers an update only to a board that runs a tagged build.
 
 ```sh
-scripts/build-firmware.sh v0.2.0 myserver:/path/to/server/firmware
-scripts/build-firmware.sh --defaults src/defaults.cpp --upload dock v0.2.0
+scripts/build-firmware.sh v0.3.0 myserver:/path/to/server/firmware
+scripts/build-firmware.sh --defaults src/defaults.cpp --upload dock v0.3.0
 ```
 
 The first builds both boards and puts their images in a server's `firmware/`
-directory as `canary-head/v0.2.0.bin` and `canary-dock/v0.2.0.bin`, beside
+directory as `canary-head/v0.3.0.bin` and `canary-dock/v0.3.0.bin`, beside
 the images already there: a server offers the one its own version calls for,
 which may be an older one, so none is removed. The second also flashes the
 dock over USB (`--upload head` for the head) with your own `defaults.cpp`,
