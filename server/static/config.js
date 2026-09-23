@@ -614,6 +614,18 @@
     e.returnValue = '';
   });
 
+  // A check's result, with the save it offers: the save goes through the
+  // same review as the save bar's button.
+  var notice = document.getElementById('notice');
+  if (notice && notice.showModal) {
+    notice.addEventListener('close', function () {
+      if (notice.returnValue !== 'save') return;
+      var button = document.querySelector('form:not([hidden]) .savebar button[value=save]');
+      if (button) button.click();
+    });
+    notice.showModal();
+  }
+
   open(nav.getAttribute('data-open') || location.hash.slice(1));
   if (location.search) history.replaceState(null, '', 'config' + location.hash);
   refresh();

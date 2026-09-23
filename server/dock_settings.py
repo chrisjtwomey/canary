@@ -231,6 +231,22 @@ class BoardSettings:
         done_id = done.get("id") if isinstance(done.get("id"), int) else 0
         return self.requests.pending(DOCK, done_id, self.now() - RECALIBRATE_WITHIN_S)
 
+    def expired(self) -> dict | None:
+        """The newest recalibration the dock never ran before it lapsed, as
+        ``{id, ppm}``, or None."""
+        done = self.last_recalibration() or {}
+        done_id = done.get("id") if isinstance(done.get("id"), int) else 0
+        newest = self.requests.pending(DOCK, done_id, 0)
+        if newest is None or newest["id"] > self.now() - RECALIBRATE_WITHIN_S:
+            return None
+        return newest
+
+    def next_report(self) -> str:
+        """The local time of the dock's next slot, as HH:MM."""
+        now = self.now()
+        slot = now + self.posts.seconds_until_next(now)
+        return datetime.fromtimestamp(slot, self.posts.tz).strftime("%H:%M")
+
     def recalibrate(self, ppm) -> int:
         """Ask the dock to recalibrate its SCD41 to ``ppm`` at its next
         reading. Returns the request's id.

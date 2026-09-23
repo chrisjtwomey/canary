@@ -190,3 +190,17 @@ def test_the_dock_may_be_silent_until_two_slots_are_missed(now, silence):
     from server import make_silence
     assert make_silence(POSTS)("canary-dock", now) == silence
     assert make_silence(POSTS)("canary-head", now) == 120
+
+
+def test_a_recalibration_past_the_hour_and_not_run_has_expired(requests):
+    board(requests=requests, now=at(12, 0)).recalibrate(420)
+
+    assert board(requests=requests, now=at(12, 30)).expired() is None
+    assert board(requests=requests, now=at(13, 1)).expired() == {"id": int(at(12, 0)), "ppm": 420}
+    ran = report(recalibrated={"id": int(at(12, 0)), "ppm": 420, "ok": True})
+    assert board(requests=requests, now=at(13, 1), report=ran).expired() is None
+
+
+@pytest.mark.parametrize("now, slot", [(at(12, 3), "12:05"), (at(1, 10), "01:30")])
+def test_the_next_report_is_the_next_slot_in_local_time(now, slot, requests):
+    assert board(requests=requests, now=now).next_report() == slot

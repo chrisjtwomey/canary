@@ -51,12 +51,19 @@ TAB_NAMES = [t.name for t in cf.TABS] + [YAML_TAB]
 
 # What each drawing on a sheet shows, and how to change it by dragging.
 VISUAL_CAPTIONS = {
-    "dial": "Each tick is a report. The hatched band is slow mode: drag its ends to move it. "
-            "The inner line is when the light is off.",
-    "panel": "The image, with the page's drawn area hatched. Drag the round handle to resize "
-             "the area. Click a dot to move it.",
-    "slot": "The time before one report. Drag the fan band's left edge. "
-            "Past the start, the fan never stops.",
+    "dial": "Each tick is a report; the inner line marks the light off. "
+            "Drag the ends of the hatched band to move slow mode.",
+    "panel": "The image, with the drawn area hatched. "
+             "Drag the round handle to resize it; click a dot to move it.",
+    "slot": "The time before one report. "
+            "Drag the fan band's left edge; past the start, the fan never stops.",
+}
+
+# What a check or a save that changed nothing says, as a dialog's heading,
+# its line, and whether it offers the save. Without scripts the note stays a
+# banner.
+NOTICES = {
+    "No problems found.": ("No problems found", "Save and restart to apply it.", True),
 }
 
 # One wording for the state, whether it is a banner or a refused save.
@@ -112,6 +119,8 @@ class DockState:
     ppm: str = str(ds.RECALIBRATE_MIN_PPM + 20)
     offline: bool = False           # it has missed two slots; nothing on the tab reaches it
     age_s: int | None = None        # since its last report
+    expired: dict | None = None     # a recalibration that lapsed before the dock ran it
+    next_report: str = ""           # the local time of its next slot, HH:MM
 
 
 def head_panel(entry: dict | None) -> dict | None:
@@ -128,7 +137,8 @@ def dock_state(dock: ds.BoardSettings) -> DockState:
     applied, refused = dock.applied()
     offline, age = dock.offline()
     return DockState(applied, refused, dock.pending(), dock.last_recalibration(),
-                     offline=offline, age_s=age)
+                     offline=offline, age_s=age, expired=dock.expired(),
+                     next_report=dock.next_report())
 
 
 def file_view(text: str) -> View:
@@ -354,32 +364,48 @@ def _settings_line(a: Airium, state: DockState) -> None:
         pill = ("synced", "Synchronized", last)
     else:
         pill = ("waiting", "Not synchronized",
-                "The dock takes these settings before its next report.")
+                f"The dock takes these settings before its next report, at {state.next_report}.")
     with a.div(klass="dock-state"):
         with a.p(klass="banner dock-line", id="dock-applied"):
             if pill is None:
-                a.span(_t=esc("No report from the dock yet."))
+                a.span(_t=esc("No report from the dock yet. Settings apply once it connects."))
             else:
                 klass, name, words = pill
                 a.span(klass=f"pill {klass}", id=f"dock-{klass}", _t=esc(name))
                 a.span(_t=esc(words))
         if state.refused:
-            names = ", ".join(cf.name_of(("dock", *key.split("."))) for key in state.refused)
-            a.p(klass="error", id="dock-refused", _t=esc(f"The dock refused {names}."))
+            names = ", ".join(_label_of(("dock", *key.split("."))) for key in state.refused)
+            a.p(klass="error", id="dock-refused",
+                _t=esc(f"Refused by the dock: {names}. Check the dock's firmware version."))
+
+
+def _label_of(path: tuple) -> str:
+    """A setting's name as its own tab shows it."""
+    f = cf.field_at(path)
+    return (f.long or f.label) if f else ".".join(path)
 
 
 def _recalibration_words(state: DockState) -> str:
     if state.pending:
         asked = datetime.fromtimestamp(state.pending["id"])
-        return f"{state.pending['ppm']} ppm waits for the dock's next reading. Asked {_when(asked)}."
+        lapses = datetime.fromtimestamp(state.pending["id"] + ds.RECALIBRATE_WITHIN_S)
+        return (f"Waiting for the dock's next report: {state.pending['ppm']} ppm, "
+                f"asked {_when(asked)}. Expires at {lapses:%H:%M}.")
+    if state.expired:
+        return (f"Recalibration to {state.expired['ppm']} ppm expired: "
+                "no report from the dock within an hour.")
     last = state.last
     if not last:
-        return "Put the dock in air of this CO₂ level for 3 minutes first."
+        return ("Keep the dock in air of a known CO₂ level for 3 minutes, then enter that level. "
+                "Outdoor air is about 420 ppm.")
     asked = _when(datetime.fromtimestamp(last["id"]))
     if not last.get("ok"):
-        return f"Last: {last.get('ppm', '?')} ppm, asked {asked}. The SCD41 refused it."
+        return (f"Last recalibration failed: {last.get('ppm', '?')} ppm, asked {asked}. "
+                "The SCD41 refused it. Try again once the dock has been in that air "
+                "for 3 minutes.")
     correction = last.get("correction_ppm", 0)
-    return f"Last: {last.get('ppm', '?')} ppm, asked {asked}. Corrected by {correction:+d} ppm."
+    return (f"Last recalibration: {last.get('ppm', '?')} ppm, asked {asked}. "
+            f"Corrected by {correction:+d} ppm.")
 
 
 def _recalibrate(a: Airium, state: DockState, report: Report, sheet: bool = False) -> None:
@@ -468,7 +494,7 @@ def _head_size(a: Airium, view: View) -> None:
         a.p(klass="help head-size", id="head-size", _t=esc(f"The head reports {said}."))
     else:
         a.p(klass="error head-size", id="head-size",
-            _t=esc(f"Does not match the head: it reports {said}."))
+            _t=esc(f"Not the head's size: it reports {said}. Set Width and Height to match."))
 
 
 def _runs(fields: tuple[cf.Field, ...], sheet: bool) -> list[tuple[str, list[cf.Field]]]:
@@ -621,6 +647,18 @@ def config_html(pages: list[EnvPage], view: View, writable: bool,
                         a.button(value="cancel", _t=esc("Cancel"))
                         a.button(value="confirm", klass="primary", id="review-confirm",
                                  _t=esc("Save and restart"))
+            if view.note in NOTICES:
+                title, lead, offers_save = NOTICES[view.note]
+                with a.dialog(id="notice", **{"aria-labelledby": "notice-title"}):
+                    with a.form(method="dialog"):
+                        a.h2(klass="label", id="notice-title", _t=esc(title))
+                        a.p(klass="lead", _t=esc(lead))
+                        with a.div(klass="choice"):
+                            a.button(value="close", autofocus="autofocus", _t=esc("Close"),
+                                     **({} if offers_save else {"klass": "primary"}))
+                            if offers_save:
+                                a.button(value="save", klass="primary", _t=esc("Save and restart"),
+                                         **({} if writable else {"disabled": "disabled"}))
             with a.datalist(id="zones"):
                 for zone in sorted(zoneinfo.available_timezones()):
                     a.option(value=zone)

@@ -172,6 +172,10 @@ def test_check_says_so_and_changes_nothing(client, path, restarts):
                                            "action": "check"})
     assert rsp.status_code == 200
     assert one(soup_of(rsp), "#note").get_text() == "No problems found."
+    notice = one(soup_of(rsp), "dialog#notice")
+    assert one(notice, "#notice-title").get_text() == "No problems found"
+    assert one(notice, ".lead").get_text() == "Save and restart to apply it."
+    assert [b.get_text() for b in notice.select("button")] == ["Close", "Save and restart"]
     assert open(path).read() == GOOD and restarts == []
 
 
@@ -425,7 +429,7 @@ def test_the_dock_tab_holds_the_dock_block_and_a_recalibration(dock_client):
 
     assert attr(one(panel, '[data-field="dock.pm.warmup_s"] input'), "value") == "35"
     assert " ".join(one(panel, "#dock-applied").get_text().split()) == \
-        "No report from the dock yet."
+        "No report from the dock yet. Settings apply once it connects."
     sections = panel.select(".section")
     assert len(sections) == 7 and all(sec.select_one("h2.group") for sec in sections)
     heading = one(panel, '.section:has([data-field="dock.scd41.self_calibration"]) h2')
@@ -458,7 +462,7 @@ def test_recalibrate_asks_the_dock_and_does_not_restart(dock_client, dock, path,
     assert open(path).read() == before
     assert restarts == []
     words = one(soup_of(dock_client.get("/web/config")), "#recalibrate-state").get_text()
-    assert words.startswith("420 ppm waits for the dock's next reading.")
+    assert words.startswith("Waiting for the dock's next report: 420 ppm, asked ")
 
 
 def test_a_reference_out_of_range_is_refused_on_the_dock_tab(dock_client, dock):
@@ -474,7 +478,7 @@ def test_a_reference_out_of_range_is_refused_on_the_dock_tab(dock_client, dock):
 
 @pytest.mark.parametrize("dock_report, words", [
     ({"client": {"settings": {"version": "00000000"}}},
-     "The dock takes these settings before its next report."),
+     "The dock takes these settings before its next report, at 21:50."),
     ({"client": {"recalibrated": {"id": 1_758_600_000, "ppm": 420, "ok": True,
                                   "correction_ppm": -12}}},
      "Corrected by -12 ppm."),
@@ -493,7 +497,8 @@ def test_a_key_the_dock_refused_is_named_as_the_form_names_it(dock_client, dock_
 
     soup = soup_of(dock_client.get("/web/config"))
 
-    assert one(soup, "#dock-refused").get_text() == "The dock refused Dock · Fan warm-up."
+    assert one(soup, "#dock-refused").get_text() == \
+        "Refused by the dock: Fan warm-up. Check the dock's firmware version."
 
 
 def test_the_bsec_rate_is_saved_as_a_number(dock_client, path):
@@ -542,7 +547,7 @@ def test_a_dock_that_reports_can_be_changed(dock_client):
     assert not one(panel, "#recalibrate-ppm").has_attr("disabled")
     assert one(panel, "#dock-waiting").get_text() == "Not synchronized"
     assert " ".join(one(panel, "#dock-applied").get_text().split()) == \
-        "Not synchronized The dock takes these settings before its next report."
+        "Not synchronized The dock takes these settings before its next report, at 21:50."
 
 
 def test_the_quiet_hours_settings_share_a_box_that_shows_with_them(dock_client):
@@ -598,7 +603,8 @@ def test_the_position_grid_stands_for_both_alignments(client):
     ({"board": "Inkplate5V2", "width": 1280, "height": 720},
      "The head reports 1280 × 720 px, Inkplate5V2.", "help"),
     ({"board": "Inkplate10", "width": 1200, "height": 825},
-     "Does not match the head: it reports 1200 × 825 px, Inkplate10.", "error"),
+     "Not the head's size: it reports 1200 × 825 px, Inkplate10. Set Width and Height to match.",
+     "error"),
 ])
 def test_the_size_line_says_what_the_head_reports(path, tz, head, words, klass):
     line = one(soup_of(image_client(path, tz, head).get("/web/config")), "#head-size")
@@ -610,3 +616,30 @@ def test_no_size_line_before_the_head_reports(path, tz):
     soup = soup_of(image_client(path, tz, {"board": "Inkplate5V2"}).get("/web/config"))
 
     assert soup.select_one("#head-size") is None
+
+
+
+def test_a_recalibration_says_when_it_expires(dock_client, dock):
+    dock_client.post("/web/config", data={"mode": "recalibrate", "ppm": "420"})
+
+    from datetime import datetime
+    from tests.conftest import AT
+    words = one(soup_of(dock_client.get("/web/config")), "#recalibrate-state").get_text()
+
+    # In the process's own zone, which the server sets to server.timezone.
+    assert words.endswith(f"Expires at {datetime.fromtimestamp(AT + 3600):%H:%M}.")
+
+
+def test_a_recalibration_the_dock_never_ran_says_it_expired(dock_client, dock):
+    from tests.conftest import AT
+    dock.requests.request("canary-dock", "scd41", 450, AT - 2 * 3600)
+
+    words = one(soup_of(dock_client.get("/web/config")), "#recalibrate-state").get_text()
+
+    assert words == "Recalibration to 450 ppm expired: no report from the dock within an hour."
+
+
+def test_before_any_recalibration_the_row_says_how_to_do_one(dock_client):
+    words = one(soup_of(dock_client.get("/web/config")), "#recalibrate-state").get_text()
+
+    assert words.startswith("Keep the dock in air of a known CO₂ level for 3 minutes")

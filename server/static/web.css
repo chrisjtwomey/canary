@@ -1493,7 +1493,8 @@ html:not(.js) .rows .remove {
 }
 
 /* ── What a save changes ── */
-#review {
+#review,
+#notice {
   box-sizing: border-box;
   width: min(640px, calc(100vw - 32px));
   max-width: none;
@@ -1505,16 +1506,19 @@ html:not(.js) .rows .remove {
   border-radius: 12px;
 }
 
-#review::backdrop {
+#review::backdrop,
+#notice::backdrop {
   background: rgba(0, 0, 0, 0.3);
 }
 
-#review h2 {
+#review h2,
+#notice h2 {
   margin: 0;
   font-size: 15px;
 }
 
-#review .lead {
+#review .lead,
+#notice .lead {
   margin: 12px 0 6px;
   font-size: 17px;
 }
@@ -1523,9 +1527,19 @@ html:not(.js) .rows .remove {
   display: none;
 }
 
-#review .choice {
+#review .choice,
+#notice .choice {
   margin-top: 16px;
   justify-content: flex-end;
+}
+
+#notice {
+  width: min(420px, calc(100vw - 32px));
+}
+
+/* With scripts the note opens as #notice instead. */
+html.js #note {
+  display: none;
 }
 
 .changes-box {
