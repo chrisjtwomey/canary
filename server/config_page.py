@@ -53,6 +53,8 @@ TAB_NAMES = [t.name for t in cf.TABS] + [YAML_TAB]
 VISUAL_CAPTIONS = {
     "dial": "Each tick is a report. The hatched band is slow mode: drag its ends to move it. "
             "The inner line is when the light is off.",
+    "panel": "The image, with the page's drawn area hatched. Drag the round handle to resize "
+             "the area. Click a dot to move it.",
     "slot": "The time before one report. Drag the fan band's left edge. "
             "Past the start, the fan never stops.",
 }
@@ -97,6 +99,7 @@ class View:
     sizes: dict[str, int] = field(default_factory=dict)      # store -> the download's bytes
     report: Report = field(default_factory=Report)
     dock: DockState | None = None
+    head: dict | None = None        # the head's panel as it reports it: width, height, board
 
 
 @dataclass
@@ -109,6 +112,16 @@ class DockState:
     ppm: str = str(ds.RECALIBRATE_MIN_PPM + 20)
     offline: bool = False           # it has missed two slots; nothing on the tab reaches it
     age_s: int | None = None        # since its last report
+
+
+def head_panel(entry: dict | None) -> dict | None:
+    """The head's panel from its newest report: width, height and board, or
+    None before it has said."""
+    client = ((entry or {}).get("doc") or {}).get("client") or {}
+    width, height = client.get("width"), client.get("height")
+    if not isinstance(width, int) or not isinstance(height, int) or width <= 0 or height <= 0:
+        return None
+    return {"width": width, "height": height, "board": str(client.get("board") or "")}
 
 
 def dock_state(dock: ds.BoardSettings) -> DockState:
@@ -254,13 +267,14 @@ def _reset_button(a: Airium, f: cf.Field, view: View) -> None:
 
 
 def _field(a: Airium, f: cf.Field, view: View, images: list[str], heading: str,
-           locked: bool = False, sheet: bool = False) -> None:
+           locked: bool = False, sheet: bool = False, by_position: bool = False) -> None:
     """One setting. ``locked`` shows it and keeps it from being changed, as
     an environment variable does, but leaves the file's value standing. On a
-    ``sheet`` a dotted leader runs from its name to its value."""
+    ``sheet`` a dotted leader runs from its name to its value. ``by_position``
+    marks a choice the group's position grid stands in for once scripts run."""
     env = f.env_value()
     error = view.errors.get(f.key)
-    klass = "field"
+    klass = "field by-position" if by_position else "field"
     if f.kind in ("pools", "times"):
         klass += " wide"
     if error:
@@ -407,6 +421,56 @@ def _nothing():
     yield
 
 
+def _place_words(x: str, y: str) -> str:
+    """"Top left", "Centre right", "Centre": a grid square's name."""
+    across = {"left": "left", "center": "centre", "right": "right"}[x]
+    down = {"top": "Top", "center": "Centre", "bottom": "Bottom"}[y]
+    return "Centre" if x == y == "center" else f"{down} {across}"
+
+
+def _position(a: Airium, g: cf.Group, view: View, locked: bool) -> None:
+    """A 3 × 3 grid that sets the group's two alignments, across and up and
+    down, with one click. It stands in for their two rows of choices, which
+    stay in the form as what a save sends."""
+    across, down = [f for f in g.fields if f.kind == "choice"]
+    x = view.values.get(across.key) or "center"
+    y = view.values.get(down.key) or "center"
+    lock = {"disabled": "disabled"} if locked or across.env_value() or down.env_value() else {}
+    with a.div(klass="field position"):
+        with a.div(klass="head"):
+            a.span(klass="name", id="position-name", _t=esc("Position"))
+        a.span(klass="leader", **{"aria-hidden": "true"})
+        with a.div(klass="control"):
+            with a.div(klass="grid3", role="group",
+                       **{"aria-labelledby": "position-name", "data-x": across.key,
+                          "data-y": down.key}):
+                for yv in ("top", "center", "bottom"):
+                    for xv in ("left", "center", "right"):
+                        a.button(type="button", _t="", **lock,
+                                 **{"data-x": xv, "data-y": yv,
+                                    "aria-label": _place_words(xv, yv),
+                                    "aria-pressed": "true" if (xv, yv) == (x, y) else "false"})
+
+
+def _head_size(a: Airium, view: View) -> None:
+    """The size the head reports, against the saved one."""
+    head = view.head
+    if not head:
+        return
+    said = f"{head['width']} × {head['height']} px"
+    if head.get("board"):
+        said += f", {head['board']}"
+    try:
+        saved = (int(view.initial["image.width"]), int(view.initial["image.height"]))
+    except (KeyError, ValueError):
+        saved = None
+    if saved == (head["width"], head["height"]):
+        a.p(klass="help head-size", id="head-size", _t=esc(f"The head reports {said}."))
+    else:
+        a.p(klass="error head-size", id="head-size",
+            _t=esc(f"Does not match the head: it reports {said}."))
+
+
 def _runs(fields: tuple[cf.Field, ...], sheet: bool) -> list[tuple[str, list[cf.Field]]]:
     """The fields in order, those in a row that show only while another field
     holds a value run together under that ``when``, on a sheet, so they can
@@ -433,7 +497,8 @@ def _group(a: Airium, g: cf.Group, view: View, images: list[str], locked: bool,
             a.span(klass="part", _t=esc(part))
     elif g.heading:
         a.h2(klass="group label", _t=esc(g.heading))
-    with a.div(klass=f"content {g.visual}".strip()) if sheet else _nothing():
+    with a.div(klass=f"content visual-{g.visual}" if g.visual else "content") if sheet \
+            else _nothing():
         if sheet and g.visual:
             with a.div(klass="visual"):
                 a.canvas(id=f"visual-{g.visual}", **{"data-visual": g.visual,
@@ -443,7 +508,12 @@ def _group(a: Airium, g: cf.Group, view: View, images: list[str], locked: bool,
             for when, fields in _runs(g.fields, sheet):
                 with a.div(klass="subsection", **{"data-when": when}) if when else _nothing():
                     for f in fields:
-                        _field(a, f, view, images, g.heading, locked, sheet)
+                        _field(a, f, view, images, g.heading, locked, sheet,
+                               by_position=g.action == "position" and f.kind == "choice")
+            if g.action == "position":
+                _position(a, g, view, locked)
+            if g.action == "head":
+                _head_size(a, view)
             if g.store in view.sizes:
                 _export(a, g.store, view.sizes[g.store])
                 _import(a, g.store, view.report)
@@ -556,7 +626,7 @@ def config_html(pages: list[EnvPage], view: View, writable: bool,
                     a.option(value=zone)
             a.script(src="rough.iife.min.js")
             a.script(src="config.js")
-            a.script(src="dock.js")
+            a.script(src="sheet.js")
     return str(a)
 
 
@@ -578,7 +648,8 @@ def restarting_html(pages: list[EnvPage], tab: str) -> str:
 def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], None],
                      restart: Callable[[], None],
                      stores: dict[str, Transfer] | None = None,
-                     dock: ds.BoardSettings | None = None) -> Blueprint:
+                     dock: ds.BoardSettings | None = None,
+                     boards: Callable[[str], dict | None] | None = None) -> Blueprint:
     """The /web/config routes for the file at ``path``.
 
     Args:
@@ -589,6 +660,8 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
             can come out of and go into, by the group's ``store`` name.
         dock: the dock's settings, for what the Dock tab says of them and
             for its recalibration.
+        boards: what the server knows of a board, as DeviceReports.device
+            gives it, for the size the head reports.
     """
     bp = Blueprint("config", __name__, url_prefix="/web/config")
     stores = stores or {}
@@ -610,6 +683,8 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
         view.sizes = {name: store.size() for name, store in stores.items()}
         if dock is not None and view.dock is None:
             view.dock = dock_state(dock)
+        if boards is not None:
+            view.head = head_panel(boards("canary-head"))
         return config_html(pages, view, writable(), bak()), status
 
     @bp.route("/export/<name>", methods=["GET"])

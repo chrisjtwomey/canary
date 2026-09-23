@@ -1,8 +1,10 @@
-/* The Dock tab's drawings, with rough.js for the hand-drawn look the pages
-   have: the day's reports as a dial, and the time before one report as a
-   strip. Each is drawn from the settings form's inputs, and dragging one
+/* The drawings on the Config page's sheet tabs, with rough.js for the
+   hand-drawn look the pages have: the day's reports as a dial, the time
+   before one report as a strip, and the image with its drawn area as a
+   panel. Each is drawn from the settings form's inputs, and dragging one
    writes the inputs, so the form stays what a save sends. A locked input,
-   such as an offline dock's, cannot be dragged. */
+   such as an offline dock's, cannot be dragged. The position grid sets the
+   drawn area's two alignments the same way. */
 (function () {
   'use strict';
 
@@ -31,6 +33,19 @@
   function on(name) {
     var el = form.querySelector('input[type=checkbox][name="' + name + '"]');
     return !!(el && el.checked);
+  }
+
+  function choice(name) {
+    var el = form.querySelector('input[type=radio][name="' + name + '"]:checked');
+    return el ? el.value : '';
+  }
+
+  // Checks a radio as a click would, so config.js sees the change.
+  function choose(name, value) {
+    var el = form.querySelector('input[type=radio][name="' + name + '"][value="' + value + '"]');
+    if (!el || el.disabled || el.checked) return;
+    el.checked = true;
+    el.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
   function minutesOf(hhmm) {
@@ -338,16 +353,172 @@
     set('dock.pm.warmup_s', Math.max(30, Math.min(600, Math.round(before / 5) * 5)));
   };
 
+  // ── The panel: the image and its drawn area ──────────────────────
+  // The image to scale with its dimension lines, and the drawn area hatched
+  // where its alignment puts it. The round handle, on the corner away from
+  // where the area is anchored, resizes it; a dot at each of the nine places
+  // moves it there.
+  var ACROSS = { left: 0, center: 0.5, right: 1 };
+  var DOWN = { top: 0, center: 0.5, bottom: 1 };
+
+  function Panel(canvas) {
+    this.canvas = canvas;
+    this.drag = false;
+    var self = this;
+    canvas.addEventListener('pointerdown', function (e) { self.down(e); });
+    canvas.addEventListener('pointermove', function (e) { self.move(e); });
+    canvas.addEventListener('pointerup', function () { self.drag = false; });
+    canvas.addEventListener('pointercancel', function () { self.drag = false; });
+  }
+
+  function picture() {
+    var w = number('image.width'), h = number('image.height');
+    w = w > 0 ? w : 1280;
+    h = h > 0 ? h : 720;
+    var iw = number('image.innerWidth'), ih = number('image.innerHeight');
+    return { w: w, h: h,
+             iw: iw > 0 ? Math.min(iw, w) : w, ih: ih > 0 ? Math.min(ih, h) : h,
+             x: ACROSS.hasOwnProperty(choice('image.innerAlignX')) ? choice('image.innerAlignX') : 'center',
+             y: DOWN.hasOwnProperty(choice('image.innerAlignY')) ? choice('image.innerAlignY') : 'center' };
+  }
+
+  Panel.prototype.geometry = function () {
+    var r = this.canvas.getBoundingClientRect();
+    var s = picture();
+    var left = 30, top = 30;
+    var k = Math.min((r.width - left - 10) / s.w, (r.height - top - 10) / s.h);
+    var W = s.w * k, H = s.h * k, iw = s.iw * k, ih = s.ih * k;
+    var ix = left + (W - iw) * ACROSS[s.x], iy = top + (H - ih) * DOWN[s.y];
+    return {
+      s: s, k: k, X: left, Y: top, W: W, H: H, ix: ix, iy: iy, iw: iw, ih: ih,
+      hx: s.x === 'right' ? ix : ix + iw,
+      hy: s.y === 'bottom' ? iy : iy + ih
+    };
+  };
+
+  Panel.prototype.draw = function () {
+    var p = prepare(this.canvas);
+    if (!p.w) return;
+    var g = this.geometry(), s = g.s;
+    var fixed = locked('image.innerWidth');
+    var ink = fixed ? G[4] : G[1];
+
+    p.rc.rectangle(g.X, g.Y, g.W, g.H, { stroke: G[1], strokeWidth: 1.6, roughness: 1.2 });
+    p.rc.rectangle(g.ix, g.iy, g.iw, g.ih,
+                   { stroke: ink, strokeWidth: 1.2, fill: fixed ? G[5] : G[4],
+                     fillStyle: 'hachure', hachureGap: 6, roughness: 1.1 });
+
+    // Dimension lines, as a drawing gives them: the size along the top and
+    // down the left.
+    var above = g.Y - 12, beside = g.X - 12;
+    p.rc.line(g.X, above, g.X + g.W, above, { stroke: G[3], roughness: 0.6 });
+    p.rc.line(g.X, above - 5, g.X, above + 5, { stroke: G[3], roughness: 0.4 });
+    p.rc.line(g.X + g.W, above - 5, g.X + g.W, above + 5, { stroke: G[3], roughness: 0.4 });
+    text(p.ctx, s.w + ' px', g.X + g.W / 2, above, { size: 12, italic: true, color: G[2], halo: true });
+    p.rc.line(beside, g.Y, beside, g.Y + g.H, { stroke: G[3], roughness: 0.6 });
+    p.rc.line(beside - 5, g.Y, beside + 5, g.Y, { stroke: G[3], roughness: 0.4 });
+    p.rc.line(beside - 5, g.Y + g.H, beside + 5, g.Y + g.H, { stroke: G[3], roughness: 0.4 });
+    p.ctx.save();
+    p.ctx.translate(beside, g.Y + g.H / 2);
+    p.ctx.rotate(-Math.PI / 2);
+    text(p.ctx, s.h + ' px', 0, 0, { size: 12, italic: true, color: G[2], halo: true });
+    p.ctx.restore();
+
+    Object.keys(DOWN).forEach(function (y) {
+      Object.keys(ACROSS).forEach(function (x) {
+        var here = x === s.x && y === s.y;
+        p.ctx.save();
+        p.ctx.beginPath();
+        p.ctx.arc(g.X + g.W * ACROSS[x], g.Y + g.H * DOWN[y], here ? 4.5 : 3.5, 0, 2 * Math.PI);
+        p.ctx.fillStyle = here ? ink : G[7];
+        p.ctx.strokeStyle = here ? ink : G[3];
+        p.ctx.lineWidth = 1.5;
+        p.ctx.fill();
+        p.ctx.stroke();
+        p.ctx.restore();
+      });
+    });
+
+    // Over the dots, and clear of the middle one.
+    text(p.ctx, s.iw + ' × ' + s.ih, g.ix + g.iw / 2, g.iy + g.ih / 2 + 20,
+         { size: 14, weight: 600, color: ink, halo: true });
+
+    if (!fixed) {
+      p.rc.circle(g.hx, g.hy, 14, { stroke: G[0], strokeWidth: 1.6, fill: G[7],
+                                    fillStyle: 'solid', roughness: 0.8 });
+    }
+  };
+
+  Panel.prototype.down = function (e) {
+    if (locked('image.innerWidth')) return;
+    var r = this.canvas.getBoundingClientRect(), g = this.geometry();
+    var x = e.clientX - r.left, y = e.clientY - r.top;
+    if (Math.hypot(x - g.hx, y - g.hy) <= 12) {
+      this.drag = true;
+      this.canvas.setPointerCapture(e.pointerId);
+      e.preventDefault();
+      return;
+    }
+    Object.keys(DOWN).forEach(function (yv) {
+      Object.keys(ACROSS).forEach(function (xv) {
+        if (Math.hypot(x - (g.X + g.W * ACROSS[xv]), y - (g.Y + g.H * DOWN[yv])) <= 10) {
+          choose('image.innerAlignX', xv);
+          choose('image.innerAlignY', yv);
+        }
+      });
+    });
+  };
+
+  // Ten-pixel steps: a drag to the pixel is finer than the drawing shows.
+  Panel.prototype.move = function (e) {
+    if (!this.drag) return;
+    var r = this.canvas.getBoundingClientRect(), g = this.geometry(), s = g.s;
+    var x = e.clientX - r.left, y = e.clientY - r.top;
+    function span(at, start, size, anchor) {
+      if (anchor === 0) return at - start;
+      if (anchor === 1) return start + size - at;
+      return 2 * Math.abs(at - (start + size / 2));
+    }
+    function snap(v, most) { return Math.max(10, Math.min(most, Math.round(v / 10) * 10)); }
+    set('image.innerWidth', snap(span(x, g.X, g.W, ACROSS[s.x]) / g.k, s.w));
+    set('image.innerHeight', snap(span(y, g.Y, g.H, DOWN[s.y]) / g.k, s.h));
+  };
+
+  // ── The position grid ────────────────────────────────────────────
+  var grids = Array.prototype.slice.call(form.querySelectorAll('.grid3'));
+  grids.forEach(function (grid) {
+    grid.addEventListener('click', function (e) {
+      var b = e.target.closest('button');
+      if (!b || b.disabled) return;
+      choose(grid.getAttribute('data-x'), b.getAttribute('data-x'));
+      choose(grid.getAttribute('data-y'), b.getAttribute('data-y'));
+    });
+  });
+
+  function markGrids() {
+    grids.forEach(function (grid) {
+      var x = choice(grid.getAttribute('data-x')), y = choice(grid.getAttribute('data-y'));
+      grid.querySelectorAll('button').forEach(function (b) {
+        var on = b.getAttribute('data-x') === x && b.getAttribute('data-y') === y;
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+    });
+  }
+
   // ── Wiring ───────────────────────────────────────────────────────
   var drawings = [];
   document.querySelectorAll('canvas[data-visual]').forEach(function (canvas) {
     var kind = canvas.getAttribute('data-visual');
     if (kind === 'dial') drawings.push(new Dial(canvas));
     if (kind === 'slot') drawings.push(new Strip(canvas));
+    if (kind === 'panel') drawings.push(new Panel(canvas));
   });
-  if (!drawings.length) return;
+  if (!drawings.length && !grids.length) return;
 
-  function redraw() { drawings.forEach(function (d) { d.draw(); }); }
+  function redraw() {
+    drawings.forEach(function (d) { d.draw(); });
+    markGrids();
+  }
   form.addEventListener('input', redraw);
   form.addEventListener('change', redraw);
   // A canvas on a closed tab has no size; it draws when its tab opens.

@@ -715,11 +715,83 @@ html:not(.js) .panel + .panel {
   color: var(--ink-mid);
 }
 
-.panel.sheet .content.dial {
+.panel.sheet .content.visual-dial,
+.panel.sheet .content.visual-panel {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
   gap: 16px 36px;
   align-items: start;
+}
+
+.panel.sheet .content.visual-panel {
+  grid-template-columns: 340px minmax(0, 1fr);
+}
+
+.panel.sheet .visual-panel .visual canvas {
+  height: 230px;
+}
+
+/* The position grid: nine squares for the drawn area's place, the one it
+   is in filled. Without scripts the two rows of choices stand instead. */
+.grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, 20px);
+  gap: 5px;
+}
+
+.grid3 button {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: var(--paper);
+  border: 2px solid var(--ink-mid);
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.grid3 button[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+.grid3 button:disabled {
+  border-color: var(--ink-faint);
+  cursor: default;
+}
+
+.grid3 button[aria-pressed="true"]:disabled {
+  background: var(--ink-faint);
+}
+
+.panel.sheet .field.position {
+  align-items: center;
+}
+
+.panel.sheet .field.position .leader {
+  align-self: center;
+  margin-bottom: 0;
+}
+
+/* A line about the group as a whole, under its fields. */
+.panel.sheet .fields > .help,
+.panel.sheet .fields > .error {
+  margin: 0;
+  font-size: 14px;
+  font-style: italic;
+  line-height: 1.35;
+  color: var(--ink-mid);
+}
+
+.panel.sheet .fields > .error {
+  padding-left: 8px;
+  font-style: normal;
+  color: var(--ink);
+  border-left: 3px solid var(--ink);
+}
+
+html:not(.js) .field.position,
+html.js .field.by-position {
+  display: none;
 }
 
 .panel.sheet .visual canvas {
@@ -728,7 +800,7 @@ html:not(.js) .panel + .panel {
   touch-action: none;
 }
 
-.panel.sheet .dial .visual canvas {
+.panel.sheet .visual-dial .visual canvas {
   height: 260px;
 }
 
@@ -740,12 +812,12 @@ html:not(.js) .panel + .panel {
   color: var(--ink-mid);
 }
 
-.panel.sheet .slot .visual {
+.panel.sheet .visual-slot .visual {
   max-width: 640px;
   margin-bottom: 16px;
 }
 
-.panel.sheet .slot .visual canvas {
+.panel.sheet .visual-slot .visual canvas {
   height: 110px;
 }
 
@@ -802,11 +874,12 @@ html:not(.js) .panel + .panel {
 
 @media (max-width: 699px) {
   .panel.sheet .section,
-  .panel.sheet .content.dial {
+  .panel.sheet .content.visual-dial,
+  .panel.sheet .content.visual-panel {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .panel.sheet .dial .visual {
+  .panel.sheet .visual-dial .visual {
     max-width: 260px;
   }
 }

@@ -82,10 +82,12 @@ class Field:
 @dataclass(frozen=True)
 class Group:
     """``store`` names the store this group's file holds, for the export row.
-    ``action`` names a row after the fields that acts at once rather than
-    saving: ``recalibrate``. ``visual`` names a drawing of the group's values
-    that can also set them: ``dial``, the day's posts, or ``slot``, the time
-    before one reading."""
+    ``action`` names a row after the fields: ``recalibrate``, which acts at
+    once rather than saving; ``position``, a grid that sets the group's two
+    alignments together; or ``head``, the size the head reports. ``visual``
+    names a drawing of the group's values that can also set them: ``dial``,
+    the day's reports, ``slot``, the time before one report, or ``panel``,
+    the image and its drawn area."""
     heading: str
     fields: tuple[Field, ...]
     store: str = ""
@@ -147,7 +149,7 @@ TABS: tuple[Tab, ...] = (
                   minimum=1),
             Field("image.height", "Height", "", "int", 720, unit="px",
                   minimum=1),
-        )),
+        ), action="head", visual="panel"),
         Group("Drawn area", (
             Field("image.innerWidth", "Width", "", "int",
                   lambda cfg: effective(cfg, "image.width"), unit="px",
@@ -159,8 +161,8 @@ TABS: tuple[Tab, ...] = (
                   choices=(("left", "Left"), ("center", "Centre"), ("right", "Right"))),
             Field("image.innerAlignY", "Up and down", "", "choice", "center",
                   choices=(("top", "Top"), ("center", "Centre"), ("bottom", "Bottom"))),
-        )),
-    )),
+        ), action="position"),
+    ), sheet=True),
     Tab("dock", "Dock", (
         Group("Report schedule", (
             Field("posts.every", "Report every", "", "int", 300, unit="minutes", minimum=1,

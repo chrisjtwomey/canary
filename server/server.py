@@ -326,7 +326,7 @@ def main():
     }
     server.app.register_blueprint(config_blueprint(pages, os.path.join(cwd, "config.yaml"),
                                                    check_config, restart_soon, stores,
-                                                   dock=board_settings))
+                                                   dock=board_settings, boards=reports.device))
 
     if args.once or args.only:
         server.regenerate(only=args.only)

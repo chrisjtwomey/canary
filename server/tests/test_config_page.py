@@ -262,7 +262,7 @@ def test_text_from_the_file_is_escaped(client, path):
     soup = soup_of(rsp)
     assert one(soup, "textarea[name=text]").get_text() == text + "bad: ["
     assert [attr(s, "src") for s in soup.find_all("script")] == [
-        "rough.iife.min.js", "config.js", "dock.js"]
+        "rough.iife.min.js", "config.js", "sheet.js"]
 
 
 def test_a_posted_tab_name_is_one_of_the_tabs(client, path):
@@ -570,3 +570,43 @@ def test_a_dock_on_the_saved_settings_is_synchronized(dock_client, dock_report, 
     assert one(soup, "#dock-synced").get_text() == "Synchronized"
     assert " ".join(one(soup, "#dock-applied").get_text().split()) == \
         "Synchronized Last report 1 h ago."
+
+
+# ── The Image tab ───────────────────────────────────────────────────
+
+def image_client(path, tz, head):
+    app = Flask(__name__)
+    app.register_blueprint(config_blueprint(
+        make_pages(tz, width=1280, height=720), path, check_config, lambda: None,
+        boards=lambda device: {"doc": {"client": head}} if device == "canary-head" else None))
+    return app.test_client()
+
+
+def test_the_position_grid_stands_for_both_alignments(client):
+    panel = one(soup_of(client.get("/web/config")), "#panel-image")
+    grid = one(panel, ".grid3")
+
+    assert (attr(grid, "data-x"), attr(grid, "data-y")) == ("image.innerAlignX", "image.innerAlignY")
+    assert len(grid.select("button")) == 9
+    assert [attr(b, "aria-label") for b in grid.select('[aria-pressed="true"]')] == ["Centre"]
+    assert attr(grid.select("button")[0], "aria-label") == "Top left"
+    for key in ("image.innerAlignX", "image.innerAlignY"):
+        assert "by-position" in one(panel, f'[data-field="{key}"]')["class"]
+
+
+@pytest.mark.parametrize("head, words, klass", [
+    ({"board": "Inkplate5V2", "width": 1280, "height": 720},
+     "The head reports 1280 × 720 px, Inkplate5V2.", "help"),
+    ({"board": "Inkplate10", "width": 1200, "height": 825},
+     "Does not match the head: it reports 1200 × 825 px, Inkplate10.", "error"),
+])
+def test_the_size_line_says_what_the_head_reports(path, tz, head, words, klass):
+    line = one(soup_of(image_client(path, tz, head).get("/web/config")), "#head-size")
+
+    assert line.get_text() == words and klass in line["class"]
+
+
+def test_no_size_line_before_the_head_reports(path, tz):
+    soup = soup_of(image_client(path, tz, {"board": "Inkplate5V2"}).get("/web/config"))
+
+    assert soup.select_one("#head-size") is None
