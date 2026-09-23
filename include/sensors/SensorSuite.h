@@ -18,7 +18,7 @@
 // that will run on the device, not a parallel copy of it.
 //
 // A sample takes roughly 150 ms of wall clock, nearly all of it the BME688
-// heater. The dock samples once a minute, and ::delay() yields on ESP32, so
+// heater. The dock samples once a slot, and ::delay() yields on ESP32, so
 // WiFi keeps running.
 class SensorSuite {
 public:
@@ -72,11 +72,10 @@ public:
     // A PM frame read can land on a bus glitch; one retry covers it.
     static const int kPmReadAttempts = 2;
 
-    // A running sensor that has missed this many samples in a row, over at
-    // least kStoppedAfterMs, has stopped: unplugged, or back from a power cut
-    // without its settings. Both bounds, so neither a loop that samples fast
-    // nor one that stalled for a while takes a healthy sensor for a stopped one.
-    static const uint8_t  kMissedLimit = 3;
+    // A running sensor that gives no reading in a sample that expected one has
+    // stopped: unplugged, or back from a power cut without its settings. Not
+    // within kStoppedAfterMs of its start or its last reading, so a sensor
+    // still settling after a start is not taken for a stopped one.
     static const uint32_t kStoppedAfterMs = 15000;
     // A start that fails is tried again after this, then after twice the last
     // wait each time, up to kRetryMaxMs.
@@ -86,7 +85,6 @@ public:
 private:
     struct SensorState {
         bool     running = false;
-        uint8_t  missed = 0;           // samples in a row with no reading where one was due
         uint32_t lastReadingMs = 0;    // or the last start
         uint32_t retryAtMs = 0;
         uint32_t retryWaitMs = kRetryFirstMs;

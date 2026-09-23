@@ -1,20 +1,21 @@
 // The dock's loop.
 //
 // A TinyS3 with the four sensors on their own regulator. Mains powered, so
-// nothing sleeps: it connects once, samples every minute to notice a sensor
-// that stops, and on each of the server's slots takes a reading and queues
-// it, with its own status beside it. The server names the slots, every five
-// minutes and every half hour overnight, and the time: the dock has no clock
-// and asks for none elsewhere. The queue is in PSRAM, and each pass of the
-// loop posts the oldest hundred of it to the server's /sensor-readings as one
-// batch. BSEC's state goes to /calibration whenever BSEC saves a new copy.
-// The server offers the image its own version calls for on any answer, and
-// the dock takes it once its queue is empty, then keeps it only if it posts.
-// The head fetches the pages the server renders from the readings and knows
-// nothing about any of this. The status LED under the head's right end
-// pulses slowly while the dock works, and gives three flashes and a steady
-// glow while anything is wrong. The PM module's fan, the dock's largest
-// load, runs only for the window before each post.
+// nothing sleeps: it connects once, and on each of the server's slots takes a
+// reading and queues it, with its own status beside it. It reads the sensors
+// at no other time. A sensor that gave nothing at one slot is started again
+// when the PM fan starts before the next, so it has settled by then. The
+// server names the slots, every five minutes and every half hour overnight,
+// and the time: the dock has no clock and asks for none elsewhere. The queue
+// is in PSRAM, and each pass of the loop posts the oldest hundred of it to the
+// server's /sensor-readings as one batch. BSEC's state goes to /calibration
+// whenever BSEC saves a new copy. The server offers the image its own version
+// calls for on any answer, and the dock takes it once its queue is empty, then
+// keeps it only if it posts. The head fetches the pages the server renders
+// from the readings and knows nothing about any of this. The status LED under
+// the head's right end pulses slowly while the dock works, and gives three
+// flashes and a steady glow while anything is wrong. The PM module's fan, the
+// dock's largest load, runs only for the window before each post.
 #include <Arduino.h>
 #include <WiFi.h>
 #include <Wire.h>
@@ -274,9 +275,6 @@ static const bool kMockSensors = false;
 
 // ─── Everything below is implementation-agnostic ──────────────────────────
 
-// Often enough to notice a sensor that stops within a few minutes. The
-// reading a post carries is taken fresh at its slot.
-static const uint32_t kSampleIntervalMs = 60000;
 // Until the server names a slot: five minutes.
 static const uint32_t kFirstIntervalMs = 300000;
 
@@ -354,7 +352,6 @@ static void startLed() {
 static ClientConfig config;
 static const char kReadingsPath[] = "/sensor-readings";
 static char     readingsURL[300];    // the server's /sensor-readings; empty disables posting
-static uint32_t lastSampleMs = 0;
 static char     json[FileBacklog::kMaxDoc];
 static char     clientJson[768];
 static char     healthJsonBuf[448];
@@ -654,36 +651,35 @@ static void logSensorChanges() {
 }
 
 // The suite counts no missed frame while the fan is off, so stopping it does
-// not make the module look dead.
+// not make the module look dead. The fan's start is the warm-up for the next
+// slot, so any sensor that has stopped is started again with it.
 static void driveFan(uint32_t nowMs) {
     const bool wanted = fanWindow.shouldRun(postTimer.untilMs(nowMs));
     if (wanted == fanRunning) return;
     fanRunning = wanted;
-    if (wanted) fanOnSinceMs = nowMs;
+    if (wanted) {
+        fanOnSinceMs = nowMs;
+        sensors.restartFailed();
+        logSensorChanges();
+    }
     sensors.setFanEnabled(wanted);
     logf(LOG_INFO, "PM fan %s", wanted ? "on" : "off");
 }
 
 static Readings sampleSensors(uint32_t nowMs) {
-    lastSampleMs = nowMs;
     const uint32_t epoch = epochAt(nowMs);
     advanceSimulation(epoch);
-    sensors.restartFailed();
     Readings r = sensors.sample(epoch);
     logSensorChanges();
     return r;
 }
 
-// On a slot, a fresh reading for the queue; between slots, a sample only to
-// see that each sensor still answers.
+// On a slot, a fresh reading for the queue.
 static void sampleWhenDue(uint32_t nowMs) {
-    if (postTimer.due(nowMs)) {
-        Readings r = sampleSensors(nowMs);
-        postTimer.taken(nowMs);
-        queueReading(r, nowMs);
-    } else if (nowMs - lastSampleMs >= kSampleIntervalMs) {
-        sampleSensors(nowMs);
-    }
+    if (!postTimer.due(nowMs)) return;
+    Readings r = sampleSensors(nowMs);
+    postTimer.taken(nowMs);
+    queueReading(r, nowMs);
 }
 
 void setup() {

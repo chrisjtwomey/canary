@@ -42,7 +42,6 @@ bool SensorSuite::startBme688() {
 void SensorSuite::started(SensorState& s, bool ok) {
     uint32_t now = clock_.millis();
     s.running = ok;
-    s.missed = 0;
     s.lastReadingMs = now;
     if (ok) {
         s.retryWaitMs = kRetryFirstMs;
@@ -72,13 +71,10 @@ void SensorSuite::track(SensorState& s, bool due, bool valid) {
     if (!s.running) return;
     uint32_t now = clock_.millis();
     if (valid) {
-        s.missed = 0;
         s.lastReadingMs = now;
         return;
     }
-    if (!due) return;
-    if (s.missed < kMissedLimit) ++s.missed;
-    if (s.missed < kMissedLimit || now - s.lastReadingMs < kStoppedAfterMs) return;
+    if (!due || now - s.lastReadingMs < kStoppedAfterMs) return;
     s.running = false;
     s.retryAtMs = now;
     s.retryWaitMs = kRetryFirstMs;
