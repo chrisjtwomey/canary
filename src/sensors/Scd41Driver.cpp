@@ -78,8 +78,12 @@ bool Scd41Driver::readMeasurement(uint32_t nowMs, Scd41Data& out) {
 bool Scd41Driver::setAmbientPressure(uint32_t pa) {
     if (mode_ == POWERED_DOWN) return false;
     if (pa < kMinPressurePa || pa > kMaxPressurePa) return false;
-    return sensirion::sendCommandWithArg(bus_, addr_, kCmdSetAmbientPressure,
-                                         (uint16_t)(pa / 100));
+    if (!sensirion::sendCommandWithArg(bus_, addr_, kCmdSetAmbientPressure, (uint16_t)(pa / 100))) {
+        return false;
+    }
+    // The part refuses the next command until it has taken this one.
+    clock_.waitMs(kCommandMs);
+    return true;
 }
 
 bool Scd41Driver::setTemperatureOffset(float degC) {

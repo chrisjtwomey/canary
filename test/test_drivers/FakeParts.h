@@ -70,6 +70,10 @@ public:
     int      stopsRefused = 0;
     int      wakeUps = 0;
     int      singleShots = 0;
+    // When set, the part refuses any command that arrives while it is still
+    // carrying out a pressure command, 1 ms by the datasheet.
+    const uint32_t* clockMs = nullptr;
+    uint32_t busyUntilMs = 0;
 
     // Power back after a cut: the part comes up idle, with nothing measured.
     void powerCycle() {
@@ -90,6 +94,7 @@ public:
             }
             return false;
         }
+        if (clockMs && *clockMs < busyUntilMs) return false;
         switch (cmd) {
             case 0x21B1:   // start periodic
             case 0x21AC:   // start low-power periodic
@@ -129,6 +134,7 @@ public:
             case 0xE000:
                 if (len != 5 || !argCrcOk(data)) return false;
                 lastPressurePa = (uint32_t)arg(data) * 100;
+                if (clockMs) busyUntilMs = *clockMs + 1;
                 return true;
             case 0x241D:
                 if (periodic || len != 5 || !argCrcOk(data)) return false;

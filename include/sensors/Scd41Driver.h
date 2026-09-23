@@ -58,7 +58,8 @@ public:
     static const uint32_t kStopBusyMs   = 500;
     static const uint32_t kSingleShotMs = 5000;
     static const uint32_t kWakeMs       = 30;
-    // Every command that answers with data needs 1 ms before the read.
+    // Every command that answers with data needs 1 ms before the read, and
+    // the pressure command 1 ms before the next command.
     static const uint32_t kCommandMs = 1;
 
     static const uint32_t kMinPressurePa = 70000;

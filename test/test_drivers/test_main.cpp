@@ -263,6 +263,18 @@ void test_scd41_pressure_goes_out_in_hectopascals_and_is_range_checked() {
     delete drv;
 }
 
+void test_scd41_data_ready_can_follow_the_pressure_straight_away() {
+    FakeScd41 part;
+    part.clockMs = &clk->now;
+    Scd41Driver* drv = startedScd41(part);
+
+    TEST_ASSERT_TRUE(drv->setAmbientPressure(101120));
+    bool ready = false;
+    TEST_ASSERT_TRUE(drv->getDataReadyStatus(clk->now, ready));
+    TEST_ASSERT_TRUE(ready);
+    delete drv;
+}
+
 void test_scd41_temperature_offset_is_refused_while_measuring() {
     FakeScd41 part;
     Scd41Driver* drv = startedScd41(part);
@@ -673,6 +685,7 @@ int main(int, char**) {
     RUN_TEST(test_scd41_data_ready_reads_only_the_low_eleven_bits);
     RUN_TEST(test_scd41_read_measurement_fails_when_the_part_nacks_it);
     RUN_TEST(test_scd41_pressure_goes_out_in_hectopascals_and_is_range_checked);
+    RUN_TEST(test_scd41_data_ready_can_follow_the_pressure_straight_away);
     RUN_TEST(test_scd41_temperature_offset_is_refused_while_measuring);
     RUN_TEST(test_scd41_reads_its_settings_only_while_idle);
     RUN_TEST(test_scd41_counts_a_corrupt_answer);
