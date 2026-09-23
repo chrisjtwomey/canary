@@ -1,3 +1,11 @@
 *
-!scripts/build-firmware.sh
-!firmware-builder/watch.sh
+!platformio.ini
+!partitions.csv
+!include
+!lib
+!src
+src/defaults.cpp
+!scripts/version.py
+!scripts/bsec.py
+!server/requirements.txt
+!firmware-builder/build.sh

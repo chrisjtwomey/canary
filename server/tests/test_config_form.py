@@ -159,16 +159,6 @@ def test_a_field_an_environment_variable_sets_is_left_alone(monkeypatch):
     assert e.text == EXAMPLE and e.changed == []
 
 
-def test_an_empty_token_keeps_the_one_in_the_file():
-    text = EXAMPLE + "\n"
-    with_token = cf.apply(text, MultiDict({"client.firmware.source.github": "o/r",
-                                           "client.firmware.source.token": "abc"})).text
-    assert cf.read(with_token)["client"]["firmware"]["source"]["token"] == "abc"
-    assert cf.shown(cf.read(with_token))["client.firmware.source.token"] == ""
-    kept = cf.apply(with_token, MultiDict({"client.firmware.source.token": ""}))
-    assert kept.text == with_token
-
-
 @pytest.mark.parametrize("key, value, words", [
     ("server.port", "abc", "whole number"),
     ("server.port", "70000", "at most 65535"),
@@ -252,16 +242,12 @@ def test_every_field_is_named_once_and_every_condition_names_a_field():
             assert f.when.split("=")[0] in cf.BY_KEY, f.key
 
 
-def test_changes_are_in_words_with_quiet_hours_on_one_line_and_no_token():
+def test_changes_are_in_words_with_quiet_hours_on_one_line():
     old = cf.read(EXAMPLE)
-    new = cf.read(edit(server__port="9090", posts__quiet="false",
-                       client__firmware__source__github="o/r",
-                       client__firmware__source__token="abc").text)
+    new = cf.read(edit(server__port="9090", posts__quiet="false").text)
     assert cf.changes(old, new) == [
         {"name": "Server · Port", "old": "8080", "new": "9090"},
         {"name": "Boards · Quiet hours", "old": "01:00–07:00, 1800 s", "new": "off"},
-        {"name": "Firmware · Repository", "old": "not set", "new": "o/r"},
-        {"name": "Firmware · Token", "old": "not set", "new": "new"},
     ]
 
 

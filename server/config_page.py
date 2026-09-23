@@ -74,7 +74,6 @@ class View:
     file_text: str                  # the file as it is
     values: dict[str, Any]          # each field as its input shows it
     initial: dict[str, Any]         # the same from the file: what a change is measured against
-    secrets: set[str]               # the secret fields the file sets
     defaults: dict[str, str] = field(default_factory=dict)   # each default, as its input shows it
     errors: dict[str, str] = field(default_factory=dict)
     problem: str = ""
@@ -91,11 +90,10 @@ def file_view(text: str) -> View:
         cfg = cf.read(text)
     except cf.FormError as exc:
         values = cf.shown({})
-        return View(text, text, values, dict(values), set(), tab=YAML_TAB,
+        return View(text, text, values, dict(values), tab=YAML_TAB,
                     unreadable=str(exc))
     values = cf.shown(cfg)
-    secrets = {f.key for f in cf.FIELDS if f.kind == "secret" and cf.has_secret(cfg, f)}
-    return View(text, text, values, dict(values), secrets, cf.defaults(cfg))
+    return View(text, text, values, dict(values), cf.defaults(cfg))
 
 
 def esc(value: Any) -> str:
@@ -200,10 +198,6 @@ def _control(a: Airium, f: cf.Field, view: View, env: str | None) -> None:
                     attrs["max"] = f"{f.maximum:g}"
             elif f.kind == "time":
                 attrs.update(type="time")
-            elif f.kind == "secret":
-                attrs.update(type="password", autocomplete="new-password", value="",
-                             placeholder="unchanged" if f.key in view.secrets
-                             else "not set")
             else:
                 attrs.update(type="text", spellcheck="false", autocomplete="off")
                 if f.kind == "zone":

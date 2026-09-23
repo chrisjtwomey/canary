@@ -165,9 +165,10 @@ forecasts quote it. The reading as measured stays under
 
 Both boards flash themselves from the server. Each is offered the newest
 image of its own product that can work with the server's version: the same
-major and minor while the major is 0. On the bench the server's version is
-what `git describe` says, `v0.3.0-51-gab12cd4` say, so an image in the
-v0.3 line is offered and one in v0.4 is not. To watch it happen:
+major and minor while the major is 0. A server run from a checkout reports
+what `git describe` says, `v0.3.1-51-gab12cd4` say, so it offers development
+builds, and an image in the v0.3 line is offered and one in v0.4 is not. To
+watch it happen:
 
 ```sh
 mkdir -p server/firmware/canary-head server/firmware/canary-dock
@@ -177,40 +178,40 @@ mkdir -p server/firmware/canary-head server/firmware/canary-dock
 client:
   firmware:
     enabled: true
-    offer_dev_builds: true  # the bench boards run builds past a tag, not a tag
 ```
 
 Flash each board once over USB, so it stores its WiFi and server URL. Then
-commit your change, and build the last commit of each board, with
-placeholder credentials, into the server's folder:
+commit a change, and put each board's build of it in the folder, named by
+its version:
 
 ```sh
 pio run -e esp32 -t upload && pio run -e dock -t upload
-scripts/build-firmware.sh --dev server/firmware
+v=$(git describe --tags --match 'v*' --dirty)
+pio run -e esp32 && cp .pio/build/esp32/firmware.bin server/firmware/canary-head/$v.bin
+pio run -e dock && cp .pio/build/dock/firmware.bin server/firmware/canary-dock/$v.bin
 ```
 
-`--dev` builds a clean clone of the last commit, so each image is named by
-the version the board will report, such as `v0.3.1-2-gab12cd4`, and
-uncommitted changes are never in it. The server offers the build furthest
-past the tag. Commit before each build: a board already on a version is not
-offered it again.
+The file's name must be the `CLIENT_VERSION` the build prints, and the
+server offers the build furthest past the tag. Commit before each build: a
+tree with uncommitted changes builds `...-dirty`, two builds of one commit
+share one version, and a board already on a version is not offered it
+again.
 
 The head takes the image after its next page, the dock after the next batch
 of readings the server takes with its queue empty; its LED pulses brighter
 and faster as the image is written. The serial log shows the offer, the
-progress, the restart, `trial boot of v0.3.1-2-gab12cd4`, and `firmware
-v0.3.1-2-gab12cd4 confirmed` once the head has drawn a page or the server has taken the dock's
-readings. The image had placeholder credentials, so a WiFi connection at
-all proves the board read its own store.
+progress, the restart, `trial boot of v0.3.1-52-gcd34ef5`, and `firmware
+v0.3.1-52-gcd34ef5 confirmed` once the head has drawn a page or the server
+has taken the dock's readings.
 
 To watch a bad image roll back, give the trial image a server it cannot
-reach: copy `src/defaults.example.cpp`, set its `serverURL` to
-`http://192.0.2.1:8080/breathe.png`, and build with `--defaults <the copy>`. That address is reserved for documentation and never answers.
-The board takes the image, fails three times, and boots the previous one
-again.
+reach: set `serverURL` in `src/defaults.cpp` to
+`http://192.0.2.1:8080/breathe.png` before building it. That address is
+reserved for documentation and never answers. The board takes the image,
+fails three times, and boots the previous one again.
 
 It then refuses that version for good, so the next offer logs `firmware
-v0.3.1-2-gab12cd4 is offered again; this board rolled back from it` rather
+v0.3.1-52-gcd34ef5 is offered again; this board rolled back from it` rather
 than looping. To try the same version again, erase the board with
 `pio run -e esp32 -t erase` (or `-e dock`), or commit again for a new one.
 
@@ -219,10 +220,10 @@ the server's line is behind, flash it over USB, and leave the older image in
 the folder: the server offers it, logs that it is offering an older image,
 and the Diagnostics page says the board was downgraded.
 
-With `offer_dev_builds: true`, every board is moved to the newest image in
-the folder. A board flashed over USB with a build the folder does not hold
-is offered the folder's newest at its next request, even an older one. Build
-into the folder with `--dev` rather than flashing builds by hand.
+A server past a tag moves every board to the newest image in the folder: a
+board flashed over USB with a build the folder does not hold is offered the
+folder's newest at its next request, even an older one. A tagged server
+offers only to boards on a tagged build, and leaves the others alone.
 
 ### 4. On the Inkplate, end to end
 
@@ -429,40 +430,32 @@ every joint". Change one and change the other.
 
 Every push to `main` runs `.github/workflows/release.yaml`. It builds
 `server/` into `ghcr.io/chrisjtwomey/canary-server` and `firmware-builder/`
-into `ghcr.io/chrisjtwomey/canary-firmware-builder`, both tagged `latest`,
-with the server reporting what `git describe` says. A server whose stack
-follows `latest` takes a push with a re-pull. Publishing a GitHub release
-adds the release's version tags (`0.3.0` and `0.3` for `v0.3.0`).
+into `ghcr.io/chrisjtwomey/canary-firmware-builder`, both tagged `latest`
+and stamped with what `git describe` says. Publishing a GitHub release adds
+the release's version tags (`0.3.0` and `0.3` for `v0.3.0`).
 
 No image carries firmware: the firmware links Bosch's BSEC binary, which
-this project does not hand out. `scripts/build-firmware.sh` builds it
-instead, in a clean checkout, from a tag, or with `--dev` from the last
-commit:
+this project does not hand out. The firmware-builder image carries the
+firmware's sources instead, at its commit, and builds them where it runs.
+When it starts, it builds the head's and the dock's firmware of its own
+version into the folder the server offers images from, as
+`canary-head/<version>.bin` and `canary-dock/<version>.bin`, and then waits.
+Images already in the folder stay: a server offers the one its version calls
+for, which may be an older one.
 
-```sh
-scripts/build-firmware.sh v0.3.0 myserver:/path/to/server/firmware
-scripts/build-firmware.sh --defaults src/defaults.cpp --upload dock v0.3.0
-scripts/build-firmware.sh --dev myserver:/path/to/server/firmware
-```
+Run the builder beside a server of the same tag. A pair on `latest` moves
+the boards with every push, because a server past a tag offers development
+builds; a pair on `0.3.1` keeps them on that release. The one USB flash a
+board needs, with your own `src/defaults.cpp`, is `pio run -e dock -t upload`
+(`-e esp32` for the head) from a checkout of the version the server runs.
 
-The first builds both boards and puts their images in a server's `firmware/`
-directory as `canary-head/v0.3.0.bin` and `canary-dock/v0.3.0.bin`, beside
-the images already there: a server offers the one its own version calls for,
-which may be an older one, so none is removed. The second also flashes the
-dock over USB (`--upload head` for the head) with your own `defaults.cpp`,
-whose settings the board then keeps: the one USB flash a board needs. The
-third builds the last commit, for a server with `offer_dev_builds: true`.
-`--signed-by <fingerprint>` refuses a tag that key did not sign.
-The `firmware-builder` service in `docker-compose.yml` runs the first for
-each new release, signed by the key in its `SIGNED_BY`.
-
-The image runs `python server.py` with the example config on port 8080.
-Mount your own `config.yaml` at `/app/config.yaml`, and volumes at
+The server image runs `python server.py` with the example config on port
+8080. Mount your own `config.yaml` at `/app/config.yaml`, and volumes at
 `/app/data` and `/app/firmware` to keep the stores and the OTA images; point
-`source.path`, `calibration.path`, `status.path` and `logs.path` into `data/`,
-or those stores are lost with the container. `docker-compose.yml`, at the repo root, runs the image
-this way, with `server/config.yaml` as the config and `server/firmware/` as
-the firmware directory.
+`source.path`, `calibration.path`, `status.path` and `logs.path` into
+`data/`, or those stores are lost with the container. `docker-compose.yml`,
+at the repo root, runs both images this way, with `server/config.yaml` as
+the config and `server/firmware/` as the firmware directory.
 
 ## Making Changes
 

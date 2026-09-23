@@ -58,11 +58,6 @@ client:             # what the board runs, not what this server does
     enabled: false
     dir: firmware   # canary-head/ and canary-dock/, each of <version>.bin; every board is
                     # offered the newest its product has that works with this server's version
-    offer_dev_builds: false # true offers to boards not built from a tag
-    # source:               # optional: fill dir from a repository's releases
-    #   github: chrisjtwomey/canary
-    #   asset: firmware.bin
-    #   token: ""           # private repo; prefer CLIENT_FIRMWARE_SOURCE_TOKEN
 
 mqtt:               # each board logs to <prefix>/<board>; the Logs view shows them
   enabled: false

@@ -256,13 +256,6 @@ def test_a_field_an_environment_variable_sets_is_locked_and_says_so(client, monk
     assert "SERVER_PORT" in one(soup, '[data-field="server.port"] .env').get_text()
 
 
-def test_the_token_is_not_put_in_the_form(client, path):
-    write(path, GOOD + "client:\n  firmware:\n    source:\n      github: o/r\n"
-                       "      token: s3cret\n")
-    token = one(soup_of(client.get("/web/config")), "#f-client-firmware-source-token")
-    assert attr(token, "value") == "" and attr(token, "placeholder") == "unchanged"
-
-
 def test_text_from_the_file_is_escaped(client, path):
     text = "# </textarea><script>alert(1)</script>\n" + GOOD
     rsp = client.post("/web/config", data={"text": text + "bad: [", "action": "check"})

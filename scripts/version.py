@@ -12,7 +12,11 @@ that names a hardware revision, is ignored.
 
 Falls back to "dev" when git cannot answer — no binary, no repository, or a
 shallow clone with no tags. CI needs fetch-depth: 0 to see tags.
+
+The firmware-builder image has no repository: its version is stamped into
+CANARY_VERSION when the image is built, and that wins.
 """
+import os
 import subprocess
 
 Import("env")  # noqa: F821 - injected by PlatformIO
@@ -30,6 +34,6 @@ def git_version() -> str:
         return "dev"
 
 
-version = git_version()
+version = os.environ.get("CANARY_VERSION", "").strip() or git_version()
 print(f"CLIENT_VERSION: {version}")
 env.Append(CPPDEFINES=[("CLIENT_VERSION", env.StringifyMacro(version))])  # noqa: F821

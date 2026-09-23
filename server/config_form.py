@@ -51,7 +51,7 @@ class Field:
     key: str
     label: str
     help: str = ""
-    kind: str = "text"      # text zone secret int number bool choice time quiet pools order times
+    kind: str = "text"      # text zone int number bool choice time quiet pools order times
     default: Any = None
     hint: str = ""
     choices: tuple[tuple[str, str], ...] = ()
@@ -186,18 +186,7 @@ TABS: tuple[Tab, ...] = (
     Tab("firmware", "Firmware", (
         Group("Updates", (
             Field("client.firmware.enabled", "Update boards", "", "bool", False),
-            Field("client.firmware.offer_dev_builds", "Development builds",
-                  "For boards not on a released version.", "bool", False),
             Field("client.firmware.dir", "Folder", "", "text", "firmware"),
-        )),
-        Group("GitHub releases", (
-            Field("client.firmware.source.github", "Repository", "Empty: add files by hand.",
-                  "text", hint="owner/repo"),
-            Field("client.firmware.source.asset", "Asset", "", "text", "firmware.bin"),
-            Field("client.firmware.source.poll_seconds", "Check every", "", "int", 3600,
-                  unit="seconds", minimum=1),
-            Field("client.firmware.source.token", "Token", "Needed for a private repo. "
-                  "CLIENT_FIRMWARE_SOURCE_TOKEN sets it too.", "secret"),
         )),
     )),
     Tab("mqtt", "MQTT", (
@@ -320,8 +309,6 @@ def shown(cfg: dict) -> dict[str, Any]:
             out[f.key] = "false" if v is not MISSING and not v else "true"
         elif f.key.startswith("posts.quiet.") and quiet is None:
             out[f.key] = str(DEFAULT_QUIET[f.path[-1]])
-        elif f.kind == "secret":
-            out[f.key] = ""
         else:
             out[f.key] = _as_input(default_of(f, cfg) if v is MISSING else v)
     return out
@@ -332,7 +319,7 @@ def defaults(cfg: dict) -> dict[str, str]:
     quiet = _quiet_block(cfg)
     out: dict[str, str] = {}
     for f in FIELDS:
-        if f.kind in ("pools", "times", "secret"):
+        if f.kind in ("pools", "times"):
             continue
         if f.key.startswith("posts.quiet.") and quiet is None:
             d: Any = DEFAULT_QUIET[f.path[-1]]
@@ -348,7 +335,7 @@ def submitted(form) -> dict[str, Any]:
     """The values a posted form holds, as :func:`shown` gives them."""
     out: dict[str, Any] = {}
     for f in FIELDS:
-        if f.key not in form or f.kind == "secret":
+        if f.key not in form:
             continue
         if f.kind == "pools":
             out[f.key] = list(zip(form.getlist(f.key + ".name"), form.getlist(f.key + ".pages")))
@@ -364,10 +351,6 @@ def initial(value: Any) -> str:
     if isinstance(value, list):
         return json.dumps([list(r) for r in value], separators=(",", ":"), ensure_ascii=False)
     return value
-
-
-def has_secret(cfg: dict, f: Field) -> bool:
-    return bool(lookup(cfg, f.path) not in (MISSING, None, ""))
 
 
 # ── Parsing ─────────────────────────────────────────────────────────
@@ -786,8 +769,6 @@ def apply(text: str, form) -> Edit:
         if f.key not in form or f.env_value() is not None:
             continue
         raw = rows[f.key] if f.kind in ("pools", "times") else form.getlist(f.key)[-1]
-        if f.kind == "secret" and not str(raw).strip():
-            continue
         try:
             values[f.key] = parse(f, raw)
         except FieldError as exc:
@@ -1011,9 +992,6 @@ def changes(old: dict, new: dict) -> list[dict[str, str]]:
     for path in _changed_paths(old, new):
         f = field_at(path)
         before, after = a.get(path, MISSING), b.get(path, MISSING)
-        if f is not None and f.kind == "secret":
-            before = MISSING if before in (MISSING, None, "") else "set"
-            after = MISSING if after in (MISSING, None, "") else "new"
         if f is not None and f.kind in ("pools", "times"):
             before = "none" if before is MISSING else before
             after = "none" if after is MISSING else after

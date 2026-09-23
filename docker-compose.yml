@@ -14,24 +14,20 @@ services:
       # the container runs as uid 1000 and could not write to a directory the
       # host owns.
       - canary-data:/app/data
-      # Firmware images, from firmware-builder or scripts/build-firmware.sh:
-      # canary-head/ and canary-dock/, each of <version>.bin. Create the
-      # directory before the first start, or Docker makes it as root and
-      # neither can write to it. The server only reads it.
+      # Firmware images, from firmware-builder: canary-head/ and canary-dock/,
+      # each of <version>.bin. Create the directory before the first start,
+      # or Docker makes it as root and neither can write to it. The server
+      # only reads it.
       - ./server/firmware:/app/firmware:ro
 
-  # Builds each new release's firmware into server/firmware. See
-  # CONTRIBUTING.md, Releases.
+  # Builds the firmware of the commit its image was built from into
+  # server/firmware, so the boards follow this server. Keep its tag the same
+  # as the server's. See CONTRIBUTING.md, Releases.
   firmware-builder:
     image: ghcr.io/chrisjtwomey/canary-firmware-builder:latest
     restart: unless-stopped
     # Must be able to write server/firmware on the host.
     user: "1000:1000"
-    environment:
-      # Only a tag this key signed is built, since the board flashes whatever
-      # the server offers.
-      SIGNED_BY: "878D72349B08E6610A678B88614344BCB54CC36E"
-      POLL_SECONDS: "900"
     volumes:
       - ./server/firmware:/firmware
       # The PlatformIO toolchain, downloaded by the first build.

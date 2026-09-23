@@ -21,6 +21,7 @@ import yaml
 from epd_server import DisplayServer, LogStore, ReadingsStore, align_process_timezone
 from epd_server.config import (ConfigError, CoreConfig, get_prop_by_keys, load_core_config,
                                load_yaml)
+from epd_server.firmware import is_clean_tag
 from epd_server.source import CompositeSource, IngestSource
 
 from about import About
@@ -101,6 +102,14 @@ def make_history(between: Callable[[int, int], list[dict]],
                  altitude_m: float = 0.0) -> Callable[[int, int], list[dict]]:
     """``between`` as the pages see it, with pressure at sea level."""
     return lambda start, end: [to_sea_level(d, altitude_m) for d in between(start, end)]
+
+
+def follow_own_version(firmware, version: str):
+    """``firmware`` offering development builds exactly when this server runs
+    one: a server past a tag is a development deployment, and its boards take
+    what the builder beside it builds; a tagged server moves them between
+    releases only."""
+    return dataclasses.replace(firmware, offer_dev_builds=not is_clean_tag(version))
 
 
 def make_posts(config: dict, tz) -> PostSchedule:
@@ -226,10 +235,14 @@ def main():
         logging.basicConfig()
         log.error(exc.args[0] if exc.args else str(exc))
         sys.exit(1)
-    core = settings.core
+    version = server_version()
+    core = dataclasses.replace(settings.core,
+                               firmware=follow_own_version(settings.core.firmware, version))
 
     logging.basicConfig(level=logging.DEBUG if core.server.debug else logging.INFO,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    log.info("canary %s: development builds are %soffered", version,
+             "" if core.firmware.offer_dev_builds else "not ")
     align_process_timezone(core.server.timezone)
     tz = core.server.timezone
 
@@ -251,7 +264,7 @@ def main():
                                    keep_days=settings.calibration_days)
     ingest = ReadingsIngest(reports, store, settings.keep_days)
     posts = settings.posts
-    about = About(server_version(), core.firmware, posts=posts)
+    about = About(version, core.firmware, posts=posts)
     pages = make_pages(tz, **core.image.page_kwargs())
     between = make_between(settings.seed, clock, store)
     history = HistoryQuery(make_history(between, settings.altitude_m), tz, now=clock)
