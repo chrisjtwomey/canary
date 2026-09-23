@@ -11,6 +11,9 @@ server/*.db
 server/static/*.html
 .DS_Store
 
+# A link to Fusion's API stubs, for type-checking hardware/enclosure.py
+.fusion-api
+
 # Firmware images the board updates itself from
 server/firmware/
 

@@ -389,6 +389,16 @@ and adds `server/` and `../epd/server` to the import path, so Pylance
 resolves `epd_server` and `sources.*`. Without it both show as unresolved
 even though the tests pass, because Pylance does not read `pytest.ini`.
 
+It also type-checks `hardware/enclosure.py` against Fusion's API stubs, read
+from `.fusion-api` at the repo root. Link that name to the `adsk/defs` folder
+of your Fusion install; on macOS:
+
+```sh
+ln -s "$HOME/Library/Application Support/Autodesk/webdeploy/production/Autodesk Fusion.app/Contents/Api/Python/packages/adsk/defs" .fusion-api
+```
+
+Without the link, only the `adsk` imports show as unresolved.
+
 ## The wiring diagrams
 
 The circuit drawings in `hardware/images/` are generated, not painted.

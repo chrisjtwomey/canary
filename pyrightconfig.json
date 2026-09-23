@@ -1,7 +1,7 @@
 {
   "include": [
     "server",
-    "hardware/enclosure/v1"
+    "hardware"
   ],
   "venvPath": "server",
   "venv": ".venv",
@@ -11,7 +11,7 @@
   ],
   "executionEnvironments": [
     {
-      "root": "hardware/enclosure/v1",
+      "root": "hardware",
       "extraPaths": [
         ".fusion-api"
       ]
