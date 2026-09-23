@@ -212,3 +212,13 @@ def test_the_live_page_and_the_panel_share_one_source(pages, tz):
     server.app.register_blueprint(web_blueprint(pages, source))
     soup = soup_of(server.app.test_client().get("/web/diagnostics"))
     assert one(soup, ".verdict").get_text() == "No report from either board yet."
+
+
+@pytest.mark.parametrize("path", ["/web/", "/web/explore", "/web/logs", "/web/no-such-page"])
+def test_every_view_names_the_servers_version_beside_its_own_name(client, path, monkeypatch):
+    import web
+    monkeypatch.setattr(web, "own_version", lambda: "v0.3.1-7-gabc1234")
+
+    soup = BeautifulSoup(client.get(path).get_data(as_text=True), "html.parser")
+
+    assert one(soup, ".bar .name-line #server-version").get_text() == "v0.3.1-7-gabc1234"

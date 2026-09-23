@@ -15,6 +15,8 @@ scales it to fit.
 from __future__ import annotations
 
 import copy
+import functools
+import html
 import math
 import os
 import time
@@ -31,6 +33,7 @@ from pages.diagnostics import DiagnosticsPage, DiagnosticsTracePage, HealthTrace
 from pages.pool import (CO2, IAQ, PM25, PRESSURE, RH, TEMP, DeltaPage, Metric, TracePage,
                         trace_points, value_range, value_ticks, weekday_axis)
 from sources.readings import epoch_arg
+from version import server_version
 
 # The explorer's measurements, by the name its URL gives them.
 MEASURES: dict[str, Metric] = {"co2": CO2, "temperature": TEMP, "humidity": RH, "dust": PM25,
@@ -132,14 +135,23 @@ def _span_row(a: Airium, groups: dict[str, list[EnvPage]], browse_href: str,
                 _page_links(a, groups[heading], browse_href, current)
 
 
+# The version cannot change while the process runs, and a checkout asks git
+# for it.
+own_version = functools.cache(server_version)
+
+
 def menu_bar(a: Airium, pages: list[EnvPage], browse_href: str, current: str) -> None:
-    """The menu across the top. ``browse_href`` is how a page link reaches the
-    browse page from here; ``current`` names the page or view that is showing."""
+    """The menu across the top, with this server's version beside the name.
+    ``browse_href`` is how a page link reaches the browse page from here;
+    ``current`` names the page or view that is showing."""
     showing = next((p for p in pages if p.name == current), None)
     with a.header(klass="bar"):
         a.input(type="checkbox", id="menu-open", klass="menu-open")
         with a.div(klass="top"):
-            a.a(klass="brand label", href=browse_href or "./", _t="Canary")
+            with a.div(klass="name-line"):
+                a.a(klass="brand label", href=browse_href or "./", _t="Canary")
+                a.span(klass="version", id="server-version", title="Server version",
+                       _t=html.escape(own_version(), quote=False))
             with a.div(klass="views"):
                 for view, words in (("explore", "Explore"), ("logs", "Logs"), ("config", "Config")):
                     extra = {"aria-current": "page"} if current == view else {}

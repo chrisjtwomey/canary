@@ -5,9 +5,9 @@ tell whether it and the server speak the same contract. It is canary's own,
 not the ``epd-server`` package's: the package is a library this server is
 built with, and the two move independently.
 
-The released image is built with ``CANARY_VERSION`` set from the release
-tag. A checkout run by hand asks git instead, the way ``scripts/version.py``
-does for the firmware. Neither answering leaves ``dev``, which never matches
+The image is built with ``CANARY_VERSION`` set by CI: the release tag for a
+release, and ``git describe`` for a push to main. A checkout run by hand asks
+git instead, the way ``scripts/version.py`` does for the firmware. Neither answering leaves ``dev``, which never matches
 a board and so is never mistaken for a release.
 """
 from __future__ import annotations

@@ -29,6 +29,20 @@ body.web {
   text-decoration: none;
 }
 
+.bar .name-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.bar .version {
+  font-size: 13px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
 .bar .views {
   display: flex;
   gap: 24px;
