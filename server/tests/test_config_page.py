@@ -266,7 +266,7 @@ def test_text_from_the_file_is_escaped(client, path):
     soup = soup_of(rsp)
     assert one(soup, "textarea[name=text]").get_text() == text + "bad: ["
     assert [attr(s, "src") for s in soup.find_all("script")] == [
-        "rough.iife.min.js", "config.js", "sheet.js"]
+        "rough.iife.min.js", "config.js", "sheet.js", "ago.js"]
 
 
 def test_a_posted_tab_name_is_one_of_the_tabs(client, path):
@@ -524,6 +524,29 @@ def test_an_offline_dock_greys_out_its_tab(dock_client, path):
     assert one(panel, "#recalibrate-ppm").has_attr("disabled")
     assert one(panel, "[data-recalibrate] button").has_attr("disabled")
     assert not panel.select('[data-field^="dock."] .reset')
+
+
+@pytest.mark.parametrize("dock_report", [{"client": {"settings": {"version": "00000000"}}}])
+@pytest.mark.parametrize("dock_offline", [True])
+def test_the_dock_lines_come_fresh_for_config_js(dock_client):
+    live = dock_client.get("/web/config/live").get_json()
+    state = BeautifulSoup(live["state"], "html.parser")
+
+    assert live["offline"] is True
+    assert attr(one(state, "#dock-state"), "data-offline") == "true"
+    assert one(state, "#dock-offline").get_text() == "Offline"
+    assert attr(one(state, "#dock-applied [data-age]"), "data-age") == "3600"
+    assert live["recalibration"].startswith("Keep the dock in air of a known CO₂ level")
+
+
+def test_the_page_starts_with_the_dock_lines_config_js_replaces(dock_client):
+    soup = soup_of(dock_client.get("/web/config"))
+
+    assert attr(one(soup, "#panel-dock #dock-state"), "data-offline") == "false"
+
+
+def test_without_a_dock_there_are_no_live_lines(client):
+    assert client.get("/web/config/live").status_code == 404
 
 
 def test_a_greyed_out_field_keeps_its_value_when_another_tab_saves(dock_client, path):

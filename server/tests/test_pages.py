@@ -25,7 +25,7 @@ def render(page, data):
 def text(soup, selector):
     node = soup.select_one(selector)
     assert node is not None, selector
-    return node.get_text(strip=True)
+    return " ".join(node.get_text().split())
 
 
 def cold(latest):
@@ -393,6 +393,12 @@ class TestDiagnostics:
         assert text(soup, "#dock-offline") == "Offline"
         assert text(soup, "#dock-age") == "reported 11 h 23 min ago"
         assert soup.select_one("#head-offline") is None
+
+    def test_each_time_since_a_report_counts_on_in_a_browser(self, tz):
+        soup, _ = render(DiagnosticsPage("diagnostics", tz=tz, width=WIDTH, height=HEIGHT),
+                         {"status": STATUS})
+        age = STATUS["boards"]["canary-dock"]["age_s"]
+        assert soup.select_one("#dock-age [data-age]")["data-age"] == str(age)
 
     def test_a_board_the_server_has_only_refused_still_shows(self, tz):
         refused = {"doc": None, "age_s": None,

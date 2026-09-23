@@ -90,7 +90,7 @@ def test_formatting():
 
 # ---------- the newer derived values ----------
 
-from metrics import (abs_humidity_g_m3, barometer_word, fmt_bytes, fmt_duration, iaq_verdict,  # noqa: E402
+from metrics import (abs_humidity_g_m3, age_span, barometer_word, fmt_bytes, fmt_duration, iaq_verdict,  # noqa: E402
                      local_midnight, minutes_above, pm25_verdict, pressure_tendency, rssi_quality,
                      tendency_words, value_at, ventilation_events)
 from sources.mock import rh_from_abs  # noqa: E402
@@ -232,3 +232,7 @@ def test_sea_level_correction_is_about_one_hpa_per_eight_metres():
     assert sea_level_hpa(1019.4, 0) == 1019.4
     assert sea_level_hpa(1019.4, 10) == pytest.approx(1020.6, abs=0.05)
     assert sea_level_hpa(1000.0, 80) == pytest.approx(1009.5, abs=0.2)
+
+
+def test_age_span_carries_the_seconds_for_ago_js_and_the_words_for_now():
+    assert age_span(8040.7) == '<span data-age="8040">2 h 14 min</span>'

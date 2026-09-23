@@ -38,7 +38,7 @@ from flask import Blueprint, Response, abort, jsonify, redirect, request
 import config_form as cf
 import dock_settings as ds
 from pages.base import EnvPage
-from metrics import fmt_duration
+from metrics import age_span
 from transfer import Corrupt, Overlap, Transfer
 from web import menu_bar, page_head
 
@@ -354,8 +354,9 @@ def _import(a: Airium, store: str, report: Report) -> None:
 
 def _settings_line(a: Airium, state: DockState) -> None:
     """Whether the dock runs the saved settings, as a banner across the tab:
-    a pill naming the state, then what it means."""
-    last = f"Last report {fmt_duration(state.age_s or 0)} ago."
+    a pill naming the state, then what it means. config.js puts a new one in
+    its place from GET /web/config/live."""
+    last = f"Last report {age_span(state.age_s or 0)} ago."
     if state.offline:
         pill = ("offline", "Offline", f"{last} Settings unlock when the dock reports again.")
     elif state.applied is None:
@@ -364,15 +365,17 @@ def _settings_line(a: Airium, state: DockState) -> None:
         pill = ("synced", "Synchronized", last)
     else:
         pill = ("waiting", "Not synchronized",
-                f"The dock takes these settings before its next report, at {state.next_report}.")
-    with a.div(klass="dock-state"):
+                esc(f"The dock takes these settings before its next report, "
+                    f"at {state.next_report}."))
+    with a.div(klass="dock-state", id="dock-state",
+               **{"data-offline": "true" if state.offline else "false"}):
         with a.p(klass="banner dock-line", id="dock-applied"):
             if pill is None:
                 a.span(_t=esc("No report from the dock yet. Settings apply once it connects."))
             else:
                 klass, name, words = pill
                 a.span(klass=f"pill {klass}", id=f"dock-{klass}", _t=esc(name))
-                a.span(_t=esc(words))
+                a.span(_t=words)
         if state.refused:
             names = ", ".join(_label_of(("dock", *key.split("."))) for key in state.refused)
             a.p(klass="error", id="dock-refused",
@@ -665,6 +668,7 @@ def config_html(pages: list[EnvPage], view: View, writable: bool,
             a.script(src="rough.iife.min.js")
             a.script(src="config.js")
             a.script(src="sheet.js")
+            a.script(src="ago.js")
     return str(a)
 
 
@@ -724,6 +728,17 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
         if boards is not None:
             view.head = head_panel(boards("canary-head"))
         return config_html(pages, view, writable(), bak()), status
+
+    @bp.route("/live", methods=["GET"])
+    def live():
+        """The Dock tab's lines about the dock as they are now, for config.js."""
+        if dock is None:
+            abort(404)
+        state = dock_state(dock)
+        a = Airium()
+        _settings_line(a, state)
+        return jsonify(state=str(a), recalibration=_recalibration_words(state),
+                       offline=state.offline)
 
     @bp.route("/export/<name>", methods=["GET"])
     def export(name: str):

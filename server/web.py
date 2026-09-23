@@ -2,6 +2,9 @@
 
     GET /web/            every page, one at a time, scaled to the window
     GET /web/<page>      a page's HTML, built from the readings as they are now
+    GET /web/stamp?page=<page>
+                         what changes when the page would, and when the server
+                         started; without a page, the readings'
     GET /web/explore     one measurement over a window the viewer moves
     GET /web/<asset>     the stylesheets, scripts and fonts those load
     GET /web/config      the server's config (config_page.py)
@@ -16,7 +19,9 @@ from __future__ import annotations
 
 import copy
 import functools
+import hashlib
 import html
+import json
 import math
 import os
 import time
@@ -25,7 +30,7 @@ from typing import Callable, Iterable
 
 from airium import Airium
 from epd_server.source import DataSource
-from flask import Blueprint, request, send_from_directory
+from flask import Blueprint, jsonify, request, send_from_directory
 
 from metrics import extremes, hour_ticks
 from pages.base import HTML_DIR, EnvPage
@@ -94,8 +99,29 @@ def render_live(page: EnvPage, source: DataSource, portrait: bool = False) -> st
     if portrait:
         view.image_width = view.image_inner_width = PORTRAIT[0]
         view.image_height = view.image_inner_height = PORTRAIT[1]
+    view.live = True
     view.template(**{name: fetch[name]() for name in page.requires})
     return str(view.airium)
+
+
+def data_stamp(requires: Iterable[str], source: DataSource) -> str:
+    """A word that changes whenever a page built on ``requires`` would: the
+    newest reading's time for a page of readings; for a page of the boards
+    alone, their reports, refusals and which are offline."""
+    requires = tuple(requires)
+    fetch = source.datasets()
+    if "latest" in requires:
+        latest = fetch["latest"]()
+        return str(latest.get("ts")) if latest else ""
+    if any(name.startswith("status") for name in requires):
+        status = fetch["status"]()
+        if status is None:
+            return ""
+        boards = [(device, bool(b.get("offline")), (b.get("refused") or {}).get("count", 0))
+                  for device, b in sorted(status["boards"].items())]
+        text = json.dumps([status["count"], boards])
+        return hashlib.sha1(text.encode()).hexdigest()[:8]
+    return ""
 
 
 def page_head(a: Airium, title: str, refresh: str = "") -> None:
@@ -300,6 +326,7 @@ def web_blueprint(pages: list[EnvPage], source: DataSource, logging_on: bool = T
     for. ``logging_on`` says whether boards' MQTT logs reach this server."""
     bp = Blueprint("web", __name__, url_prefix="/web")
     by_name = {p.name: p for p in pages}
+    started = int(time.time())
 
     @bp.route("/")
     def browse():
@@ -312,6 +339,12 @@ def web_blueprint(pages: list[EnvPage], source: DataSource, logging_on: bool = T
     @bp.route("/logs")
     def logs():
         return logs_html(pages, logging_on)
+
+    @bp.route("/stamp")
+    def stamp():
+        page = by_name.get(request.args.get("page", ""))
+        requires = page.requires if page is not None else ("latest",)
+        return jsonify(stamp=data_stamp(requires, source), started=started)
 
     @bp.route("/<path:name>")
     def page_or_asset(name: str):

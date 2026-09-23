@@ -4,7 +4,8 @@
    view can be bookmarked. Each change asks /history for the window's spec
    and charts.js draws it. While a drag or a zoom is under way the last
    drawing is stretched to the new window, and the new one is fetched when
-   the pointer settles. A window that ends now is fetched again every minute. */
+   the pointer settles. A window that ends now is fetched again every
+   minute, and within 10 s of a new reading. */
 (function () {
   'use strict';
 
@@ -12,6 +13,7 @@
   var MIN_SPAN = HOUR;
   var MAX_SPAN = 92 * 24 * HOUR;
   var RELOAD_MS = 60000;
+  var POLL_MS = 10000;
   var SETTLE_MS = 250;
   var G = Charts.grey;
 
@@ -357,9 +359,24 @@
     resized = setTimeout(draw, 150);
   });
 
+  function following() { return view.to === null && !document.hidden && !drag && !pinch; }
+
   setInterval(function () {
-    if (view.to === null && !document.hidden && !drag && !pinch) load();
+    if (following()) load();
   }, RELOAD_MS);
+
+  var stamp = null;   // the newest reading's, as the server last said
+  setInterval(function () {
+    if (!following()) return;
+    fetch('stamp', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (s) {
+        if (!s) return;
+        if (stamp !== null && s.stamp !== stamp && following()) load();
+        stamp = s.stamp;
+      })
+      .catch(function () {});
+  }, POLL_MS);
 
   Promise.all([
     document.fonts.load('500 18px Fraunces'),

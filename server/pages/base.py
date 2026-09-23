@@ -32,6 +32,7 @@ class EnvPage(_Page):
     title = ""
     stylesheet = ""
     css_class = ""   # the page-<css_class> hook the stylesheet keys on; defaults to the name
+    live = False     # loads ago.js, for a browser; the panel's render has no clock to follow
 
     def __init__(self, name: str, tz: tzinfo | None = None, **kwargs):
         kwargs.setdefault("html_dir", HTML_DIR)
@@ -70,6 +71,8 @@ class EnvPage(_Page):
                     a.link(rel="stylesheet", href=self.stylesheet)
                 a.script(src="rough.iife.min.js")
                 a.script(src="charts.js")
+                if self.live:
+                    a.script(src="ago.js")
             with a.body(style=self.layout_css_variables()):
                 with a.div(klass="inner-canvas-outer"):
                     with a.div(klass="inner-canvas"):

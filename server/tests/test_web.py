@@ -7,10 +7,11 @@ from epd_server import DisplayServer, ReadingsStore
 
 from server import make_between, make_history, make_pages, make_source
 from sources.mock import MockReadingsSource
-from sources.status import DeviceReports
+from sources.status import DeviceReports, StatusSource
 from tests.conftest import AT, TZ
 from tests.html import attr, one
-from web import MAX_POINTS, MAX_SPAN_S, MEASURES, WINDOWS, HistoryQuery, time_axis, web_blueprint
+from web import (MAX_POINTS, MAX_SPAN_S, MEASURES, WINDOWS, HistoryQuery, data_stamp,
+                 time_axis, web_blueprint)
 
 DAY = 86400
 
@@ -69,7 +70,62 @@ class TestBrowse:
         assert rsp.status_code in (301, 308) and rsp.headers["Location"].endswith("/web/")
 
 
+class TestStamp:
+    class Source:
+        def __init__(self, reports, latest=None):
+            self.reports, self.latest = reports, latest
+
+        def datasets(self):
+            return {"latest": lambda: self.latest,
+                    "status": StatusSource(self.reports).status}
+
+    def test_a_page_of_readings_changes_with_the_newest_reading(self):
+        source = self.Source(DeviceReports(now=lambda: float(AT)), {"ts": AT - 60})
+        before = data_stamp(("latest", "history_24h", "status"), source)
+        source.reports.accept({"ts": AT, "device": "canary-head", "client": {"board": "x"}})
+        assert data_stamp(("latest", "history_24h", "status"), source) == before == str(AT - 60)
+
+        source.latest = {"ts": AT}
+        assert data_stamp(("latest", "history_24h", "status"), source) == str(AT)
+
+    def test_a_page_of_the_boards_changes_with_a_report_a_refusal_and_an_offline_board(self):
+        clock = [float(AT)]
+        reports = DeviceReports(now=lambda: clock[0], silence=lambda device, now: 120)
+        source = self.Source(reports)
+        reports.accept({"ts": AT, "device": "canary-head", "client": {"board": "x"}})
+        seen = [data_stamp(("status",), source)]
+
+        clock[0] += 60
+        seen.append(data_stamp(("status",), source))
+        reports.accept({"ts": AT + 60, "device": "canary-head", "client": {"board": "x"}})
+        seen.append(data_stamp(("status",), source))
+        reports.refused("canary-dock", "v0.1.0")
+        seen.append(data_stamp(("status",), source))
+        clock[0] += 600
+        seen.append(data_stamp(("status",), source))
+
+        assert seen[0] == seen[1], "time alone changes nothing"
+        assert len(set(seen[1:])) == 4
+
+    def test_the_server_answers_a_page_s_stamp_and_when_it_started(self, client, source):
+        breathe = client.get("/web/stamp?page=breathe").get_json()
+        boards = client.get("/web/stamp?page=diagnostics").get_json()
+        readings = client.get("/web/stamp").get_json()
+
+        assert breathe["stamp"] == readings["stamp"] == str(source.datasets()["latest"]()["ts"])
+        assert boards["stamp"] != breathe["stamp"]
+        assert breathe["started"] == boards["started"] == readings["started"]
+
+
 class TestLivePage:
+    def test_a_page_in_a_browser_counts_its_times_on_and_the_panel_s_does_not(
+            self, client, pages, data):
+        live = soup_of(client.get("/web/diagnostics"))
+        assert [attr(s, "src") for s in live.select("script[src]")][-1] == "ago.js"
+        breathe = next(p for p in pages if p.name == "breathe")
+        breathe.template(**data, status=None)
+        assert "ago.js" not in str(breathe.airium)
+
     def test_a_page_is_built_from_the_readings_now(self, client, source):
         soup = soup_of(client.get("/web/breathe"))
         latest = source.datasets()["latest"]()

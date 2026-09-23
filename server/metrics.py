@@ -333,6 +333,11 @@ def fmt_duration(seconds: float) -> str:
     return f"{d} d {h} h" if h else f"{d} d"
 
 
+def age_span(seconds: float) -> str:
+    """fmt_duration's words in a span that ago.js counts on from there."""
+    return f'<span data-age="{int(seconds)}">{fmt_duration(seconds)}</span>'
+
+
 def fmt_bytes(n: float) -> str:
     if n >= 1024 * 1024:
         return f"{n / 1048576:.1f} MB"

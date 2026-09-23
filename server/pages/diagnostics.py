@@ -15,7 +15,7 @@ from airium import Airium
 
 import math
 
-from metrics import (IAQ_ACCURACY, fmt_bytes, fmt_duration, fmt_hm, fmt_int, fmt_stamp,
+from metrics import (IAQ_ACCURACY, age_span, fmt_bytes, fmt_duration, fmt_hm, fmt_int, fmt_stamp,
                      hour_ticks, rssi_quality)
 from pages.base import EnvPage
 
@@ -109,7 +109,7 @@ class DiagnosticsPage(EnvPage):
                     if entry.get("offline"):
                         a.span(klass="pill offline", id=f"{k}-offline", _t="Offline")
                     a.span(klass="stamp", id=f"{k}-age",
-                           _t=f"reported {fmt_duration(age)} ago" if age is not None
+                           _t=f"reported {age_span(age)} ago" if age is not None
                            else "no report yet")
 
             with a.div(klass="card"):
@@ -168,11 +168,11 @@ class DiagnosticsPage(EnvPage):
         changed = entry.get("changed")
         if changed:
             kv(a, "downgraded" if changed["older"] else "updated",
-               f"from {changed['from']}, {fmt_duration(changed['age_s'])} ago", id=f"{k}-changed")
+               f"from {changed['from']}, {age_span(changed['age_s'])} ago", id=f"{k}-changed")
         refused = entry.get("refused")
         if refused:
             kv(a, "refused", f"{refused['count']} from {refused['version']}, "
-                             f"{fmt_duration(refused['age_s'])} ago", id=f"{k}-refused")
+                             f"{age_span(refused['age_s'])} ago", id=f"{k}-refused")
 
     def _sensors(self, a: Airium, k: str, c: dict, valid: dict) -> None:
         present = c.get("sensors") or {}

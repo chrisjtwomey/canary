@@ -626,6 +626,39 @@
     notice.showModal();
   }
 
+  // The Dock tab's lines about the dock, fresh every 10 s. When the dock goes
+  // offline or comes back, the page loads again to lock or unlock its
+  // settings, unless that would lose something typed.
+  var LIVE_MS = 10000;
+  var dockState = document.getElementById('dock-state');
+  var ppm = document.getElementById('recalibrate-ppm');
+  var locked = dockState && dockState.getAttribute('data-offline') === 'true';
+
+  function untouched() {
+    return !saving && changedIn(document).length === 0 && !document.querySelector('dialog[open]')
+      && (!ppm || ppm.value === ppm.defaultValue);
+  }
+
+  function live() {
+    if (document.hidden || saving) return;
+    fetch('config/live', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (s) {
+        if (!s) return;
+        dockState.outerHTML = s.state;
+        dockState = document.getElementById('dock-state');
+        var line = document.getElementById('recalibrate-state');
+        if (line) line.textContent = s.recalibration;
+        if (s.offline !== locked && untouched()) {
+          leaving = true;
+          location.reload();
+        }
+      })
+      .catch(function () {});
+  }
+
+  if (dockState) setInterval(live, LIVE_MS);
+
   open(nav.getAttribute('data-open') || location.hash.slice(1));
   if (location.search) history.replaceState(null, '', 'config' + location.hash);
   refresh();
