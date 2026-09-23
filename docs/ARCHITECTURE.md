@@ -150,17 +150,22 @@ dock at the pogo connector.
 
 ### 3.5 One LED says whether the dock is well
 
-The dock drives a yellow LED on IO6, behind a clear tile in the shell's front face. It shows one of three states:
+The dock drives a yellow LED on IO6, behind a clear tile in the shell's front face. It shows the first of these
+states that holds, in the look the server's `dock.led` block sets for it: off, solid, a pulse or a flash, and the
+interval a pulse or a flash repeats at.
 
-| What the LED does | What it means |
-|---|---|
-| Pulsing at 120 a minute | Starting: `setup()` is connecting, or starting the sensors. |
-| Pulsing at 60 a minute | Working: it is reading, and the server is taking its posts. |
-| Three flashes, then five seconds steady | No network, a post the server would not take, or a sensor has stopped. |
-| Pulsing faster and brighter | Writing a new image: from 60 a minute at a quarter of the light to 240 at full light as it is written. |
+| State | When | Look by default |
+|---|---|---|
+| Updating | Writing a new image. | Pulsing faster and brighter as it is written: from 60 a minute at a quarter of the light to 240 at full light. Not set by the server. |
+| Starting | `setup()` is connecting, or starting the sensors. | Pulse every 0.5 s. |
+| No Wi-Fi | Started, and off the network. | Flash every 1 s. |
+| Post failed | The last post did not reach the server, or the server would not take it. | Flash every 2 s. |
+| Sensor missing | A sensor does not answer. | Flash every 3 s. |
+| Well | Reading, and the server is taking its posts. | Pulse every 1 s. |
 
-The slow pulse is the heartbeat: a dock that has died goes dark, which a steady working state would hide. A pulse
-is sixteen equal steps of light, spaced in time along a sine.
+The slow pulse is the heartbeat: a dock that has died goes dark, which a solid working state would hide. A pulse
+is sixteen equal steps of light, spaced in time along a sine; a flash is 150 ms of full light at the start of each
+interval.
 
 `StatusLed` turns the time into an LEDC duty and holds no hardware, so the pattern is tested on the host.
 Brightness is perceived brightness, mapped through gamma 2.2 onto a 14-bit channel at 1 kHz. A task of its own

@@ -502,8 +502,8 @@ def _head_size(a: Airium, view: View) -> None:
 
 def _runs(fields: tuple[cf.Field, ...], sheet: bool) -> list[tuple[str, list[cf.Field]]]:
     """The fields in order, those in a row that show only while another field
-    holds a value run together under that ``when``, on a sheet, so they can
-    share one box. Elsewhere each field stands alone."""
+    holds a value run together under that ``when``, on a sheet, so two or
+    more can share one box. Elsewhere each field stands alone."""
     runs: list[tuple[str, list[cf.Field]]] = []
     for f in fields:
         when = f.when if sheet else ""
@@ -535,7 +535,8 @@ def _group(a: Airium, g: cf.Group, view: View, images: list[str], locked: bool,
                 a.p(klass="caption", _t=esc(VISUAL_CAPTIONS[g.visual]))
         with a.div(klass="fields"):
             for when, fields in _runs(g.fields, sheet):
-                with a.div(klass="subsection", **{"data-when": when}) if when else _nothing():
+                boxed = when and len(fields) > 1
+                with a.div(klass="subsection", **{"data-when": when}) if boxed else _nothing():
                     for f in fields:
                         _field(a, f, view, images, g.heading, locked, sheet,
                                by_position=g.action == "position" and f.kind == "choice")

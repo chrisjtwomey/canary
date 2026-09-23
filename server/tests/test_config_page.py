@@ -501,6 +501,28 @@ def test_a_key_the_dock_refused_is_named_as_the_form_names_it(dock_client, dock_
         "Refused by the dock: Fan warm-up. Check the dock's firmware version."
 
 
+def test_each_light_state_has_a_pattern_and_an_interval_shown_for_pulse_and_flash(
+        dock_client, path):
+    soup = soup_of(dock_client.get("/web/config"))
+    well = one(soup, '[data-field="dock.led.well.pattern"]')
+
+    assert [s.get_text() for s in well.select(".segments span")] == \
+        ["Off", "Solid", "Pulse", "Flash"]
+    assert attr(one(well, "input[checked]"), "value") == "pulse"
+    interval = one(soup, '[data-field="dock.led.well.interval_s"]')
+    assert attr(interval, "data-when") == "dock.led.well.pattern=pulse|flash"
+    assert interval.find_parent(class_="subsection") is None
+    assert attr(one(interval, "input"), "value") == "1"
+
+    dock_client.post("/web/config", data={
+        **posted(soup, dock__led__well__pattern="solid", dock__led__no_wifi__interval_s="0.5"),
+        "action": "save"})
+
+    saved = open(path).read()
+    assert "pattern: solid" in saved and "interval_s: 0.5" in saved
+    check_config(saved)
+
+
 def test_the_bsec_rate_is_saved_as_a_number(dock_client, path):
     soup = soup_of(dock_client.get("/web/config"))
     assert one(soup, '[data-field="dock.bsec.sample_s"] input[checked]')["value"] == "300"

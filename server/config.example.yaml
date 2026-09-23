@@ -61,6 +61,13 @@ dock:               # what the dock does between readings; it takes a change bef
   led:
     brightness_pct: 15
     off_in_quiet_hours: false   # dark from the pre-warm before the first quiet slot
+    # The look of each state: off, solid, pulse or flash, repeating every
+    # interval_s (0.25 to 10). The dock shows the first state that holds.
+    starting: {pattern: pulse, interval_s: 0.5}
+    no_wifi: {pattern: flash, interval_s: 1}
+    post_failed: {pattern: flash, interval_s: 2}
+    sensor_missing: {pattern: flash, interval_s: 3}
+    well: {pattern: pulse, interval_s: 1}
   bsec:
     sample_s: 300   # BSEC's air quality sample: 3 or 300 s; a change starts its learning again
   log:

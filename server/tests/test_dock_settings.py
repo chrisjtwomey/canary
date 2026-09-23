@@ -41,7 +41,9 @@ def test_a_config_without_a_dock_block_gives_the_defaults():
     assert load_dock_settings({}) == DockSettings(
         pm_warmup_s=35, scd41_temperature_offset_c=4.0, scd41_self_calibration=True,
         shtc3_low_power=False, led_brightness_pct=15, led_off_in_quiet_hours=False,
-        log_level="debug", bsec_sample_s=300)
+        log_level="debug", bsec_sample_s=300, led_looks=(
+            ("starting", "pulse", 0.5), ("no_wifi", "flash", 1.0), ("post_failed", "flash", 2.0),
+            ("sensor_missing", "flash", 3.0), ("well", "pulse", 1.0)))
 
 
 def test_it_reads_each_key_of_the_dock_block():
@@ -66,10 +68,28 @@ def test_it_reads_each_key_of_the_dock_block():
     ({"log": {"level": "verbose"}}, "dock.log.level"),
     ({"bsec": {"sample_s": 60}}, "dock.bsec.sample_s"),
     ({"bsec": {"sample_s": "300"}}, "dock.bsec.sample_s"),
+    ({"led": {"well": {"pattern": "blink"}}}, "dock.led.well.pattern"),
+    ({"led": {"no_wifi": {"interval_s": 0.2}}}, "dock.led.no_wifi.interval_s"),
+    ({"led": {"starting": {"interval_s": 11}}}, "dock.led.starting.interval_s"),
+    ({"led": {"post_failed": {"interval_s": True}}}, "dock.led.post_failed.interval_s"),
 ])
 def test_a_value_out_of_range_is_refused_by_its_key(block, key):
     with pytest.raises(ConfigError, match=f"^{key} "):
         load_dock_settings({"dock": block})
+
+
+def test_a_look_the_block_gives_in_part_keeps_the_rest_of_its_default():
+    looks = dict((state, (pattern, every)) for state, pattern, every in load_dock_settings(
+        {"dock": {"led": {"well": {"pattern": "solid"}, "no_wifi": {"interval_s": 0.25}}}}
+    ).led_looks)
+
+    assert looks["well"] == ("solid", 1.0)
+    assert looks["no_wifi"] == ("flash", 0.25)
+    assert looks["starting"] == ("pulse", 0.5)
+
+
+def test_a_look_is_part_of_the_version():
+    assert DockSettings(led_looks=(("well", "off", 1.0),)).version != DockSettings().version
 
 
 def test_the_server_will_not_start_on_a_bad_dock_block():
@@ -98,7 +118,12 @@ def test_the_answer_is_the_settings_and_their_version(requests):
         "pm": {"warmup_s": 35},
         "scd41": {"temperature_offset_c": 4.0, "self_calibration": True},
         "shtc3": {"low_power": False},
-        "led": {"brightness_pct": 15, "dark": False},
+        "led": {"brightness_pct": 15, "dark": False,
+                "starting": {"pattern": "pulse", "interval_s": 0.5},
+                "no_wifi": {"pattern": "flash", "interval_s": 1},
+                "post_failed": {"pattern": "flash", "interval_s": 2},
+                "sensor_missing": {"pattern": "flash", "interval_s": 3},
+                "well": {"pattern": "pulse", "interval_s": 1}},
         "log": {"level": "debug"},
         "bsec": {"sample_s": 300},
     }

@@ -32,7 +32,7 @@ struct ClientStatus {
     uint16_t    bsecSampleS;     // seconds between its samples
     const char* settingsVersion; // the board settings it runs, "" before any; null on a
                                  // board without settings, which sends neither block
-    uint8_t     settingsRefused; // the keys of them it refused, as BoardSettings.h's bits
+    uint32_t    settingsRefused; // the keys of them it refused, as BoardSettings.h's bits
     uint32_t    recalibratedId;  // the last recalibration it ran; 0 for none
     uint16_t    recalibratedPpm;
     bool        recalibratedOk;

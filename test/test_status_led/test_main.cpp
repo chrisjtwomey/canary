@@ -1,5 +1,5 @@
-// The dock's status LED: 120 pulses a minute while it starts, 60 while it
-// works, and three flashes over a steady glow while something is wrong.
+// The dock's status LED: a look for each state the server can set, and the
+// update's own pulse.
 #include <unity.h>
 #include <cstdint>
 
@@ -30,20 +30,29 @@ void test_the_brightness_moves_the_peak_on_the_same_curve() {
 void test_a_brightness_of_0_keeps_every_state_dark() {
     StatusLed led;
     led.brightness(0);
-    const StatusLed::State states[] = {StatusLed::STARTING, StatusLed::WELL,
-                                       StatusLed::TROUBLE, StatusLed::UPDATING};
-    for (StatusLed::State s : states) {
-        led.state(s, 0);
-        for (uint32_t t = 0; t < StatusLed::kTroubleCycleMs; t += 50) {
+    for (int s = StatusLed::STARTING; s <= StatusLed::UPDATING; ++s) {
+        led.look((StatusLed::State)s, StatusLed::SOLID, 1000);
+        led.state((StatusLed::State)s, 0);
+        for (uint32_t t = 0; t < 3000; t += 50) {
             TEST_ASSERT_EQUAL_UINT16(0, led.dutyAt(t));
         }
+    }
+}
+
+void test_the_defaults_are_the_servers() {
+    StatusLed led;
+    const StatusLed::Pattern patterns[] = {StatusLed::PULSE, StatusLed::FLASH, StatusLed::FLASH,
+                                           StatusLed::FLASH, StatusLed::PULSE};
+    const uint32_t intervals[] = {500, 1000, 2000, 3000, 1000};
+    for (uint8_t s = 0; s < StatusLed::kLooks; ++s) {
+        TEST_ASSERT_EQUAL_INT(patterns[s], led.pattern((StatusLed::State)s));
+        TEST_ASSERT_EQUAL_UINT32(intervals[s], led.intervalMs((StatusLed::State)s));
     }
 }
 
 void test_starting_pulses_twice_a_second() {
     StatusLed led;
     led.state(StatusLed::STARTING, 0);
-    TEST_ASSERT_EQUAL_UINT32(500, StatusLed::kFastPulseMs);
     TEST_ASSERT_EQUAL_UINT16(0, led.dutyAt(0));
     TEST_ASSERT_EQUAL_UINT16(led.peakDuty(), led.dutyAt(250));
     TEST_ASSERT_EQUAL_UINT16(0, led.dutyAt(500));
@@ -54,7 +63,6 @@ void test_starting_pulses_twice_a_second() {
 void test_working_pulses_once_a_second() {
     StatusLed led;
     led.state(StatusLed::WELL, 0);
-    TEST_ASSERT_EQUAL_UINT32(1000, StatusLed::kSlowPulseMs);
     TEST_ASSERT_EQUAL_UINT16(0, led.dutyAt(0));
     TEST_ASSERT_EQUAL_UINT16(led.peakDuty(), led.dutyAt(500));
     TEST_ASSERT_EQUAL_UINT16(0, led.dutyAt(1000));
@@ -65,7 +73,7 @@ void test_a_pulse_climbs_in_sixteen_steps() {
     led.state(StatusLed::WELL, 0);
     uint16_t last = 0;
     int levels = 1;
-    for (uint32_t ms = 1; ms <= StatusLed::kSlowPulseMs / 2; ++ms) {
+    for (uint32_t ms = 1; ms <= 500; ++ms) {
         const uint16_t duty = led.dutyAt(ms);
         TEST_ASSERT_TRUE(duty >= last);
         if (duty != last) ++levels;
@@ -89,21 +97,54 @@ void test_changing_state_starts_the_new_pattern_from_its_beginning() {
     TEST_ASSERT_EQUAL_UINT16(led.peakDuty(), led.dutyAt(750));
 }
 
-void test_trouble_is_three_flashes_and_then_a_steady_glow() {
+void test_a_flash_lights_the_start_of_each_interval() {
     StatusLed led;
-    led.state(StatusLed::TROUBLE, 0);
+    led.state(StatusLed::POST_FAILED, 0);
     const uint16_t peak = led.peakDuty();
-    const uint32_t slot = StatusLed::kTroubleFlashMs;
-    for (uint32_t flash = 0; flash < StatusLed::kTroubleFlashes; ++flash) {
-        TEST_ASSERT_EQUAL_UINT16(peak, led.dutyAt(2 * flash * slot));
-        TEST_ASSERT_EQUAL_UINT16(0, led.dutyAt((2 * flash + 1) * slot));
-    }
-    // Steady from the end of the last gap to the end of the six-second cycle.
-    TEST_ASSERT_EQUAL_UINT16(peak, led.dutyAt(6 * slot));
-    TEST_ASSERT_EQUAL_UINT16(peak, led.dutyAt(3000));
-    TEST_ASSERT_EQUAL_UINT16(peak, led.dutyAt(StatusLed::kTroubleCycleMs - 1));
-    // And then it flashes again.
-    TEST_ASSERT_EQUAL_UINT16(0, led.dutyAt(StatusLed::kTroubleCycleMs + slot));
+    TEST_ASSERT_EQUAL_UINT16(peak, led.dutyAt(0));
+    TEST_ASSERT_EQUAL_UINT16(peak, led.dutyAt(StatusLed::kFlashMs - 1));
+    TEST_ASSERT_EQUAL_UINT16(0, led.dutyAt(StatusLed::kFlashMs));
+    TEST_ASSERT_EQUAL_UINT16(0, led.dutyAt(1999));
+    TEST_ASSERT_EQUAL_UINT16(peak, led.dutyAt(2000));
+}
+
+void test_a_short_interval_flashes_for_half_of_it() {
+    StatusLed led;
+    led.look(StatusLed::NO_WIFI, StatusLed::FLASH, 250);
+    led.state(StatusLed::NO_WIFI, 0);
+    TEST_ASSERT_EQUAL_UINT16(led.peakDuty(), led.dutyAt(124));
+    TEST_ASSERT_EQUAL_UINT16(0, led.dutyAt(125));
+    TEST_ASSERT_EQUAL_UINT16(led.peakDuty(), led.dutyAt(250));
+}
+
+void test_solid_and_off_hold_one_level() {
+    StatusLed led;
+    led.look(StatusLed::WELL, StatusLed::SOLID, 1000);
+    led.look(StatusLed::SENSOR_MISSING, StatusLed::OFF, 1000);
+    led.state(StatusLed::WELL, 0);
+    for (uint32_t t = 0; t < 2000; t += 10) TEST_ASSERT_EQUAL_UINT16(led.peakDuty(), led.dutyAt(t));
+    led.state(StatusLed::SENSOR_MISSING, 0);
+    for (uint32_t t = 0; t < 2000; t += 10) TEST_ASSERT_EQUAL_UINT16(0, led.dutyAt(t));
+}
+
+void test_a_pulse_follows_its_interval() {
+    StatusLed led;
+    led.look(StatusLed::STARTING, StatusLed::PULSE, 4000);
+    led.state(StatusLed::STARTING, 0);
+    TEST_ASSERT_EQUAL_UINT16(0, led.dutyAt(0));
+    TEST_ASSERT_EQUAL_UINT16(led.peakDuty(), led.dutyAt(2000));
+    TEST_ASSERT_EQUAL_UINT16(0, led.dutyAt(4000));
+}
+
+void test_a_look_that_cannot_be_shown_is_ignored() {
+    StatusLed led;
+    led.look(StatusLed::WELL, StatusLed::FLASH, 0);
+    led.look(StatusLed::WELL, StatusLed::kPatterns, 1000);
+    led.look(StatusLed::UPDATING, StatusLed::OFF, 1000);
+    TEST_ASSERT_EQUAL_INT(StatusLed::PULSE, led.pattern(StatusLed::WELL));
+    TEST_ASSERT_EQUAL_UINT32(1000, led.intervalMs(StatusLed::WELL));
+    led.state(StatusLed::UPDATING, 0);
+    TEST_ASSERT_TRUE(led.dutyAt(500) > 0);
 }
 
 void test_a_pattern_survives_the_millis_rollover() {
@@ -158,12 +199,17 @@ int main(int, char**) {
     RUN_TEST(test_the_peak_is_fifteen_percent_on_a_gamma_curve);
     RUN_TEST(test_the_brightness_moves_the_peak_on_the_same_curve);
     RUN_TEST(test_a_brightness_of_0_keeps_every_state_dark);
+    RUN_TEST(test_the_defaults_are_the_servers);
     RUN_TEST(test_starting_pulses_twice_a_second);
     RUN_TEST(test_working_pulses_once_a_second);
     RUN_TEST(test_a_pulse_climbs_in_sixteen_steps);
     RUN_TEST(test_repeating_a_state_does_not_restart_its_pattern);
     RUN_TEST(test_changing_state_starts_the_new_pattern_from_its_beginning);
-    RUN_TEST(test_trouble_is_three_flashes_and_then_a_steady_glow);
+    RUN_TEST(test_a_flash_lights_the_start_of_each_interval);
+    RUN_TEST(test_a_short_interval_flashes_for_half_of_it);
+    RUN_TEST(test_solid_and_off_hold_one_level);
+    RUN_TEST(test_a_pulse_follows_its_interval);
+    RUN_TEST(test_a_look_that_cannot_be_shown_is_ignored);
     RUN_TEST(test_a_pattern_survives_the_millis_rollover);
     RUN_TEST(test_an_update_brightens_and_quickens_as_the_image_is_written);
     RUN_TEST(test_progress_past_the_end_is_the_end);

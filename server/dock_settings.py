@@ -9,7 +9,8 @@ light is dark until the next reading, and a recalibration waiting to run.
      "pm": {"warmup_s": 35},
      "scd41": {"temperature_offset_c": 4.0, "self_calibration": true},
      "shtc3": {"low_power": false},
-     "led": {"brightness_pct": 15, "dark": false},
+     "led": {"brightness_pct": 15, "dark": false,
+             "starting": {"pattern": "pulse", "interval_s": 0.5}, ...},
      "log": {"level": "debug"},
      "bsec": {"sample_s": 300},
      "recalibrate": {"id": 1758650400, "ppm": 420}}
@@ -43,6 +44,15 @@ SCD41_OFFSET_C = 4.0
 SCD41_OFFSET_MAX_C = 20.0
 # The light's full brightness when it was set by eye on the bench.
 LED_BRIGHTNESS_PCT = 15
+# The light's looks: each state the dock can be in, highest first, with its
+# look by default. The dock shows the first that holds; its update has a look
+# of its own that no setting changes.
+LED_PATTERNS = ("off", "solid", "pulse", "flash")
+LED_LOOKS = (("starting", "pulse", 0.5), ("no_wifi", "flash", 1),
+             ("post_failed", "flash", 2), ("sensor_missing", "flash", 3),
+             ("well", "pulse", 1))
+LED_INTERVAL_MIN_S = 0.25
+LED_INTERVAL_MAX_S = 10.0
 LOG_LEVELS = ("error", "warning", "notice", "info", "debug")
 # BSEC's two rates, in seconds between samples. At 300 Bosch counts the
 # BME688's self-heating as negligible; a change starts IAQ learning again.
@@ -68,6 +78,7 @@ class DockSettings:
     led_off_in_quiet_hours: bool = False
     log_level: str = "debug"
     bsec_sample_s: int = 300
+    led_looks: tuple[tuple[str, str, float], ...] = LED_LOOKS   # (state, pattern, interval_s)
 
     def document(self) -> dict:
         """The settings as the dock reads them, without the version."""
@@ -76,7 +87,9 @@ class DockSettings:
             "scd41": {"temperature_offset_c": self.scd41_temperature_offset_c,
                       "self_calibration": self.scd41_self_calibration},
             "shtc3": {"low_power": self.shtc3_low_power},
-            "led": {"brightness_pct": self.led_brightness_pct},
+            "led": {"brightness_pct": self.led_brightness_pct,
+                    **{state: {"pattern": pattern, "interval_s": interval}
+                       for state, pattern, interval in self.led_looks}},
             "log": {"level": self.log_level},
             "bsec": {"sample_s": self.bsec_sample_s},
         }
@@ -105,6 +118,19 @@ def _bool(config: dict, key: str, default: bool) -> bool:
     if not isinstance(value, bool):
         raise ConfigError(f"dock.{key} must be true or false, not {value!r}")
     return value
+
+
+def _led_look(config: dict, state: str, pattern: str, interval: float) -> tuple[str, str, float]:
+    chosen = _get(config, f"led.{state}.pattern", pattern)
+    if chosen not in LED_PATTERNS:
+        raise ConfigError(f"dock.led.{state}.pattern must be one of {', '.join(LED_PATTERNS)}, "
+                          f"not {chosen!r}")
+    every = _get(config, f"led.{state}.interval_s", interval)
+    if isinstance(every, bool) or not isinstance(every, (int, float)) \
+            or not LED_INTERVAL_MIN_S <= every <= LED_INTERVAL_MAX_S:
+        raise ConfigError(f"dock.led.{state}.interval_s must be from {LED_INTERVAL_MIN_S:g} to "
+                          f"{LED_INTERVAL_MAX_S:g}, not {every!r}")
+    return state, chosen, round(float(every), 3)
 
 
 def load_dock_settings(config: dict) -> DockSettings:
@@ -139,6 +165,7 @@ def load_dock_settings(config: dict) -> DockSettings:
         led_off_in_quiet_hours=_bool(config, "led.off_in_quiet_hours", False),
         log_level=level,
         bsec_sample_s=rate,
+        led_looks=tuple(_led_look(config, *look) for look in LED_LOOKS),
     )
 
 

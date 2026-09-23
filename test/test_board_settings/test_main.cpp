@@ -8,7 +8,12 @@
 static const char kFull[] =
     "{\"version\":\"3f2a9c1e\",\"pm\":{\"warmup_s\":0},"
     "\"scd41\":{\"temperature_offset_c\":2.5,\"self_calibration\":false},"
-    "\"shtc3\":{\"low_power\":true},\"led\":{\"brightness_pct\":40,\"dark\":true},"
+    "\"shtc3\":{\"low_power\":true},\"led\":{\"brightness_pct\":40,\"dark\":true,"
+    "\"starting\":{\"pattern\":\"solid\",\"interval_s\":0.25},"
+    "\"no_wifi\":{\"pattern\":\"off\",\"interval_s\":4},"
+    "\"post_failed\":{\"pattern\":\"pulse\",\"interval_s\":2.5},"
+    "\"sensor_missing\":{\"pattern\":\"flash\",\"interval_s\":10},"
+    "\"well\":{\"pattern\":\"off\",\"interval_s\":1}},"
     "\"log\":{\"level\":\"info\"},\"bsec\":{\"sample_s\":3},"
     "\"recalibrate\":{\"id\":1758650400,\"ppm\":420}}";
 
@@ -30,6 +35,10 @@ void test_the_defaults_are_the_servers() {
     TEST_ASSERT_EQUAL_UINT8(15, s.ledBrightnessPct);
     TEST_ASSERT_EQUAL_UINT8(5, s.logLevel);
     TEST_ASSERT_EQUAL_UINT16(300, s.bsecSampleS);
+    const uint8_t patterns[kLedTriggers] = {2, 3, 3, 3, 2};   // pulse, flash, flash, flash, pulse
+    const uint16_t intervals[kLedTriggers] = {500, 1000, 2000, 3000, 1000};
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(patterns, s.ledPattern, kLedTriggers);
+    TEST_ASSERT_EQUAL_UINT16_ARRAY(intervals, s.ledIntervalMs, kLedTriggers);
 }
 
 void test_it_reads_every_key() {
@@ -43,17 +52,21 @@ void test_it_reads_every_key() {
     TEST_ASSERT_EQUAL_UINT8(40, a.settings.ledBrightnessPct);
     TEST_ASSERT_EQUAL_UINT8(4, a.settings.logLevel);
     TEST_ASSERT_EQUAL_UINT16(3, a.settings.bsecSampleS);
+    const uint8_t patterns[kLedTriggers] = {1, 0, 2, 3, 0};   // solid, off, pulse, flash, off
+    const uint16_t intervals[kLedTriggers] = {250, 4000, 2500, 10000, 1000};
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(patterns, a.settings.ledPattern, kLedTriggers);
+    TEST_ASSERT_EQUAL_UINT16_ARRAY(intervals, a.settings.ledIntervalMs, kLedTriggers);
     TEST_ASSERT_TRUE(a.dark);
     TEST_ASSERT_EQUAL_UINT32(1758650400, a.recalibrateId);
     TEST_ASSERT_EQUAL_UINT16(420, a.recalibratePpm);
-    TEST_ASSERT_EQUAL_UINT8(0, a.refused);
+    TEST_ASSERT_EQUAL_UINT32(0, a.refused);
 }
 
 void test_a_whole_number_offset_is_a_number_too() {
     SettingsAnswer a;
     TEST_ASSERT_TRUE(parse("{\"version\":\"a\",\"scd41\":{\"temperature_offset_c\":4}}", a));
     TEST_ASSERT_EQUAL_FLOAT(4.0f, a.settings.scd41OffsetC);
-    TEST_ASSERT_EQUAL_UINT8(0, a.refused);
+    TEST_ASSERT_EQUAL_UINT32(0, a.refused);
 }
 
 void test_a_key_the_answer_lacks_keeps_the_current_value() {
@@ -70,9 +83,14 @@ void test_a_value_out_of_the_docks_limits_is_refused_and_the_current_kept() {
     SettingsAnswer a;
     TEST_ASSERT_TRUE(parse("{\"version\":\"a\",\"pm\":{\"warmup_s\":10},"
                            "\"scd41\":{\"temperature_offset_c\":25,\"self_calibration\":1},"
-                           "\"shtc3\":{\"low_power\":\"yes\"},\"led\":{\"brightness_pct\":101},"
+                           "\"shtc3\":{\"low_power\":\"yes\"},\"led\":{\"brightness_pct\":101,"
+                           "\"starting\":{\"pattern\":\"blink\",\"interval_s\":0.2},"
+                           "\"no_wifi\":{\"pattern\":2,\"interval_s\":10.5},"
+                           "\"post_failed\":{\"pattern\":\"\",\"interval_s\":\"2\"},"
+                           "\"sensor_missing\":{\"pattern\":true,\"interval_s\":0},"
+                           "\"well\":{\"pattern\":\"Pulse\",\"interval_s\":-1}},"
                            "\"log\":{\"level\":\"verbose\"},\"bsec\":{\"sample_s\":60}}", a));
-    TEST_ASSERT_EQUAL_UINT8((1u << kSettingKeys) - 1, a.refused);
+    TEST_ASSERT_EQUAL_UINT32((1u << kSettingKeys) - 1, a.refused);
     BoardSettings d = defaultBoardSettings();
     TEST_ASSERT_EQUAL_UINT16(d.pmWarmupS, a.settings.pmWarmupS);
     TEST_ASSERT_EQUAL_FLOAT(d.scd41OffsetC, a.settings.scd41OffsetC);
@@ -81,6 +99,16 @@ void test_a_value_out_of_the_docks_limits_is_refused_and_the_current_kept() {
     TEST_ASSERT_EQUAL_UINT8(d.ledBrightnessPct, a.settings.ledBrightnessPct);
     TEST_ASSERT_EQUAL_UINT8(d.logLevel, a.settings.logLevel);
     TEST_ASSERT_EQUAL_UINT16(d.bsecSampleS, a.settings.bsecSampleS);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(d.ledPattern, a.settings.ledPattern, kLedTriggers);
+    TEST_ASSERT_EQUAL_UINT16_ARRAY(d.ledIntervalMs, a.settings.ledIntervalMs, kLedTriggers);
+}
+
+void test_a_look_the_answer_gives_in_part_changes_that_part() {
+    SettingsAnswer a;
+    TEST_ASSERT_TRUE(parse("{\"version\":\"a\",\"led\":{\"well\":{\"interval_s\":3}}}", a));
+    TEST_ASSERT_EQUAL_UINT8(2, a.settings.ledPattern[4]);
+    TEST_ASSERT_EQUAL_UINT16(3000, a.settings.ledIntervalMs[4]);
+    TEST_ASSERT_EQUAL_UINT32(0, a.refused);
 }
 
 void test_the_warm_up_limits_are_0_or_30_to_600() {
@@ -91,12 +119,12 @@ void test_the_warm_up_limits_are_0_or_30_to_600() {
     for (const char* v : good) {
         snprintf(json, sizeof(json), "{\"version\":\"a\",\"pm\":{\"warmup_s\":%s}}", v);
         TEST_ASSERT_TRUE(parse(json, a));
-        TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, a.refused, v);
+        TEST_ASSERT_EQUAL_UINT32_MESSAGE(0, a.refused, v);
     }
     for (const char* v : bad) {
         snprintf(json, sizeof(json), "{\"version\":\"a\",\"pm\":{\"warmup_s\":%s}}", v);
         TEST_ASSERT_TRUE(parse(json, a));
-        TEST_ASSERT_EQUAL_UINT8_MESSAGE(1u << kPmWarmup, a.refused, v);
+        TEST_ASSERT_EQUAL_UINT32_MESSAGE(1u << kPmWarmup, a.refused, v);
     }
 }
 
@@ -123,7 +151,7 @@ void test_refused_keys_are_named_as_the_server_names_them() {
     TEST_ASSERT_EQUAL_STRING("[]", buf);
     refusedJson((1u << kScd41Offset) | (1u << kLedBrightness), buf, sizeof(buf));
     TEST_ASSERT_EQUAL_STRING("[\"scd41.temperature_offset_c\",\"led.brightness_pct\"]", buf);
-    char every[192];   // the size ClientStatus.cpp gives it
+    char every[kRefusedJsonBytes];
     TEST_ASSERT_TRUE(refusedJson((1u << kSettingKeys) - 1, every, sizeof(every)) > 0);
     char small[10];
     TEST_ASSERT_EQUAL_UINT(0, refusedJson(1u << kScd41Offset, small, sizeof(small)));
@@ -136,6 +164,7 @@ int main(int, char**) {
     RUN_TEST(test_a_whole_number_offset_is_a_number_too);
     RUN_TEST(test_a_key_the_answer_lacks_keeps_the_current_value);
     RUN_TEST(test_a_value_out_of_the_docks_limits_is_refused_and_the_current_kept);
+    RUN_TEST(test_a_look_the_answer_gives_in_part_changes_that_part);
     RUN_TEST(test_the_warm_up_limits_are_0_or_30_to_600);
     RUN_TEST(test_a_recalibration_out_of_range_is_not_run);
     RUN_TEST(test_an_answer_without_a_version_or_not_json_is_not_taken);

@@ -160,9 +160,9 @@ void test_the_dock_client_object_fits_its_buffer_with_every_key_refused() {
     s.board = "canary-dock"; s.version = "v0.3.1-12-g0123abc-dirty";
     s.ip = "192.168.100.200"; s.nextUrl = "";
     s.settingsVersion = "3f2a9c1e";
-    s.settingsRefused = 0xFF;
+    s.settingsRefused = (1u << kSettingKeys) - 1;
     s.recalibratedId = 4294967295u; s.recalibratedPpm = 2000; s.recalibratedCorrection = -32768;
-    char buf[1024];   // the dock's clientJson
+    char buf[1536];   // the dock's clientJson
     TEST_ASSERT_TRUE(clientStatusJson(s, buf, sizeof(buf)) > 0);
 }
 

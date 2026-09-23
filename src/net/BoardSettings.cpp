@@ -12,7 +12,20 @@ static const char* const kKeyNames[kSettingKeys] = {
     "led.brightness_pct",
     "log.level",
     "bsec.sample_s",
+    "led.starting.pattern",       "led.starting.interval_s",
+    "led.no_wifi.pattern",        "led.no_wifi.interval_s",
+    "led.post_failed.pattern",    "led.post_failed.interval_s",
+    "led.sensor_missing.pattern", "led.sensor_missing.interval_s",
+    "led.well.pattern",           "led.well.interval_s",
 };
+
+static const char* const kLedTriggerNames[kLedTriggers] = {
+    "starting", "no_wifi", "post_failed", "sensor_missing", "well",
+};
+static const char* const kLedPatternNames[kLedPatterns] = {"off", "solid", "pulse", "flash"};
+// The server's defaults, in StatusLed's numbering.
+static const uint8_t  kLedDefaultPattern[kLedTriggers] = {2, 3, 3, 3, 2};
+static const uint16_t kLedDefaultIntervalMs[kLedTriggers] = {500, 1000, 2000, 3000, 1000};
 
 // In log_utils.h's order, from LOG_ERROR.
 static const char* const kLevels[] = {"error", "warning", "notice", "info", "debug"};
@@ -26,6 +39,10 @@ BoardSettings defaultBoardSettings() {
     s.ledBrightnessPct = 15;
     s.logLevel = 5;
     s.bsecSampleS = 300;
+    for (uint8_t t = 0; t < kLedTriggers; ++t) {
+        s.ledPattern[t] = kLedDefaultPattern[t];
+        s.ledIntervalMs[t] = kLedDefaultIntervalMs[t];
+    }
     return s;
 }
 
@@ -37,20 +54,22 @@ namespace {
 // refused when it is there but unusable.
 class Taker {
 public:
-    explicit Taker(uint8_t& refused) : refused_(refused) {}
+    explicit Taker(uint32_t& refused) : refused_(refused) {}
 
     template <typename T>
     void take(JsonVariantConst v, SettingKey key, T& value, bool (*usable)(JsonVariantConst)) {
         if (v.isNull()) return;
         if (!usable(v)) {
-            refused_ |= (uint8_t)(1u << key);
+            refuse(key);
             return;
         }
         value = v.as<T>();
     }
 
+    void refuse(uint8_t key) { refused_ |= 1ul << key; }
+
 private:
-    uint8_t& refused_;
+    uint32_t& refused_;
 };
 
 bool warmupUsable(JsonVariantConst v) {
@@ -69,6 +88,37 @@ bool rateUsable(JsonVariantConst v) {
 }
 bool pctUsable(JsonVariantConst v) {
     return v.is<int>() && v.as<int>() >= 0 && v.as<int>() <= 100;
+}
+
+// `name`'s place in `names`, or -1.
+int indexOf(const char* name, const char* const* names, uint8_t count) {
+    for (uint8_t i = 0; i < count; ++i) {
+        if (strcmp(name, names[i]) == 0) return i;
+    }
+    return -1;
+}
+
+void takeLedLook(JsonVariantConst look, uint8_t trigger, BoardSettings& s, Taker& t) {
+    const uint8_t key = kLedLook + 2 * trigger;
+    JsonVariantConst pattern = look["pattern"];
+    if (!pattern.isNull()) {
+        const int found = pattern.is<const char*>()
+            ? indexOf(pattern.as<const char*>(), kLedPatternNames, kLedPatterns) : -1;
+        if (found < 0) {
+            t.refuse(key);
+        } else {
+            s.ledPattern[trigger] = (uint8_t)found;
+        }
+    }
+    JsonVariantConst interval = look["interval_s"];
+    if (!interval.isNull()) {
+        const float ms = interval.is<float>() ? interval.as<float>() * 1000.0f : -1.0f;
+        if (ms < kLedIntervalMinMs - 0.5f || ms > kLedIntervalMaxMs + 0.5f) {
+            t.refuse(key + 1);
+        } else {
+            s.ledIntervalMs[trigger] = (uint16_t)(ms + 0.5f);
+        }
+    }
 }
 
 }  // namespace
@@ -92,6 +142,9 @@ bool parseBoardSettings(const char* json, size_t len, const BoardSettings& curre
     t.take(doc["shtc3"]["low_power"], kShtc3LowPower, s.shtc3LowPower, boolUsable);
     t.take(doc["led"]["brightness_pct"], kLedBrightness, s.ledBrightnessPct, pctUsable);
     t.take(doc["bsec"]["sample_s"], kBsecSampleS, s.bsecSampleS, rateUsable);
+    for (uint8_t trigger = 0; trigger < kLedTriggers; ++trigger) {
+        takeLedLook(doc["led"][kLedTriggerNames[trigger]], trigger, s, t);
+    }
 
     JsonVariantConst level = doc["log"]["level"];
     if (!level.isNull()) {
@@ -103,7 +156,7 @@ bool parseBoardSettings(const char* json, size_t len, const BoardSettings& curre
         if (found) {
             s.logLevel = found;
         } else {
-            out.refused |= (uint8_t)(1u << kLogLevel);
+            t.refuse(kLogLevel);
         }
     }
 
@@ -118,14 +171,14 @@ bool parseBoardSettings(const char* json, size_t len, const BoardSettings& curre
     return true;
 }
 
-size_t refusedJson(uint8_t refused, char* buf, size_t len) {
+size_t refusedJson(uint32_t refused, char* buf, size_t len) {
     size_t n = 0;
     int w = snprintf(buf, len, "[");
     if (w < 0 || (size_t)w >= len) return 0;
     n += (size_t)w;
     bool first = true;
     for (uint8_t key = 0; key < kSettingKeys; ++key) {
-        if (!(refused & (1u << key))) continue;
+        if (!(refused & (1ul << key))) continue;
         w = snprintf(buf + n, len - n, "%s\"%s\"", first ? "" : ",", kKeyNames[key]);
         if (w < 0 || (size_t)w >= len - n) {
             buf[0] = '\0';

@@ -14,9 +14,9 @@
 // offers the image its own version calls for on any answer, and the dock takes
 // it once its queue is empty, then keeps it only if it posts. The head fetches
 // the pages the server renders from the readings and knows nothing about any
-// of this. The status LED under the head's right end pulses slowly while the
-// dock works, and gives three flashes and a steady glow while anything is
-// wrong. The PM module's fan, the dock's largest load, runs only for the
+// of this. The status LED under the head's right end shows the dock's state
+// in the look the server sets for it: by default a slow pulse while the dock
+// works and a flash while something is wrong. The PM module's fan, the dock's largest load, runs only for the
 // window before each post, unless the settings keep it on.
 #include <Arduino.h>
 #include <Preferences.h>
@@ -335,14 +335,18 @@ static volatile bool postFailed = false;
 static volatile bool     updating = false;
 static volatile uint16_t updatePermille = 0;
 
-// Trouble is anything that stops a reading reaching the server.
+static_assert(kLedTriggers == StatusLed::kLooks, "a look for each state but UPDATING");
+static_assert(kLedPatterns == StatusLed::kPatterns, "BoardSettings numbers the patterns as StatusLed");
+
+// The first state that holds, in StatusLed::State's order.
 static StatusLed::State ledState() {
     if (updating) return StatusLed::UPDATING;
     if (!running) return StatusLed::STARTING;
-    const bool well = WiFi.status() == WL_CONNECTED && !postFailed &&
-                      sensors.shtc3Present() && sensors.scd41Present() &&
-                      sensors.pmPresent() && sensors.bme688Present();
-    return well ? StatusLed::WELL : StatusLed::TROUBLE;
+    if (WiFi.status() != WL_CONNECTED) return StatusLed::NO_WIFI;
+    if (postFailed) return StatusLed::POST_FAILED;
+    const bool sensed = sensors.shtc3Present() && sensors.scd41Present() &&
+                        sensors.pmPresent() && sensors.bme688Present();
+    return sensed ? StatusLed::WELL : StatusLed::SENSOR_MISSING;
 }
 
 // The fast pulse's shortest step lasts about 11 ms, so a 5 ms tick keeps
@@ -378,7 +382,7 @@ static void startLed() {
 
 // What the dock runs: the defaults, then the copy in NVS, then each answer.
 static BoardSettings boardSettings = defaultBoardSettings();
-static uint8_t       settingsRefused = 0;
+static uint32_t      settingsRefused = 0;
 // Until the next reading, from the last answer; not kept across a restart.
 static bool          ledDark = false;
 
@@ -432,6 +436,10 @@ static void applySettings() {
     sensors.setScd41Options(boardSettings.scd41OffsetC, boardSettings.scd41SelfCalibration);
     sensors.setShtc3LowPower(boardSettings.shtc3LowPower);
     statusLed.brightness(ledDark ? 0 : boardSettings.ledBrightnessPct);
+    for (uint8_t t = 0; t < kLedTriggers; ++t) {
+        statusLed.look((StatusLed::State)t, (StatusLed::Pattern)boardSettings.ledPattern[t],
+                       boardSettings.ledIntervalMs[t]);
+    }
     setBsecSampleS(boardSettings.bsecSampleS);
     setLogLevel(boardSettings.logLevel);
 }
@@ -493,7 +501,7 @@ static void fetchSettings() {
     if (changed) {
         saveSettings(text);
         logf(LOG_NOTICE, "settings %s applied", boardSettings.version);
-        char refused[192];
+        char refused[kRefusedJsonBytes];
         if (settingsRefused && refusedJson(settingsRefused, refused, sizeof(refused))) {
             logf(LOG_WARNING, "settings: refused %s", refused);
         }
@@ -507,7 +515,7 @@ static ClientConfig config;
 static const char kReadingsPath[] = "/sensor-readings";
 static char     readingsURL[300];    // the server's /sensor-readings; empty disables posting
 static char     json[FileBacklog::kMaxDoc];
-static char     clientJson[1024];
+static char     clientJson[1536];
 static char     healthJsonBuf[448];
 static char     withClient[FileBacklog::kMaxDoc + sizeof(clientJson) + 32];
 static char     body[sizeof(withClient) + sizeof(healthJsonBuf) + 16];

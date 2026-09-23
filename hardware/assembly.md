@@ -278,8 +278,9 @@ image, and every later firmware — comes from the server.
    checks.
 3. Plug one USB-C cable into the dock. It powers both halves.
 
-The LED then tells you where it is: a fast pulse while it connects and starts the sensors, a slow one when it is
-reading and posting, and three flashes with a steady glow when something is wrong.
+The LED then tells you where it is. By default: a fast pulse while it connects and starts the sensors, a slow one
+when it is reading and posting, and a flash when something is wrong: every second with no Wi-Fi, every 2 s when a
+post fails, every 3 s when a sensor is missing. The server's Dock tab sets these looks.
 
 ## Appendix: every joint
 

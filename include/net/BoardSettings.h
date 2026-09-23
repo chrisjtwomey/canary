@@ -2,6 +2,11 @@
 #include <cstddef>
 #include <cstdint>
 
+// The status light's triggers that have a look, in StatusLed::State's order,
+// and its patterns, in StatusLed::Pattern's.
+static const uint8_t kLedTriggers = 5;
+static const uint8_t kLedPatterns = 4;
+
 // The dock's settings as the server's GET /board-settings gives them, held to
 // the dock's own limits whatever the server says.
 struct BoardSettings {
@@ -13,6 +18,8 @@ struct BoardSettings {
     uint8_t  ledBrightnessPct;
     uint8_t  logLevel;           // log_utils.h's numbering: 1 error to 5 debug
     uint16_t bsecSampleS;        // IBsec::kLpSampleS or kUlpSampleS
+    uint8_t  ledPattern[kLedTriggers];
+    uint16_t ledIntervalMs[kLedTriggers];
 };
 
 // The server's defaults, which the dock runs until the server has said anything.
@@ -27,7 +34,9 @@ enum SettingKey : uint8_t {
     kLedBrightness,
     kLogLevel,
     kBsecSampleS,
-    kSettingKeys,
+    // Each trigger's pattern, then its interval: kLedLook + 2 * trigger (+ 1).
+    kLedLook,
+    kSettingKeys = kLedLook + 2 * kLedTriggers,
 };
 
 // The key as the server names it, e.g. "pm.warmup_s".
@@ -35,7 +44,7 @@ const char* settingKeyName(uint8_t key);
 
 struct SettingsAnswer {
     BoardSettings settings;
-    uint8_t  refused;            // a bit per SettingKey out of range or of the wrong kind
+    uint32_t refused;            // a bit per SettingKey out of range or of the wrong kind
     bool     dark;               // the light stays dark until the next reading
     uint32_t recalibrateId;      // 0 for none
     uint16_t recalibratePpm;
@@ -49,10 +58,15 @@ bool parseBoardSettings(const char* json, size_t len, const BoardSettings& curre
 
 // The refused keys as a JSON array. Returns the length written, or 0 when it
 // does not fit.
-size_t refusedJson(uint8_t refused, char* buf, size_t len);
+size_t refusedJson(uint32_t refused, char* buf, size_t len);
+
+// The room refusedJson needs with every key refused, and its terminator.
+static const size_t kRefusedJsonBytes = 512;
 
 static const uint16_t kPmWarmupMinS = 30;
 static const uint16_t kPmWarmupMaxS = 600;
 static const float    kScd41OffsetMaxC = 20.0f;
 static const uint16_t kRecalibrateMinPpm = 400;
 static const uint16_t kRecalibrateMaxPpm = 2000;
+static const uint16_t kLedIntervalMinMs = 250;
+static const uint16_t kLedIntervalMaxMs = 10000;

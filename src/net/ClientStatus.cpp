@@ -11,7 +11,7 @@ static const char* b(bool v) { return v ? "true" : "false"; }
 // settings: the head leaves settingsVersion null and sends neither.
 static int settingsJson(const ClientStatus& s, char* buf, size_t len) {
     if (!s.settingsVersion) return snprintf(buf, len, "}");
-    char refused[192];
+    char refused[kRefusedJsonBytes];
     if (!refusedJson(s.settingsRefused, refused, sizeof(refused))) return -1;
     return snprintf(buf, len,
         ",\"settings\":{\"version\":\"%s\",\"refused\":%s}"

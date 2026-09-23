@@ -152,7 +152,7 @@
     all('[data-when]').forEach(function (box) {
       var parts = box.getAttribute('data-when').split('=');
       var source = document.querySelector('[data-key="' + parts[0] + '"]');
-      box.hidden = source ? valueOf(source) !== parts[1] : false;
+      box.hidden = source ? parts[1].split('|').indexOf(valueOf(source)) < 0 : false;
     });
   }
 

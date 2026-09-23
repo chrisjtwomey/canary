@@ -45,8 +45,8 @@ class Field:
     of the config that gives it; the form shows it as the field's value.
     ``hint`` is an example of the value, for a field with no default. ``when``
     is another field and a
-    value, as ``source.kind=store``: the field shows only while that one holds
-    it. ``env`` is false for keys the server reads without looking for an
+    value, as ``source.kind=store``, or values, as ``led.well.pattern=pulse|flash``:
+    the field shows only while that one holds one of them. ``env`` is false for keys the server reads without looking for an
     environment variable.
     """
     key: str
@@ -108,6 +108,24 @@ class Tab:
     @property
     def fields(self) -> list[Field]:
         return [f for g in self.groups for f in g.fields]
+
+
+# The status light's states, as the Dock tab names them.
+LED_STATE_LABELS = {"starting": "Starting", "no_wifi": "No Wi-Fi", "post_failed": "Post failed",
+                    "sensor_missing": "Sensor missing", "well": "Well"}
+
+
+def _led_fields(state: str, pattern: str, interval: float) -> tuple[Field, Field]:
+    label = LED_STATE_LABELS[state]
+    key = f"dock.led.{state}"
+    return (
+        Field(f"{key}.pattern", label, "", "choice", pattern,
+              choices=tuple((p, p.capitalize()) for p in ds.LED_PATTERNS),
+              long=f"{label} pattern"),
+        Field(f"{key}.interval_s", "Interval", "", "number", interval, unit="s",
+              minimum=ds.LED_INTERVAL_MIN_S, maximum=ds.LED_INTERVAL_MAX_S,
+              when=f"{key}.pattern=pulse|flash", long=f"{label} interval"),
+    )
 
 
 TABS: tuple[Tab, ...] = (
@@ -199,6 +217,8 @@ TABS: tuple[Tab, ...] = (
             Field("dock.led.brightness_pct", "Brightness", "0 = off.", "int",
                   ds.LED_BRIGHTNESS_PCT, unit="%", minimum=0, maximum=100),
             Field("dock.led.off_in_quiet_hours", "Off in slow mode", "", "bool", False),
+            *(field for state, pattern, interval in ds.LED_LOOKS
+              for field in _led_fields(state, pattern, interval)),
         )),
         Group("Log", (
             Field("dock.log.level", "Level", "", "choice", "debug",
