@@ -3,20 +3,23 @@
 // A TinyS3 with the four sensors on their own regulator. Mains powered, so
 // nothing sleeps: it connects once, and on each of the server's slots takes a
 // reading and queues it, with its own status beside it. It reads the sensors
-// at no other time. A sensor that gave nothing at one slot is started again
-// when the PM fan starts before the next, so it has settled by then. The
-// server names the slots, every five minutes and every half hour overnight,
-// and the time: the dock has no clock and asks for none elsewhere. The queue
-// is in PSRAM, and each pass of the loop posts the oldest hundred of it to the
-// server's /sensor-readings as one batch. BSEC's state goes to /calibration
-// whenever BSEC saves a new copy. The server offers the image its own version
-// calls for on any answer, and the dock takes it once its queue is empty, then
-// keeps it only if it posts. The head fetches the pages the server renders
-// from the readings and knows nothing about any of this. The status LED under
-// the head's right end pulses slowly while the dock works, and gives three
-// flashes and a steady glow while anything is wrong. The PM module's fan, the
-// dock's largest load, runs only for the window before each post.
+// at no other time. Before each slot it gets ready for it: it asks the server
+// for its settings and applies any change, runs a recalibration the server
+// asks for, and starts again a sensor that gave nothing at the last slot, so
+// it has settled by this one. The server names the slots, every five minutes
+// and every half hour overnight, and the time: the dock has no clock and asks
+// for none elsewhere. The queue is in PSRAM, and each pass of the loop posts
+// the oldest hundred of it to the server's /sensor-readings as one batch.
+// BSEC's state goes to /calibration whenever BSEC saves a new copy. The server
+// offers the image its own version calls for on any answer, and the dock takes
+// it once its queue is empty, then keeps it only if it posts. The head fetches
+// the pages the server renders from the readings and knows nothing about any
+// of this. The status LED under the head's right end pulses slowly while the
+// dock works, and gives three flashes and a steady glow while anything is
+// wrong. The PM module's fan, the dock's largest load, runs only for the
+// window before each post, unless the settings keep it on.
 #include <Arduino.h>
+#include <Preferences.h>
 #include <WiFi.h>
 #include <Wire.h>
 #include <ezTime.h>
@@ -35,6 +38,7 @@
 #include "dock/PostTimer.h"
 #include "dock/StatusLed.h"
 #include "net/Backlog.h"
+#include "net/BoardSettings.h"
 #include "net/Calibration.h"
 #include "net/ClientStatus.h"
 #include "net/ServerClock.h"
@@ -77,6 +81,7 @@ static uint32_t syncedEpoch() { return epochAt(millis()); }
 
 static char calibrationURL[310];   // the server's /calibration; empty when there is no server
 static char aboutURL[310];         // the server's /about, asked for the time until it is known
+static char settingsURL[340];      // the server's /board-settings, with this board's name
 
 // ─── The only part that knows which sensor implementation is in use ───────
 
@@ -113,10 +118,9 @@ static void startBsec() {}
 static void fillBsecStatus(ClientStatus&) {}
 static size_t calibrationBlock(char*, size_t, uint32_t&) { return 0; }
 static void restoreFromServer() {}
+static void setBsecSampleS(uint16_t) {}
 
 #else
-#include <Preferences.h>
-
 #include "sensors/Bme688Driver.h"
 #include "sensors/BsecLibrary.h"
 #include "sensors/BsecRunner.h"
@@ -153,6 +157,8 @@ public:
         out.len = prefs.getBytes("state", out.blob, sizeof(out.blob));
         out.accuracy = prefs.getUChar("accuracy", 0);
         out.savedEpoch = prefs.getULong("saved", 0);
+        // A copy saved without its rate is from before there was a choice: 3 s.
+        out.sampleS = prefs.getUShort("rate", IBsec::kLpSampleS);
         prefs.end();
         return out.len > 0;
     }
@@ -162,6 +168,7 @@ public:
         const bool ok = prefs.putBytes("state", state.blob, state.len) == state.len;
         prefs.putUChar("accuracy", state.accuracy);
         prefs.putULong("saved", state.savedEpoch);
+        prefs.putUShort("rate", state.sampleS);
         prefs.end();
         return ok;
     }
@@ -211,6 +218,7 @@ static void fillBsecStatus(ClientStatus& s) {
     s.iaqAccuracy = bsec.accuracy;
     s.bsecLateCalls = bsec.lateCalls;
     s.bsecSavedEpoch = bsec.savedEpoch;
+    s.bsecSampleS = bsec.sampleS;
 }
 
 // The state as of BSEC's last copy, as the calibration block, and when BSEC
@@ -219,7 +227,8 @@ static size_t calibrationBlock(char* buf, size_t len, uint32_t& savedEpoch) {
     BsecState state;
     if (!bsecRunner.current(state)) return 0;
     savedEpoch = state.savedEpoch;
-    return calibrationJson(state.blob, state.len, state.accuracy, state.savedEpoch, buf, len);
+    return calibrationJson(state.blob, state.len, state.accuracy, state.savedEpoch, state.sampleS,
+                           buf, len);
 }
 
 // Asked once a boot, after the server has taken a batch of readings, so a failed
@@ -230,12 +239,15 @@ static void restoreFromServer() {
     if (askedServerForState || !bootEpoch || !calibrationURL[0]) return;
     askedServerForState = true;
 
-    char url[360];
-    snprintf(url, sizeof(url), "%s?device=%s&before=%lu", calibrationURL, CLIENT_NAME,
-             (unsigned long)bootEpoch);
+    const uint16_t rate = bsecRunner.sampleS();
+    char url[380];
+    snprintf(url, sizeof(url), "%s?device=%s&before=%lu&sample_s=%u", calibrationURL, CLIENT_NAME,
+             (unsigned long)bootEpoch, (unsigned)rate);
     int32_t size = 1024;
     uint8_t* answer = downloadFile(url, clientUserAgent(CLIENT_NAME), &size, nullptr);
-    const SavedCopy ours = {nvsState.len > 0, nvsState.accuracy, nvsState.savedEpoch};
+    // A copy from the other rate is no use to BSEC, so it counts as none.
+    const SavedCopy ours = {nvsState.len > 0 && nvsState.sampleS == rate, nvsState.accuracy,
+                            nvsState.savedEpoch};
     char why[80];
     if (!answer) {
         const SavedCopy none = {};
@@ -252,7 +264,8 @@ static void restoreFromServer() {
 
     BsecState theirs = {};
     if (!parseBme688Calibration(text, theirs.blob, sizeof(theirs.blob), theirs.len,
-                                theirs.accuracy, theirs.savedEpoch)) {
+                                theirs.accuracy, theirs.savedEpoch, theirs.sampleS) ||
+        theirs.sampleS != rate) {
         logf(LOG_WARNING, "[bsec] state: %s selected (server state unreadable)",
              ours.present ? "NVS" : "none");
         return;
@@ -263,6 +276,16 @@ static void restoreFromServer() {
         logf(choice.takeServer ? LOG_NOTICE : LOG_INFO, "[bsec] state: %s", why);
     }
     if (choice.takeServer) bsecRunner.restartWith(theirs);
+}
+
+// A new rate starts BSEC again from nothing, then asks the server once more
+// for a copy learned at that rate.
+static void setBsecSampleS(uint16_t sampleS) {
+    if (!IBsec::knownRate(sampleS) || sampleS == bsecRunner.sampleS()) return;
+    const bool running = bsecRunner.status().started;
+    bsecRunner.setSampleS(sampleS);
+    askedServerForState = false;
+    if (running) logf(LOG_NOTICE, "[bsec] a sample every %u s: starting again", (unsigned)sampleS);
 }
 
 // The readings come from the room itself, so there is nothing to advance.
@@ -286,10 +309,12 @@ static const uint32_t kCpuMhz = 80;
 // The fan settles in 30 s (Pmsa003iDriver::kWarmupMs), Plantower's figure;
 // the margin covers a slot the loop reaches a little late. Each reading
 // records how long the fan had actually run, so the database can show
-// whether 30 s is enough.
+// whether 30 s is enough. The settings can lengthen it, or keep the fan on.
 static const uint32_t kFanWarmupMs = 30000;
 static const uint32_t kFanMarginMs = 5000;
 static FanWindow fanWindow(kFanWarmupMs + kFanMarginMs);
+// Set at the pre-warm before a slot, cleared by the reading at it.
+static bool prewarmed = false;
 static bool fanRunning = true;    // the module's own pull-up holds it on until told otherwise
 static uint32_t fanOnSinceMs = 0;
 
@@ -349,13 +374,142 @@ static void startLed() {
     xTaskCreatePinnedToCore(ledTask, "led", kLedStackBytes, nullptr, 1, nullptr, 0);
 }
 
+// ─── The settings the server gives the dock ─────────────────────────────────
+
+// What the dock runs: the defaults, then the copy in NVS, then each answer.
+static BoardSettings boardSettings = defaultBoardSettings();
+static uint8_t       settingsRefused = 0;
+// Until the next reading, from the last answer; not kept across a restart.
+static bool          ledDark = false;
+
+// The last recalibration run, kept so a restart neither runs it again nor
+// forgets to report it.
+struct Recalibrated {
+    uint32_t id;
+    uint16_t ppm;
+    bool     ok;
+    int16_t  correction;
+};
+static Recalibrated recalibrated = {};
+
+static const char kSettingsNamespace[] = "settings";
+static char       settingsText[1024];
+
+static void loadSettings() {
+    Preferences prefs;
+    if (!prefs.begin(kSettingsNamespace, true)) return;
+    const size_t n = prefs.getString("doc", settingsText, sizeof(settingsText));
+    if (prefs.getBytesLength("frc") == sizeof(recalibrated)) {
+        prefs.getBytes("frc", &recalibrated, sizeof(recalibrated));
+    }
+    prefs.end();
+    SettingsAnswer answer;
+    if (n > 1 && parseBoardSettings(settingsText, strlen(settingsText), boardSettings, answer)) {
+        boardSettings = answer.settings;
+        settingsRefused = answer.refused;
+        logf(LOG_INFO, "settings %s from NVS", boardSettings.version);
+    }
+}
+
+static void saveSettings(const char* text) {
+    Preferences prefs;
+    if (!prefs.begin(kSettingsNamespace, false)) return;
+    prefs.putString("doc", text);
+    prefs.end();
+}
+
+static void saveRecalibrated() {
+    Preferences prefs;
+    if (!prefs.begin(kSettingsNamespace, false)) return;
+    prefs.putBytes("frc", &recalibrated, sizeof(recalibrated));
+    prefs.end();
+}
+
+// Each setting where it takes effect. Unchanged ones cost nothing, so this
+// runs on every answer.
+static void applySettings() {
+    fanWindow.setLeadMs((uint32_t)boardSettings.pmWarmupS * 1000);
+    sensors.setScd41Options(boardSettings.scd41OffsetC, boardSettings.scd41SelfCalibration);
+    sensors.setShtc3LowPower(boardSettings.shtc3LowPower);
+    statusLed.brightness(ledDark ? 0 : boardSettings.ledBrightnessPct);
+    setBsecSampleS(boardSettings.bsecSampleS);
+    setLogLevel(boardSettings.logLevel);
+}
+
+static void logSensorChanges();
+
+static void runRecalibration(uint32_t id, uint16_t ppm) {
+    int16_t correction = 0;
+    switch (sensors.recalibrateScd41(ppm, correction)) {
+        case SensorSuite::Recalibration::NotReady:
+            logf(LOG_INFO, "[scd41] recalibration to %u ppm waits for 3 minutes of measuring",
+                 (unsigned)ppm);
+            return;
+        case SensorSuite::Recalibration::Done:
+            recalibrated = {id, ppm, true, correction};
+            logf(LOG_NOTICE, "[scd41] recalibrated to %u ppm: corrected by %d ppm", (unsigned)ppm,
+                 (int)correction);
+            break;
+        case SensorSuite::Recalibration::Failed:
+            recalibrated = {id, ppm, false, 0};
+            logf(LOG_ERROR, "[scd41] recalibration to %u ppm failed", (unsigned)ppm);
+            break;
+    }
+    saveRecalibrated();
+    logSensorChanges();
+}
+
+static void heardFrom(const PageResponse& rsp, uint32_t atMs, bool schedule);
+
+// The server's settings, applied, and its recalibration, run. A failed
+// request keeps what the dock runs.
+static void fetchSettings() {
+    if (!settingsURL[0]) return;
+    PageResponse rsp = {};
+    int32_t size = sizeof(settingsText) - 1;
+    uint8_t* body = downloadFile(settingsURL, clientUserAgent(CLIENT_NAME), &size, &rsp);
+    heardFrom(rsp, millis(), false);
+    if (!body) {
+        logf(LOG_WARNING, "settings: no answer; keeping %s",
+             boardSettings.version[0] ? boardSettings.version : "the defaults");
+        return;
+    }
+    char text[sizeof(settingsText)];
+    const size_t n = size > 0 && (size_t)size < sizeof(text) ? (size_t)size : sizeof(text) - 1;
+    memcpy(text, body, n);
+    text[n] = '\0';
+    free(body);
+
+    SettingsAnswer answer;
+    if (!parseBoardSettings(text, n, boardSettings, answer)) {
+        log(LOG_WARNING, "settings: the answer is unreadable");
+        return;
+    }
+    const bool changed = strcmp(answer.settings.version, boardSettings.version) != 0;
+    boardSettings = answer.settings;
+    settingsRefused = answer.refused;
+    ledDark = answer.dark;
+    applySettings();
+    if (changed) {
+        saveSettings(text);
+        logf(LOG_NOTICE, "settings %s applied", boardSettings.version);
+        char refused[192];
+        if (settingsRefused && refusedJson(settingsRefused, refused, sizeof(refused))) {
+            logf(LOG_WARNING, "settings: refused %s", refused);
+        }
+    }
+    if (answer.recalibrateId > recalibrated.id) {
+        runRecalibration(answer.recalibrateId, answer.recalibratePpm);
+    }
+}
+
 static ClientConfig config;
 static const char kReadingsPath[] = "/sensor-readings";
 static char     readingsURL[300];    // the server's /sensor-readings; empty disables posting
 static char     json[FileBacklog::kMaxDoc];
-static char     clientJson[768];
+static char     clientJson[1024];
 static char     healthJsonBuf[448];
-static char     withClient[FileBacklog::kMaxDoc + 768 + 32];
+static char     withClient[FileBacklog::kMaxDoc + sizeof(clientJson) + 32];
 static char     body[sizeof(withClient) + sizeof(healthJsonBuf) + 16];
 static char     ipText[16];
 
@@ -493,6 +647,12 @@ static ClientStatus clientStatus(uint32_t nowMs) {
     s.backlogCapacity = queue ? queue->capacity() : 0;
     s.backlogStore = queue ? queue->where() : "";
     fillBsecStatus(s);
+    s.settingsVersion = boardSettings.version;
+    s.settingsRefused = settingsRefused;
+    s.recalibratedId = recalibrated.id;
+    s.recalibratedPpm = recalibrated.ppm;
+    s.recalibratedOk = recalibrated.ok;
+    s.recalibratedCorrection = recalibrated.correction;
     return s;
 }
 
@@ -650,18 +810,28 @@ static void logSensorChanges() {
     }
 }
 
+// The pre-warm comes the fan's lead before each slot, or the default lead
+// when the fan never stops: the settings first, since they can move the
+// SCD41's, then any sensor that has stopped, so it has settled by the slot.
+static uint32_t prewarmLeadMs() {
+    return fanWindow.always() ? kFanWarmupMs + kFanMarginMs : fanWindow.leadMs();
+}
+
+static void prewarmWhenDue(uint32_t nowMs) {
+    if (prewarmed || postTimer.untilMs(nowMs) > prewarmLeadMs()) return;
+    prewarmed = true;
+    fetchSettings();
+    sensors.restartFailed();
+    logSensorChanges();
+}
+
 // The suite counts no missed frame while the fan is off, so stopping it does
-// not make the module look dead. The fan's start is the warm-up for the next
-// slot, so any sensor that has stopped is started again with it.
+// not make the module look dead.
 static void driveFan(uint32_t nowMs) {
     const bool wanted = fanWindow.shouldRun(postTimer.untilMs(nowMs));
     if (wanted == fanRunning) return;
     fanRunning = wanted;
-    if (wanted) {
-        fanOnSinceMs = nowMs;
-        sensors.restartFailed();
-        logSensorChanges();
-    }
+    if (wanted) fanOnSinceMs = nowMs;
     sensors.setFanEnabled(wanted);
     logf(LOG_INFO, "PM fan %s", wanted ? "on" : "off");
 }
@@ -679,6 +849,7 @@ static void sampleWhenDue(uint32_t nowMs) {
     if (!postTimer.due(nowMs)) return;
     Readings r = sampleSensors(nowMs);
     postTimer.taken(nowMs);
+    prewarmed = false;
     queueReading(r, nowMs);
 }
 
@@ -710,6 +881,8 @@ void setup() {
     if (urlOrigin(config.serverURL, readingsURL, sizeof(readingsURL) - sizeof(kReadingsPath))) {
         snprintf(calibrationURL, sizeof(calibrationURL), "%s/calibration", readingsURL);
         snprintf(aboutURL, sizeof(aboutURL), "%s/about", readingsURL);
+        snprintf(settingsURL, sizeof(settingsURL), "%s/board-settings?device=%s", readingsURL,
+                 CLIENT_NAME);
         strcat(readingsURL, kReadingsPath);
         logf(LOG_INFO, "posting readings to %s", readingsURL);
     } else {
@@ -717,6 +890,9 @@ void setup() {
     }
     openQueue();
 
+    loadSettings();
+    // Before the suite starts, so the SCD41 starts with its options.
+    applySettings();
     startI2c();
     // Before the suite, which asks the BSEC side whether the BME688 is running.
     startBsec();
@@ -739,6 +915,7 @@ void loop() {
     keepMQTTConnected();
     const uint32_t nowMs = millis();
     askForTime(nowMs);
+    prewarmWhenDue(nowMs);
     driveFan(nowMs);
     sampleWhenDue(nowMs);
     sendQueued();

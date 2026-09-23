@@ -682,6 +682,165 @@ html:not(.js) .panel + .panel {
   margin-top: 0;
 }
 
+/* A tab set out as a spec sheet: each group under a rule, its heading in a
+   column beside it, and each setting a line with a dotted leader from its
+   name to its value. A group with a drawing puts it before its lines. On a
+   phone the heading goes above, and the drawing above the lines. */
+.panel.sheet .section {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: 10px 32px;
+  padding: 18px 0;
+  border-top: 2px solid var(--ink-faint);
+}
+
+.panel.sheet .dock-state + .section {
+  margin-top: 14px;
+}
+
+.panel.sheet .section .group {
+  margin: 3px 0 0;
+}
+
+.panel.sheet .section .group .part {
+  display: block;
+  margin-top: 4px;
+}
+
+.panel.sheet .part {
+  font-size: 13px;
+  font-style: italic;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-mid);
+}
+
+.panel.sheet .content.dial {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 16px 36px;
+  align-items: start;
+}
+
+.panel.sheet .visual canvas {
+  display: block;
+  width: 100%;
+  touch-action: none;
+}
+
+.panel.sheet .dial .visual canvas {
+  height: 260px;
+}
+
+.panel.sheet .visual .caption {
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.35;
+  color: var(--ink-mid);
+}
+
+.panel.sheet .slot .visual {
+  max-width: 640px;
+  margin-bottom: 16px;
+}
+
+.panel.sheet .slot .visual canvas {
+  height: 110px;
+}
+
+.panel.sheet .fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 560px;
+  margin-top: 0;
+}
+
+/* Settings that apply only while the one above them is on, in a box of their
+   own, so their names need not repeat the condition. */
+.panel.sheet .subsection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px 14px;
+  border: 2px dashed var(--ink-faint);
+  border-radius: 10px;
+}
+
+.panel.sheet .field {
+  display: grid;
+  grid-template-columns: auto minmax(24px, 1fr) auto;
+  align-items: baseline;
+  column-gap: 10px;
+}
+
+.panel.sheet .field .head {
+  margin-bottom: 0;
+}
+
+.panel.sheet .field .leader {
+  align-self: end;
+  margin-bottom: 0.55em;
+  border-bottom: 2px dotted var(--ink-faint);
+}
+
+.panel.sheet .field .control {
+  justify-content: flex-end;
+}
+
+.panel.sheet .field .help,
+.panel.sheet .field .env,
+.panel.sheet .field .error {
+  grid-column: 1 / -1;
+}
+
+.panel.sheet input[type="number"],
+.panel.sheet input[type="time"] {
+  width: 7em;
+}
+
+@media (max-width: 699px) {
+  .panel.sheet .section,
+  .panel.sheet .content.dial {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .panel.sheet .dial .visual {
+    max-width: 260px;
+  }
+}
+
+/* Whether the dock runs the saved settings: a pill for each state, solid
+   when the dock is offline, outlined when it is synchronized, and dashed
+   while it has yet to take the saved settings. */
+.dock-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.pill {
+  font-size: 14px;
+  font-weight: 700;
+  font-style: italic;
+  white-space: nowrap;
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  border-radius: 1em;
+  padding: 0 0.8em;
+}
+
+.pill.offline {
+  color: var(--paper);
+  background: var(--ink);
+}
+
+.pill.waiting {
+  border-style: dashed;
+}
+
 .field {
   min-width: 0;
 }
@@ -770,7 +929,9 @@ html:not(.js) .panel + .panel {
 }
 
 .field .control .button.off,
-.field .control .button.off:hover {
+.field .control .button.off:hover,
+.field .control .button:disabled,
+.field .control .button:disabled:hover {
   color: var(--ink-faint);
   border-color: var(--ink-faint);
   cursor: default;

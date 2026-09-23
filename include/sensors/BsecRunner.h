@@ -13,6 +13,7 @@ struct BsecState {
     uint32_t len;
     uint8_t  accuracy;     // the IAQ accuracy when it was taken, 0-3
     uint32_t savedEpoch;   // UTC seconds when it was taken; 0 before NTP set the clock
+    uint16_t sampleS;      // the rate it was learned at; useless at the other
 };
 
 // Where the state waits between boots: NVS on the board.
@@ -39,22 +40,31 @@ public:
         uint8_t  accuracy;     // of the last index, 0-3
         uint32_t lateCalls;    // times BSEC said it was asked late
         uint32_t savedEpoch;   // the last save to the store this boot; 0 for none
+        uint16_t sampleS;      // seconds between samples
     };
 
     BsecRunner(IBsec& bsec, IBme688& bme, IClock& clock, IBsecStateStore& store, EpochFn epoch)
         : bsec_(bsec), bme_(bme), clock_(clock), store_(store), epoch_(epoch) {}
 
-    // Start the sensor and BSEC, from the stored state when there is one.
-    // Runs before the task does. `stored` gets the state that was loaded, so
-    // the loop can weigh it against the server's copy.
+    // Start the sensor and BSEC, from the stored state when there is one
+    // learned at this rate. Runs before the task does. `stored` gets the state
+    // that was loaded, so the loop can weigh it against the server's copy.
     bool begin(BsecState* stored = nullptr);
     uint32_t step();
+
+    // Any task: sample every `sampleS`, IBsec::kLpSampleS or kUlpSampleS.
+    // Before begin() it is the rate BSEC starts at; after, a new rate starts
+    // BSEC again from nothing at the next step. Another value is ignored.
+    void setSampleS(uint16_t sampleS);
+    // Any task.
+    uint16_t sampleS() const;
 
     // Any task: the newest cycle, with BSEC's index when it has one, and the
     // clock reading it was taken at. False before the first.
     bool latest(Bme688Data& out, uint32_t& atMs) const;
-    // Any task: start BSEC again from `state` at the next step.
-    void restartWith(const BsecState& state);
+    // Any task: start BSEC again from `state` at the next step. False, and
+    // nothing done, for a state learned at another rate.
+    bool restartWith(const BsecState& state);
     // Any task: the state as of the last copy. False before the first.
     bool current(BsecState& out) const;
     // Any task.
@@ -106,6 +116,8 @@ private:
     bool        haveCurrent_ = false;
     BsecState   pending_ = {};
     bool        restartPending_ = false;
+    bool        freshPending_ = false;   // start from nothing at sampleS_
+    uint16_t    sampleS_ = IBsec::kLpSampleS;
     Status      status_ = {};
 };
 
@@ -123,12 +135,13 @@ public:
     uint32_t measurementMs() const override { return 0; }
     bool fetchData(uint32_t nowMs, Bme688Data& out) override {
         uint32_t atMs = 0;
-        return runner_.latest(out, atMs) && nowMs - atMs <= kFreshMs;
+        return runner_.latest(out, atMs) &&
+               nowMs - atMs <= kFreshCycles * 1000u * runner_.sampleS();
     }
     uint8_t chipId() override { return 0x61; }
 
-    // Three of BSEC's 3 s cycles.
-    static const uint32_t kFreshMs = 9000;
+    // A cycle is fresh until three more should have followed it.
+    static const uint32_t kFreshCycles = 3;
 
 private:
     BsecRunner& runner_;

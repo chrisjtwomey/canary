@@ -1,0 +1,144 @@
+// The dock's settings from GET /board-settings, held to the dock's own limits.
+#include <unity.h>
+#include <cstdio>
+#include <cstring>
+
+#include "net/BoardSettings.h"
+
+static const char kFull[] =
+    "{\"version\":\"3f2a9c1e\",\"pm\":{\"warmup_s\":0},"
+    "\"scd41\":{\"temperature_offset_c\":2.5,\"self_calibration\":false},"
+    "\"shtc3\":{\"low_power\":true},\"led\":{\"brightness_pct\":40,\"dark\":true},"
+    "\"log\":{\"level\":\"info\"},\"bsec\":{\"sample_s\":3},"
+    "\"recalibrate\":{\"id\":1758650400,\"ppm\":420}}";
+
+static bool parse(const char* json, SettingsAnswer& out,
+                  const BoardSettings& current = defaultBoardSettings()) {
+    return parseBoardSettings(json, strlen(json), current, out);
+}
+
+void setUp() {}
+void tearDown() {}
+
+void test_the_defaults_are_the_servers() {
+    BoardSettings s = defaultBoardSettings();
+    TEST_ASSERT_EQUAL_STRING("", s.version);
+    TEST_ASSERT_EQUAL_UINT16(35, s.pmWarmupS);
+    TEST_ASSERT_EQUAL_FLOAT(4.0f, s.scd41OffsetC);
+    TEST_ASSERT_TRUE(s.scd41SelfCalibration);
+    TEST_ASSERT_FALSE(s.shtc3LowPower);
+    TEST_ASSERT_EQUAL_UINT8(15, s.ledBrightnessPct);
+    TEST_ASSERT_EQUAL_UINT8(5, s.logLevel);
+    TEST_ASSERT_EQUAL_UINT16(300, s.bsecSampleS);
+}
+
+void test_it_reads_every_key() {
+    SettingsAnswer a;
+    TEST_ASSERT_TRUE(parse(kFull, a));
+    TEST_ASSERT_EQUAL_STRING("3f2a9c1e", a.settings.version);
+    TEST_ASSERT_EQUAL_UINT16(0, a.settings.pmWarmupS);
+    TEST_ASSERT_EQUAL_FLOAT(2.5f, a.settings.scd41OffsetC);
+    TEST_ASSERT_FALSE(a.settings.scd41SelfCalibration);
+    TEST_ASSERT_TRUE(a.settings.shtc3LowPower);
+    TEST_ASSERT_EQUAL_UINT8(40, a.settings.ledBrightnessPct);
+    TEST_ASSERT_EQUAL_UINT8(4, a.settings.logLevel);
+    TEST_ASSERT_EQUAL_UINT16(3, a.settings.bsecSampleS);
+    TEST_ASSERT_TRUE(a.dark);
+    TEST_ASSERT_EQUAL_UINT32(1758650400, a.recalibrateId);
+    TEST_ASSERT_EQUAL_UINT16(420, a.recalibratePpm);
+    TEST_ASSERT_EQUAL_UINT8(0, a.refused);
+}
+
+void test_a_whole_number_offset_is_a_number_too() {
+    SettingsAnswer a;
+    TEST_ASSERT_TRUE(parse("{\"version\":\"a\",\"scd41\":{\"temperature_offset_c\":4}}", a));
+    TEST_ASSERT_EQUAL_FLOAT(4.0f, a.settings.scd41OffsetC);
+    TEST_ASSERT_EQUAL_UINT8(0, a.refused);
+}
+
+void test_a_key_the_answer_lacks_keeps_the_current_value() {
+    BoardSettings current = defaultBoardSettings();
+    current.ledBrightnessPct = 80;
+    SettingsAnswer a;
+    TEST_ASSERT_TRUE(parse("{\"version\":\"a\"}", a, current));
+    TEST_ASSERT_EQUAL_UINT8(80, a.settings.ledBrightnessPct);
+    TEST_ASSERT_FALSE(a.dark);
+    TEST_ASSERT_EQUAL_UINT32(0, a.recalibrateId);
+}
+
+void test_a_value_out_of_the_docks_limits_is_refused_and_the_current_kept() {
+    SettingsAnswer a;
+    TEST_ASSERT_TRUE(parse("{\"version\":\"a\",\"pm\":{\"warmup_s\":10},"
+                           "\"scd41\":{\"temperature_offset_c\":25,\"self_calibration\":1},"
+                           "\"shtc3\":{\"low_power\":\"yes\"},\"led\":{\"brightness_pct\":101},"
+                           "\"log\":{\"level\":\"verbose\"},\"bsec\":{\"sample_s\":60}}", a));
+    TEST_ASSERT_EQUAL_UINT8((1u << kSettingKeys) - 1, a.refused);
+    BoardSettings d = defaultBoardSettings();
+    TEST_ASSERT_EQUAL_UINT16(d.pmWarmupS, a.settings.pmWarmupS);
+    TEST_ASSERT_EQUAL_FLOAT(d.scd41OffsetC, a.settings.scd41OffsetC);
+    TEST_ASSERT_EQUAL(d.scd41SelfCalibration, a.settings.scd41SelfCalibration);
+    TEST_ASSERT_EQUAL(d.shtc3LowPower, a.settings.shtc3LowPower);
+    TEST_ASSERT_EQUAL_UINT8(d.ledBrightnessPct, a.settings.ledBrightnessPct);
+    TEST_ASSERT_EQUAL_UINT8(d.logLevel, a.settings.logLevel);
+    TEST_ASSERT_EQUAL_UINT16(d.bsecSampleS, a.settings.bsecSampleS);
+}
+
+void test_the_warm_up_limits_are_0_or_30_to_600() {
+    const char* const good[] = {"0", "30", "600"};
+    const char* const bad[] = {"29", "601", "-1", "35.5"};
+    char json[80];
+    SettingsAnswer a;
+    for (const char* v : good) {
+        snprintf(json, sizeof(json), "{\"version\":\"a\",\"pm\":{\"warmup_s\":%s}}", v);
+        TEST_ASSERT_TRUE(parse(json, a));
+        TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, a.refused, v);
+    }
+    for (const char* v : bad) {
+        snprintf(json, sizeof(json), "{\"version\":\"a\",\"pm\":{\"warmup_s\":%s}}", v);
+        TEST_ASSERT_TRUE(parse(json, a));
+        TEST_ASSERT_EQUAL_UINT8_MESSAGE(1u << kPmWarmup, a.refused, v);
+    }
+}
+
+void test_a_recalibration_out_of_range_is_not_run() {
+    SettingsAnswer a;
+    TEST_ASSERT_TRUE(parse("{\"version\":\"a\",\"recalibrate\":{\"id\":5,\"ppm\":3000}}", a));
+    TEST_ASSERT_EQUAL_UINT32(0, a.recalibrateId);
+    TEST_ASSERT_TRUE(parse("{\"version\":\"a\",\"recalibrate\":{\"id\":0,\"ppm\":420}}", a));
+    TEST_ASSERT_EQUAL_UINT32(0, a.recalibrateId);
+}
+
+void test_an_answer_without_a_version_or_not_json_is_not_taken() {
+    SettingsAnswer a;
+    TEST_ASSERT_FALSE(parse("{\"pm\":{\"warmup_s\":0}}", a));
+    TEST_ASSERT_FALSE(parse("{\"version\":\"\"}", a));
+    TEST_ASSERT_FALSE(parse("{\"version\":\"0123456789abc\"}", a));
+    TEST_ASSERT_FALSE(parse("[1]", a));
+    TEST_ASSERT_FALSE(parse("<html>", a));
+}
+
+void test_refused_keys_are_named_as_the_server_names_them() {
+    char buf[128];
+    TEST_ASSERT_EQUAL_UINT(2, refusedJson(0, buf, sizeof(buf)));
+    TEST_ASSERT_EQUAL_STRING("[]", buf);
+    refusedJson((1u << kScd41Offset) | (1u << kLedBrightness), buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("[\"scd41.temperature_offset_c\",\"led.brightness_pct\"]", buf);
+    char every[192];   // the size ClientStatus.cpp gives it
+    TEST_ASSERT_TRUE(refusedJson((1u << kSettingKeys) - 1, every, sizeof(every)) > 0);
+    char small[10];
+    TEST_ASSERT_EQUAL_UINT(0, refusedJson(1u << kScd41Offset, small, sizeof(small)));
+}
+
+int main(int, char**) {
+    UNITY_BEGIN();
+    RUN_TEST(test_the_defaults_are_the_servers);
+    RUN_TEST(test_it_reads_every_key);
+    RUN_TEST(test_a_whole_number_offset_is_a_number_too);
+    RUN_TEST(test_a_key_the_answer_lacks_keeps_the_current_value);
+    RUN_TEST(test_a_value_out_of_the_docks_limits_is_refused_and_the_current_kept);
+    RUN_TEST(test_the_warm_up_limits_are_0_or_30_to_600);
+    RUN_TEST(test_a_recalibration_out_of_range_is_not_run);
+    RUN_TEST(test_an_answer_without_a_version_or_not_json_is_not_taken);
+    RUN_TEST(test_refused_keys_are_named_as_the_server_names_them);
+    return UNITY_END();
+}

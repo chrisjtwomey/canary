@@ -16,8 +16,8 @@ public:
     void waitMs(uint32_t ms) override { now += ms; }
 };
 
-// BSEC as its interface promises: a forced cycle every 3 s, and the index at
-// whatever accuracy the test sets.
+// BSEC as its interface promises: a forced cycle at the rate it was started
+// at, and the index at whatever accuracy the test sets.
 class FakeBsec : public IBsec {
 public:
     std::string          calls;
@@ -28,10 +28,11 @@ public:
     int     controls = 0;
     int     steps = 0;
     uint8_t accuracy = 0;
-    static const int64_t kPeriodNs = 3000000000LL;
+    uint16_t initRate = 0, subscribeRate = 0;
 
-    int init() override {
+    int init(uint16_t sampleS) override {
         calls += "init ";
+        initRate = sampleS;
         return initResult;
     }
     int setState(const uint8_t* state, uint32_t len) override {
@@ -45,8 +46,9 @@ public:
         *len = n;
         return kOk;
     }
-    int subscribe() override {
+    int subscribe(uint16_t sampleS) override {
         calls += "subscribe ";
+        subscribeRate = sampleS;
         return kOk;
     }
     int sensorControl(int64_t nowNs, BsecRequest& r) override {
@@ -59,7 +61,7 @@ public:
         r.osP = 5;
         r.osH = 1;
         r.runGas = true;
-        r.nextCallNs = nowNs + kPeriodNs;
+        r.nextCallNs = nowNs + (int64_t)subscribeRate * 1000000000LL;
         const int status = nextStatus;
         nextStatus = kOk;
         return status;
@@ -158,8 +160,10 @@ void tearDown() {
     delete clk;
 }
 
-static BsecState stateOf(std::initializer_list<uint8_t> bytes, uint8_t accuracy, uint32_t saved) {
+static BsecState stateOf(std::initializer_list<uint8_t> bytes, uint8_t accuracy, uint32_t saved,
+                         uint16_t sampleS = IBsec::kLpSampleS) {
     BsecState s = {};
+    s.sampleS = sampleS;
     for (uint8_t b : bytes) s.blob[s.len++] = b;
     s.accuracy = accuracy;
     s.savedEpoch = saved;
@@ -368,8 +372,83 @@ void test_the_suite_sees_the_newest_cycle_while_it_is_fresh() {
     TEST_ASSERT_EQUAL_UINT32(0, adapter.measurementMs());
     TEST_ASSERT_TRUE(adapter.fetchData(clk->now, d));
     TEST_ASSERT_TRUE(d.hasIaq);
-    TEST_ASSERT_FALSE_MESSAGE(adapter.fetchData(clk->now + BsecBme688::kFreshMs + 1, d),
+    TEST_ASSERT_FALSE_MESSAGE(adapter.fetchData(clk->now + 3 * 3000 + 1, d),
                               "a reading BSEC has not renewed is not a reading");
+}
+
+// ─── The sample rate ─────────────────────────────────────────────────────
+
+void test_bsec_starts_at_the_rate_set_before_begin() {
+    runner->setSampleS(IBsec::kUlpSampleS);
+    runner->begin();
+    TEST_ASSERT_EQUAL_UINT16(300, bsec->initRate);
+    TEST_ASSERT_EQUAL_UINT16(300, bsec->subscribeRate);
+    TEST_ASSERT_EQUAL_UINT16(300, runner->status().sampleS);
+}
+
+void test_a_stored_state_from_the_other_rate_is_not_used() {
+    store->has = true;
+    store->stored = stateOf({1, 2, 3}, 3, 1000, IBsec::kLpSampleS);
+    runner->setSampleS(IBsec::kUlpSampleS);
+    runner->begin();
+    TEST_ASSERT_EQUAL_STRING("init subscribe ", bsec->calls.c_str());
+    TEST_ASSERT_FALSE(runner->status().restored);
+}
+
+void test_a_new_rate_starts_bsec_again_from_nothing_at_the_next_step() {
+    store->has = true;
+    store->stored = stateOf({1, 2, 3}, 3, 1000);
+    runner->begin();
+    runner->step();
+    bsec->calls.clear();
+
+    runner->setSampleS(IBsec::kUlpSampleS);
+    TEST_ASSERT_EQUAL_STRING("", bsec->calls.c_str());
+    runner->step();
+    TEST_ASSERT_EQUAL_STRING("init subscribe ", bsec->calls.c_str());
+    TEST_ASSERT_EQUAL_UINT16(300, bsec->initRate);
+    TEST_ASSERT_FALSE(runner->status().restored);
+    BsecState copy;
+    TEST_ASSERT_TRUE(runner->current(copy));
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(300, copy.sampleS, "no copy from the old rate survives");
+}
+
+void test_the_same_rate_again_or_an_unknown_one_changes_nothing() {
+    runner->begin();
+    runner->step();
+    bsec->calls.clear();
+    runner->setSampleS(IBsec::kLpSampleS);
+    runner->setSampleS(60);
+    runner->step();
+    TEST_ASSERT_EQUAL_STRING("", bsec->calls.c_str());
+    TEST_ASSERT_EQUAL_UINT16(3, runner->sampleS());
+}
+
+void test_a_copy_from_the_other_rate_is_refused() {
+    runner->begin();
+    TEST_ASSERT_FALSE(runner->restartWith(stateOf({9, 9}, 3, 2000, IBsec::kUlpSampleS)));
+    bsec->calls.clear();
+    runner->step();
+    TEST_ASSERT_EQUAL_STRING("", bsec->calls.c_str());
+}
+
+void test_at_300_s_a_cycle_stays_fresh_for_three_cycles() {
+    BsecBme688 adapter(*runner);
+    Bme688Data d;
+    runner->setSampleS(IBsec::kUlpSampleS);
+    runner->begin();
+    runner->step();
+    TEST_ASSERT_TRUE(adapter.fetchData(clk->now + 899000, d));
+    TEST_ASSERT_FALSE(adapter.fetchData(clk->now + 900001, d));
+}
+
+void test_at_300_s_bsec_is_asked_again_after_300_s() {
+    runner->setSampleS(IBsec::kUlpSampleS);
+    runner->begin();
+    runFor(295000);                        // the task wakes at most 3 s apart
+    TEST_ASSERT_EQUAL_INT(1, bsec->controls);
+    runFor(8000);
+    TEST_ASSERT_EQUAL_INT(2, bsec->controls);
 }
 
 int main(int, char**) {
@@ -389,5 +468,12 @@ int main(int, char**) {
     RUN_TEST(test_the_state_is_saved_when_accuracy_reaches_3_then_every_six_hours);
     RUN_TEST(test_a_restart_with_the_servers_copy_waits_for_the_next_step);
     RUN_TEST(test_the_suite_sees_the_newest_cycle_while_it_is_fresh);
+    RUN_TEST(test_bsec_starts_at_the_rate_set_before_begin);
+    RUN_TEST(test_a_stored_state_from_the_other_rate_is_not_used);
+    RUN_TEST(test_a_new_rate_starts_bsec_again_from_nothing_at_the_next_step);
+    RUN_TEST(test_the_same_rate_again_or_an_unknown_one_changes_nothing);
+    RUN_TEST(test_a_copy_from_the_other_rate_is_refused);
+    RUN_TEST(test_at_300_s_a_cycle_stays_fresh_for_three_cycles);
+    RUN_TEST(test_at_300_s_bsec_is_asked_again_after_300_s);
     return UNITY_END();
 }

@@ -50,6 +50,22 @@ posts:              # when the dock posts its readings, on the wall clock (:00, 
     to: "07:00"
     every: 1800
 
+dock:               # what the dock does between readings; it takes a change before its next one
+  pm:
+    warmup_s: 35    # the fan runs this long before each reading; 0 keeps it on
+  scd41:
+    temperature_offset_c: 4.0   # the dock's own heat, taken off the CO2 sensor's temperature
+    self_calibration: true      # takes the lowest reading of each week as fresh air
+  shtc3:
+    low_power: false
+  led:
+    brightness_pct: 15
+    off_in_quiet_hours: false   # dark from the pre-warm before the first quiet slot
+  bsec:
+    sample_s: 300   # BSEC's air quality sample: 3 or 300 s; a change starts its learning again
+  log:
+    level: debug    # error, warning, notice, info or debug
+
 site:
   altitude_m: 10    # pressure is reduced to sea level, as forecasts quote it
 

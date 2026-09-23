@@ -81,9 +81,10 @@ def test_a_store_with_no_documents_has_no_size(tmp_path):
 def test_a_calibration_copy_comes_back_with_its_columns(tmp_path):
     path = str(tmp_path / "calibration.db")
     store = CalibrationStore(path, keep_days=0, now=lambda: float(AT))
-    store.add("dock", {"bme688": {"state": "QUJD", "accuracy": 3, "saved": AT}})
+    store.add("dock", {"bme688": {"state": "QUJD", "accuracy": 3, "saved": AT, "sample_s": 300}})
     assert docs(Transfer("calibration", path, "calibration")) == [
-        {"device": "dock", "sensor": "bme688", "saved": AT, "accuracy": 3, "state": "QUJD"}]
+        {"device": "dock", "sensor": "bme688", "saved": AT, "accuracy": 3, "state": "QUJD",
+         "sample_s": 300}]
 
 
 def test_the_documents_go_back_into_a_store_unchanged(readings, tmp_path):
@@ -159,11 +160,21 @@ def test_a_store_that_is_not_kept_cannot_take_a_file(tmp_path):
 def test_a_calibration_file_goes_back_in(tmp_path):
     path = str(tmp_path / "calibration.db")
     store = CalibrationStore(path, keep_days=0, now=lambda: float(AT))
-    store.add("dock", {"bme688": {"state": "QUJD", "accuracy": 3, "saved": AT}})
+    store.add("dock", {"bme688": {"state": "QUJD", "accuracy": 3, "saved": AT, "sample_s": 300}})
     export = Transfer("calibration", path, "calibration")
-    copy = {"device": "dock", "sensor": "bme688", "saved": AT + 60, "accuracy": 2, "state": "RUZH"}
+    copy = {"device": "dock", "sensor": "bme688", "saved": AT + 60, "accuracy": 2, "state": "RUZH",
+            "sample_s": 300}
     assert took(export, [copy]) == {"added": 1, "held": 0, "total": 1}
     assert copy in docs(export)
+
+
+def test_a_calibration_file_from_before_the_rate_holds_3_s_copies(tmp_path):
+    path = str(tmp_path / "calibration.db")
+    CalibrationStore(path, keep_days=0).add("dock", {})
+    export = Transfer("calibration", path, "calibration")
+    took(export, [{"device": "dock", "sensor": "bme688", "saved": AT, "accuracy": 3,
+                   "state": "QUJD"}])
+    assert docs(export)[0]["sample_s"] == 3
 
 
 def test_a_line_that_is_not_a_calibration_copy_is_corrupt(tmp_path):

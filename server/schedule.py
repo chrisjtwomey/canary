@@ -93,6 +93,17 @@ class PostSchedule:
             minute += MINUTE
         raise AssertionError("no slot in two days")   # an interval divides some minute of the day
 
+    def slot_before(self, t: float) -> int:
+        """The latest slot at or before ``t``."""
+        minute = math.floor(t) // MINUTE * MINUTE
+        for _ in range(LOOK_AHEAD_MINUTES):
+            local = datetime.fromtimestamp(minute, self.tz)
+            step = self.quiet_every if self.quiet(local) else self.every
+            if (local.hour * 3600 + local.minute * 60) % step == 0:
+                return minute
+            minute -= MINUTE
+        raise AssertionError("no slot in two days")
+
     def describe(self) -> dict:
         """The schedule as ``GET /about`` gives it."""
         quiet = None

@@ -3,7 +3,23 @@
 #include <cstdio>
 #include <cstring>
 
+#include "net/BoardSettings.h"
+
 static const char* b(bool v) { return v ? "true" : "false"; }
+
+// The dock's settings and its last recalibration, for a board that has
+// settings: the head leaves settingsVersion null and sends neither.
+static int settingsJson(const ClientStatus& s, char* buf, size_t len) {
+    if (!s.settingsVersion) return snprintf(buf, len, "}");
+    char refused[192];
+    if (!refusedJson(s.settingsRefused, refused, sizeof(refused))) return -1;
+    return snprintf(buf, len,
+        ",\"settings\":{\"version\":\"%s\",\"refused\":%s}"
+        ",\"recalibrated\":{\"id\":%lu,\"ppm\":%u,\"ok\":%s,\"correction_ppm\":%d}}",
+        s.settingsVersion, refused,
+        (unsigned long)s.recalibratedId, (unsigned)s.recalibratedPpm, b(s.recalibratedOk),
+        (int)s.recalibratedCorrection);
+}
 
 size_t clientStatusJson(const ClientStatus& s, char* buf, size_t len) {
     int n = snprintf(buf, len,
@@ -13,7 +29,8 @@ size_t clientStatusJson(const ClientStatus& s, char* buf, size_t len) {
         ",\"sensors\":{\"shtc3\":%s,\"scd41\":%s,\"pmsa003i\":%s,\"bme688\":%s}"
         ",\"fetch\":{\"next_url\":\"%s\",\"next_in_s\":%lu,\"backoff_step\":%d,\"ok\":%lu,\"failed\":%lu}"
         ",\"backlog\":{\"held\":%lu,\"capacity\":%lu,\"store\":\"%s\"}"
-        ",\"bsec\":{\"running\":%s,\"restored\":%s,\"accuracy\":%u,\"late\":%lu,\"saved\":%lu}}",
+        ",\"bsec\":{\"running\":%s,\"restored\":%s,\"accuracy\":%u,\"late\":%lu,\"saved\":%lu"
+        ",\"sample_s\":%u}",
         s.board ? s.board : "", s.version ? s.version : "", s.ip ? s.ip : "", s.rssi,
         (unsigned long)s.uptimeS,
         (unsigned long)s.heapFree, (unsigned long)s.heapSize,
@@ -25,7 +42,11 @@ size_t clientStatusJson(const ClientStatus& s, char* buf, size_t len) {
         (unsigned long)s.backlogHeld, (unsigned long)s.backlogCapacity,
         s.backlogStore ? s.backlogStore : "",
         b(s.bsecRunning), b(s.bsecRestored), (unsigned)s.iaqAccuracy,
-        (unsigned long)s.bsecLateCalls, (unsigned long)s.bsecSavedEpoch);
+        (unsigned long)s.bsecLateCalls, (unsigned long)s.bsecSavedEpoch, (unsigned)s.bsecSampleS);
+    if (n >= 0 && (size_t)n < len) {
+        const int m = settingsJson(s, buf + n, len - (size_t)n);
+        n = m < 0 ? -1 : n + m;
+    }
     if (n < 0 || (size_t)n >= len) {
         if (len) buf[0] = '\0';
         return 0;

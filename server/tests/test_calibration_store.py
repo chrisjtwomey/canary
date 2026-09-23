@@ -11,8 +11,8 @@ from tests.conftest import AT
 DEVICE = "canary-dock"
 
 
-def copy(saved, accuracy=3, state="AAEC"):
-    return {"bme688": {"state": state, "accuracy": accuracy, "saved": saved}}
+def copy(saved, accuracy=3, state="AAEC", sample_s=300):
+    return {"bme688": {"state": state, "accuracy": accuracy, "saved": saved, "sample_s": sample_s}}
 
 
 @pytest.fixture
@@ -35,30 +35,30 @@ def client_for(cal, tz):
 def test_the_newest_copy_saved_before_the_time_is_handed_back(cal):
     for saved in (AT - 7200, AT - 3600, AT - 60):
         cal.add(DEVICE, copy(saved, state=f"S{saved}"))
-    assert cal.lookup(DEVICE, before=AT - 1800) == copy(AT - 3600, state=f"S{AT - 3600}")
+    assert cal.lookup(DEVICE, before=AT - 1800, sample_s=300) == copy(AT - 3600, state=f"S{AT - 3600}")
 
 
 def test_a_copy_at_accuracy_3_wins_over_a_newer_one_below_it(cal):
     cal.add(DEVICE, copy(AT - 7200, accuracy=3, state="high"))
     cal.add(DEVICE, copy(AT - 600, accuracy=1, state="low"))
-    assert cal.lookup(DEVICE, before=AT)["bme688"]["state"] == "high"
+    assert cal.lookup(DEVICE, before=AT, sample_s=300)["bme688"]["state"] == "high"
 
 
 def test_without_a_copy_at_3_the_newest_is_handed_back(cal):
     cal.add(DEVICE, copy(AT - 7200, accuracy=1, state="older"))
     cal.add(DEVICE, copy(AT - 600, accuracy=2, state="newer"))
-    assert cal.lookup(DEVICE, before=AT)["bme688"]["state"] == "newer"
+    assert cal.lookup(DEVICE, before=AT, sample_s=300)["bme688"]["state"] == "newer"
 
 
 def test_copies_made_since_the_boot_are_never_handed_back(cal):
     cal.add(DEVICE, copy(AT + 60))
     cal.add(DEVICE, copy(AT))
-    assert cal.lookup(DEVICE, before=AT) is None
+    assert cal.lookup(DEVICE, before=AT, sample_s=300) is None
 
 
 def test_only_the_named_device_is_answered(cal):
     cal.add("another-board", copy(AT - 60))
-    assert cal.lookup(DEVICE, before=AT) is None
+    assert cal.lookup(DEVICE, before=AT, sample_s=300) is None
 
 
 @pytest.mark.parametrize("entry", [
@@ -68,6 +68,8 @@ def test_only_the_named_device_is_answered(cal):
     {"state": "AAEC", "accuracy": True, "saved": AT},
     {"state": "AAEC", "accuracy": 3, "saved": 0},
     {"state": "AAEC", "accuracy": 3},
+    {"state": "AAEC", "accuracy": 3, "saved": AT},
+    {"state": "AAEC", "accuracy": 3, "saved": AT, "sample_s": 60},
 ])
 def test_an_entry_that_is_not_a_usable_copy_is_not_kept(cal, entry):
     assert cal.add(DEVICE, {"bme688": entry}) == 0
@@ -84,24 +86,26 @@ def test_copies_older_than_keep_days_go_as_new_ones_arrive(cal):
     cal.add(DEVICE, copy(AT - 4 * 86400, state="old"))
     cal.add(DEVICE, copy(AT - 60, state="new"))
     assert cal.count() == 1
-    assert cal.lookup(DEVICE, before=AT)["bme688"]["state"] == "new"
+    assert cal.lookup(DEVICE, before=AT, sample_s=300)["bme688"]["state"] == "new"
 
 
 def test_the_get_route_answers_with_the_block_the_board_sends(cal, tz):
     client = client_for(cal, tz)
     cal.add(DEVICE, copy(AT - 60))
-    rsp = client.get(f"/calibration?device={DEVICE}&before={AT}")
+    rsp = client.get(f"/calibration?device={DEVICE}&before={AT}&sample_s=300")
     assert rsp.status_code == 200 and rsp.get_json() == copy(AT - 60)
-    assert client.get(f"/calibration?device={DEVICE}&before={AT - 3600}").status_code == 404
-    assert client.get(f"/calibration?device={DEVICE}").status_code == 400
-    assert client.get(f"/calibration?before={AT}").status_code == 400
+    assert client.get(f"/calibration?device={DEVICE}&before={AT - 3600}&sample_s=300").status_code == 404
+    assert client.get(f"/calibration?device={DEVICE}&sample_s=300").status_code == 400
+    assert client.get(f"/calibration?before={AT}&sample_s=300").status_code == 400
+    assert client.get(f"/calibration?device={DEVICE}&before={AT}").status_code == 400
+    assert client.get(f"/calibration?device={DEVICE}&before={AT}&sample_s=60").status_code == 400
 
 
 def test_a_posted_block_reaches_the_calibration_store(cal, tz):
     client = client_for(cal, tz)
     rsp = client.post("/calibration", json={"device": DEVICE, "calibration": copy(AT - 30)})
     assert rsp.status_code == 204
-    assert cal.lookup(DEVICE, before=AT) == copy(AT - 30)
+    assert cal.lookup(DEVICE, before=AT, sample_s=300) == copy(AT - 30)
 
 
 @pytest.mark.parametrize("doc", [{"calibration": copy(1)}, {"device": "", "calibration": copy(1)},
@@ -109,3 +113,28 @@ def test_a_posted_block_reaches_the_calibration_store(cal, tz):
 def test_a_post_without_a_device_or_a_block_is_a_400(cal, tz, doc):
     rsp = client_for(cal, tz).post("/calibration", json=[{"device": DEVICE, "calibration": copy(AT - 30)}, doc])
     assert rsp.status_code == 400 and cal.count() == 0
+
+
+def test_only_a_copy_at_the_rate_asked_for_is_handed_back(cal):
+    cal.add(DEVICE, copy(AT - 600, sample_s=3, state="fast"))
+    cal.add(DEVICE, copy(AT - 60, sample_s=300, state="slow"))
+    assert cal.lookup(DEVICE, before=AT, sample_s=3)["bme688"]["state"] == "fast"
+    assert cal.lookup(DEVICE, before=AT, sample_s=300)["bme688"]["state"] == "slow"
+
+
+def test_copies_kept_before_there_was_a_rate_are_3_s_copies(tmp_path):
+    import sqlite3
+    path = tmp_path / "calibration.db"
+    db = sqlite3.connect(path)
+    db.execute("CREATE TABLE calibration (device TEXT NOT NULL, sensor TEXT NOT NULL,"
+               " saved INTEGER NOT NULL, accuracy INTEGER NOT NULL, state TEXT NOT NULL,"
+               " PRIMARY KEY (device, sensor, saved))")
+    db.execute("INSERT INTO calibration VALUES (?, 'bme688', ?, 3, 'old')", (DEVICE, AT - 60))
+    db.commit()
+    db.close()
+
+    store = CalibrationStore(path, keep_days=0, now=lambda: float(AT))
+
+    assert store.lookup(DEVICE, before=AT, sample_s=3)["bme688"]["state"] == "old"
+    assert store.lookup(DEVICE, before=AT, sample_s=300) is None
+    store.close()

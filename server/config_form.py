@@ -26,6 +26,7 @@ from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 from ruamel.yaml.tokens import CommentToken
 from ruamel.yaml.util import load_yaml_guess_indent
 
+import dock_settings as ds
 from schedule import DEFAULT_QUIET
 
 # A key the file does not have.
@@ -61,6 +62,8 @@ class Field:
     step: int = 1
     when: str = ""
     env: bool = True
+    long: str = ""          # the name in messages, when the label leans on its place on the page
+    scale: int = 1          # the file's units in one of the input's: 60 shows seconds as minutes
 
     @property
     def path(self) -> tuple[str, ...]:
@@ -78,17 +81,27 @@ class Field:
 
 @dataclass(frozen=True)
 class Group:
-    """``store`` names the store this group's file holds, for the export row."""
+    """``store`` names the store this group's file holds, for the export row.
+    ``action`` names a row after the fields that acts at once rather than
+    saving: ``recalibrate``. ``visual`` names a drawing of the group's values
+    that can also set them: ``dial``, the day's posts, or ``slot``, the time
+    before one reading."""
     heading: str
     fields: tuple[Field, ...]
     store: str = ""
+    action: str = ""
+    visual: str = ""
 
 
 @dataclass(frozen=True)
 class Tab:
+    """``sheet`` sets the tab out as a spec sheet: each group under a rule,
+    its heading in a column beside it, and each field a line with a dotted
+    leader from its name to its value."""
     name: str
     title: str
     groups: tuple[Group, ...]
+    sheet: bool = False
 
     @property
     def fields(self) -> list[Field]:
@@ -148,19 +161,48 @@ TABS: tuple[Tab, ...] = (
                   choices=(("top", "Top"), ("center", "Centre"), ("bottom", "Bottom"))),
         )),
     )),
-    Tab("boards", "Boards", (
-        Group("Sending", (
-            Field("posts.every", "Send every", "Whole minutes.", "int", 300, unit="seconds",
-                  minimum=60, step=60),
-            Field("posts.quiet", "Quiet hours",
-                  "A time range of less frequent sensor readings.", "quiet", True, env=False),
+    Tab("dock", "Dock", (
+        Group("Report schedule", (
+            Field("posts.every", "Report every", "", "int", 300, unit="minutes", minimum=1,
+                  scale=60),
+            Field("posts.quiet", "Slow mode",
+                  "A time range of less frequent reports.", "quiet", True, env=False),
             Field("posts.quiet.from", "From", "", "time", when="posts.quiet=true", env=False),
             Field("posts.quiet.to", "To", "", "time", when="posts.quiet=true", env=False),
-            Field("posts.quiet.every", "Send every (quiet)", "", "int",
+            Field("posts.quiet.every", "Report every", "", "int",
                   lambda cfg: effective(cfg, "posts.every"),
-                  unit="seconds", minimum=60, step=60, when="posts.quiet=true", env=False),
+                  unit="minutes", minimum=1, scale=60, when="posts.quiet=true", env=False,
+                  long="Report every, in slow mode"),
+        ), visual="dial"),
+        Group("Before each report · PMSA003I", (
+            Field("dock.pm.warmup_s", "Fan warm-up", "0 = always on.", "int", ds.PM_WARMUP_S,
+                  unit="seconds", minimum=0, maximum=ds.PM_WARMUP_MAX_S),
+        ), visual="slot"),
+        Group("CO₂ · SCD41", (
+            Field("dock.scd41.temperature_offset_c", "Temperature offset",
+                  "Heat from the dock, taken off the SCD41's reading.", "number",
+                  ds.SCD41_OFFSET_C, unit="°C", minimum=0, maximum=ds.SCD41_OFFSET_MAX_C),
+            Field("dock.scd41.self_calibration", "Self-calibration",
+                  "Takes the lowest reading of each week as fresh air.", "bool", True),
+        ), action="recalibrate"),
+        Group("Humidity · SHTC3", (
+            Field("dock.shtc3.low_power", "Low power", "Faster readings, less repeatable.",
+                  "bool", False),
         )),
-    )),
+        Group("Air quality · BME688", (
+            Field("dock.bsec.sample_s", "Sample", "A change starts IAQ learning again.", "choice",
+                  300, choices=(("3", "Every 3 s"), ("300", "Every 5 min"))),
+        )),
+        Group("Status light", (
+            Field("dock.led.brightness_pct", "Brightness", "0 = off.", "int",
+                  ds.LED_BRIGHTNESS_PCT, unit="%", minimum=0, maximum=100),
+            Field("dock.led.off_in_quiet_hours", "Off in slow mode", "", "bool", False),
+        )),
+        Group("Log", (
+            Field("dock.log.level", "Level", "", "choice", "debug",
+                  choices=tuple((level, level.capitalize()) for level in ds.LOG_LEVELS)),
+        )),
+    ), sheet=True),
     Tab("storage", "Storage", (
         Group("Sensor readings", (
             Field("source.path", "File", "", "text", "sensor-readings.db"),
@@ -272,6 +314,19 @@ def effective(cfg: dict, key: str) -> Any:
     return default_of(BY_KEY[key], cfg) if v is MISSING else v
 
 
+def _scaled(f: Field, value: Any) -> Any:
+    """``value`` from the file in the input's units."""
+    if f.scale == 1 or isinstance(value, bool) or not isinstance(value, (int, float)):
+        return value
+    shown = value / f.scale
+    return int(shown) if shown == int(shown) else shown
+
+
+def input_text(f: Field, value: Any) -> str:
+    """A value from the file as ``f``'s input shows it."""
+    return _as_input(_scaled(f, value))
+
+
 def _as_input(value: Any) -> str:
     if value is None or value is MISSING:
         return ""
@@ -308,9 +363,9 @@ def shown(cfg: dict) -> dict[str, Any]:
         elif f.kind == "quiet":
             out[f.key] = "false" if v is not MISSING and not v else "true"
         elif f.key.startswith("posts.quiet.") and quiet is None:
-            out[f.key] = str(DEFAULT_QUIET[f.path[-1]])
+            out[f.key] = _as_input(_scaled(f, DEFAULT_QUIET[f.path[-1]]))
         else:
-            out[f.key] = _as_input(default_of(f, cfg) if v is MISSING else v)
+            out[f.key] = _as_input(_scaled(f, default_of(f, cfg) if v is MISSING else v))
     return out
 
 
@@ -326,7 +381,7 @@ def defaults(cfg: dict) -> dict[str, str]:
         else:
             d = default_of(f, cfg)
         if d is not None:
-            out[f.key] = _as_input(d)
+            out[f.key] = _as_input(_scaled(f, d))
     return out
 
 
@@ -426,7 +481,7 @@ def parse(f: Field, raw: Any) -> Any:
         except ValueError:
             raise FieldError("Must be a whole number.") from None
         _bounds(f, v)
-        return v
+        return v * f.scale
     if f.kind == "number":
         try:
             v = int(raw)
@@ -442,7 +497,7 @@ def parse(f: Field, raw: Any) -> Any:
     if f.kind == "choice":
         if raw not in [c for c, _ in f.choices]:
             raise FieldError("Must be one of " + ", ".join(w for _, w in f.choices) + ".")
-        return raw
+        return int(raw) if raw.isdigit() else raw
     if f.kind == "time":
         m = _HHMM.fullmatch(raw)
         if not m or int(m[1]) > 23 or int(m[2]) > 59:
@@ -950,9 +1005,10 @@ def name_of(path: tuple) -> str:
         return ".".join(path)
     tab = next(t for t in TABS if t.name == TAB_OF[f.key])
     group = next(g for g in tab.groups if f in g.fields)
-    shared = sum(o.label == f.label for o in tab.fields) > 1
+    name = f.long or f.label
+    shared = sum((o.long or o.label) == name for o in tab.fields) > 1
     rest = path[2:] if f.kind == "times" and path != f.path else path[len(f.path):]
-    return " · ".join([tab.title, *([group.heading] if shared else []), f.label, *rest])
+    return " · ".join([tab.title, *([group.heading] if shared else []), name, *rest])
 
 
 def _words(v: Any) -> str:
@@ -967,13 +1023,21 @@ def _words(v: Any) -> str:
     return str(v)
 
 
+def _unit_words(f: Field, v: Any) -> Any:
+    """A scaled field's value in the input's units, with them, as "5 minutes"."""
+    shown = _scaled(f, v)
+    return f"{shown} {f.unit}" if shown is not v else v
+
+
 def _quiet_words(cfg: dict) -> str:
     q = lookup(cfg, ("posts", "quiet"))
     if q is not MISSING and not q:
         return "off"
     q = q if isinstance(q, dict) else DEFAULT_QUIET
     every = q.get("every", lookup(cfg, ("posts", "every")))
-    return f"{q.get('from', '?')}–{q.get('to', '?')}, {300 if every is MISSING else every} s"
+    every = 300 if every is MISSING else every
+    minutes = f"{every // 60} min" if isinstance(every, int) and every % 60 == 0 else f"{every} s"
+    return f"{q.get('from', '?')}–{q.get('to', '?')}, every {minutes}"
 
 
 def _with_quiet_words(cfg: dict) -> dict:
@@ -995,6 +1059,8 @@ def changes(old: dict, new: dict) -> list[dict[str, str]]:
         if f is not None and f.kind in ("pools", "times"):
             before = "none" if before is MISSING else before
             after = "none" if after is MISSING else after
+        if f is not None and f.scale != 1:
+            before, after = (_unit_words(f, v) for v in (before, after))
         out.append((order.get(f.key, len(order)) if f else len(order),
                     {"name": name_of(path), "old": _words(before), "new": _words(after)}))
     return [c for _, c in sorted(out, key=lambda x: x[0])]

@@ -9,9 +9,9 @@
 // The LED is never dark for long: a slow pulse is the heartbeat, so a dead
 // dock and a well one do not look alike.
 //
-// Brightness is perceived brightness, mapped to duty through gamma 2.2. The
-// cap was set by eye on a breadboard with no resistor in line; with the 1 kOhm
-// fitted it must be set again.
+// Brightness is perceived brightness, mapped to duty through gamma 2.2, up
+// to a cap in percent of full: 15 by default, set by eye on a breadboard with
+// no resistor in line. A cap of 0 keeps the LED dark whatever the state.
 class StatusLed {
 public:
     static const uint8_t  kResolutionBits = 14;
@@ -52,6 +52,11 @@ public:
 
     State state() const { return state_; }
 
+    // The cap, in percent of full brightness; above 100 is 100. The LED task
+    // reads it, so it is one byte.
+    void brightness(uint8_t pct) { capPct_ = pct > 100 ? 100 : pct; }
+    uint8_t brightness() const { return capPct_; }
+
     // How much of the image is written, in thousandths.
     void progress(uint16_t permille) { progress_ = permille > 1000 ? 1000 : permille; }
 
@@ -73,24 +78,26 @@ public:
     }
 
     // The brightest step, which is also the flash and the steady glow.
-    static uint16_t peakDuty() { return stepDuty(kSteps - 1); }
+    uint16_t peakDuty() const { return stepDuty(kSteps - 1); }
+
+    static const uint8_t kDefaultBrightnessPct = 15;
 
 private:
     // Perceived brightness of step/15 of the cap, as an LEDC duty.
-    static uint16_t stepDuty(uint8_t step) {
-        const float cap = 0.15f;     // of full brightness, by eye
+    uint16_t stepDuty(uint8_t step) const {
+        const float cap = capPct_ / 100.0f;
         const float gamma = 2.2f;
         const float level = cap * step / (kSteps - 1);
         return (uint16_t)(kMaxDuty * std::pow(level, gamma) + 0.5f);
     }
 
-    static uint16_t pulseDuty(uint32_t phase, uint32_t periodMs, uint8_t top = kSteps - 1) {
+    uint16_t pulseDuty(uint32_t phase, uint32_t periodMs, uint8_t top = kSteps - 1) const {
         const float turn = 2.0f * 3.14159265f * phase / periodMs;
         const float light = 0.5f * (1.0f - std::cos(turn));
         return stepDuty((uint8_t)(top * light + 0.5f));
     }
 
-    static uint16_t troubleDuty(uint32_t phase) {
+    uint16_t troubleDuty(uint32_t phase) const {
         const uint32_t flashing = kTroubleFlashes * 2u * kTroubleFlashMs;
         if (phase < flashing && (phase / kTroubleFlashMs) % 2) return 0;
         return peakDuty();
@@ -99,4 +106,5 @@ private:
     State    state_ = STARTING;
     uint32_t startedMs_ = 0;
     uint16_t progress_ = 0;
+    volatile uint8_t capPct_ = kDefaultBrightnessPct;
 };

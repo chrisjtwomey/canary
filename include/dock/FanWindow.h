@@ -17,10 +17,18 @@ public:
     explicit FanWindow(uint32_t leadMs) : lead_(leadMs) {}
 
     // untilPostMs is the time to the next post, 0 when it is due.
-    bool shouldRun(uint32_t untilPostMs) const { return untilPostMs <= lead_; }
+    bool shouldRun(uint32_t untilPostMs) const { return always_ || untilPostMs <= lead_; }
 
     uint32_t leadMs() const { return lead_; }
 
+    // A lead of 0 keeps the fan running.
+    void setLeadMs(uint32_t leadMs) {
+        always_ = leadMs == 0;
+        if (leadMs) lead_ = leadMs;
+    }
+    bool always() const { return always_; }
+
 private:
     uint32_t lead_;
+    bool     always_ = false;
 };

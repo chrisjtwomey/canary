@@ -16,7 +16,7 @@ from typing import Any, Callable, Iterable, Iterator
 from epd_server.logs import LEVELS
 from epd_server.store import key
 
-from sources.calibration import MAX_ACCURACY, SENSORS
+from sources.calibration import MAX_ACCURACY, SAMPLE_S, SENSORS
 
 # Rows read, written or asked about in one go. Three key columns a row keeps
 # the question about a batch under any SQLite's limit on how many values it takes.
@@ -69,7 +69,11 @@ def _calibration_row(doc: Any) -> tuple:
         raise ValueError("accuracy must be 0 to 3")
     if not isinstance(state, str) or not state:
         raise ValueError("state must be a string")
-    return device, sensor, saved, accuracy, state
+    # A file exported before BSEC had a choice of rate holds 3 s copies.
+    rate = doc.get("sample_s", SAMPLE_S[0])
+    if isinstance(rate, bool) or rate not in SAMPLE_S:
+        raise ValueError("sample_s must be 3 or 300")
+    return device, sensor, saved, accuracy, state, rate
 
 
 def _logs_row(doc: Any) -> tuple:
@@ -103,9 +107,10 @@ class Kind:
 KINDS = {
     "readings": Kind("readings", ("doc",), "ts", ("device", "ts"),
                      ("device", "ts", "doc"), _readings_row),
-    "calibration": Kind("calibration", ("device", "sensor", "saved", "accuracy", "state"),
+    "calibration": Kind("calibration", ("device", "sensor", "saved", "accuracy", "state", "sample_s"),
                         "saved", ("device", "sensor", "saved"),
-                        ("device", "sensor", "saved", "accuracy", "state"), _calibration_row),
+                        ("device", "sensor", "saved", "accuracy", "state", "sample_s"),
+                        _calibration_row),
     "logs": Kind("lines", ("board", "received", "level", "text"), "id",
                  ("board", "received", "text"), ("board", "received", "level", "text"), _logs_row),
 }

@@ -113,3 +113,15 @@ def test_config_can_turn_the_quiet_window_off_or_move_it():
         {"every": 600, "quiet": None}
     moved = make_posts({"posts": {"quiet": {"from": "23:00", "to": "06:00", "every": 3600}}}, DUBLIN)
     assert moved.describe()["quiet"] == {"from": "23:00", "to": "06:00", "every": 3600}
+
+
+@pytest.mark.parametrize("now, slot", [
+    ("2026-06-15T12:03:10", "06-15 12:00:00"),
+    ("2026-06-15T12:05:00", "06-15 12:05:00"),     # a slot is its own latest
+    ("2026-06-15T01:20:00", "06-15 01:00:00"),     # quiet: on the half hour
+    ("2026-06-15T07:03:00", "06-15 07:00:00"),
+    ("2026-06-15T06:59:00", "06-15 06:30:00"),
+])
+def test_the_latest_slot_at_or_before_a_time(now, slot):
+    assert datetime.fromtimestamp(schedule().slot_before(at(now)), DUBLIN).strftime(
+        "%m-%d %H:%M:%S") == slot

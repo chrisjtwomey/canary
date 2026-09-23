@@ -91,7 +91,7 @@ def test_the_page_shows_the_file_as_a_form_and_as_text(client, path):
     assert one(soup, '[data-field="server.port"] .reset').has_attr("hidden")
     assert soup.select_one('[data-field="source.kind"]') is None
     assert [attr(t, "data-tab") for t in soup.select("nav.tabs a")] == [
-        "server", "display", "image", "boards", "storage", "firmware", "mqtt", "yaml"]
+        "server", "display", "image", "dock", "storage", "firmware", "mqtt", "yaml"]
 
 
 def test_the_form_posted_back_as_it_is_changes_nothing(client, path, restarts):
@@ -261,7 +261,8 @@ def test_text_from_the_file_is_escaped(client, path):
     rsp = client.post("/web/config", data={"text": text + "bad: [", "action": "check"})
     soup = soup_of(rsp)
     assert one(soup, "textarea[name=text]").get_text() == text + "bad: ["
-    assert [attr(s, "src") for s in soup.find_all("script")] == ["config.js"]
+    assert [attr(s, "src") for s in soup.find_all("script")] == [
+        "rough.iife.min.js", "config.js", "dock.js"]
 
 
 def test_a_posted_tab_name_is_one_of_the_tabs(client, path):
@@ -382,3 +383,190 @@ def test_a_page_that_cannot_ask_gets_the_answer_under_the_row(exporting):
                          data={"file": (io.BytesIO(text.encode()), "readings.jsonl")})
     row = one(soup_of(rsp), '[data-import="sensor-readings"]')
     assert one(row, "p").get_text() == "Added 1 of 1 records."
+
+
+# ── The Dock tab ────────────────────────────────────────────────────
+
+@pytest.fixture
+def dock_report():
+    return {}
+
+
+@pytest.fixture
+def dock_offline():
+    return False
+
+
+@pytest.fixture
+def dock(tmp_path, dock_report, dock_offline):
+    from dock_settings import BoardSettings, DockSettings
+    from schedule import PostSchedule
+    from sources.calibration import CalibrationStore
+    from tests.conftest import AT, TZ
+    store = CalibrationStore(tmp_path / "calibration.db")
+    yield BoardSettings(DockSettings(), PostSchedule(300, TZ), store,
+                        lambda device: ({"doc": dock_report, "age_s": 3600,
+                                         "offline": dock_offline} if dock_report else None),
+                        now=lambda: AT)
+    store.close()
+
+
+@pytest.fixture
+def dock_client(path, restarts, tz, dock):
+    app = Flask(__name__)
+    app.register_blueprint(config_blueprint(make_pages(tz, width=1280, height=720), path,
+                                            check_config, lambda: restarts.append(1), dock=dock))
+    return app.test_client()
+
+
+def test_the_dock_tab_holds_the_dock_block_and_a_recalibration(dock_client):
+    soup = soup_of(dock_client.get("/web/config"))
+    panel = one(soup, "#panel-dock")
+
+    assert attr(one(panel, '[data-field="dock.pm.warmup_s"] input'), "value") == "35"
+    assert " ".join(one(panel, "#dock-applied").get_text().split()) == \
+        "No report from the dock yet."
+    sections = panel.select(".section")
+    assert len(sections) == 7 and all(sec.select_one("h2.group") for sec in sections)
+    heading = one(panel, '.section:has([data-field="dock.scd41.self_calibration"]) h2')
+    assert [span.get_text() for span in heading.select("span")] == ["CO₂", "SCD41"]
+    assert attr(one(panel, "#recalibrate-ppm"), "form") == "recalibrate-form"
+    group = one(panel, "[data-recalibrate]").find_parent(class_="fields")
+    assert group.select_one('[data-field="dock.scd41.self_calibration"]') is not None
+    assert one(soup, "#recalibrate-form").find_parent(id="settings-form") is None
+
+
+def test_a_setting_changed_on_the_dock_tab_is_saved_under_dock(dock_client, path, restarts):
+    soup = soup_of(dock_client.get("/web/config"))
+
+    rsp = dock_client.post("/web/config", data={
+        **posted(soup, dock__led__brightness_pct="40"), "action": "save"})
+
+    assert rsp.status_code == 200
+    assert "brightness_pct: 40" in open(path).read()
+    assert restarts == [1]
+
+
+def test_recalibrate_asks_the_dock_and_does_not_restart(dock_client, dock, path, restarts):
+    before = open(path).read()
+
+    rsp = dock_client.post("/web/config", data={"mode": "recalibrate", "ppm": "420"})
+
+    assert rsp.status_code == 303
+    assert rsp.headers["Location"].endswith("config#dock")
+    assert dock.pending()["ppm"] == 420
+    assert open(path).read() == before
+    assert restarts == []
+    words = one(soup_of(dock_client.get("/web/config")), "#recalibrate-state").get_text()
+    assert words.startswith("420 ppm waits for the dock's next reading.")
+
+
+def test_a_reference_out_of_range_is_refused_on_the_dock_tab(dock_client, dock):
+    rsp = dock_client.post("/web/config", data={"mode": "recalibrate", "ppm": "50"})
+    soup = soup_of(rsp)
+
+    assert rsp.status_code == 400
+    assert attr(one(soup, "nav.tabs"), "data-open") == "dock"
+    assert one(soup, '[data-recalibrate] .error').get_text() == "Enter a value from 400 to 2000 ppm."
+    assert attr(one(soup, "#recalibrate-ppm"), "value") == "50"
+    assert dock.pending() is None
+
+
+@pytest.mark.parametrize("dock_report, words", [
+    ({"client": {"settings": {"version": "00000000"}}},
+     "The dock takes these settings before its next report."),
+    ({"client": {"recalibrated": {"id": 1_758_600_000, "ppm": 420, "ok": True,
+                                  "correction_ppm": -12}}},
+     "Corrected by -12 ppm."),
+    ({"client": {"recalibrated": {"id": 1_758_600_000, "ppm": 420, "ok": False}}},
+     "The SCD41 refused it."),
+])
+def test_the_dock_tab_says_what_the_dock_reported(dock_client, words):
+    text = one(soup_of(dock_client.get("/web/config")), "#panel-dock").get_text()
+
+    assert words in text
+
+
+def test_a_key_the_dock_refused_is_named_as_the_form_names_it(dock_client, dock_report, dock):
+    dock_report["client"] = {"settings": {"version": dock.settings.version,
+                                          "refused": ["pm.warmup_s"]}}
+
+    soup = soup_of(dock_client.get("/web/config"))
+
+    assert one(soup, "#dock-refused").get_text() == "The dock refused Dock · Fan warm-up."
+
+
+def test_the_bsec_rate_is_saved_as_a_number(dock_client, path):
+    soup = soup_of(dock_client.get("/web/config"))
+    assert one(soup, '[data-field="dock.bsec.sample_s"] input[checked]')["value"] == "300"
+
+    dock_client.post("/web/config", data={**posted(soup, dock__bsec__sample_s="3"), "action": "save"})
+
+    assert "sample_s: 3\n" in open(path).read()
+    check_config(open(path).read())
+
+
+
+@pytest.mark.parametrize("dock_report", [{"client": {"settings": {"version": "00000000"}}}])
+@pytest.mark.parametrize("dock_offline", [True])
+def test_an_offline_dock_greys_out_its_tab(dock_client, path):
+    panel = one(soup_of(dock_client.get("/web/config")), "#panel-dock")
+
+    assert one(panel, "#dock-offline").get_text() == "Offline"
+    assert "Last report 1 h ago." in panel.get_text()
+    for el in panel.select('[data-field^="dock."] input'):
+        assert el.has_attr("disabled"), el
+    assert one(panel, "#recalibrate-ppm").has_attr("disabled")
+    assert one(panel, "[data-recalibrate] button").has_attr("disabled")
+    assert not panel.select('[data-field^="dock."] .reset')
+
+
+def test_a_greyed_out_field_keeps_its_value_when_another_tab_saves(dock_client, path):
+    """A disabled input is not posted, and a field the form leaves out stays."""
+    with open(path, "a") as f:
+        f.write("dock:\n  led:\n    brightness_pct: 40\n")
+    soup = soup_of(dock_client.get("/web/config"))
+    data = {k: v for k, v in posted(soup, source__seed="9").items() if not k.startswith("dock.")}
+
+    dock_client.post("/web/config", data={**data, "action": "save"})
+
+    assert "brightness_pct: 40" in open(path).read()
+
+
+@pytest.mark.parametrize("dock_report", [{"client": {"settings": {"version": "00000000"}}}])
+def test_a_dock_that_reports_can_be_changed(dock_client):
+    panel = one(soup_of(dock_client.get("/web/config")), "#panel-dock")
+
+    assert panel.select_one("#dock-offline") is None
+    assert not one(panel, '[data-field="dock.pm.warmup_s"] input').has_attr("disabled")
+    assert not one(panel, "#recalibrate-ppm").has_attr("disabled")
+    assert one(panel, "#dock-waiting").get_text() == "Not synchronized"
+    assert " ".join(one(panel, "#dock-applied").get_text().split()) == \
+        "Not synchronized The dock takes these settings before its next report."
+
+
+def test_the_quiet_hours_settings_share_a_box_that_shows_with_them(dock_client):
+    panel = one(soup_of(dock_client.get("/web/config")), "#panel-dock")
+    box = one(panel, ".subsection")
+
+    assert attr(box, "data-when") == "posts.quiet=true"
+    assert [attr(f, "data-field") for f in box.select("[data-field]")] == [
+        "posts.quiet.from", "posts.quiet.to", "posts.quiet.every"]
+    assert one(box, '[data-field="posts.quiet.every"] .name').get_text() == "Report every"
+
+
+def test_a_report_interval_set_by_the_environment_shows_in_minutes(dock_client, monkeypatch):
+    monkeypatch.setenv("POSTS_EVERY", "600")
+    field = one(soup_of(dock_client.get("/web/config")), '[data-field="posts.every"] input')
+
+    assert attr(field, "value") == "10" and field.has_attr("disabled")
+
+
+def test_a_dock_on_the_saved_settings_is_synchronized(dock_client, dock_report, dock):
+    dock_report["client"] = {"settings": {"version": dock.settings.version, "refused": []}}
+
+    soup = soup_of(dock_client.get("/web/config"))
+
+    assert one(soup, "#dock-synced").get_text() == "Synchronized"
+    assert " ".join(one(soup, "#dock-applied").get_text().split()) == \
+        "Synchronized Last report 1 h ago."

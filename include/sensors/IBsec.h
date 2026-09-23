@@ -23,16 +23,20 @@ struct BsecResult {
 // Bosch's BSEC library, as the calls BsecRunner makes, so the host tests can
 // stand in for the closed-source binary. Each returns BSEC's status: zero is
 // success, a negative number an error, a positive one a warning.
+//
+// BSEC samples every kLpSampleS or every kUlpSampleS seconds. Each rate has a
+// configuration of its own, and a state learned at one is no use at the
+// other.
 class IBsec {
 public:
     virtual ~IBsec() {}
-    // Reset BSEC and load the configuration blob.
-    virtual int init() = 0;
+    // Reset BSEC and load the configuration for a sample every `sampleS`.
+    virtual int init(uint16_t sampleS) = 0;
     virtual int setState(const uint8_t* state, uint32_t len) = 0;
     virtual int getState(uint8_t* state, uint32_t max, uint32_t* len) = 0;
-    // Ask for the outputs, at the LP rate. Bosch's order is init, then any
-    // state, then this.
-    virtual int subscribe() = 0;
+    // Ask for the outputs, a sample every `sampleS`. Bosch's order is init,
+    // then any state, then this.
+    virtual int subscribe(uint16_t sampleS) = 0;
     virtual int sensorControl(int64_t nowNs, BsecRequest& request) = 0;
     // One forced cycle, with the inputs the last request asked for.
     virtual int doSteps(int64_t nowNs, const Bme688Data& data, BsecResult& result) = 0;
@@ -40,4 +44,9 @@ public:
     static const int      kOk = 0;
     static const int      kLateCall = 100;    // BSEC_W_SC_CALL_TIMING_VIOLATION
     static const uint32_t kMaxState = 238;    // BSEC_MAX_STATE_BLOB_SIZE
+    static const uint16_t kLpSampleS = 3;
+    static const uint16_t kUlpSampleS = 300;
+    static bool knownRate(uint16_t sampleS) {
+        return sampleS == kLpSampleS || sampleS == kUlpSampleS;
+    }
 };

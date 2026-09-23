@@ -32,6 +32,10 @@ def status_doc(doc: dict) -> dict | None:
     return kept
 
 
+# A post that arrives a little after its slot is not a missed one.
+OFFLINE_GRACE_S = 60
+
+
 class DeviceReports:
     """The newest report from each board, and every report in ``store``.
 
@@ -39,13 +43,19 @@ class DeviceReports:
     "newest" is by the board's own ``ts``, not by when it arrived. Beside it,
     held in memory: the last time each board's version changed, and the posts
     the server refused because of a board's version.
+
+    ``silence`` gives, for a board and the time now, how long it may go
+    without a report before two of its posts are missed; past that, and
+    OFFLINE_GRACE_S, the board is offline. Without it no board is judged.
     """
 
     def __init__(self, now: Callable[[], float] = time.time,
-                 store: ReadingsStore | None = None, keep_days: float = 0):
+                 store: ReadingsStore | None = None, keep_days: float = 0,
+                 silence: Callable[[str, float], float] | None = None):
         self.now = now
         self.store = store
         self.keep_days = keep_days
+        self.silence = silence
         self.by_device: dict[str, dict] = {}     # device -> {"doc", "received"}
         self.changes: dict[str, dict] = {}       # device -> {"from", "to", "at", "older"}
         self.refusals: dict[str, dict] = {}      # device -> {"version", "count", "at"}
@@ -82,14 +92,18 @@ class DeviceReports:
 
     def device(self, name: str) -> dict | None:
         """What is known of one board: ``{"doc", "age_s"}`` for its newest
-        report, both None when the server has refused all it sent, and
-        ``changed`` and ``refused`` when there is one to tell."""
+        report, both None when the server has refused all it sent, ``offline``
+        when the server judges it, and ``changed`` and ``refused`` when there
+        is one to tell."""
         entry = self.by_device.get(name)
         refused = self.refusals.get(name)
         if entry is None and refused is None:
             return None
+        now = self.now()
         out = {"doc": entry["doc"] if entry else None,
-               "age_s": max(0, int(self.now() - entry["received"])) if entry else None}
+               "age_s": max(0, int(now - entry["received"])) if entry else None}
+        if entry and self.silence is not None:
+            out["offline"] = out["age_s"] > self.silence(name, now) + OFFLINE_GRACE_S
         change = self.changes.get(name)
         if change is not None:
             out["changed"] = {**change, "age_s": max(0, int(self.now() - change["at"]))}

@@ -3,6 +3,7 @@
 #include <unity.h>
 #include <cstring>
 
+#include "net/BoardSettings.h"
 #include "net/ClientStatus.h"
 #include "sensors/SensorHealth.h"
 #include "net/Url.h"
@@ -19,7 +20,7 @@ static ClientStatus status() {
     s.fetchOk = 12; s.fetchFailed = 1;
     s.backlogHeld = 7; s.backlogCapacity = 1480; s.backlogStore = "psram";
     s.bsecRunning = true; s.bsecRestored = true; s.iaqAccuracy = 2;
-    s.bsecLateCalls = 3; s.bsecSavedEpoch = 1757443200;
+    s.bsecLateCalls = 3; s.bsecSavedEpoch = 1757443200; s.bsecSampleS = 300;
     return s;
 }
 
@@ -40,7 +41,7 @@ void test_client_json_carries_every_field() {
     TEST_ASSERT_NOT_NULL(strstr(buf, "\"fetch\":{\"next_url\":\"http://h:8080/day.png\",\"next_in_s\":120,\"backoff_step\":0,\"ok\":12,\"failed\":1}"));
     TEST_ASSERT_NOT_NULL(strstr(buf, "\"backlog\":{\"held\":7,\"capacity\":1480,\"store\":\"psram\"}"));
     TEST_ASSERT_NOT_NULL(strstr(buf, "\"bsec\":{\"running\":true,\"restored\":true,\"accuracy\":2"
-                                     ",\"late\":3,\"saved\":1757443200}"));
+                                     ",\"late\":3,\"saved\":1757443200,\"sample_s\":300}"));
     TEST_ASSERT_EQUAL_CHAR('{', buf[0]);
     TEST_ASSERT_EQUAL_CHAR('}', buf[n - 1]);
 }
@@ -132,9 +133,45 @@ void test_health_that_does_not_fit_writes_nothing() {
     TEST_ASSERT_EQUAL_STRING("", buf);
 }
 
+void test_a_board_without_settings_sends_no_settings() {
+    char buf[1024];
+    clientStatusJson(status(), buf, sizeof(buf));
+    TEST_ASSERT_NULL(strstr(buf, "\"settings\""));
+    TEST_ASSERT_NULL(strstr(buf, "\"recalibrated\""));
+}
+
+void test_the_dock_says_which_settings_it_runs_and_its_last_recalibration() {
+    ClientStatus s = status();
+    s.settingsVersion = "3f2a9c1e";
+    s.settingsRefused = (1u << kPmWarmup) | (1u << kLogLevel);
+    s.recalibratedId = 1758650400; s.recalibratedPpm = 420;
+    s.recalibratedOk = true; s.recalibratedCorrection = -12;
+    char buf[1024];
+    size_t n = clientStatusJson(s, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_UINT(strlen(buf), n);
+    TEST_ASSERT_NOT_NULL(strstr(buf, ",\"settings\":{\"version\":\"3f2a9c1e\""
+                                     ",\"refused\":[\"pm.warmup_s\",\"log.level\"]}"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, ",\"recalibrated\":{\"id\":1758650400,\"ppm\":420"
+                                     ",\"ok\":true,\"correction_ppm\":-12}}"));
+}
+
+void test_the_dock_client_object_fits_its_buffer_with_every_key_refused() {
+    ClientStatus s = status();
+    s.board = "canary-dock"; s.version = "v0.3.1-12-g0123abc-dirty";
+    s.ip = "192.168.100.200"; s.nextUrl = "";
+    s.settingsVersion = "3f2a9c1e";
+    s.settingsRefused = 0xFF;
+    s.recalibratedId = 4294967295u; s.recalibratedPpm = 2000; s.recalibratedCorrection = -32768;
+    char buf[1024];   // the dock's clientJson
+    TEST_ASSERT_TRUE(clientStatusJson(s, buf, sizeof(buf)) > 0);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_client_json_carries_every_field);
+    RUN_TEST(test_a_board_without_settings_sends_no_settings);
+    RUN_TEST(test_the_dock_says_which_settings_it_runs_and_its_last_recalibration);
+    RUN_TEST(test_the_dock_client_object_fits_its_buffer_with_every_key_refused);
     RUN_TEST(test_client_json_needs_room_or_writes_nothing);
     RUN_TEST(test_client_object_is_spliced_before_the_closing_brace);
     RUN_TEST(test_splice_rejects_non_objects_and_small_buffers);

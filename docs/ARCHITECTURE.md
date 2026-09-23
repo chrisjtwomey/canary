@@ -34,9 +34,9 @@ a tweak to it; it is a different program, and each board has its own.
 The dock, `src/dock/main.cpp`, is the one the sensors need:
 
 ```
-setup:  80 MHz; wifi; I2C; BSEC; sensors.begin(); the first reading 35 s on
+setup:  80 MHz; wifi; the settings from NVS; I2C; BSEC; sensors.begin(); the first reading 35 s on
 loop:   until known   GET /about           every 30 s, for the server's time
-        every 60 s    sensors.sample()     to notice a sensor that stops (SCD41 periodic, BME688 via BSEC, SHTC3)
+        before a slot GET /board-settings  the settings, applied (§3.8); a recalibration; a stopped sensor started again
         each slot     queue a reading      a fresh sample, PM included, with the dock's own status, into PSRAM
         every pass    POST /sensor-readings       the oldest 100 in the queue as one batch, once the time is known
                       POST /calibration    BSEC's state, after a batch, when BSEC has saved a new copy
@@ -56,7 +56,8 @@ Plantower's 30 second warm-up and a margin, counted back from the next slot,
 and each reading records in `pm_warmup_s` how long the fan had actually run,
 so the stored readings can show whether 30 seconds is enough. `SensorSuite`
 counts no missed frame while the fan is off, so stopping it does not make the
-module look dead.
+module look dead. The settings can lengthen the window, or keep the fan on
+(§3.8).
 
 The dock has no clock and does not ask NTP. Every response from the server
 carries its time, and the dock holds it as an offset from its uptime, so the
@@ -234,6 +235,39 @@ The layout leaves its bottom free for the two facts the head only knows at run t
 the server's version, and then the board's own name, version and address. The head writes those in the pages' face
 at the size of their detail text, from a one-bit font `scripts/gfxfont.py` makes out of the server's font file.
 
+### 3.8 The server holds the dock's settings
+
+The `dock` block of `config.yaml`, the Dock tab on `/web/config`, sets what the dock does between readings: the
+fan's warm-up, the SCD41's temperature offset and self-calibration, the SHTC3's low-power mode, BSEC's sample
+rate, the LED's brightness and whether it goes dark in quiet hours, and the dock's log level. The dock asks `GET /board-settings` at the
+pre-warm before each slot, applies what has changed, and keeps the answer in NVS, so it starts on the same settings
+after a power cut. The answer carries a version, a hash of the settings, and the dock reports the version it runs,
+and any key it refused, in its `client` object; the Dock tab says whether the dock has taken the saved settings.
+The dock holds each value to limits of its own, so a server that sends one out of range changes nothing. A board that has
+missed two of its posts, two slots for the dock and two minutes for the head, is offline: the Boards page marks it,
+and the Dock tab greys out its settings and its recalibration until the dock reports again, since nothing sent then
+would reach it. The saved values stay as they are.
+
+Each setting takes effect where it can without a wait. The SCD41 takes its offset and self-calibration only while
+idle and forgets them at a power cycle, so the dock sets them at each start of the part, and a change stops its
+measuring for half a second at the pre-warm, which leaves five seconds' conversions to spare before the slot.
+Neither is written to the part's EEPROM.
+
+BSEC samples the BME688 every 3 s or every 5 minutes, 5 by default. Bosch ships a configuration for each rate, and
+the state BSEC learns at one is no use at the other, so each saved copy says its rate, the dock restores only a copy
+at its own, and a change of rate starts BSEC again from nothing. At 5 minutes Bosch counts the BME688's self-heating
+as negligible, and a reading carries the newest cycle, up to 5 minutes old.
+
+The LED's quiet hours are the server's: the answer says whether the next slot falls in them, so the LED goes dark
+at the pre-warm before the first quiet slot and comes back at the one before the first slot after them.
+
+A recalibration is not a setting. The Dock tab asks for one with a reference in ppm, the server keeps the request
+with the time it was asked as its id, and the answer carries it for an hour or until the dock reports that id as
+run. The dock runs it at the pre-warm, once the SCD41 has measured for the three minutes the datasheet asks, stops
+the part for about a second, and reports the correction, or the failure, in its `client` object. Each one is
+written to the SCD41's EEPROM by the part itself, so it is for a person with the dock in known air, not for a
+schedule.
+
 ## 4. What stays as the kit has it
 
 - The wire contract: `GET /<page>.png` with the refresh and next-URL headers. The awake client honours the header by waiting instead of sleeping.
@@ -258,7 +292,7 @@ include/sensors/  src/sensors/
   IBsec.h  BsecRunner  BsecLibrary              BSEC, in a task of its own
   SensorValidation                              the bench routine's checks
   mock/                                         EnvModel, LaggedValue and the four mocks
-include/net/  src/net/         Backlog, Calibration, ClientStatus, RefreshTimer, ServerClock, Stamp, Url
+include/net/  src/net/         Backlog, BoardSettings, Calibration, ClientStatus, RefreshTimer, ServerClock, Stamp, Url
 include/dock/                  StatusLed (§3.5), FanWindow and PostTimer: when the fan runs and the next reading falls
 include/head/  src/notice.cpp  what the head does after a fetch, and the notices it draws (§3.7)
 include/head/notices/          the notices, rendered by scripts/notices.py from server/pages/notice.py
@@ -276,6 +310,7 @@ server/
   config_form.py               the form's fields, and how a filled-in form edits config.yaml
   transfer.py                  a store out to a file and back in, from the Storage tab
   schedule.py                  the dock's reading slots, slower overnight (§3.3)
+  dock_settings.py             the dock block and GET /board-settings (§3.8)
   sources/                     the mock room, readings ingest, calibration store, device status, sea-level pressure
   pages/                       Breathe, Comfort, Dust, Air, Day, the Diagnostics pages, and the trace and delta pages
   metrics.py                   derived values and wording
@@ -409,3 +444,4 @@ Dated decisions and status behind the text above, oldest first.
 - **2026-09-22**: the boards post to `/sensor-readings`, and the default store is `sensor-readings.db`, so the route and the file say what they hold. There is no `/readings` for older firmware: before 1.0 a minor release may break the contract with no transition, and a dock on older firmware is flashed by USB.
 - **2026-09-22**: the Storage tab downloads each store as a file and takes one back. The file is one JSON document a line, in the shape the board posted, and not the SQLite file: a store keeps a document under its board and its time and ignores a second with that key, so a file goes into another store of the same kind and adds only what is missing. An import writes the whole file or none of it, so a corrupt line leaves nothing behind, and when the store already holds some of them it writes nothing until the person says to put the file over them. The size beside Download is taken from the first lines and how many documents are held, so drawing the page costs the same whatever the store holds. An upload weighs at most 64 MB.
 - **2026-09-22**: the menu gives each group a row of its own, with the headings in a column beside the pages. Three days and Changes name the same five measurements, so they share one row and the heading is a switch between them; a hidden radio holds the choice, which keeps the switch working without JavaScript. On the browse page, `browse.js` moves the shown page to the same measurement over the other span, and flips the switch when a page from the other span is opened.
+- **2026-09-23**: the dock takes its settings from the server (§3.8) rather than from constants in its firmware, so changing how it runs needs no build. It asks at each pre-warm rather than reading them off the answer to a batch, because the pre-warm is when a setting can take effect before the slot, and a failed request costs nothing: the dock keeps what it runs. The pre-warm is a moment of its own, the fan's lead before each slot, since a fan kept on never starts. BSEC's sample rate is a setting too, 5 minutes by default: the dock's first run, which looked like a start from nothing, reached accuracy 3 about 5.5 hours in at 3 s, so a change costs hours of learning rather than days. A recalibration is a request with an id rather than a setting, so saving the config again never repeats one.

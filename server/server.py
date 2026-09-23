@@ -27,6 +27,7 @@ from epd_server.source import CompositeSource, IngestSource
 from about import About
 from board_logs import LogsQuery
 from config_page import config_blueprint
+from dock_settings import DOCK, BoardSettings, DockSettings, load_dock_settings
 from pages.air import AirPage
 from pages.breathe import BreathePage
 from pages.comfort import ComfortPage
@@ -57,6 +58,8 @@ SOURCE_KINDS = ("mock", "store")
 FIRMWARE_PRODUCTS = ("canary-head", "canary-dock")
 # The history windows the pages ask for, as history_24h and history_72h.
 HISTORY_HOURS = (24, 72)
+# The head reports on its own clock, kReportIntervalMs in src/main.cpp.
+HEAD_REPORT_EVERY_S = 60
 
 
 def make_pages(tz, **geometry) -> list:
@@ -112,6 +115,17 @@ def follow_own_version(firmware, version: str):
     return dataclasses.replace(firmware, offer_dev_builds=not is_clean_tag(version))
 
 
+def make_silence(posts: PostSchedule) -> Callable[[str, float], float]:
+    """How long each board may go without a report before two of its posts
+    are missed: the dock's since the second-latest slot, the head's two of
+    its intervals."""
+    def silence(device: str, now: float) -> float:
+        if device != DOCK:
+            return 2 * HEAD_REPORT_EVERY_S
+        return now - posts.slot_before(posts.slot_before(now) - 1)
+    return silence
+
+
 def make_posts(config: dict, tz) -> PostSchedule:
     """The dock's post schedule from the ``posts`` block: every five minutes,
     and every half hour from 01:00 to 07:00, when the block says nothing."""
@@ -139,6 +153,7 @@ class Settings:
     logs_days: float
     altitude_m: float
     posts: PostSchedule
+    dock: DockSettings
 
 
 def load_settings(config: dict) -> Settings:
@@ -178,6 +193,7 @@ def load_settings(config: dict) -> Settings:
         logs_days=float(get_prop_by_keys(config, "logs", "keep_days", default=7)),
         altitude_m=float(get_prop_by_keys(config, "site", "altitude_m", default=0)),
         posts=make_posts(config, core.server.timezone),
+        dock=load_dock_settings(config),
     )
 
 
@@ -253,7 +269,8 @@ def main():
         log.info("clock pinned to %s", args.at)
 
     status_store = ReadingsStore(os.path.join(cwd, settings.status_path))
-    reports = DeviceReports(store=status_store, keep_days=settings.status_days)
+    reports = DeviceReports(store=status_store, keep_days=settings.status_days,
+                            silence=make_silence(settings.posts))
     log.info("board reports in %s, %d held", status_store.path, status_store.count())
     store = None
     if settings.kind == "store":
@@ -272,6 +289,7 @@ def main():
     status = StatusSource(reports)
     board_logs = LogStore(os.path.join(cwd, settings.logs_path), keep_days=settings.logs_days)
     logs = LogsQuery(board_logs, tz)
+    board_settings = BoardSettings(settings.dock, posts, calibration, reports.device, now=clock)
 
     try:
         server = DisplayServer(
@@ -286,6 +304,7 @@ def main():
             client_logs=board_logs,
             ingest={"sensor-readings": ingest.accept, "calibration": calibration.accept},
             queries={"calibration": calibration.answer, "about": about.answer,
+                     "board-settings": board_settings.answer,
                      "history": history.answer, "sensor-readings": readings.answer,
                      "status": lambda args: status.status(), "logs": logs.answer},
             firmware=core.firmware,
@@ -306,7 +325,8 @@ def main():
         "board-logs": Transfer("board-logs", board_logs.path, "logs"),
     }
     server.app.register_blueprint(config_blueprint(pages, os.path.join(cwd, "config.yaml"),
-                                                   check_config, restart_soon, stores))
+                                                   check_config, restart_soon, stores,
+                                                   dock=board_settings))
 
     if args.once or args.only:
         server.regenerate(only=args.only)

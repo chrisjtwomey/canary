@@ -82,7 +82,7 @@ size_t base64Decode(const char* in, size_t inLen, uint8_t* out, size_t outLen) {
 }
 
 size_t calibrationJson(const uint8_t* state, uint32_t len, uint8_t accuracy, uint32_t savedEpoch,
-                       char* buf, size_t bufLen) {
+                       uint16_t sampleS, char* buf, size_t bufLen) {
     static const char kHead[] = "{\"bme688\":{\"state\":\"";
     const size_t head = sizeof(kHead) - 1;
     if (bufLen <= head) {
@@ -96,8 +96,9 @@ size_t calibrationJson(const uint8_t* state, uint32_t len, uint8_t accuracy, uin
         return 0;
     }
     const size_t pos = head + encoded;
-    const int n = snprintf(buf + pos, bufLen - pos, "\",\"accuracy\":%u,\"saved\":%lu}}",
-                           (unsigned)accuracy, (unsigned long)savedEpoch);
+    const int n = snprintf(buf + pos, bufLen - pos,
+                           "\",\"accuracy\":%u,\"saved\":%lu,\"sample_s\":%u}}",
+                           (unsigned)accuracy, (unsigned long)savedEpoch, (unsigned)sampleS);
     if (n < 0 || (size_t)n >= bufLen - pos) {
         buf[0] = '\0';
         return 0;
@@ -119,7 +120,7 @@ size_t withMember(const char* doc, const char* key, const char* obj, char* out, 
 }
 
 bool parseBme688Calibration(const char* json, uint8_t* state, uint32_t max, uint32_t& len,
-                            uint8_t& accuracy, uint32_t& savedEpoch) {
+                            uint8_t& accuracy, uint32_t& savedEpoch, uint16_t& sampleS) {
     const char* entry = valueOf(json, "bme688");
     if (!entry || *entry != '{') return false;
     const char* text = valueOf(entry, "state");
@@ -128,14 +129,16 @@ bool parseBme688Calibration(const char* json, uint8_t* state, uint32_t max, uint
     const char* end = strchr(text, '"');
     if (!end || end == text) return false;
     const size_t decoded = base64Decode(text, (size_t)(end - text), state, max);
-    unsigned long acc = 0, saved = 0;
+    unsigned long acc = 0, saved = 0, rate = 0;
     if (decoded == 0 || !unsignedOf(entry, "accuracy", 3, acc) ||
-        !unsignedOf(entry, "saved", 0xFFFFFFFFul, saved)) {
+        !unsignedOf(entry, "saved", 0xFFFFFFFFul, saved) ||
+        !unsignedOf(entry, "sample_s", 0xFFFF, rate)) {
         return false;
     }
     len = (uint32_t)decoded;
     accuracy = (uint8_t)acc;
     savedEpoch = (uint32_t)saved;
+    sampleS = (uint16_t)rate;
     return true;
 }
 

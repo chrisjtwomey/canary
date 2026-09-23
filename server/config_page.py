@@ -10,6 +10,8 @@ save and a restart.
     POST /web/config     mode=form: the form's values written into the file
                          mode=yaml: the text as given
                          mode=restore: config.yaml.bak
+                         mode=recalibrate: the dock's SCD41 recalibrated to
+                              ppm at its next reading; no action, no restart
                          then action=check: whether that would start the server
                               action=review: the same, and what it changes, as JSON
                               action=save: the same check, then the old file kept
@@ -21,6 +23,7 @@ its config.
 """
 from __future__ import annotations
 
+import contextlib
 import html
 import os
 import shutil
@@ -30,10 +33,12 @@ from datetime import datetime
 from typing import Any, Callable
 
 from airium import Airium
-from flask import Blueprint, Response, abort, jsonify, request
+from flask import Blueprint, Response, abort, jsonify, redirect, request
 
 import config_form as cf
+import dock_settings as ds
 from pages.base import EnvPage
+from metrics import fmt_duration
 from transfer import Corrupt, Overlap, Transfer
 from web import menu_bar, page_head
 
@@ -43,6 +48,14 @@ MAX_UPLOAD = 64 * 1024 * 1024
 BROWSE_HREF = "./"
 YAML_TAB = "yaml"
 TAB_NAMES = [t.name for t in cf.TABS] + [YAML_TAB]
+
+# What each drawing on a sheet shows, and how to change it by dragging.
+VISUAL_CAPTIONS = {
+    "dial": "Each tick is a report. The hatched band is slow mode: drag its ends to move it. "
+            "The inner line is when the light is off.",
+    "slot": "The time before one report. Drag the fan band's left edge. "
+            "Past the start, the fan never stops.",
+}
 
 # One wording for the state, whether it is a banner or a refused save.
 READ_ONLY = "config.yaml is read-only. Change its permissions to save."
@@ -83,6 +96,26 @@ class View:
     unreadable: str = ""            # why the form cannot show this file
     sizes: dict[str, int] = field(default_factory=dict)      # store -> the download's bytes
     report: Report = field(default_factory=Report)
+    dock: DockState | None = None
+
+
+@dataclass
+class DockState:
+    """What the Dock tab says about the dock beside its settings."""
+    applied: bool | None = None     # runs the saved settings; None before it says
+    refused: list[str] = field(default_factory=list)
+    pending: dict | None = None     # a recalibration it has yet to run
+    last: dict | None = None        # its report of the last one it ran
+    ppm: str = str(ds.RECALIBRATE_MIN_PPM + 20)
+    offline: bool = False           # it has missed two slots; nothing on the tab reaches it
+    age_s: int | None = None        # since its last report
+
+
+def dock_state(dock: ds.BoardSettings) -> DockState:
+    applied, refused = dock.applied()
+    offline, age = dock.offline()
+    return DockState(applied, refused, dock.pending(), dock.last_recalibration(),
+                     offline=offline, age_s=age)
 
 
 def file_view(text: str) -> View:
@@ -161,9 +194,11 @@ def _rows(a: Airium, f: cf.Field, view: View, images: list[str], heading: str) -
                 a.p(klass="help", _t=esc(f.help))
 
 
-def _control(a: Airium, f: cf.Field, view: View, env: str | None) -> None:
+def _control(a: Airium, f: cf.Field, view: View, env: str | None, locked: bool) -> None:
     value = view.values.get(f.key, "")
-    lock = {"disabled": "disabled"} if env is not None else {}
+    if env is not None and f.scale != 1 and env.strip().isdigit():
+        env = cf.input_text(f, int(env))
+    lock = {"disabled": "disabled"} if env is not None or locked else {}
     marks = {"data-default": esc(view.defaults[f.key])} if f.key in view.defaults else {}
     own = {"id": _id(f.key), "name": f.key, "data-key": f.key,
            "data-initial": esc(cf.initial(view.initial.get(f.key, ""))), **lock, **marks}
@@ -218,7 +253,11 @@ def _reset_button(a: Airium, f: cf.Field, view: View) -> None:
              **{"aria-label": esc(f"Reset {f.label}")}, **({"hidden": "hidden"} if at_default else {}))
 
 
-def _field(a: Airium, f: cf.Field, view: View, images: list[str], heading: str) -> None:
+def _field(a: Airium, f: cf.Field, view: View, images: list[str], heading: str,
+           locked: bool = False, sheet: bool = False) -> None:
+    """One setting. ``locked`` shows it and keeps it from being changed, as
+    an environment variable does, but leaves the file's value standing. On a
+    ``sheet`` a dotted leader runs from its name to its value."""
     env = f.env_value()
     error = view.errors.get(f.key)
     klass = "field"
@@ -235,9 +274,11 @@ def _field(a: Airium, f: cf.Field, view: View, images: list[str], heading: str) 
                     a.span(klass="name", id=_id(f.key) + "-name", _t=esc(f.label))
                 else:
                     a.label(klass="name", for_=_id(f.key), _t=esc(f.label))
-                if f.key in view.defaults and env is None:
+                if f.key in view.defaults and env is None and not locked:
                     _reset_button(a, f, view)
-            _control(a, f, view, env)
+            if sheet:
+                a.span(klass="leader", **{"aria-hidden": "true"})
+            _control(a, f, view, env, locked)
         if f.help and f.kind not in ("pools", "times"):
             a.p(klass="help", _t=esc(f.help))
         if env is not None:
@@ -287,6 +328,68 @@ def _import(a: Airium, store: str, report: Report) -> None:
             a.p(klass="error" if report.bad else "help", _t=esc(report.words))
 
 
+def _settings_line(a: Airium, state: DockState) -> None:
+    """Whether the dock runs the saved settings, as a banner across the tab:
+    a pill naming the state, then what it means."""
+    last = f"Last report {fmt_duration(state.age_s or 0)} ago."
+    if state.offline:
+        pill = ("offline", "Offline", f"{last} Settings unlock when the dock reports again.")
+    elif state.applied is None:
+        pill = None
+    elif state.applied:
+        pill = ("synced", "Synchronized", last)
+    else:
+        pill = ("waiting", "Not synchronized",
+                "The dock takes these settings before its next report.")
+    with a.div(klass="dock-state"):
+        with a.p(klass="banner dock-line", id="dock-applied"):
+            if pill is None:
+                a.span(_t=esc("No report from the dock yet."))
+            else:
+                klass, name, words = pill
+                a.span(klass=f"pill {klass}", id=f"dock-{klass}", _t=esc(name))
+                a.span(_t=esc(words))
+        if state.refused:
+            names = ", ".join(cf.name_of(("dock", *key.split("."))) for key in state.refused)
+            a.p(klass="error", id="dock-refused", _t=esc(f"The dock refused {names}."))
+
+
+def _recalibration_words(state: DockState) -> str:
+    if state.pending:
+        asked = datetime.fromtimestamp(state.pending["id"])
+        return f"{state.pending['ppm']} ppm waits for the dock's next reading. Asked {_when(asked)}."
+    last = state.last
+    if not last:
+        return "Put the dock in air of this CO₂ level for 3 minutes first."
+    asked = _when(datetime.fromtimestamp(last["id"]))
+    if not last.get("ok"):
+        return f"Last: {last.get('ppm', '?')} ppm, asked {asked}. The SCD41 refused it."
+    correction = last.get("correction_ppm", 0)
+    return f"Last: {last.get('ppm', '?')} ppm, asked {asked}. Corrected by {correction:+d} ppm."
+
+
+def _recalibrate(a: Airium, state: DockState, report: Report, sheet: bool = False) -> None:
+    """The row that asks for a recalibration. Its controls belong to the form
+    beside the settings form, as the import rows' do."""
+    form = "recalibrate-form"
+    lock = {"disabled": "disabled"} if state.offline else {}
+    with a.div(klass="field wide", **{"data-recalibrate": "scd41"}):
+        with a.div(klass="head"):
+            a.label(klass="name", for_="recalibrate-ppm", _t=esc("Recalibrate"))
+        if sheet:
+            a.span(klass="leader", **{"aria-hidden": "true"})
+        with a.div(klass="control"):
+            a.input(type="number", id="recalibrate-ppm", name="ppm", form=form,
+                    value=esc(state.ppm), step="1", inputmode="numeric",
+                    min=str(ds.RECALIBRATE_MIN_PPM), max=str(ds.RECALIBRATE_MAX_PPM), **lock)
+            a.span(klass="unit", _t=esc("ppm"))
+            a.button(type="submit", klass="button", form=form, _t=esc("Recalibrate"), **lock)
+        if report.store == "recalibrate":
+            a.p(klass="error" if report.bad else "help", _t=esc(report.words))
+        else:
+            a.p(klass="help", id="recalibrate-state", _t=esc(_recalibration_words(state)))
+
+
 def _savebar(a: Airium, writable: bool, status: str, *, discard: bool) -> None:
     with a.footer(klass="savebar"):
         a.p(klass="status", _t=esc(status), **{"aria-live": "polite",
@@ -297,6 +400,55 @@ def _savebar(a: Airium, writable: bool, status: str, *, discard: bool) -> None:
             a.button(type="submit", name="action", value="check", _t=esc("Check"))
             a.button(type="submit", name="action", value="save", klass="primary",
                      _t=esc("Save and restart"), **({} if writable else {"disabled": "disabled"}))
+
+
+@contextlib.contextmanager
+def _nothing():
+    yield
+
+
+def _runs(fields: tuple[cf.Field, ...], sheet: bool) -> list[tuple[str, list[cf.Field]]]:
+    """The fields in order, those in a row that show only while another field
+    holds a value run together under that ``when``, on a sheet, so they can
+    share one box. Elsewhere each field stands alone."""
+    runs: list[tuple[str, list[cf.Field]]] = []
+    for f in fields:
+        when = f.when if sheet else ""
+        if when and runs and runs[-1][0] == when:
+            runs[-1][1].append(f)
+        else:
+            runs.append((when, [f]))
+    return runs
+
+
+def _group(a: Airium, g: cf.Group, view: View, images: list[str], locked: bool,
+           sheet: bool = False) -> None:
+    """A group's heading and fields. On a ``sheet`` a heading such as "CO₂ ·
+    SCD41" takes two lines, the part under the measurement, and the group's
+    drawing, when it has one, comes before its fields."""
+    if g.heading and sheet and " · " in g.heading:
+        title, part = g.heading.split(" · ", 1)
+        with a.h2(klass="group label"):
+            a.span(_t=esc(title))
+            a.span(klass="part", _t=esc(part))
+    elif g.heading:
+        a.h2(klass="group label", _t=esc(g.heading))
+    with a.div(klass=f"content {g.visual}".strip()) if sheet else _nothing():
+        if sheet and g.visual:
+            with a.div(klass="visual"):
+                a.canvas(id=f"visual-{g.visual}", **{"data-visual": g.visual,
+                                                      "aria-hidden": "true"})
+                a.p(klass="caption", _t=esc(VISUAL_CAPTIONS[g.visual]))
+        with a.div(klass="fields"):
+            for when, fields in _runs(g.fields, sheet):
+                with a.div(klass="subsection", **{"data-when": when}) if when else _nothing():
+                    for f in fields:
+                        _field(a, f, view, images, g.heading, locked, sheet)
+            if g.store in view.sizes:
+                _export(a, g.store, view.sizes[g.store])
+                _import(a, g.store, view.report)
+            if g.action == "recalibrate" and view.dock is not None:
+                _recalibrate(a, view.dock, view.report, sheet)
 
 
 def _tab_problems(view: View) -> set[str]:
@@ -356,22 +508,27 @@ def config_html(pages: list[EnvPage], view: View, writable: bool,
                         a.input(type="hidden", name="mode", value="form")
                         a.input(type="hidden", name="tab", value=view.tab or cf.TABS[0].name)
                         for t in cf.TABS:
-                            with a.section(klass="panel", id=f"panel-{t.name}", role="tabpanel",
+                            with a.section(klass="panel sheet" if t.sheet else "panel",
+                                           id=f"panel-{t.name}", role="tabpanel",
                                            **{"data-tab": t.name,
                                               "aria-labelledby": f"tab-{t.name}"}):
+                                locked = False
+                                if t.name == "dock" and view.dock is not None:
+                                    _settings_line(a, view.dock)
+                                    locked = view.dock.offline
                                 for g in t.groups:
-                                    if g.heading:
-                                        a.h2(klass="group label", _t=esc(g.heading))
-                                    with a.div(klass="fields"):
-                                        for f in g.fields:
-                                            _field(a, f, view, images, g.heading)
-                                        if g.store in view.sizes:
-                                            _export(a, g.store, view.sizes[g.store])
-                                            _import(a, g.store, view.report)
+                                    if t.sheet:
+                                        with a.div(klass="section"):
+                                            _group(a, g, view, images, locked, sheet=True)
+                                    else:
+                                        _group(a, g, view, images, locked)
                         _savebar(a, writable, status, discard=True)
                     for store in view.sizes:
                         a.form(method="post", action=f"config/import/{store}",
                                enctype="multipart/form-data", id=f"import-{store}")
+                    if view.dock is not None:
+                        with a.form(method="post", action="config", id="recalibrate-form"):
+                            a.input(type="hidden", name="mode", value="recalibrate")
                 with a.form(method="post", action="config", id="yaml-form",
                             **{"data-title": "Save and restart?",
                                "data-confirm": "Save and restart"}):
@@ -397,7 +554,9 @@ def config_html(pages: list[EnvPage], view: View, writable: bool,
             with a.datalist(id="zones"):
                 for zone in sorted(zoneinfo.available_timezones()):
                     a.option(value=zone)
+            a.script(src="rough.iife.min.js")
             a.script(src="config.js")
+            a.script(src="dock.js")
     return str(a)
 
 
@@ -418,7 +577,8 @@ def restarting_html(pages: list[EnvPage], tab: str) -> str:
 
 def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], None],
                      restart: Callable[[], None],
-                     stores: dict[str, Transfer] | None = None) -> Blueprint:
+                     stores: dict[str, Transfer] | None = None,
+                     dock: ds.BoardSettings | None = None) -> Blueprint:
     """The /web/config routes for the file at ``path``.
 
     Args:
@@ -427,6 +587,8 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
         restart: restarts the server once the response has gone out.
         stores: the store behind each group of the Storage tab that a file
             can come out of and go into, by the group's ``store`` name.
+        dock: the dock's settings, for what the Dock tab says of them and
+            for its recalibration.
     """
     bp = Blueprint("config", __name__, url_prefix="/web/config")
     stores = stores or {}
@@ -446,6 +608,8 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
 
     def page(view: View, status: int = 200):
         view.sizes = {name: store.size() for name, store in stores.items()}
+        if dock is not None and view.dock is None:
+            view.dock = dock_state(dock)
         return config_html(pages, view, writable(), bak()), status
 
     @bp.route("/export/<name>", methods=["GET"])
@@ -532,6 +696,20 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
                 return jsonify(problem=problem), status
             view.problem = problem
             return page(view, status)
+
+        if mode == "recalibrate":
+            if dock is None:
+                abort(404)
+            ppm = form.get("ppm", "")
+            try:
+                dock.recalibrate(ppm)
+            except ValueError as exc:
+                view.tab = "dock"
+                view.dock = dock_state(dock)
+                view.dock.ppm = ppm
+                view.report = Report("recalibrate", str(exc), True)
+                return page(view, 400)
+            return redirect("config#dock", 303)
 
         if mode == "restore":
             try:

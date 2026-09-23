@@ -162,7 +162,7 @@ def test_a_field_an_environment_variable_sets_is_left_alone(monkeypatch):
 @pytest.mark.parametrize("key, value, words", [
     ("server.port", "abc", "whole number"),
     ("server.port", "70000", "at most 65535"),
-    ("posts.every", "90", "multiple of 60"),
+    ("posts.every", "1.5", "whole number"),
     ("posts.quiet.from", "25:00", "HH:MM"),
     ("image.innerAlignX", "middle", "one of"),
 ])
@@ -247,8 +247,17 @@ def test_changes_are_in_words_with_quiet_hours_on_one_line():
     new = cf.read(edit(server__port="9090", posts__quiet="false").text)
     assert cf.changes(old, new) == [
         {"name": "Server · Port", "old": "8080", "new": "9090"},
-        {"name": "Boards · Quiet hours", "old": "01:00–07:00, 1800 s", "new": "off"},
+        {"name": "Dock · Slow mode", "old": "01:00–07:00, every 30 min", "new": "off"},
     ]
+
+
+def test_the_report_interval_is_shown_in_minutes_and_kept_in_seconds():
+    assert cf.shown(cf.read(EXAMPLE))["posts.every"] == "5"
+    e = cf.apply(EXAMPLE, MultiDict({"posts.every": "10"}))
+
+    assert cf.read(e.text)["posts"]["every"] == 600
+    assert cf.changes(cf.read(EXAMPLE), cf.read(e.text)) == [
+        {"name": "Dock · Report every", "old": "5 minutes", "new": "10 minutes"}]
 
 
 @pytest.mark.parametrize("path, name", [
@@ -277,3 +286,8 @@ def test_the_edit_reads_back_as_pyyaml_reads_it():
     cfg = yaml.safe_load(e.text)
     assert (cfg["server"]["timezone"], cfg["mqtt"]["enabled"], cfg["site"]["altitude_m"]) == (
         "Europe/London", True, 12.5)
+
+
+def test_a_field_named_by_its_place_on_the_page_has_its_full_name_in_messages():
+    assert cf.name_of(("posts", "quiet", "every")) == "Dock · Report every, in slow mode"
+    assert cf.name_of(("posts", "every")) == "Dock · Report every"

@@ -44,6 +44,24 @@
   color: var(--ink);
 }
 
+/* A board that has missed two of its posts: the one mark on the page in
+   solid ink, so it reads at a glance from across the room. */
+.page-diagnostics .board-head .when {
+  display: flex;
+  align-items: baseline;
+  gap: 1.2cqw;
+}
+
+.page-diagnostics .pill.offline {
+  font-size: 1.5cqw;
+  font-weight: 700;
+  font-style: italic;
+  color: var(--paper);
+  background: var(--ink);
+  border-radius: 1em;
+  padding: 0.15em 0.8em;
+}
+
 .page-diagnostics .card {
   min-height: 0;
 }
@@ -107,6 +125,7 @@
   .page-diagnostics .head .title { font-size: 4.6cqw; }
   .page-diagnostics .board { grid-template-columns: 1fr 1fr; grid-template-rows: max-content; row-gap: 1.4cqh; column-gap: 5cqw; }
   .page-diagnostics .board-head .name { font-size: 3.4cqw; }
+  .page-diagnostics .pill.offline { font-size: 2.8cqw; }
   .page-diagnostics .card .label { font-size: 2.6cqw; margin-bottom: 0.8cqh; }
   .page-diagnostics .kv { font-size: 3.3cqw; row-gap: 0.5cqh; column-gap: 2cqw; }
   .page-diagnostics .bars { width: 16cqw; height: 3cqh; margin-top: 0.8cqh; }

@@ -216,3 +216,24 @@ def test_the_health_object_is_kept_beside_the_client_one(tmp_path):
     assert store.latest() == {"ts": 10, "device": "canary-dock", "client": {"rssi": -60},
                               "health": {"restarts": 1}}
     store.close()
+
+
+def _silence(device, now):
+    return 600 if device == "canary-dock" else 120
+
+
+@pytest.mark.parametrize("age, offline", [(600 + 60, False), (600 + 61, True)])
+def test_a_board_that_has_missed_two_posts_is_offline(age, offline):
+    clock = [10_000.0]
+    reports = DeviceReports(now=lambda: clock[0], silence=_silence)
+    reports.accept({"ts": 10_000, "device": "canary-dock", "client": {"ip": "x"}})
+    clock[0] += age
+
+    assert reports.device("canary-dock")["offline"] is offline
+
+
+def test_no_board_is_judged_without_the_rule():
+    reports = DeviceReports(now=lambda: 10_000.0)
+    reports.accept({"ts": 1, "device": "canary-dock", "client": {"ip": "x"}})
+
+    assert "offline" not in reports.device("canary-dock")

@@ -105,8 +105,12 @@ class DiagnosticsPage(EnvPage):
             with a.div(klass="board-head"):
                 a.span(klass="name label", _t=f"{k}, {c.get('board', device)}")
                 age = entry.get("age_s")
-                a.span(klass="stamp", id=f"{k}-age",
-                       _t=f"reported {fmt_duration(age)} ago" if age is not None else "no report yet")
+                with a.span(klass="when"):
+                    if entry.get("offline"):
+                        a.span(klass="pill offline", id=f"{k}-offline", _t="Offline")
+                    a.span(klass="stamp", id=f"{k}-age",
+                           _t=f"reported {fmt_duration(age)} ago" if age is not None
+                           else "no report yet")
 
             with a.div(klass="card"):
                 a.div(klass="label", _t="Client")

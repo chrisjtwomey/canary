@@ -11,10 +11,10 @@
 size_t base64Encode(const uint8_t* in, size_t len, char* out, size_t outLen);
 size_t base64Decode(const char* in, size_t inLen, uint8_t* out, size_t outLen);
 
-// {"bme688":{"state":"<base64>","accuracy":3,"saved":1757443200}}. Returns
-// the length written, or 0 when it does not fit.
+// {"bme688":{"state":"<base64>","accuracy":3,"saved":1757443200,"sample_s":300}}.
+// Returns the length written, or 0 when it does not fit.
 size_t calibrationJson(const uint8_t* state, uint32_t len, uint8_t accuracy, uint32_t savedEpoch,
-                       char* buf, size_t bufLen);
+                       uint16_t sampleS, char* buf, size_t bufLen);
 
 // `doc` with "key":obj added before its closing brace. Returns the length
 // written, or 0 when out is too small or doc or obj is not an object.
@@ -23,7 +23,7 @@ size_t withMember(const char* doc, const char* key, const char* obj, char* out, 
 // The bme688 entry of the server's answer, decoded. False when there is none
 // or it does not parse.
 bool parseBme688Calibration(const char* json, uint8_t* state, uint32_t max, uint32_t& len,
-                            uint8_t& accuracy, uint32_t& savedEpoch);
+                            uint8_t& accuracy, uint32_t& savedEpoch, uint16_t& sampleS);
 
 // What the board knows of a saved state. A savedEpoch of 0 is a copy saved
 // before NTP set the clock, whose age is unknown.

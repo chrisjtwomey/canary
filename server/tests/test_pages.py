@@ -384,6 +384,16 @@ class TestDiagnostics:
         assert soup.select_one("#dock-changed").find_previous_sibling().get_text() == "downgraded"
         assert text(soup, "#dock-refused") == "3 from v0.4.0, 2 h 1 min ago"
 
+    def test_a_board_that_has_missed_two_posts_is_marked_offline(self, tz):
+        dock = dict(STATUS["boards"]["canary-dock"], age_s=40980, offline=True)
+        head = dict(STATUS["boards"]["canary-head"], offline=False)
+        status = dict(STATUS, boards={"canary-dock": dock, "canary-head": head})
+        soup, _ = render(DiagnosticsPage("diagnostics", tz=tz, width=WIDTH, height=HEIGHT),
+                         {"status": status})
+        assert text(soup, "#dock-offline") == "Offline"
+        assert text(soup, "#dock-age") == "reported 11 h 23 min ago"
+        assert soup.select_one("#head-offline") is None
+
     def test_a_board_the_server_has_only_refused_still_shows(self, tz):
         refused = {"doc": None, "age_s": None,
                    "refused": {"version": "v0.4.0", "count": 1, "at": 0, "age_s": 30}}

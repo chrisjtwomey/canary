@@ -8,10 +8,14 @@
 
 namespace {
 
-// Bosch's configuration for a BME688 on 3.3 V in LP mode, with a four-day
-// calibration window, compiled in the way Bosch's own examples do it.
-const uint8_t kConfig[] = {
+// Bosch's configurations for a BME688 on 3.3 V, one for each rate, each with
+// a four-day calibration window, compiled in the way Bosch's own examples do
+// it.
+const uint8_t kLpConfig[] = {
 #include "bme688/bme688_sel_33v_3s_4d/bsec_selectivity.txt"
+};
+const uint8_t kUlpConfig[] = {
+#include "bme688/bme688_sel_33v_300s_4d/bsec_selectivity.txt"
 };
 
 // What Bosch's wrapper sets aside for an instance; init() checks that the
@@ -42,12 +46,15 @@ bool wanted(uint32_t processData, uint8_t input) {
 
 }  // namespace
 
-int BsecLibrary::init() {
+int BsecLibrary::init(uint16_t sampleS) {
     if (bsec_get_instance_size_m() > kInstanceBytes) return kInstanceTooSmall;
     processData_ = 0;
     int status = bsec_init_m(instance);
     if (status != BSEC_OK) return status;
-    return bsec_set_configuration_m(instance, kConfig, sizeof(kConfig), work, sizeof(work));
+    const bool ulp = sampleS == kUlpSampleS;
+    return bsec_set_configuration_m(instance, ulp ? kUlpConfig : kLpConfig,
+                                    ulp ? sizeof(kUlpConfig) : sizeof(kLpConfig), work,
+                                    sizeof(work));
 }
 
 int BsecLibrary::setState(const uint8_t* state, uint32_t len) {
@@ -58,11 +65,12 @@ int BsecLibrary::getState(uint8_t* state, uint32_t max, uint32_t* len) {
     return bsec_get_state_m(instance, 0, state, max, work, sizeof(work), len);
 }
 
-int BsecLibrary::subscribe() {
+int BsecLibrary::subscribe(uint16_t sampleS) {
+    const float rate = sampleS == kUlpSampleS ? BSEC_SAMPLE_RATE_ULP : BSEC_SAMPLE_RATE_LP;
     bsec_sensor_configuration_t requested[kOutputCount];
     for (uint8_t i = 0; i < kOutputCount; ++i) {
         requested[i].sensor_id = kOutputs[i];
-        requested[i].sample_rate = BSEC_SAMPLE_RATE_LP;
+        requested[i].sample_rate = rate;
     }
     bsec_sensor_configuration_t required[BSEC_MAX_PHYSICAL_SENSOR];
     uint8_t nRequired = BSEC_MAX_PHYSICAL_SENSOR;

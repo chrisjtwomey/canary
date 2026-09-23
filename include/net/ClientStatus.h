@@ -29,6 +29,14 @@ struct ClientStatus {
     uint8_t     iaqAccuracy;     // 0-3
     uint32_t    bsecLateCalls;   // times BSEC was asked later than it wanted
     uint32_t    bsecSavedEpoch;  // its last state save this boot; 0 for none
+    uint16_t    bsecSampleS;     // seconds between its samples
+    const char* settingsVersion; // the board settings it runs, "" before any; null on a
+                                 // board without settings, which sends neither block
+    uint8_t     settingsRefused; // the keys of them it refused, as BoardSettings.h's bits
+    uint32_t    recalibratedId;  // the last recalibration it ran; 0 for none
+    uint16_t    recalibratedPpm;
+    bool        recalibratedOk;
+    int16_t     recalibratedCorrection;   // ppm, when ok
 };
 
 // Encodes the "client" object. Returns the length written, or 0 if the

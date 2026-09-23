@@ -18,18 +18,21 @@ int64_t BsecRunner::nowMs64() {
 // state BSEC refuses, from another BSEC version say, means starting from
 // nothing, and a copy of it from the server would fail the same way.
 bool BsecRunner::startBsec(const BsecState* state) {
-    bool fromState = state != nullptr && state->len > 0;
+    const uint16_t rate = sampleS();
+    bool fromState = state != nullptr && state->len > 0 && state->sampleS == rate;
     started_ = false;
     {
         std::lock_guard<std::mutex> guard(lock_);
         status_.started = false;
+        status_.sampleS = rate;
+        haveCurrent_ = false;
     }
-    if (bsec_.init() != IBsec::kOk) return false;
+    if (bsec_.init(rate) != IBsec::kOk) return false;
     if (fromState && bsec_.setState(state->blob, state->len) != IBsec::kOk) {
         fromState = false;
-        if (bsec_.init() != IBsec::kOk) return false;
+        if (bsec_.init(rate) != IBsec::kOk) return false;
     }
-    if (bsec_.subscribe() < IBsec::kOk) return false;
+    if (bsec_.subscribe(rate) < IBsec::kOk) return false;
     started_ = true;
     nextCallNs_ = 0;
     std::lock_guard<std::mutex> guard(lock_);
@@ -55,15 +58,33 @@ bool BsecRunner::begin(BsecState* stored) {
     return status_.running;
 }
 
-void BsecRunner::restartWith(const BsecState& state) {
+bool BsecRunner::restartWith(const BsecState& state) {
     std::lock_guard<std::mutex> guard(lock_);
+    if (state.sampleS != sampleS_) return false;
     pending_ = state;
     restartPending_ = true;
+    freshPending_ = false;
+    return true;
+}
+
+void BsecRunner::setSampleS(uint16_t sampleS) {
+    if (!IBsec::knownRate(sampleS)) return;
+    std::lock_guard<std::mutex> guard(lock_);
+    if (sampleS == sampleS_) return;
+    sampleS_ = sampleS;
+    restartPending_ = false;
+    freshPending_ = status_.started;
+}
+
+uint16_t BsecRunner::sampleS() const {
+    std::lock_guard<std::mutex> guard(lock_);
+    return sampleS_;
 }
 
 uint32_t BsecRunner::step() {
     BsecState pending;
     bool restart = false;
+    bool fresh = false;
     {
         std::lock_guard<std::mutex> guard(lock_);
         if (restartPending_) {
@@ -71,9 +92,12 @@ uint32_t BsecRunner::step() {
             restartPending_ = false;
             restart = true;
         }
+        fresh = freshPending_;
+        freshPending_ = false;
     }
-    if (restart || !started_) {
+    if (restart || fresh || !started_) {
         if (!startBsec(restart ? &pending : nullptr)) return kRetryMs;
+        if (fresh) savedAtHigh_ = false;
     }
 
     const int64_t nowNs = nowMs64() * 1000000;
@@ -163,6 +187,7 @@ void BsecRunner::copyState(uint32_t nowMs) {
     copy.len = len;
     copy.savedEpoch = epoch_ ? epoch_() : 0;
     std::lock_guard<std::mutex> guard(lock_);
+    copy.sampleS = sampleS_;
     copy.accuracy = status_.accuracy;
     current_ = copy;
     haveCurrent_ = true;

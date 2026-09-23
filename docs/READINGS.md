@@ -92,7 +92,10 @@ Diagnostics page shows it.
   "fetch": { "next_url": "http://h:8080/day.png", "next_in_s": 120, "backoff_step": 0,
              "ok": 12, "failed": 1 },
   "backlog": { "held": 0, "capacity": 1480, "store": "psram" },
-  "bsec": { "running": true, "restored": true, "accuracy": 2, "late": 0, "saved": 1757443200 }
+  "bsec": { "running": true, "restored": true, "accuracy": 2, "late": 0, "saved": 1757443200,
+            "sample_s": 300 },
+  "settings": { "version": "5bd4ecec", "refused": [] },
+  "recalibrated": { "id": 1758650400, "ppm": 420, "ok": true, "correction_ppm": -12 }
 }
 ```
 
@@ -108,8 +111,13 @@ it was queued with, so a batch that arrives after an outage fills in how the
 board fared through it; the server keeps the report with the highest `ts` as
 the newest. `bsec` is
 BSEC's own state: whether it runs, whether it took a saved state when it
-started, the accuracy of its index, how many of its samples were late, and
-when it last saved its state this boot (0 for not yet).
+started, the accuracy of its index, how many of its samples were late,
+when it last saved its state this boot (0 for not yet), and the seconds
+between its samples, 3 or 300. `settings` and
+`recalibrated` come from the dock alone (ARCHITECTURE §3.8): the version of
+the settings it runs and the keys of them it refused, and the last
+recalibration it ran, with the id the server gave it and the correction the
+SCD41 made; an `id` of 0 is none yet.
 
 The dock queues every document when it takes the reading, and posts the
 queue oldest first, up to 100 documents at a time as one JSON array. The
@@ -197,11 +205,13 @@ the server is taking its readings:
 ```json
 { "device": "canary-dock",
   "calibration": {
-    "bme688": { "state": "<320 characters of base64>", "accuracy": 3, "saved": 1757443200 } } }
+    "bme688": { "state": "<320 characters of base64>", "accuracy": 3, "saved": 1757443200,
+                "sample_s": 300 } } }
 ```
 
 `state` is BSEC's 238-byte state, `accuracy` the IAQ accuracy when it was
-taken, and `saved` when it was taken, in UTC seconds. A copy saved before
+taken, `saved` when it was taken, in UTC seconds, and `sample_s` the rate
+BSEC learned it at: a state is no use to BSEC at the other rate. A copy saved before
 the clock was set is not sent. The block is keyed by sensor so that other
 sensors can join it; only the BME688 has learned state the board can back
 up. A copy the server refuses is not sent again; one it could not take for
@@ -209,10 +219,14 @@ now is sent after the next batch it takes.
 
 The calibration store keeps the block whatever the source kind. Every copy
 is kept for `calibration.keep_days`, and
-`GET /calibration?device=<device>&before=<epoch>` answers with the newest
-copy saved before that time, one at accuracy 3 first, or a 404.
+`GET /calibration?device=<device>&before=<epoch>&sample_s=<3 or 300>` answers
+with the newest copy at that rate saved before that time, one at accuracy 3
+first, or a 404. Copies kept before BSEC had a choice of rate count as 3 s.
 
 After a boot, once the server has taken a batch, the board asks for the
-server's copy with `GET /calibration?device=<device>&before=<boot time>`,
-and restarts BSEC on it when it is better than the copy NVS gave it: more
-accurate, or as accurate and more than an hour newer.
+server's copy at BSEC's rate with
+`GET /calibration?device=<device>&before=<boot time>&sample_s=<rate>`, and
+restarts BSEC on it when it is better than the copy NVS gave it: more
+accurate, or as accurate and more than an hour newer. A copy from NVS at the
+other rate counts as none. When the settings change the rate, BSEC starts
+again from nothing at the new one, and the board asks the server once more.
