@@ -6,6 +6,7 @@ bool MockScd41::begin(uint32_t nowMs) {
     mode_ = IDLE;
     ready_ = false;
     firstShotPending_ = true;
+    measured_ = false;
     busyUntilMs_ = nowMs + kWakeMs;
     // Cold: the part has not warmed itself yet.
     selfHeat_.primeAt(0.0f, nowMs);
@@ -76,12 +77,14 @@ void MockScd41::refresh(uint32_t nowMs) {
     float truePa = room_.pressureHpa() * 100.0f;
     float co2 = co2_.update(room_.co2Ppm() * (truePa / (float)assumedPa_), nowMs)
                 + room_.noise(10.0f);
+    co2 += frcPpm_;
     if (firstShotPending_) {
         co2 += 150.0f;   // the first shot after power-up is not to be trusted
         firstShotPending_ = false;
     }
     if (co2 < 0) co2 = 0;
     pending_.co2Ppm = (uint16_t)(co2 + 0.5f);
+    measured_ = true;
 
     float dieC = temp_.update(room_.tempC(), nowMs) + selfHeat_.update(kSelfHeatingC, nowMs);
     pending_.tempC = dieC - offsetC_ + room_.noise(0.1f);
@@ -119,11 +122,40 @@ bool MockScd41::setTemperatureOffset(float degC) {
     return true;
 }
 
+bool MockScd41::getAutomaticSelfCalibration(bool& on) {
+    if (mode_ != IDLE) return false;
+    on = asc_;
+    return true;
+}
+
+bool MockScd41::getTemperatureOffset(float& degC) {
+    if (mode_ != IDLE) return false;
+    degC = offsetC_;
+    return true;
+}
+
+bool MockScd41::setAutomaticSelfCalibration(bool on) {
+    if (mode_ != IDLE) return false;
+    asc_ = on;
+    return true;
+}
+
+bool MockScd41::performForcedRecalibration(uint32_t nowMs, uint16_t ppm, int16_t& correction) {
+    if (mode_ != IDLE || busy(nowMs) || !measured_) return false;
+    const float truePa = room_.pressureHpa() * 100.0f;
+    const float reads = room_.co2Ppm() * (truePa / (float)assumedPa_) + frcPpm_;
+    const float moved = (float)ppm - reads;
+    frcPpm_ += moved;
+    correction = (int16_t)(moved < 0 ? moved - 0.5f : moved + 0.5f);
+    return true;
+}
+
 bool MockScd41::powerDown() {
     if (mode_ != IDLE) return false;
     mode_ = POWERED_DOWN;
     ready_ = false;
     firstShotPending_ = true;
+    measured_ = false;
     return true;
 }
 

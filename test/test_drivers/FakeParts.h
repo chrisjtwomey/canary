@@ -66,6 +66,10 @@ public:
     bool     poweredDown = false;
     uint32_t lastPressurePa = 0;
     uint16_t lastOffsetWord = 0;
+    uint16_t lastFrcPpm = 0;
+    // The answer to a forced recalibration: the correction plus 0x8000, or
+    // 0xFFFF for one that failed.
+    uint16_t frcAnswer = 0x8000 - 12;
     int      stopsAccepted = 0;
     int      stopsRefused = 0;
     int      wakeUps = 0;
@@ -139,6 +143,15 @@ public:
             case 0x241D:
                 if (periodic || len != 5 || !argCrcOk(data)) return false;
                 lastOffsetWord = offsetWord = arg(data);
+                return true;
+            case 0x2416:     // set automatic self-calibration, idle only
+                if (periodic || len != 5 || !argCrcOk(data)) return false;
+                asc = arg(data) != 0;
+                return true;
+            case 0x362F:     // forced recalibration, idle only
+                if (periodic || len != 5 || !argCrcOk(data)) return false;
+                lastFrcPpm = arg(data);
+                queue(&frcAnswer, 1);
                 return true;
             case 0x2313: {   // get automatic self-calibration, idle only
                 if (periodic) return false;

@@ -90,7 +90,27 @@ bool Scd41Driver::setTemperatureOffset(float degC) {
     if (mode_ != IDLE) return false;
     if (degC < 0.0f || degC > kMaxOffsetC) return false;
     uint16_t word = (uint16_t)(degC * 65535.0f / kMaxOffsetC + 0.5f);
-    return sensirion::sendCommandWithArg(bus_, addr_, kCmdSetTemperatureOffset, word);
+    if (!sensirion::sendCommandWithArg(bus_, addr_, kCmdSetTemperatureOffset, word)) return false;
+    clock_.waitMs(kCommandMs);
+    return true;
+}
+
+bool Scd41Driver::setAutomaticSelfCalibration(bool on) {
+    if (mode_ != IDLE) return false;
+    if (!sensirion::sendCommandWithArg(bus_, addr_, kCmdSetAsc, on ? 1 : 0)) return false;
+    clock_.waitMs(kCommandMs);
+    return true;
+}
+
+bool Scd41Driver::performForcedRecalibration(uint32_t nowMs, uint16_t ppm, int16_t& correction) {
+    if (mode_ != IDLE || busy(nowMs)) return false;
+    if (!sensirion::sendCommandWithArg(bus_, addr_, kCmdPerformFrc, ppm)) return false;
+    clock_.waitMs(kFrcMs);
+    uint16_t word = 0;
+    if (sensirion::readWordsChecked(bus_, addr_, &word, 1) != sensirion::READ_OK) return false;
+    if (word == kFrcFailed) return false;
+    correction = (int16_t)((int32_t)word - kFrcZero);
+    return true;
 }
 
 bool Scd41Driver::powerDown() {

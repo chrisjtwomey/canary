@@ -30,6 +30,8 @@ public:
     bool getSerialNumber(uint64_t& serial) override;
     bool getAutomaticSelfCalibration(bool& on) override;
     bool getTemperatureOffset(float& degC) override;
+    bool setAutomaticSelfCalibration(bool on) override;
+    bool performForcedRecalibration(uint32_t nowMs, uint16_t ppm, int16_t& correction) override;
     uint32_t crcFailures() const override { return crcFailures_; }
 
     enum Mode { IDLE, PERIODIC, LOW_POWER_PERIODIC, SINGLE_SHOT, POWERED_DOWN };
@@ -50,6 +52,8 @@ public:
     static const uint16_t kCmdGetSerialNumber       = 0x3682;
     static const uint16_t kCmdGetAsc                = 0x2313;
     static const uint16_t kCmdGetTemperatureOffset  = 0x2318;
+    static const uint16_t kCmdSetAsc                = 0x2416;
+    static const uint16_t kCmdPerformFrc            = 0x362F;
 
     // The data-ready word is "not ready" only when its low eleven bits are
     // all zero; the top five are reserved and carry whatever they carry.
@@ -61,6 +65,11 @@ public:
     // Every command that answers with data needs 1 ms before the read, and
     // the pressure command 1 ms before the next command.
     static const uint32_t kCommandMs = 1;
+    // A forced recalibration answers after 400 ms: the correction plus
+    // 0x8000, or 0xFFFF when it failed.
+    static const uint32_t kFrcMs = 400;
+    static const uint16_t kFrcFailed = 0xFFFF;
+    static const uint16_t kFrcZero = 0x8000;
 
     static const uint32_t kMinPressurePa = 70000;
     static const uint32_t kMaxPressurePa = 120000;

@@ -22,6 +22,15 @@ public:
     // The settings its accuracy rests on. Idle only; false when not read.
     virtual bool getAutomaticSelfCalibration(bool& on) { (void)on; return false; }
     virtual bool getTemperatureOffset(float& degC) { (void)degC; return false; }
+    // Idle only. The part keeps it in RAM until a power cycle.
+    virtual bool setAutomaticSelfCalibration(bool on) { (void)on; return false; }
+    // Idle only, after at least 3 minutes of measuring in air of `ppm`.
+    // `correction` is how far the part moved, in ppm. False when the part
+    // refused or failed it.
+    virtual bool performForcedRecalibration(uint32_t nowMs, uint16_t ppm, int16_t& correction) {
+        (void)nowMs; (void)ppm; (void)correction;
+        return false;
+    }
     // Answers that arrived with a bad CRC, since start.
     virtual uint32_t crcFailures() const { return 0; }
 };

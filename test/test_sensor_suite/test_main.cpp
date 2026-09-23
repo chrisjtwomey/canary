@@ -277,6 +277,97 @@ void test_a_sample_costs_about_150ms_of_wall_clock() {
     TEST_ASSERT_UINT32_WITHIN_MESSAGE(20, 152, cost, "13 ms SHTC3 + 139 ms BME688 cycle");
 }
 
+// ---------------- settings ----------------
+
+void test_scd41_options_set_before_begin_go_on_at_its_start() {
+    suite->setScd41Options(1.5f, false);
+    TEST_ASSERT_EQUAL_FLOAT(4.0f, scd41->temperatureOffset());   // not started yet
+    suite->begin();
+    TEST_ASSERT_EQUAL_FLOAT(1.5f, scd41->temperatureOffset());
+    TEST_ASSERT_FALSE(scd41->selfCalibration());
+    TEST_ASSERT_EQUAL(MockScd41::PERIODIC, scd41->mode());
+}
+
+void test_scd41_options_changed_while_it_runs_stop_it_for_half_a_second() {
+    suite->begin();
+    const uint32_t before = clk->waited;
+    suite->setScd41Options(2.0f, true);
+    TEST_ASSERT_EQUAL_FLOAT(2.0f, scd41->temperatureOffset());
+    TEST_ASSERT_EQUAL(MockScd41::PERIODIC, scd41->mode());
+    TEST_ASSERT_TRUE(suite->scd41Present());
+    TEST_ASSERT_UINT32_WITHIN(5, SensorSuite::kScd41StopMs, clk->waited - before);
+}
+
+void test_the_same_scd41_options_again_do_not_stop_it() {
+    suite->setScd41Options(2.0f, true);
+    suite->begin();
+    const uint32_t before = clk->waited;
+    suite->setScd41Options(2.0f, true);
+    TEST_ASSERT_EQUAL_UINT32(before, clk->waited);
+}
+
+void test_the_scd41_reads_again_before_the_next_slot_after_its_options_change() {
+    suite->begin();
+    settle();
+    suite->sample(room->epoch());
+    clk->advance(265000);                  // the pre-warm, 35 s before the next slot
+    suite->setScd41Options(3.0f, true);
+    clk->advance(35000);
+    Readings r = suite->sample(room->epoch());
+    TEST_ASSERT_TRUE(r.scd41Valid);
+    TEST_ASSERT_TRUE(suite->scd41Present());
+}
+
+void test_low_power_shtc3_waits_its_shorter_conversion() {
+    suite->begin();
+    settle();
+    suite->setShtc3LowPower(true);
+    const uint32_t before = clk->waited;
+    Readings r = suite->sample(room->epoch());
+    TEST_ASSERT_TRUE(r.shtc3Valid);
+    TEST_ASSERT_TRUE(suite->health().shtc3LowPower);
+    // The BME688's measurement is the rest of the sample's waits.
+    TEST_ASSERT_EQUAL_UINT32(SensorSuite::kShtc3LowPowerMs + bme->measurementMs(),
+                             clk->waited - before);
+}
+
+// ---------------- recalibration ----------------
+
+void test_a_recalibration_waits_for_3_minutes_of_measuring() {
+    suite->begin();
+    clk->advance(SensorSuite::kFrcAfterMs - 1000);
+    int16_t correction = 0;
+    TEST_ASSERT_TRUE(SensorSuite::Recalibration::NotReady ==
+                     suite->recalibrateScd41(420, correction));
+    TEST_ASSERT_EQUAL(MockScd41::PERIODIC, scd41->mode());
+}
+
+void test_a_recalibration_moves_the_co2_readings_and_measuring_goes_on() {
+    suite->begin();
+    for (int i = 0; i < 40; ++i) {              // 200 s of periodic readings
+        clk->advance(5000);
+        suite->sample(room->epoch());
+    }
+    int16_t correction = 0;
+    TEST_ASSERT_TRUE(SensorSuite::Recalibration::Done ==
+                     suite->recalibrateScd41(1000, correction));
+    TEST_ASSERT_TRUE(correction > 0);
+    TEST_ASSERT_EQUAL(MockScd41::PERIODIC, scd41->mode());
+    clk->advance(35000);
+    Readings r = suite->sample(room->epoch());
+    TEST_ASSERT_TRUE(r.scd41Valid);
+    TEST_ASSERT_UINT16_WITHIN(60, 1000, r.scd41.co2Ppm);
+}
+
+void test_a_recalibration_after_options_changed_waits_again() {
+    suite->begin();
+    clk->advance(SensorSuite::kFrcAfterMs + 1000);
+    suite->setScd41Options(3.0f, true);        // stops and starts it
+    int16_t correction = 0;
+    TEST_ASSERT_TRUE(SensorSuite::Recalibration::NotReady ==
+                     suite->recalibrateScd41(420, correction));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_begin_starts_all_four);
@@ -295,5 +386,13 @@ int main(int, char**) {
     RUN_TEST(test_scd41_reports_only_when_the_5s_conversion_is_ready);
     RUN_TEST(test_fan_can_be_stopped_and_restarts_its_warm_up);
     RUN_TEST(test_a_sample_costs_about_150ms_of_wall_clock);
+    RUN_TEST(test_scd41_options_set_before_begin_go_on_at_its_start);
+    RUN_TEST(test_scd41_options_changed_while_it_runs_stop_it_for_half_a_second);
+    RUN_TEST(test_the_same_scd41_options_again_do_not_stop_it);
+    RUN_TEST(test_the_scd41_reads_again_before_the_next_slot_after_its_options_change);
+    RUN_TEST(test_low_power_shtc3_waits_its_shorter_conversion);
+    RUN_TEST(test_a_recalibration_waits_for_3_minutes_of_measuring);
+    RUN_TEST(test_a_recalibration_moves_the_co2_readings_and_measuring_goes_on);
+    RUN_TEST(test_a_recalibration_after_options_changed_waits_again);
     return UNITY_END();
 }

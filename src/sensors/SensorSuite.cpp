@@ -19,15 +19,65 @@ bool SensorSuite::startShtc3() {
     return true;
 }
 
-// The part answers questions about its settings only while idle, so they
-// are asked here, once a start, before it begins measuring.
+// The part takes its settings, and answers questions about them, only while
+// idle, so both happen here, once a start, before it begins measuring.
 bool SensorSuite::startScd41() {
     if (!scd41_.begin(clock_.millis())) return false;
     clock_.waitMs(kScd41WakeMs);
     scd41Read_ = scd41_.getSerialNumber(scd41Serial_);
+    readScd41Settings();
+    if (!scd41_.startPeriodicMeasurement(clock_.millis())) return false;
+    scd41MeasuringSinceMs_ = clock_.millis();
+    return true;
+}
+
+// Sets the options on the idle part, then reads back what it holds, for
+// health().
+void SensorSuite::readScd41Settings() {
+    if (scd41OptionsSet_) {
+        scd41_.setTemperatureOffset(scd41OffsetC_);
+        scd41_.setAutomaticSelfCalibration(scd41Asc_);
+    }
     ascKnown_ = scd41_.getAutomaticSelfCalibration(asc_);
     offsetKnown_ = scd41_.getTemperatureOffset(offsetC_);
-    return scd41_.startPeriodicMeasurement(clock_.millis());
+}
+
+bool SensorSuite::stopScd41() {
+    if (!scd41_.stopPeriodicMeasurement(clock_.millis())) return false;
+    clock_.waitMs(kScd41StopMs);
+    return true;
+}
+
+// Measuring again after stopScd41(). A part that will not start is taken for
+// stopped, so the next restartFailed() starts it from the beginning.
+void SensorSuite::resumeScd41() {
+    readScd41Settings();
+    if (scd41_.startPeriodicMeasurement(clock_.millis())) {
+        scd41MeasuringSinceMs_ = clock_.millis();
+        return;
+    }
+    scd41State_.running = false;
+    scd41State_.retryAtMs = clock_.millis();
+    scd41State_.retryWaitMs = kRetryFirstMs;
+}
+
+void SensorSuite::setScd41Options(float offsetC, bool selfCalibration) {
+    if (scd41OptionsSet_ && offsetC == scd41OffsetC_ && selfCalibration == scd41Asc_) return;
+    scd41OptionsSet_ = true;
+    scd41OffsetC_ = offsetC;
+    scd41Asc_ = selfCalibration;
+    if (!scd41State_.running) return;
+    if (stopScd41()) resumeScd41();
+}
+
+SensorSuite::Recalibration SensorSuite::recalibrateScd41(uint16_t ppm, int16_t& correction) {
+    if (!scd41State_.running || clock_.millis() - scd41MeasuringSinceMs_ < kFrcAfterMs) {
+        return Recalibration::NotReady;
+    }
+    if (!stopScd41()) return Recalibration::Failed;
+    const bool done = scd41_.performForcedRecalibration(clock_.millis(), ppm, correction);
+    resumeScd41();
+    return done ? Recalibration::Done : Recalibration::Failed;
 }
 
 bool SensorSuite::startPm() { return pm_.begin(clock_.millis()); }
@@ -103,8 +153,8 @@ Readings SensorSuite::sample(uint32_t epoch) {
 void SensorSuite::sampleShtc3(Readings& r) {
     if (!shtc3State_.running) return;
     if (!shtc3_.wakeup(clock_.millis())) return;
-    if (shtc3_.measure(clock_.millis(), kShtc3LowPower)) {
-        clock_.waitMs(kShtc3MeasureMs);
+    if (shtc3_.measure(clock_.millis(), shtc3LowPower_)) {
+        clock_.waitMs(shtc3LowPower_ ? kShtc3LowPowerMs : kShtc3MeasureMs);
         r.shtc3Valid = shtc3_.read(clock_.millis(), r.shtc3);
     }
     shtc3_.sleep();
@@ -178,6 +228,6 @@ SensorHealth SensorSuite::health() const {
     h.pmError = pmError_;
     h.shtc3IdKnown = shtc3Id_ != 0;
     h.shtc3Id = shtc3Id_;
-    h.shtc3LowPower = kShtc3LowPower;
+    h.shtc3LowPower = shtc3LowPower_;
     return h;
 }

@@ -52,6 +52,21 @@ public:
     // invented numbers.
     Readings sample(uint32_t epoch);
 
+    // The SCD41's temperature offset and self-calibration, set at each start,
+    // since the part keeps them only until a power cycle. A change while it
+    // runs stops it for about half a second to set them. Until the first
+    // call it keeps its own.
+    void setScd41Options(float offsetC, bool selfCalibration);
+
+    // SHTC3 low-power mode, from the next sample.
+    void setShtc3LowPower(bool on) { shtc3LowPower_ = on; }
+
+    enum class Recalibration { Done, Failed, NotReady };
+    // A forced recalibration of the SCD41 to `ppm`, which stops it for about
+    // a second. NotReady until it has measured for kFrcAfterMs since its
+    // start; `correction` is set when Done.
+    Recalibration recalibrateScd41(uint16_t ppm, int16_t& correction);
+
     // The PM fan. Low stops it and, on the Adafruit board, its 5 V charge
     // pump; readings are untrustworthy for 30 s after it restarts, which
     // sample() honours through IPmsa003i::stable().
@@ -61,8 +76,12 @@ public:
     static const uint32_t kScd41WakeMs = 30;
     // SHTC3 normal-mode conversion, datasheet 12.1 ms max.
     static const uint32_t kShtc3MeasureMs = 13;
-    // Normal mode: kShtc3MeasureMs is its conversion time, not low power's.
-    static const bool kShtc3LowPower = false;
+    // SHTC3 low-power conversion, datasheet 0.8 ms max.
+    static const uint32_t kShtc3LowPowerMs = 1;
+    // The SCD41 takes no command for 500 ms after a stop.
+    static const uint32_t kScd41StopMs = 500;
+    // Datasheet 3.7.1: a forced recalibration wants 3 minutes of measuring.
+    static const uint32_t kFrcAfterMs = 180000;
     // BME688 forced-mode profile: 300 C for 100 ms is Bosch's indoor VOC
     // example, and the plate needs 20-30 ms of that to reach temperature.
     static const uint16_t kBmeHeaterC = 300;
@@ -95,6 +114,9 @@ private:
     bool startScd41();
     bool startPm();
     bool startBme688();
+    bool stopScd41();
+    void resumeScd41();
+    void readScd41Settings();
     void started(SensorState& s, bool ok);
     void retry(SensorState& s, StartFn start);
     void track(SensorState& s, bool due, bool valid);
@@ -130,4 +152,9 @@ private:
     bool        pmSeen_ = false;
     uint8_t     pmVersion_ = 0, pmError_ = 0;
     uint16_t    shtc3Id_ = 0;
+    bool        shtc3LowPower_ = false;
+    bool        scd41OptionsSet_ = false;
+    float       scd41OffsetC_ = 0.0f;
+    bool        scd41Asc_ = true;
+    uint32_t    scd41MeasuringSinceMs_ = 0;
 };

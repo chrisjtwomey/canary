@@ -288,6 +288,49 @@ void test_scd41_temperature_offset_is_refused_while_measuring() {
     delete drv;
 }
 
+void test_scd41_self_calibration_is_set_only_while_idle() {
+    FakeScd41 part;
+    Scd41Driver* drv = startedScd41(part);
+
+    TEST_ASSERT_FALSE(drv->setAutomaticSelfCalibration(false));
+    TEST_ASSERT_TRUE(part.asc);
+    drv->stopPeriodicMeasurement(clk->now);
+    clk->advance(Scd41Driver::kStopBusyMs);
+    TEST_ASSERT_TRUE(drv->setAutomaticSelfCalibration(false));
+    TEST_ASSERT_FALSE(part.asc);
+    delete drv;
+}
+
+void test_scd41_forced_recalibration_waits_400ms_and_reads_the_correction() {
+    FakeScd41 part;
+    Scd41Driver* drv = startedScd41(part);
+    int16_t correction = 0;
+
+    TEST_ASSERT_FALSE(drv->performForcedRecalibration(clk->now, 420, correction));
+    drv->stopPeriodicMeasurement(clk->now);
+    TEST_ASSERT_FALSE(drv->performForcedRecalibration(clk->now, 420, correction));   // busy
+    clk->advance(Scd41Driver::kStopBusyMs);
+    const uint32_t before = clk->now;
+    TEST_ASSERT_TRUE(drv->performForcedRecalibration(clk->now, 420, correction));
+    TEST_ASSERT_EQUAL_UINT16(420, part.lastFrcPpm);
+    TEST_ASSERT_EQUAL_INT16(-12, correction);
+    TEST_ASSERT_TRUE(clk->now - before >= Scd41Driver::kFrcMs);
+    delete drv;
+}
+
+void test_scd41_a_failed_forced_recalibration_is_false() {
+    FakeScd41 part;
+    part.frcAnswer = 0xFFFF;
+    Scd41Driver* drv = startedScd41(part);
+    drv->stopPeriodicMeasurement(clk->now);
+    clk->advance(Scd41Driver::kStopBusyMs);
+    int16_t correction = 7;
+
+    TEST_ASSERT_FALSE(drv->performForcedRecalibration(clk->now, 420, correction));
+    TEST_ASSERT_EQUAL_INT16(7, correction);
+    delete drv;
+}
+
 void test_scd41_reads_its_settings_only_while_idle() {
     FakeScd41 part;
     part.asc = false;
@@ -687,6 +730,9 @@ int main(int, char**) {
     RUN_TEST(test_scd41_pressure_goes_out_in_hectopascals_and_is_range_checked);
     RUN_TEST(test_scd41_data_ready_can_follow_the_pressure_straight_away);
     RUN_TEST(test_scd41_temperature_offset_is_refused_while_measuring);
+    RUN_TEST(test_scd41_self_calibration_is_set_only_while_idle);
+    RUN_TEST(test_scd41_forced_recalibration_waits_400ms_and_reads_the_correction);
+    RUN_TEST(test_scd41_a_failed_forced_recalibration_is_false);
     RUN_TEST(test_scd41_reads_its_settings_only_while_idle);
     RUN_TEST(test_scd41_counts_a_corrupt_answer);
     RUN_TEST(test_scd41_stop_leaves_the_part_busy_for_half_a_second);

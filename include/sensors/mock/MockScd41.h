@@ -36,10 +36,17 @@ public:
     bool powerDown() override;
     bool wakeUp(uint32_t nowMs) override;
     bool getSerialNumber(uint64_t& serial) override;
+    bool getAutomaticSelfCalibration(bool& on) override;
+    bool getTemperatureOffset(float& degC) override;
+    bool setAutomaticSelfCalibration(bool on) override;
+    // Fails unless the part has measured since power-up, as the datasheet
+    // says the real one does; moves every later reading by the correction.
+    bool performForcedRecalibration(uint32_t nowMs, uint16_t ppm, int16_t& correction) override;
 
     enum Mode { IDLE, PERIODIC, LOW_POWER_PERIODIC, SINGLE_SHOT, POWERED_DOWN };
     Mode mode() const { return mode_; }
     float temperatureOffset() const { return offsetC_; }
+    bool selfCalibration() const { return asc_; }
 
     static const uint32_t kPeriodicMs   = 5000;
     static const uint32_t kLowPowerMs   = 30000;
@@ -66,6 +73,9 @@ private:
     uint32_t busyUntilMs_ = 0;
     uint32_t assumedPa_ = 101300;
     float offsetC_ = 4.0f;
+    bool asc_ = true;
+    bool measured_ = false;      // since power-up, which a recalibration needs
+    float frcPpm_ = 0.0f;
     Scd41Data pending_{};
     LaggedValue co2_{kCo2TauS};
     LaggedValue temp_{kTempTauS};
