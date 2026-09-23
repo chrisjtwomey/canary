@@ -1,6 +1,10 @@
-name: Release
+name: Images
 
+# Every push to main publishes both images as `latest`, which a server's
+# stack follows; a published release adds its version tags.
 on:
+  push:
+    branches: [main]
   release:
     types: [published]
 
@@ -27,6 +31,16 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0   # git describe needs the tags
+
+      # The version the server reports: the release's tag, or for a push what
+      # git describe says, as a checkout run by hand would.
+      - name: Work out the version
+        id: version
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: echo "version=${TAG:-$(git describe --tags --match 'v*' --always)}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v4
@@ -43,7 +57,7 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest
+            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push
         uses: docker/build-push-action@v7
@@ -54,4 +68,4 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            CANARY_VERSION=${{ github.event.release.tag_name }}
+            CANARY_VERSION=${{ steps.version.outputs.version }}

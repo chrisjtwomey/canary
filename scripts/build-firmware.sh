@@ -2,12 +2,17 @@
 # Build the device firmware from a release tag, in a clean checkout.
 #
 #   build-firmware.sh [options] <tag> [<dest>]
+#   build-firmware.sh --dev [options] [<dest>]
 #
 # <dest> is the directory a server offers images from, local or host:path.
-# Each board's image goes there as <product>/<tag>.bin, beside the images
+# Each board's image goes there as <product>/<version>.bin, beside the images
 # already there: a server offers the one its own version calls for, which
 # may be an older one.
 #
+#   --dev                      build this checkout's last commit instead of a
+#                              tag; its version is what git describe says,
+#                              such as v0.3.1-2-gab12cd4, and a server with
+#                              offer_dev_builds offers it over the air
 #   --signed-by <fingerprint>  refuse a tag this key did not sign
 #   --key-url <url>            where to fetch the key (default: the owner's
 #                              keys on GitHub)
@@ -15,7 +20,7 @@
 #   --upload <head|dock>       also flash that board's build over USB
 #
 # The build is of a fresh clone, never the working tree, so its version is
-# exactly the tag: epd offers an update only to a board on a tagged build.
+# exactly the tag, or the commit: uncommitted changes are never in it.
 set -euo pipefail
 
 repo_url=${REPO_URL:-https://github.com/chrisjtwomey/canary.git}
@@ -24,6 +29,7 @@ key_url=https://github.com/chrisjtwomey.gpg
 signed_by=
 defaults=
 upload=
+dev=
 
 usage() {
     awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0" >&2
@@ -35,6 +41,7 @@ while [ $# -gt 0 ]; do
         --signed-by) signed_by=$(printf '%s' "${2:?}" | tr -d ' ' | tr a-f A-F); shift 2 ;;
         --key-url)   key_url=${2:?}; shift 2 ;;
         --defaults)  defaults=${2:?}; shift 2 ;;
+        --dev)       dev=1; shift ;;
         --upload)    upload=${2:?}; shift 2
                      case $upload in head|dock) ;; *) echo "--upload takes head or dock" >&2; exit 2 ;; esac ;;
         -h|--help)   usage 0 ;;
@@ -42,9 +49,16 @@ while [ $# -gt 0 ]; do
         *)           break ;;
     esac
 done
-[ $# -eq 1 ] || [ $# -eq 2 ] || usage 2
-tag=$1
-dest=${2:-}
+if [ -n "$dev" ]; then
+    [ $# -le 1 ] || usage 2
+    [ -z "$signed_by" ] || { echo "--signed-by checks a tag; --dev builds a commit" >&2; exit 2; }
+    tag=
+    dest=${1:-}
+else
+    [ $# -eq 1 ] || [ $# -eq 2 ] || usage 2
+    tag=$1
+    dest=${2:-}
+fi
 [ -n "$dest" ] || [ -n "$upload" ] || { echo "nothing to do: give a <dest>, --upload, or both" >&2; exit 2; }
 [ -z "$defaults" ] || [ -f "$defaults" ] || { echo "no such file: $defaults" >&2; exit 2; }
 
@@ -64,7 +78,16 @@ checkout_tag() {  # <url> <tag> <dir>
     git -C "$3" -c advice.detachedHead=false checkout -q "$2"
 }
 
-checkout_tag "$repo_url" "$tag" "$src"
+if [ -n "$dev" ]; then
+    here=$(git rev-parse --show-toplevel)
+    git clone -q "$here" "$src"
+    git -C "$src" -c advice.detachedHead=false checkout -q "$(git -C "$here" rev-parse HEAD)"
+    tag=$(git -C "$src" describe --tags --match 'v*' --always)
+    [ -z "$(git -C "$here" status --porcelain --untracked-files=no)" ] \
+        || echo "note: uncommitted changes are not in $tag" >&2
+else
+    checkout_tag "$repo_url" "$tag" "$src"
+fi
 
 if [ -n "$signed_by" ]; then
     export GNUPGHOME=$work/gnupg
