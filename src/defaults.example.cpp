@@ -20,8 +20,8 @@ ClientConfig builtInSettings() {
     cfg.mqttEnabled = false;
     cfg.mqttBroker = "XXXX";
     cfg.mqttPort = 1883;
-    cfg.mqttClientID = "env-monitor-client";
-    cfg.mqttTopic = "mqtt/env-monitor";
+    cfg.mqttClientID = "canary-head";
+    cfg.mqttPrefix = "mqtt/canary";
     cfg.mqttRetries = 3;
 
     return cfg;

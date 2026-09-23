@@ -100,8 +100,8 @@ def test_the_files_indentation_is_kept():
 
 @pytest.mark.parametrize("value", ["yes", "on", "null", "12", "a: b", "#x", " padded"])
 def test_a_string_pyyaml_would_misread_is_quoted(value):
-    e = cf.apply(EXAMPLE, MultiDict({"mqtt.topic": value}))
-    assert cf.read(e.text)["mqtt"]["topic"] == value.strip()
+    e = cf.apply(EXAMPLE, MultiDict({"mqtt.prefix": value}))
+    assert cf.read(e.text)["mqtt"]["prefix"] == value.strip()
 
 
 def test_quiet_hours_off_are_an_empty_block():

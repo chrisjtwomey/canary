@@ -13,6 +13,7 @@ import sqlite3
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable, Iterator
 
+from epd_server.logs import LEVELS
 from epd_server.store import key
 
 from sources.calibration import MAX_ACCURACY, SENSORS
@@ -71,6 +72,22 @@ def _calibration_row(doc: Any) -> tuple:
     return device, sensor, saved, accuracy, state
 
 
+def _logs_row(doc: Any) -> tuple:
+    if not isinstance(doc, dict):
+        raise ValueError("not an object")
+    board, received, level, text = doc.get("board"), doc.get("received"), doc.get("level"), doc.get("text")
+    if not isinstance(board, str) or not board:
+        raise ValueError("board must be a string")
+    if isinstance(received, bool) or not isinstance(received, (int, float)) or received <= 0:
+        raise ValueError("received must be an epoch")
+    if level is not None and (isinstance(level, bool) or not isinstance(level, int)
+                              or not 0 <= level < len(LEVELS)):
+        raise ValueError("level must be empty or 0 to 5")
+    if not isinstance(text, str):
+        raise ValueError("text must be a string")
+    return board, received, level, text
+
+
 @dataclass(frozen=True)
 class Kind:
     """One store's table: what a line of its file holds, what makes two
@@ -89,6 +106,8 @@ KINDS = {
     "calibration": Kind("calibration", ("device", "sensor", "saved", "accuracy", "state"),
                         "saved", ("device", "sensor", "saved"),
                         ("device", "sensor", "saved", "accuracy", "state"), _calibration_row),
+    "logs": Kind("lines", ("board", "received", "level", "text"), "id",
+                 ("board", "received", "text"), ("board", "received", "level", "text"), _logs_row),
 }
 
 

@@ -21,6 +21,7 @@
 #include <ezTime.h>
 
 #include "log_utils.h"
+#include "mqtt_topic.h"
 #include "network_utils.h"
 #include "ota.h"
 #include "ota_offer.h"
@@ -702,10 +703,12 @@ void setup() {
     config = loadConfig(builtInSettings());
     connectNetworkForever();
     setInterval(0);   // ezTime: no NTP; the log's clock is set from the server
-    if (config.mqttEnabled && mqttSettingsAreSet(config.mqttBroker)) {
+    static char mqttTopic[128];
+    if (config.mqttEnabled && mqttSettingsAreSet(config.mqttBroker) &&
+        boardLogTopic(config.mqttPrefix, CLIENT_NAME, mqttTopic, sizeof(mqttTopic))) {
         // The head connects as the config's mqttClientID; a second board with the
         // same id would knock it off the broker, so the dock connects as itself.
-        configureMQTT(config.mqttBroker, config.mqttPort, config.mqttTopic, CLIENT_NAME, config.mqttRetries);
+        configureMQTT(config.mqttBroker, config.mqttPort, mqttTopic, CLIENT_NAME, config.mqttRetries);
     }
 
     if (urlOrigin(config.serverURL, readingsURL, sizeof(readingsURL) - sizeof(kReadingsPath))) {
@@ -736,6 +739,7 @@ void setup() {
 }
 
 void loop() {
+    keepWiFiConnected();
     keepMQTTConnected();
     const uint32_t nowMs = millis();
     askForTime(nowMs);

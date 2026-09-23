@@ -172,6 +172,11 @@ TABS: tuple[Tab, ...] = (
             Field("status.keep_days", "Delete after", "0 = never.", "number", 7, unit="days",
                   minimum=0),
         ), store="board-reports"),
+        Group("Board logs", (
+            Field("logs.path", "File", "", "text", "board-logs.db"),
+            Field("logs.keep_days", "Delete after", "0 = never.", "number", 7, unit="days",
+                  minimum=0),
+        ), store="board-logs"),
         Group("Calibration", (
             Field("calibration.path", "File", "", "text", "calibration.db"),
             Field("calibration.keep_days", "Delete after", "0 = never.", "number", 3, unit="days",
@@ -197,10 +202,12 @@ TABS: tuple[Tab, ...] = (
     )),
     Tab("mqtt", "MQTT", (
         Group("", (
-            Field("mqtt.enabled", "Board log", "Relay board logs from MQTT.", "bool", False),
+            Field("mqtt.enabled", "Board logs", "Keep what boards log over MQTT, and show it on Logs.",
+                  "bool", False),
             Field("mqtt.host", "Host", "", "text", "localhost"),
             Field("mqtt.port", "Port", "", "int", 1883, minimum=1, maximum=65535),
-            Field("mqtt.topic", "Topic", "", "text", "mqtt/epd-client"),
+            Field("mqtt.prefix", "Prefix", "Each board logs to <prefix>/<board>.", "text",
+                  "mqtt/canary"),
         )),
     )),
 )

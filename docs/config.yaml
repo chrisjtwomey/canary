@@ -26,5 +26,5 @@ mqtt_logger:
   broker: XXXX
   port: 1883
   clientId: canary-head
-  topic: mqtt/env-monitor-client
+  prefix: mqtt/canary   # the board logs to <prefix>/<its name>, such as mqtt/canary/canary-head
   retries: 3

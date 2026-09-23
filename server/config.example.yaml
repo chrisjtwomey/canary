@@ -64,10 +64,14 @@ client:             # what the board runs, not what this server does
     #   asset: firmware.bin
     #   token: ""           # private repo; prefer CLIENT_FIRMWARE_SOURCE_TOKEN
 
-mqtt:
+mqtt:               # each board logs to <prefix>/<board>; the Logs view shows them
   enabled: false
   host: localhost
   port: 1883
-  topic: mqtt/canary
+  prefix: mqtt/canary
+
+logs:               # what each board logs over MQTT, kept for the Logs view
+  # path: board-logs.db # relative to this file
+  keep_days: 7        # older lines are deleted, 0 keeps all
 
 debug: false

@@ -18,12 +18,13 @@ from datetime import datetime
 from typing import Callable
 
 import yaml
-from epd_server import DisplayServer, ReadingsStore, align_process_timezone
+from epd_server import DisplayServer, LogStore, ReadingsStore, align_process_timezone
 from epd_server.config import (ConfigError, CoreConfig, get_prop_by_keys, load_core_config,
                                load_yaml)
 from epd_server.source import CompositeSource, IngestSource
 
 from about import About
+from board_logs import LogsQuery
 from config_page import config_blueprint
 from pages.air import AirPage
 from pages.breathe import BreathePage
@@ -125,6 +126,8 @@ class Settings:
     calibration_days: float
     status_path: str
     status_days: float
+    logs_path: str
+    logs_days: float
     altitude_m: float
     posts: PostSchedule
 
@@ -138,6 +141,7 @@ def load_settings(config: dict) -> Settings:
     """
     core = load_core_config(config, default_display=DEFAULT_DISPLAY,
                             default_firmware_product="canary-head",
+                            default_mqtt_prefix="mqtt/canary",
                             base_dir=cwd,
                             default_width=1280, default_height=720)
     kind = get_prop_by_keys(config, "source", "kind", default="mock")
@@ -161,6 +165,8 @@ def load_settings(config: dict) -> Settings:
         calibration_days=float(get_prop_by_keys(config, "calibration", "keep_days", default=3)),
         status_path=str(get_prop_by_keys(config, "status", "path", default="status.db")),
         status_days=float(get_prop_by_keys(config, "status", "keep_days", default=7)),
+        logs_path=str(get_prop_by_keys(config, "logs", "path", default="board-logs.db")),
+        logs_days=float(get_prop_by_keys(config, "logs", "keep_days", default=7)),
         altitude_m=float(get_prop_by_keys(config, "site", "altitude_m", default=0)),
         posts=make_posts(config, core.server.timezone),
     )
@@ -251,6 +257,8 @@ def main():
     history = HistoryQuery(make_history(between, settings.altitude_m), tz, now=clock)
     readings = ReadingsQuery(between, now=clock)
     status = StatusSource(reports)
+    board_logs = LogStore(os.path.join(cwd, settings.logs_path), keep_days=settings.logs_days)
+    logs = LogsQuery(board_logs, tz)
 
     try:
         server = DisplayServer(
@@ -262,10 +270,11 @@ def main():
             port=core.server.port,
             mqtt=core.mqtt,
             mqtt_client_id="canary-server",
+            client_logs=board_logs,
             ingest={"sensor-readings": ingest.accept, "calibration": calibration.accept},
             queries={"calibration": calibration.answer, "about": about.answer,
                      "history": history.answer, "sensor-readings": readings.answer,
-                     "status": lambda args: status.status()},
+                     "status": lambda args: status.status(), "logs": logs.answer},
             firmware=core.firmware,
             header_prefix="Canary",
             server_version=about.version,
@@ -276,11 +285,12 @@ def main():
     except ValueError as exc:
         log.error(str(exc))
         sys.exit(1)
-    server.app.register_blueprint(web_blueprint(pages, source))
+    server.app.register_blueprint(web_blueprint(pages, source, logging_on=core.mqtt.enabled))
     stores = {
         "sensor-readings": Transfer("sensor-readings", os.path.join(cwd, settings.store_path)),
         "board-reports": Transfer("board-reports", status_store.path),
         "calibration": Transfer("calibration", calibration.path, "calibration"),
+        "board-logs": Transfer("board-logs", board_logs.path, "logs"),
     }
     server.app.register_blueprint(config_blueprint(pages, os.path.join(cwd, "config.yaml"),
                                                    check_config, restart_soon, stores))

@@ -216,6 +216,176 @@ body.web {
   background: var(--paper);
 }
 
+/* ── Logs ──────────────────────────────────────────────────────── */
+/* The page is as tall as the window, and only the log scrolls, so the
+   filters stay in reach and the end of the log is the end of the page. */
+body.web.logs {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.logs .bar {
+  flex: none;
+  width: 100%;
+}
+
+.logview {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 16px 24px 12px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  color: var(--ink-mid);
+}
+
+.logview .banner a {
+  color: var(--ink);
+}
+
+.logview .filters {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.logview select,
+.logview input[type="search"] {
+  font: inherit;
+  font-size: 16px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1.5px solid var(--ink-mid);
+  border-radius: 18px;
+  padding: 6px 14px;
+}
+
+.logview input[type="search"] {
+  flex: 1;
+  min-width: 10em;
+}
+
+.logview .log {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  border-top: 2px solid var(--ink-faint);
+  border-bottom: 2px solid var(--ink-faint);
+}
+
+.logview .log:focus-visible {
+  outline: 2px solid var(--ink-mid);
+  outline-offset: 2px;
+}
+
+.logview ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.logview .line {
+  display: grid;
+  grid-template-columns: 6em 9em minmax(0, 1fr);
+  column-gap: 12px;
+  padding: 2px 0;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.logview .line .at,
+.logview .line .board {
+  color: var(--ink-mid);
+  white-space: nowrap;
+}
+
+.logview .line .text {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.logview .lv-debug { color: var(--ink-mid); }
+.logview .lv-warning { color: var(--ink); }
+.logview .lv-error,
+.logview .lv-critical { color: var(--ink); font-weight: 700; }
+
+.logview .day {
+  padding: 12px 0 4px;
+  font-size: 14px;
+  font-style: italic;
+  color: var(--ink-mid);
+}
+
+.logview .earlier,
+.logview .newest {
+  font: inherit;
+  font-size: 15px;
+  font-style: italic;
+  color: var(--ink-soft);
+  background: var(--paper);
+  border: 1.5px solid var(--ink-mid);
+  border-radius: 18px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+.logview .earlier {
+  display: block;
+  margin: 10px auto;
+}
+
+.logview .newest {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  color: var(--paper);
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+.logview [hidden] {
+  display: none;
+}
+
+.logview .empty {
+  margin: 24px 0;
+  font-style: italic;
+}
+
+.logview .status {
+  flex: none;
+  min-height: 1.2em;
+  margin: 0;
+  font-size: 14px;
+  font-style: italic;
+}
+
+@media (max-width: 640px) {
+  .logview {
+    padding: 12px 16px 8px;
+  }
+
+  .logview .line {
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 4px 0;
+  }
+
+  .logview .line .text {
+    grid-column: 1 / -1;
+  }
+}
+
 /* ── The explorer ────────────────────────────────────────────── */
 .explorer {
   max-width: 1280px;

@@ -141,7 +141,7 @@ def menu_bar(a: Airium, pages: list[EnvPage], browse_href: str, current: str) ->
         with a.div(klass="top"):
             a.a(klass="brand label", href=browse_href or "./", _t="Canary")
             with a.div(klass="views"):
-                for view, words in (("explore", "Explore"), ("config", "Config")):
+                for view, words in (("explore", "Explore"), ("logs", "Logs"), ("config", "Config")):
                     extra = {"aria-current": "page"} if current == view else {}
                     a.a(klass=f"{view}-link", href=view, _t=words, **extra)
         with a.div(klass="here"):
@@ -244,8 +244,48 @@ def explore_html(pages: list[EnvPage]) -> str:
     return str(a)
 
 
-def web_blueprint(pages: list[EnvPage], source: DataSource) -> Blueprint:
-    """The /web routes for ``pages``, each built from ``source`` when asked for."""
+# The level filter's choices: a level keeps the lines at it and above.
+LEVEL_CHOICES = (("", "All levels"), ("DEBUG", "Debug and above"), ("INFO", "Info and above"),
+                 ("NOTICE", "Notice and above"), ("WARNING", "Warnings and above"),
+                 ("ERROR", "Errors and above"), ("CRITICAL", "Critical only"))
+
+
+def logs_html(pages: list[EnvPage], logging_on: bool) -> str:
+    """What the boards log, newest at the end. logs.js asks /logs for the
+    lines and adds new ones as they arrive."""
+    a = Airium()
+    a("<!DOCTYPE html>")
+    with a.html(lang="en"):
+        page_head(a, "Canary \u00b7 Logs")
+        with a.body(klass="web logs"):
+            menu_bar(a, pages, "./", "logs")
+            with a.main(klass="logview"):
+                if not logging_on:
+                    a.p(klass="banner", id="logging-off",
+                        _t='Board logging is off. Turn it on in <a href="config#mqtt">Config</a>.')
+                with a.div(klass="filters"):
+                    with a.select(id="board", **{"aria-label": "Board"}):
+                        a.option(value="", _t="All boards")
+                    with a.select(id="level", **{"aria-label": "Level"}):
+                        for value, words in LEVEL_CHOICES:
+                            a.option(value=value, _t=words)
+                    a.input(type="search", id="find", placeholder="Find text",
+                            autocomplete="off", spellcheck="false", **{"aria-label": "Find text"})
+                with a.div(klass="log", id="log", tabindex="0", **{"aria-label": "Board log"}):
+                    a.button(type="button", id="earlier", klass="earlier", hidden="hidden",
+                             _t="Show earlier lines")
+                    a.ol(id="lines", _t="")
+                    a.p(klass="empty", id="empty", hidden="hidden", _t="")
+                a.p(klass="status", id="status", _t="", **{"aria-live": "polite"})
+                a.button(type="button", id="newest", klass="newest", hidden="hidden",
+                         _t="New lines below")
+            a.script(src="logs.js")
+    return str(a)
+
+
+def web_blueprint(pages: list[EnvPage], source: DataSource, logging_on: bool = True) -> Blueprint:
+    """The /web routes for ``pages``, each built from ``source`` when asked
+    for. ``logging_on`` says whether boards' MQTT logs reach this server."""
     bp = Blueprint("web", __name__, url_prefix="/web")
     by_name = {p.name: p for p in pages}
 
@@ -256,6 +296,10 @@ def web_blueprint(pages: list[EnvPage], source: DataSource) -> Blueprint:
     @bp.route("/explore")
     def explore():
         return explore_html(pages)
+
+    @bp.route("/logs")
+    def logs():
+        return logs_html(pages, logging_on)
 
     @bp.route("/<path:name>")
     def page_or_asset(name: str):
