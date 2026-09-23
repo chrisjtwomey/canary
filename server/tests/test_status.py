@@ -44,6 +44,31 @@ def test_reports_are_kept_in_the_store_and_pruned(tmp_path):
                                            "client": {"rssi": -70}}
 
 
+def test_a_restart_brings_back_each_boards_newest_report(tmp_path):
+    """The store outlives the server, so the pages need not wait for each
+    board to post again before they have something to show."""
+    store = ReadingsStore(tmp_path / "status.db")
+    before = DeviceReports(now=lambda: 2000.0, store=store)
+    before.accept({"ts": 1000, "device": "canary-dock", "client": {"rssi": -70}})
+    before.accept({"ts": 1600, "device": "canary-dock", "client": {"rssi": -65}})
+    before.accept({"ts": 1500, "device": "canary-head", "client": {"rssi": -60}})
+
+    after = DeviceReports(now=lambda: 2000.0, store=store)
+    assert after.devices() == ["canary-dock", "canary-head"]
+    assert after.device("canary-dock") == {"doc": {"ts": 1600, "device": "canary-dock",
+                                                    "client": {"rssi": -65}}, "age_s": 400}
+    assert after.device("canary-head")["age_s"] == 500
+    assert after.count == 3 and after.changes == {}
+
+
+def test_a_restart_brings_back_nothing_the_store_has_pruned(tmp_path):
+    store = ReadingsStore(tmp_path / "status.db")
+    DeviceReports(now=lambda: 100.0, store=store).accept(
+        {"ts": 100, "device": "canary-head", "client": {}})
+    after = DeviceReports(now=lambda: 3 * 86400.0, store=store, keep_days=1)
+    assert after.devices() == [] and after.latest is None
+
+
 def test_a_report_without_a_client_block_is_not_stored(tmp_path):
     store = ReadingsStore(tmp_path / "status.db")
     reports = DeviceReports(now=lambda: 1000.0, store=store)

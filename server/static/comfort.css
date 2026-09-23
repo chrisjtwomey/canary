@@ -48,3 +48,24 @@
   font-size: 4.4cqw;
   margin-top: 3cqh;
 }
+
+@container (orientation: portrait) {
+  .page-comfort .title { left: 6cqw; top: 4cqh; }
+  .page-comfort .stamp { right: 6cqw; top: 4cqh; }
+  .page-comfort .stats {
+    left: 6cqw;
+    top: 9cqh;
+    width: 88cqw;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 4cqw;
+  }
+  .page-comfort .stat { margin-bottom: 2cqh; }
+  .page-comfort .stat .hero { font-size: 20cqw; }
+  .page-comfort .stat .label { font-size: 3cqw; }
+  .page-comfort .detail,
+  .page-comfort .verdict { grid-column: 1 / -1; white-space: normal; }
+  .page-comfort .detail { font-size: 4.2cqw; margin-top: 0; }
+  .page-comfort .verdict { font-size: 9.5cqw; margin-top: 2cqh; }
+  .page-comfort .chart { left: 4cqw; right: 4cqw; top: 46cqh; width: auto; height: 50cqh; }
+}

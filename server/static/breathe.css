@@ -48,3 +48,13 @@
   font-style: italic;
   color: var(--ink-soft);
 }
+
+@container (orientation: portrait) {
+  .page-breathe .title { left: 6cqw; top: 4cqh; }
+  .page-breathe .stamp { right: 6cqw; top: 4cqh; }
+  .page-breathe .hero { left: 5cqw; top: 9cqh; font-size: 34cqw; }
+  .page-breathe .verdict { left: 6cqw; top: 29cqh; font-size: 9.5cqw; }
+  .page-breathe .details { left: 6cqw; top: 37cqh; width: 88cqw; font-size: 4.2cqw; }
+  .page-breathe .spark-label { right: 6cqw; top: 51cqh; font-size: 3.2cqw; }
+  .page-breathe .spark { left: 6cqw; right: 6cqw; top: 55cqh; width: auto; height: 32cqh; }
+}

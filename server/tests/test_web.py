@@ -52,6 +52,18 @@ class TestBrowse:
         assert (attr(frame, "src"), attr(frame, "width"), attr(frame, "height")) == \
             (pages[0].name, "1280", "720")
 
+    def test_a_phone_gets_one_row_of_menu_that_steps_and_unfolds(self, client, pages):
+        soup = soup_of(client.get("/web/"))
+        assert one(soup, ".bar input#menu-open")["type"] == "checkbox"
+        assert one(soup, ".bar .here #here-name").get_text() == (pages[0].title or pages[0].name)
+        assert one(soup, ".bar .here #prev") and one(soup, ".bar .here #next")
+        assert attr(one(soup, ".bar .here label.pages-toggle"), "for") == "menu-open"
+
+    def test_a_view_that_is_not_a_page_unfolds_but_does_not_step(self, client):
+        soup = soup_of(client.get("/web/explore"))
+        assert one(soup, ".bar .here label.pages-toggle").get_text() == "Pages"
+        assert soup.select_one(".bar .here #prev") is None
+
     def test_web_without_the_slash_leads_to_the_browse_page(self, client):
         rsp = client.get("/web")
         assert rsp.status_code in (301, 308) and rsp.headers["Location"].endswith("/web/")
@@ -64,6 +76,14 @@ class TestLivePage:
         assert one(soup, "div.page.page-breathe") is not None
         assert one(soup, "#co2 .value").get_text() == f"{latest['co2_ppm']:,.0f}"
         assert one(soup, "script#charts").get_text().startswith("[")
+
+    def test_a_page_asked_for_upright_is_drawn_at_the_portrait_size(self, client, pages):
+        upright = client.get("/web/breathe?shape=portrait").get_data(as_text=True)
+        assert "--outer-width:540px;--outer-height:960px;" in upright
+        panel = client.get("/web/breathe").get_data(as_text=True)
+        assert "--outer-width:1280px;--outer-height:720px;" in panel
+        breathe = next(p for p in pages if p.name == "breathe")
+        assert (breathe.image_width, breathe.image_height) == (1280, 720), "the panel's page is untouched"
 
     def test_the_regenerated_page_keeps_its_own_document(self, client, pages):
         breathe = next(p for p in pages if p.name == "breathe")

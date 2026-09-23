@@ -8,8 +8,12 @@
   var stage = document.getElementById('stage');
   var links = Array.prototype.slice.call(document.querySelectorAll('nav a[data-page]'));
   var names = links.map(function (a) { return a.getAttribute('data-page'); });
-  var W = +frame.getAttribute('width');
-  var H = +frame.getAttribute('height');
+  // A phone gets each page upright, at the size web.py's PORTRAIT renders.
+  var PANEL = { w: +frame.getAttribute('width'), h: +frame.getAttribute('height') };
+  var PORTRAIT = { w: 540, h: 960 };
+  var phone = window.matchMedia('(max-width: 640px)');
+
+  function size() { return phone.matches ? PORTRAIT : PANEL; }
 
   function current() {
     var name = decodeURIComponent(location.hash.slice(1));
@@ -19,7 +23,11 @@
   function show() {
     var name = current();
     var link = links[names.indexOf(name)];
-    if (frame.getAttribute('src') !== name) frame.setAttribute('src', name);
+    var src = phone.matches ? name + '?shape=portrait' : name;
+    if (frame.getAttribute('src') !== src) frame.setAttribute('src', src);
+    frame.setAttribute('width', size().w);
+    frame.setAttribute('height', size().h);
+    fit();
     links.forEach(function (a) {
       if (a === link) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
@@ -28,13 +36,15 @@
     var radio = span && document.getElementById(span.id.replace('links-', 'span-'));
     if (radio) radio.checked = true;
     frame.title = link.textContent;
+    document.getElementById('here-name').textContent = link.textContent;
+    document.getElementById('menu-open').checked = false;
     document.title = link.textContent + ' · Canary';
   }
 
   function fit() {
-    var k = Math.min(1, stage.clientWidth / W);
+    var k = Math.min(1, stage.clientWidth / size().w);
     frame.style.transform = 'scale(' + k + ')';
-    stage.style.height = Math.ceil(H * k) + 'px';
+    stage.style.height = Math.ceil(size().h * k) + 'px';
   }
 
   function step(by) {
@@ -66,7 +76,10 @@
     });
   });
 
+  document.getElementById('prev').addEventListener('click', function () { step(-1); });
+  document.getElementById('next').addEventListener('click', function () { step(1); });
   window.addEventListener('hashchange', show);
+  phone.addEventListener('change', show);
   window.addEventListener('resize', fit);
   document.addEventListener('keydown', onKey);
   // A click on the page gives it the focus, and its keys with it.

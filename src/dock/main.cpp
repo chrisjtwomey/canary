@@ -356,7 +356,7 @@ static char     readingsURL[300];    // the server's /sensor-readings; empty dis
 static uint32_t lastSampleMs = 0;
 static char     json[FileBacklog::kMaxDoc];
 static char     clientJson[768];
-static char     healthJsonBuf[320];
+static char     healthJsonBuf[448];
 static char     withClient[FileBacklog::kMaxDoc + 768 + 32];
 static char     body[sizeof(withClient) + sizeof(healthJsonBuf) + 16];
 static char     ipText[16];

@@ -65,6 +65,9 @@ body {
   padding-bottom: var(--inner-pad-bottom, 0px);
   padding-left: var(--inner-pad-left, 0px);
   background: var(--paper);
+  /* So a page can change its own box upright: a container query reaches
+     only what is inside the container it asks about. */
+  container: canvas / size;
 }
 
 /* Every page lays out inside this box. It is a size container, so
@@ -195,4 +198,14 @@ canvas {
 .page-notice .detail {
   font-size: 2.1cqw;
   margin-top: 2cqh;
+}
+
+/* ── Upright ─────────────────────────────────────────────────── */
+/* A phone asks for a page taller than wide (web.py's PORTRAIT). Each page's
+   stylesheet stacks its parts down the page; these are the sizes they share.
+   The panel is always landscape, so none of this reaches it. */
+@container (orientation: portrait) {
+  .label { font-size: 3.2cqw; }
+  .stamp { font-size: 3.2cqw; }
+  .footer { left: 6cqw; right: 6cqw; bottom: 3cqh; font-size: 3.8cqw; }
 }

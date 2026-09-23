@@ -108,3 +108,29 @@
   top: 0;
   height: 100%;
 }
+
+
+/* Upright: one column, each measurement's number on a line of its own
+   above its day. The "now" heading goes: the numbers say it. */
+@container canvas (orientation: portrait) {
+  .page-day {
+    --range-w: 34cqw;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto repeat(4, auto minmax(0, 1fr)) 5cqh;
+    padding: 0 5cqw 2cqh 5cqw;
+  }
+  .page-day .head-now { display: none; }
+  .page-day .head-hist { padding-top: 4cqh; }
+  .page-day .now {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: baseline;
+    padding-top: 1cqh;
+  }
+  .page-day .now .label { font-size: 3cqw; margin-bottom: 0; }
+  .page-day .now .hero { font-size: 10cqw; }
+  .page-day .hist { border-top: none; gap: 3cqw; }
+  .page-day .range { font-size: 3.4cqw; column-gap: 1.6cqw; row-gap: 0.4cqh; }
+  .page-day .range .tag { font-size: 2.4cqw; }
+  .page-day .axis { grid-column: 1; }
+}

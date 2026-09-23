@@ -50,6 +50,18 @@ class DeviceReports:
         self.changes: dict[str, dict] = {}       # device -> {"from", "to", "at", "older"}
         self.refusals: dict[str, dict] = {}      # device -> {"version", "count", "at"}
         self.count = 0
+        if store is not None:
+            self._restore()
+
+    def _restore(self) -> None:
+        """Take each board's newest report back from the store, so a restart
+        does not blank the pages until every board posts again. A restored
+        report's own ``ts`` stands in for when it arrived."""
+        if self.keep_days:
+            self.store.prune(int(self.now() - self.keep_days * 86400))
+        for doc in self.store.latest_each():
+            self.by_device[str(doc.get("device", ""))] = {"doc": doc, "received": doc["ts"]}
+        self.count = self.store.count()
 
     @property
     def latest(self) -> dict | None:

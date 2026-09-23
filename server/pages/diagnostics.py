@@ -2,20 +2,21 @@
 
 Both boards post a ``client`` object with every document. DiagnosticsPage
 shows the newest from each; DiagnosticsTracePage draws both boards' free
-memory and signal, and the dock's queue, over the last 24 hours, with the
-restarts each counted. HealthTracePage draws the dock's ``health`` object
+memory, and the dock's queue, over the last 24 hours, with the restarts each
+counted. HealthTracePage draws the dock's ``health`` object
 over the same day: how its sensors fare rather than what they measure.
 """
 from __future__ import annotations
 
 import os
+from datetime import datetime
 
 from airium import Airium
 
 import math
 
-from metrics import (IAQ_ACCURACY, fmt_bytes, fmt_duration, fmt_int, fmt_stamp, hour_ticks,
-                     rssi_quality)
+from metrics import (IAQ_ACCURACY, fmt_bytes, fmt_duration, fmt_hm, fmt_int, fmt_stamp,
+                     hour_ticks, rssi_quality)
 from pages.base import EnvPage
 
 # key in client.sensors, its name, and the valid flag that says it is warm
@@ -135,10 +136,11 @@ class DiagnosticsPage(EnvPage):
                     kv(a, "heap", f"{fmt_bytes(c.get('heap_free', 0))} free of {fmt_bytes(c.get('heap_size', 0))}", id=f"{k}-heap")
                 with a.div(klass="meter"):
                     a.canvas(id=f"{k}-heap-meter")
-                with a.div(klass="kv"):
-                    kv(a, "psram", f"{fmt_bytes(c.get('psram_free', 0))} free of {fmt_bytes(c.get('psram_size', 0))}", id=f"{k}-psram")
-                with a.div(klass="meter"):
-                    a.canvas(id=f"{k}-psram-meter")
+                if c.get("psram_size"):
+                    with a.div(klass="kv"):
+                        kv(a, "psram", f"{fmt_bytes(c.get('psram_free', 0))} free of {fmt_bytes(c['psram_size'])}", id=f"{k}-psram")
+                    with a.div(klass="meter"):
+                        a.canvas(id=f"{k}-psram-meter")
                 queue = queue_of(c)
                 if queue is not None:
                     held, capacity = queue.get("held", 0), queue.get("capacity", 0)
@@ -220,8 +222,10 @@ class DiagnosticsPage(EnvPage):
             for key in ("heap", "psram"):
                 size = c.get(f"{key}_size") or 0
                 free = c.get(f"{key}_free") or 0
+                if key == "psram" and not size:
+                    continue
                 specs.append({"kind": "meter", "canvas": f"#{k}-{key}-meter",
-                              "fraction": (size - free) / size if size else 0.0})
+                              "fraction": free / size if size else 0.0})
             queue = queue_of(c)
             if queue is not None:
                 capacity = queue.get("capacity") or 0
@@ -238,10 +242,6 @@ def free_memory_kb(c: dict) -> float | None:
 def queued(c: dict) -> float | None:
     queue = queue_of(c)
     return None if queue is None else queue.get("held")
-
-
-def signal(c: dict) -> float | None:
-    return c.get("rssi")
 
 
 class Trace:
@@ -275,13 +275,10 @@ class Trace:
 
 
 # The trace page's charts, tallest first. Free memory is what a leak shows
-# in; the queue is empty unless the server was away; the signal barely moves
-# once the dock is placed.
+# in; the queue is empty unless the server was away.
 TRACES = (
     Trace("heap", "free memory, KB", free_memory_kb, y=(0, 320), step=100),
     Trace("queue", "queue, readings", queued),
-    Trace("rssi", "Wi-Fi signal, dBm", signal, y=(-90, -40), step=20,
-          guides=((-55, "strong"), (-75, "weak"))),
 )
 
 # Which board is the dark line when both are on a chart: the dock, which is
@@ -290,8 +287,8 @@ TRACE_ORDER = ("canary-dock", "canary-head")
 
 
 class DiagnosticsTracePage(EnvPage):
-    """Both boards' free memory and signal, and the dock's queue, over the
-    last day, with each board's restarts."""
+    """Both boards' free memory, and the dock's queue, over the last day,
+    with each board's restarts."""
     title = "Diagnostics"
     stylesheet = "diagnostics-trace.css"
     css_class = "diagnostics-trace"
@@ -397,24 +394,93 @@ def health_points(reports: list[dict], value, start: int) -> list[list]:
     return pts
 
 
-# The health trace page's charts: a count added up over the day, or a flag.
+# The faults the health page counts: a count added up over the day, or a
+# flag whose false spans are the fault. Each has its words for one and for
+# many, and the verdict it gives when it leads. The first is the worst: a
+# restart outranks any number of damaged answers.
 HEALTH_TRACES = (
-    ("restarts", "sensor restarts", health_value("restarts"), True),
-    ("pmsa003i", "PMSA003I damaged frames", health_value("checksum_failures", "pmsa003i"), True),
-    ("shtc3", "SHTC3 checksum failures", health_value("checksum_failures", "shtc3"), True),
-    ("heater", "BME688 heater at temperature", health_value("bme688", "heat_stable"), False),
+    ("restarts", ("restart", "restarts"), "A sensor restarted.",
+     health_value("restarts"), True),
+    ("pmsa003i", ("damaged PMSA003I frame", "damaged PMSA003I frames"), "PMSA003I dropping frames.",
+     health_value("checksum_failures", "pmsa003i"), True),
+    ("shtc3", ("SHTC3 checksum failure", "SHTC3 checksum failures"), "SHTC3 answers damaged.",
+     health_value("checksum_failures", "shtc3"), True),
+    ("scd41", ("SCD41 checksum failure", "SCD41 checksum failures"), "SCD41 answers damaged.",
+     health_value("checksum_failures", "scd41"), True),
+    ("heater", ("BME688 heater cold once", "BME688 heater cold {n} times"), "BME688 heater ran cold.",
+     health_value("bme688", "heat_stable"), False),
 )
+# Faults in one quarter hour stack outward from the dial; past six the dots
+# stop, and the number above the dial still counts them all.
+SLOT_S = 15 * 60
+MAX_STACK = 6
+
+
+def rises(pts: list[list[int]]) -> list[list[int]]:
+    """Each time a count went up, with how far it went up."""
+    return [[after_ts, after - before]
+            for (_, before), (after_ts, after) in zip(pts, pts[1:]) if after > before]
+
+
+def false_spans(pts: list[list[int]], until: int) -> list[list[int]]:
+    """The spans a flag read false over, each running to the next report."""
+    out: list[list[int]] = []
+    for i, (ts, value) in enumerate(pts):
+        if value:
+            continue
+        end = pts[i + 1][0] if i + 1 < len(pts) else until
+        if out and out[-1][1] == ts:
+            out[-1][1] = end
+        else:
+            out.append([ts, end])
+    return out
+
+
+def day_fraction(ts: int, tz) -> float:
+    """Where a time falls on a 24-hour clock face: 0 at midnight, 0.5 at noon."""
+    t = datetime.fromtimestamp(ts, tz)
+    return (t.hour * 3600 + t.minute * 60 + t.second) / 86400
+
+
+def arcs(spans: list[list[int]], tz) -> list[list[float]]:
+    """Spans of time as arcs of the clock face, cut at midnight."""
+    out: list[list[float]] = []
+    for t0, t1 in spans:
+        if t1 - t0 >= 86400:
+            return [[0.0, 1.0]]
+        f0, f1 = day_fraction(t0, tz), day_fraction(t1, tz)
+        out.extend([[f0, f1]] if f0 <= f1 else [[f0, 1.0], [0.0, f1]])
+    return out
+
+
+def covered_spans(pts: list[list[int]], gap: int) -> list[list[int]]:
+    """The spans reports arrived over, cut wherever more than ``gap`` passed
+    between two of them."""
+    out: list[list[int]] = []
+    for ts, _ in pts:
+        if out and ts - out[-1][1] <= gap:
+            out[-1][1] = ts
+        else:
+            out.append([ts, ts])
+    return out
+
+
 HEALTH_DEVICE = "canary-dock"
 
 
 class HealthTracePage(EnvPage):
-    """How the dock's sensors fared over the last day: restarts, damaged
-    answers and the gas heater, with the SCD41's settings above them."""
+    """How the dock's sensors fared over the last day, as the other pages
+    say a measurement: a number, a verdict and one drawing. The number counts
+    the faults, and the drawing puts each on a 24-hour clock face. Below, what
+    each sensor reports of its own settings."""
     title = "Sensor health"
-    stylesheet = "diagnostics-trace.css"
+    stylesheet = "health.css"
     css_class = "health-trace"
     requires = ("status", "status_history_24h")
     HOURS = 24
+    # Reports arrive every ten minutes, so a longer silence is a gap in the
+    # record rather than the next report running late.
+    GAP_S = 20 * 60
 
     def _dock(self, status: dict | None, history: dict) -> tuple[dict | None, list[dict]]:
         """The dock's newest health object and its reports of the day that carry one."""
@@ -426,7 +492,7 @@ class HealthTracePage(EnvPage):
     def body(self, a: Airium, **data) -> None:
         status: dict | None = data["status"]
         newest, reports = self._dock(status, data["status_history_24h"] or {})
-        a.div(klass="title label", _t="Sensors, last 24 hours")
+        a.div(klass="title label", _t="Sensor health")
         if status is None:
             a.div(klass="verdict", _t="No report from either board yet.")
             a.div(klass="detail", _t="Each posts once it connects.")
@@ -435,32 +501,69 @@ class HealthTracePage(EnvPage):
             a.div(klass="verdict", _t="No health report from the dock yet.")
             a.div(klass="detail", _t="The dock sends one with every reading.")
             return
-        a.div(klass="stamp", _t=fmt_stamp(status["boards"][HEALTH_DEVICE]["doc"]["ts"], self.tz))
-        end = status["boards"][HEALTH_DEVICE]["doc"]["ts"]
-        added = since_start(health_points(reports, health_value("checksum_failures", "scd41"),
-                                          end - self.HOURS * 3600))
-        with a.div(klass="stats"):
-            self._scd41(a, newest, added[-1][1] if added else 0)
-        with a.div(klass="charts"):
-            for key, title, _value, _counted in HEALTH_TRACES:
-                with a.div(klass=f"chart chart-{key}"):
-                    a.div(klass="label", _t=title)
-                    a.canvas(id=f"health-{key}")
+        doc = status["boards"][HEALTH_DEVICE]["doc"]
+        end = doc["ts"]
+        start = end - self.HOURS * 3600
+        tallies = self._tallies(reports, start, end)
+        total = sum(t["n"] for t in tallies)
+
+        a.div(klass="stamp", _t=fmt_stamp(end, self.tz))
+        a.div(klass="span", _t=f"last {self.HOURS} hours")
+        with a.div(klass="hero", id="faults"):
+            a.span(klass="value", _t=fmt_int(total))
+            a.span(klass="unit", _t="fault" if total == 1 else "faults")
+        worst = next((t for t in tallies if t["key"] == "restarts" and t["n"]), None) or \
+            max(tallies, key=lambda t: t["n"])
+        a.div(klass="verdict", _t=worst["verdict"] if total else "All sensors well.")
+
+        said = [t["words"] for t in tallies if t["n"]]
+        detail = [(", ".join(said) + ".") if said else "No faults."]
+        first = min((c[0] for t in tallies for c in t["covered"]), default=None)
+        if first is not None and first - start > self.GAP_S:
+            detail.append(f"No reports before {fmt_hm(first, self.tz)}.")
+        a.div(klass="detail", _t=" ".join(detail))
+
+        with a.div(klass="dial"):
+            a.canvas(id="health-dial")
+        a.div(klass="caption", _t="the last 24 hours: "
+                                  "large dots restarts, small dots damaged answers")
+        self._settings(a, newest, (doc.get("client") or {}).get("bsec") or {})
 
     @staticmethod
-    def _scd41(a: Airium, health: dict, failures: int) -> None:
-        """What the SCD41 said at its last start, which decides its accuracy,
-        and its damaged answers of the day: too few to be worth a chart."""
+    def _settings(a: Airium, health: dict, bsec: dict) -> None:
+        """What each sensor reports of its own settings, a row each. A sensor
+        that has not reported them yet says so rather than dropping out."""
         scd41 = health.get("scd41") or {}
-        parts = [f"serial {scd41['serial']}"] if scd41.get("serial") else ["settings not read"]
+        bme = health.get("bme688") or {}
+        pm = health.get("pmsa003i") or {}
+        shtc3 = health.get("shtc3") or {}
+        rows = {"SCD41": [], "BME688": [], "PMSA003I": [], "SHTC3": []}
+        if scd41.get("serial"):
+            rows["SCD41"].append(f"serial {scd41['serial']}")
         if "asc" in scd41:
-            parts.append("self-calibration " + ("on" if scd41["asc"] else "off"))
+            rows["SCD41"].append("self-calibration " + ("on" if scd41["asc"] else "off"))
         if "offset_c" in scd41:
-            parts.append(f"offset {scd41['offset_c']:.1f} °C")
-        parts.append(f"{failures} checksum failure{'s' if failures != 1 else ''} today")
-        with a.div(klass="stat", id="scd41"):
-            a.span(klass="name", _t="SCD41")
-            a.span(klass="detail", _t=", ".join(parts))
+            rows["SCD41"].append(f"offset {scd41['offset_c']:.1f} °C")
+        if "pressure_hpa" in scd41:
+            rows["SCD41"].append(f"pressure {fmt_int(scd41['pressure_hpa'])} hPa")
+        if "heater_c" in bme and "heater_ms" in bme:
+            rows["BME688"].append(f"heater {bme['heater_c']} °C for {bme['heater_ms']} ms")
+        if "restored" in bsec:
+            rows["BME688"].append("BSEC state " + ("restored" if bsec["restored"] else "new"))
+        if "version" in pm:
+            rows["PMSA003I"].append(f"version {pm['version']}")
+        if "error" in pm:
+            rows["PMSA003I"].append("no error" if not pm["error"] else f"error {pm['error']}")
+        if shtc3.get("id"):
+            rows["SHTC3"].append(f"ID {shtc3['id']}")
+        if "low_power" in shtc3:
+            rows["SHTC3"].append("low-power mode" if shtc3["low_power"] else "normal mode")
+        with a.div(klass="settings", id="settings"):
+            a.div(klass="label", _t="Sensor settings")
+            with a.div(klass="rows"):
+                for name, parts in rows.items():
+                    a.span(klass="name", _t=name)
+                    a.span(klass="v", _t=" · ".join(parts) if parts else "not reported yet")
 
     def charts(self, **data) -> list[dict]:
         status: dict | None = data["status"]
@@ -469,21 +572,51 @@ class HealthTracePage(EnvPage):
             return []
         end = status["boards"][HEALTH_DEVICE]["doc"]["ts"]
         start = end - self.HOURS * 3600
-        ticks = hour_ticks(start, end, self.tz, 6)
-        specs = []
-        for key, _title, value, counted in HEALTH_TRACES:
+        tallies = self._tallies(reports, start, end)
+        return [{
+            "kind": "dial", "canvas": "#health-dial",
+            "covered": arcs(tallies[0]["covered"], self.tz),
+            "bands": arcs([b for t in tallies for b in t["bands"]], self.tz),
+            "dots": self._dots(tallies),
+            "now": day_fraction(end, self.tz),
+            "ticks": [{"f": h / 24, "label": f"{h:02d}"} for h in (0, 6, 12, 18)],
+        }]
+
+    def _dots(self, tallies: list[dict]) -> list[dict]:
+        """A dot for each counted fault, at the middle of its quarter hour,
+        and ``k`` for how many already sit there."""
+        stacks: dict[int, int] = {}
+        dots = []
+        for t in tallies:
+            for ts, n in t["events"]:
+                slot = ts // SLOT_S
+                for _ in range(n):
+                    k = stacks.get(slot, 0)
+                    if k >= MAX_STACK:
+                        break
+                    stacks[slot] = k + 1
+                    dots.append({"f": day_fraction(slot * SLOT_S + SLOT_S // 2, self.tz),
+                                 "k": k, "big": t["key"] == "restarts"})
+        return dots
+
+    def _tallies(self, reports: list[dict], start: int, end: int) -> list[dict]:
+        """Each fault's count over the window and the words for it: for a
+        count, where it rose and how far; for a flag, the spans it read false."""
+        out = []
+        for key, (one, many), verdict, value, counted in HEALTH_TRACES:
             pts = health_points(reports, value, start)
+            t = {"key": key, "verdict": verdict, "events": [], "bands": [],
+                 "covered": covered_spans(pts, self.GAP_S)}
             if counted:
                 pts = since_start(pts)
-                lo, hi, yticks = Trace(key, "", None).axis(max((p[1] for p in pts), default=0))
+                t["events"] = rises(pts)
+                t["n"] = pts[-1][1] if pts else 0
             else:
-                lo, hi, yticks = 0, 1, [0, 1]
-            specs.append({
-                "kind": "trace", "canvas": f"#health-{key}", "points": pts, "step": True,
-                "x": {"min": start, "max": end}, "y": {"min": lo, "max": hi},
-                "yticks": yticks, "guides": [],
-                "days": [{"x": t["x"]} for t in ticks],
-                "dayLabels": [{"x": t["x"], "label": t["label"]} for t in ticks],
-                "now": pts[-1] if pts else None,
-            })
-        return specs
+                t["bands"] = false_spans(pts, end)
+                t["n"] = len(t["bands"])
+            if key == "heater":
+                t["words"] = one if t["n"] == 1 else many.format(n=t["n"])
+            else:
+                t["words"] = f"{fmt_int(t['n'])} {one if t['n'] == 1 else many}"
+            out.append(t)
+        return out

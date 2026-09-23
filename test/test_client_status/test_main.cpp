@@ -90,16 +90,22 @@ static SensorHealth fullHealth() {
     h.scd41Read = true; h.scd41Serial = 0x9A3BC0FFEE41ull;
     h.ascKnown = true; h.asc = true;
     h.offsetKnown = true; h.offsetC = 4.0f;
+    h.pressureKnown = true; h.pressurePa = 101262;
+    h.bme688HeaterC = 300; h.bme688HeaterMs = 100;
+    h.pmSeen = true; h.pmVersion = 0x97; h.pmError = 0;
+    h.shtc3IdKnown = true; h.shtc3Id = 0x0887; h.shtc3LowPower = false;
     return h;
 }
 
-void test_health_carries_the_counts_the_bme688_and_the_scd41() {
-    char buf[320];
+void test_health_carries_the_counts_and_each_sensors_settings() {
+    char buf[448];
     TEST_ASSERT_TRUE(healthJson(fullHealth(), buf, sizeof(buf)) > 0);
     TEST_ASSERT_EQUAL_STRING(
         "{\"restarts\":2,\"checksum_failures\":{\"pmsa003i\":5,\"shtc3\":1,\"scd41\":0}"
-        ",\"bme688\":{\"gas_valid\":true,\"heat_stable\":false}"
-        ",\"scd41\":{\"serial\":\"9a3bc0ffee41\",\"asc\":true,\"offset_c\":4.0}}", buf);
+        ",\"bme688\":{\"gas_valid\":true,\"heat_stable\":false,\"heater_c\":300,\"heater_ms\":100}"
+        ",\"scd41\":{\"serial\":\"9a3bc0ffee41\",\"asc\":true,\"offset_c\":4.0,\"pressure_hpa\":1013}"
+        ",\"pmsa003i\":{\"version\":151,\"error\":0}"
+        ",\"shtc3\":{\"id\":\"0887\",\"low_power\":false}}", buf);
 }
 
 void test_health_leaves_out_what_is_not_known() {
@@ -107,7 +113,10 @@ void test_health_leaves_out_what_is_not_known() {
     h.bme688Seen = false;
     h.ascKnown = false;
     h.offsetKnown = false;
-    char buf[320];
+    h.pressureKnown = false;
+    h.pmSeen = false;
+    h.shtc3IdKnown = false;
+    char buf[448];
     healthJson(h, buf, sizeof(buf));
     TEST_ASSERT_NULL(strstr(buf, "bme688"));
     TEST_ASSERT_NOT_NULL(strstr(buf, "\"scd41\":{\"serial\":\"9a3bc0ffee41\"}"));
@@ -130,5 +139,8 @@ int main(int, char**) {
     RUN_TEST(test_client_object_is_spliced_before_the_closing_brace);
     RUN_TEST(test_splice_rejects_non_objects_and_small_buffers);
     RUN_TEST(test_url_origin_keeps_scheme_host_and_port);
+    RUN_TEST(test_health_carries_the_counts_and_each_sensors_settings);
+    RUN_TEST(test_health_leaves_out_what_is_not_known);
+    RUN_TEST(test_health_that_does_not_fit_writes_nothing);
     return UNITY_END();
 }

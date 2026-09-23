@@ -350,8 +350,19 @@ class TestDiagnostics:
                                                 "#dock-rssi-bars", "#dock-heap-meter", "#dock-psram-meter",
                                                 "#dock-queue-meter"]
         assert specs[3] == {"kind": "bars", "canvas": "#dock-rssi-bars", "filled": 3, "total": 4}
-        assert specs[4]["fraction"] == pytest.approx((327680 - 120000) / 327680)
+        # memory fills with what is free; the queue fills with what it holds
+        assert specs[4]["fraction"] == pytest.approx(120000 / 327680)
+        assert specs[5]["fraction"] == pytest.approx(4000000 / 4194304)
         assert specs[6]["fraction"] == pytest.approx(7 / 1480)
+
+    def test_a_board_without_psram_shows_no_psram_row(self, tz):
+        client = dict(HEAD_DOC["client"], psram_free=0, psram_size=0)
+        head = dict(HEAD_DOC, client=client)
+        status = dict(STATUS, boards={"canary-head": {"doc": head, "age_s": 5}})
+        soup, specs = render(DiagnosticsPage("diagnostics", tz=tz, width=WIDTH, height=HEIGHT),
+                             {"status": status})
+        assert soup.select_one("#head-psram") is None
+        assert [s["canvas"] for s in specs] == ["#head-rssi-bars", "#head-heap-meter"]
 
     def test_a_queue_before_its_capacity_is_known_is_a_count(self, tz):
         client = dict(DOCK_DOC["client"], backlog={"held": 0, "capacity": 0, "store": "psram"})
@@ -410,9 +421,9 @@ class TestDiagnosticsTrace:
         assert text(soup, "#head-stat .detail") == "up 6 min, 1 restart today"
         assert text(soup, "#dock-stat .detail") == "up 2 h 14 min, no restarts today"
         assert [el.get_text() for el in soup.select(".chart .label")] == \
-            ["free memory, KB", "queue, readings", "Wi-Fi signal, dBm"]
-        assert [s["canvas"] for s in specs] == ["#trace-heap", "#trace-queue", "#trace-rssi"]
-        heap, queue, rssi = specs
+            ["free memory, KB", "queue, readings"]
+        assert [s["canvas"] for s in specs] == ["#trace-heap", "#trace-queue"]
+        heap, queue = specs
         assert all(s["kind"] == "trace" for s in specs)
         assert heap["x"] == {"min": DOCK_DOC["ts"] - 86400, "max": DOCK_DOC["ts"]}
         # the dock is the dark line, the head the light one, on the same scale
@@ -421,9 +432,7 @@ class TestDiagnosticsTrace:
         assert heap["points2"][0][1] == pytest.approx(97.7, abs=0.05)
         assert heap["now"] == heap["points"][-1] and heap["now2"] == heap["points2"][-1]
         assert heap["y"] == {"min": 0, "max": 320} and heap["yticks"] == [0, 100, 200, 300]
-        assert len(rssi["points"]) == 144 and rssi["points"][0][1] == -61
-        assert [g["label"] for g in rssi["guides"]] == ["strong", "weak"]
-        assert len(rssi["dayLabels"]) == 4   # every six hours across a day
+        assert len(heap["dayLabels"]) == 4   # every six hours across a day
 
     def test_the_queue_is_the_docks_alone_on_an_axis_fitted_to_the_day(self, tz):
         specs = render(DiagnosticsTracePage("diagnostics-trace", tz=tz, width=WIDTH, height=HEIGHT),
@@ -448,6 +457,7 @@ class TestDiagnosticsTrace:
         assert specs == []
 
 
+from metrics import fmt_hm  # noqa: E402
 from pages.diagnostics import HealthTracePage, since_start  # noqa: E402
 
 
@@ -480,25 +490,74 @@ def test_a_count_from_the_docks_start_adds_up_across_a_restart():
 
 
 class TestHealthTrace:
-    def test_four_charts_and_the_scd41_settings(self, tz):
+    def test_a_number_a_verdict_and_a_dial(self, tz):
         page = HealthTracePage("health-trace", tz=tz, width=WIDTH, height=HEIGHT)
         assert page.requires == ("status", "status_history_24h")
         soup, specs = render(page, {"status": health_status(),
                                     "status_history_24h": health_history()})
-        assert text(soup, ".title") == "Sensors, last 24 hours"
-        assert text(soup, "#scd41 .detail") == \
-            "serial 9a3bc0ffee41, self-calibration on, offset 4.0 °C, 2 checksum failures today"
-        assert [s["canvas"] for s in specs] == \
-            ["#health-restarts", "#health-pmsa003i", "#health-shtc3", "#health-heater"]
-        restarts, pm, shtc3, heater = specs
-        assert all(s["step"] for s in specs), "counts and flags jump, so they are drawn in steps"
-        # One restart before the dock's own restart, none after: a total of 1.
-        assert restarts["points"][-1][1] == 1 and restarts["y"] == {"min": 0, "max": 10}
-        # 71 // 20 = 3 before the restart, 71 // 20 = 3 after it.
-        assert pm["points"][-1][1] == 6
-        assert shtc3["points"][-1][1] == 0
-        assert heater["y"] == {"min": 0, "max": 1} and heater["yticks"] == [0, 1]
-        assert [p[1] for p in heater["points"]].count(0) == 1
+        assert text(soup, ".title") == "Sensor health"
+        # 1 restart, 3 + 3 damaged frames, 1 + 1 SCD41 failures, one cold heater.
+        assert text(soup, "#faults .value") == "10" and text(soup, "#faults .unit") == "faults"
+        assert text(soup, ".verdict") == "A sensor restarted."
+        assert text(soup, ".detail") == ("1 restart, 6 damaged PMSA003I frames, "
+                                         "2 SCD41 checksum failures, BME688 heater cold once.")
+        [dial] = specs
+        assert dial["kind"] == "dial" and dial["canvas"] == "#health-dial"
+        assert [t["label"] for t in dial["ticks"]] == ["00", "06", "12", "18"]
+        assert len(dial["dots"]) == 9
+        assert [d["big"] for d in dial["dots"]].count(True) == 1, "the one restart"
+        assert sum(f1 - f0 for f0, f1 in dial["covered"]) == pytest.approx(1 - 600 / 86400)
+
+    def test_every_sensor_has_a_settings_row(self, tz):
+        page = HealthTracePage("health-trace", tz=tz, width=WIDTH, height=HEIGHT)
+        soup, _ = render(page, {"status": health_status(),
+                                "status_history_24h": health_history()})
+        assert text(soup, "#settings .label") == "Sensor settings"
+        rows = dict(zip([n.get_text() for n in soup.select("#settings .name")],
+                        [v.get_text() for v in soup.select("#settings .v")]))
+        assert rows == {
+            "SCD41": "serial 9a3bc0ffee41 · self-calibration on · offset 4.0 °C",
+            "BME688": "BSEC state restored",
+            "PMSA003I": "not reported yet",
+            "SHTC3": "not reported yet",
+        }
+        status = health_status()
+        status["boards"]["canary-dock"]["doc"]["health"].update(
+            bme688={"gas_valid": True, "heat_stable": True, "heater_c": 300, "heater_ms": 100},
+            pmsa003i={"version": 151, "error": 0}, shtc3={"id": "0887", "low_power": False})
+        status["boards"]["canary-dock"]["doc"]["health"]["scd41"]["pressure_hpa"] = 1013
+        soup, _ = render(page, {"status": status, "status_history_24h": health_history()})
+        values = [v.get_text() for v in soup.select("#settings .v")]
+        assert values == [
+            "serial 9a3bc0ffee41 · self-calibration on · offset 4.0 °C · pressure 1,013 hPa",
+            "heater 300 °C for 100 ms · BSEC state restored",
+            "version 151 · no error",
+            "ID 0887 · normal mode",
+        ]
+
+    def test_a_silence_is_said_and_left_off_the_dial(self, tz):
+        """The dock sent nothing for the first half of the day. The detail says
+        so, and the dial's firm ring covers only the hours it reported."""
+        page = HealthTracePage("health-trace", tz=tz, width=WIDTH, height=HEIGHT)
+        history = health_history()
+        end = health_status()["boards"]["canary-dock"]["doc"]["ts"]
+        first = end - 11 * 3600
+        history["canary-dock"] = [d for d in history["canary-dock"] if d["ts"] >= first]
+        soup, [dial] = render(page, {"status": health_status(),
+                                     "status_history_24h": history})
+        assert text(soup, ".detail").endswith(f"No reports before {fmt_hm(first, tz)}.")
+        assert sum(f1 - f0 for f0, f1 in dial["covered"]) == \
+            pytest.approx((11 * 3600 - 600) / 86400)
+
+    def test_a_quiet_day(self, tz):
+        page = HealthTracePage("health-trace", tz=tz, width=WIDTH, height=HEIGHT)
+        quiet = {"canary-dock": [dict(d, health={"restarts": 0, "checksum_failures": {}})
+                                 for d in health_history()["canary-dock"]]}
+        soup, [dial] = render(page, {"status": health_status(), "status_history_24h": quiet})
+        assert text(soup, "#faults .value") == "0"
+        assert text(soup, ".verdict") == "All sensors well."
+        assert text(soup, ".detail") == "No faults."
+        assert dial["dots"] == [] and dial["bands"] == []
 
     def test_before_the_dock_sends_health(self, tz):
         page = HealthTracePage("health-trace", tz=tz, width=WIDTH, height=HEIGHT)

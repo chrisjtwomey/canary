@@ -37,7 +37,8 @@ size_t healthJson(const SensorHealth& h, char* buf, size_t len) {
           (unsigned long)h.restarts, (unsigned long)h.pmBadFrames,
           (unsigned long)h.shtc3CrcFailures, (unsigned long)h.scd41CrcFailures);
     if (h.bme688Seen) {
-        w.add(",\"bme688\":{\"gas_valid\":%s,\"heat_stable\":%s}", b(h.gasValid), b(h.heatStable));
+        w.add(",\"bme688\":{\"gas_valid\":%s,\"heat_stable\":%s,\"heater_c\":%u,\"heater_ms\":%u}",
+              b(h.gasValid), b(h.heatStable), (unsigned)h.bme688HeaterC, (unsigned)h.bme688HeaterMs);
     }
     if (h.scd41Read) {
         // Hex, twelve digits: the serial is 48 bits, which a JSON number
@@ -46,7 +47,14 @@ size_t healthJson(const SensorHealth& h, char* buf, size_t len) {
               (unsigned)(h.scd41Serial >> 16 & 0xFFFF), (unsigned)(h.scd41Serial & 0xFFFF));
         if (h.ascKnown) w.add(",\"asc\":%s", b(h.asc));
         if (h.offsetKnown) w.add(",\"offset_c\":%.1f", (double)h.offsetC);
+        if (h.pressureKnown) w.add(",\"pressure_hpa\":%lu", (unsigned long)((h.pressurePa + 50) / 100));
         w.add("}");
+    }
+    if (h.pmSeen) {
+        w.add(",\"pmsa003i\":{\"version\":%u,\"error\":%u}", (unsigned)h.pmVersion, (unsigned)h.pmError);
+    }
+    if (h.shtc3IdKnown) {
+        w.add(",\"shtc3\":{\"id\":\"%04x\",\"low_power\":%s}", (unsigned)h.shtc3Id, b(h.shtc3LowPower));
     }
     w.add("}");
     if (!w.ok) {

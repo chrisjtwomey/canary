@@ -50,3 +50,13 @@
   font-style: italic;
   color: var(--ink-soft);
 }
+
+@container (orientation: portrait) {
+  .page-dust .title { left: 6cqw; top: 4cqh; }
+  .page-dust .stamp { right: 6cqw; top: 4cqh; }
+  .page-dust .hero { left: 5cqw; top: 9cqh; font-size: 34cqw; }
+  .page-dust .verdict { left: 6cqw; top: 29cqh; font-size: 9.5cqw; }
+  .page-dust .detail { left: 6cqw; top: 37cqh; width: 88cqw; font-size: 4.2cqw; }
+  .page-dust .cloud { left: 6cqw; right: 6cqw; top: 45cqh; width: auto; height: 44cqh; }
+  .page-dust .caption { left: 6cqw; right: 6cqw; bottom: 3cqh; width: auto; font-size: 3.4cqw; }
+}

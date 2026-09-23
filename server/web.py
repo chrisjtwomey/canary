@@ -23,7 +23,7 @@ from typing import Callable, Iterable
 
 from airium import Airium
 from epd_server.source import DataSource
-from flask import Blueprint, send_from_directory
+from flask import Blueprint, request, send_from_directory
 
 from metrics import extremes, hour_ticks
 from pages.base import HTML_DIR, EnvPage
@@ -74,14 +74,23 @@ def menu(pages: Iterable[EnvPage]) -> list[tuple[str, list[EnvPage]]]:
     return [(heading, group) for heading, group in groups.items() if group]
 
 
-def render_live(page: EnvPage, source: DataSource) -> str:
-    """``page``'s HTML from the readings now.
+# A page as a phone shows it: upright, and narrow enough that the charts'
+# fixed-size labels are still readable once scaled to a phone's width. The
+# stylesheets lay a page out afresh when its box is taller than wide.
+PORTRAIT = (540, 960)
+
+
+def render_live(page: EnvPage, source: DataSource, portrait: bool = False) -> str:
+    """``page``'s HTML from the readings now, at the panel's size or PORTRAIT.
 
     The template is built on a copy: the regeneration thread uses the page
     object itself, and a template replaces the page's document as it starts.
     """
     fetch = source.datasets()
     view = copy.copy(page)
+    if portrait:
+        view.image_width = view.image_inner_width = PORTRAIT[0]
+        view.image_height = view.image_inner_height = PORTRAIT[1]
     view.template(**{name: fetch[name]() for name in page.requires})
     return str(view.airium)
 
@@ -126,13 +135,23 @@ def _span_row(a: Airium, groups: dict[str, list[EnvPage]], browse_href: str,
 def menu_bar(a: Airium, pages: list[EnvPage], browse_href: str, current: str) -> None:
     """The menu across the top. ``browse_href`` is how a page link reaches the
     browse page from here; ``current`` names the page or view that is showing."""
+    showing = next((p for p in pages if p.name == current), None)
     with a.header(klass="bar"):
+        a.input(type="checkbox", id="menu-open", klass="menu-open")
         with a.div(klass="top"):
             a.a(klass="brand label", href=browse_href or "./", _t="Canary")
             with a.div(klass="views"):
                 for view, words in (("explore", "Explore"), ("config", "Config")):
                     extra = {"aria-current": "page"} if current == view else {}
                     a.a(klass=f"{view}-link", href=view, _t=words, **extra)
+        with a.div(klass="here"):
+            if showing is not None:
+                a.button(type="button", klass="step", id="prev", _t="‹",
+                         **{"aria-label": "Previous page"})
+                a.span(klass="name", id="here-name", _t=label(showing))
+                a.button(type="button", klass="step", id="next", _t="›",
+                         **{"aria-label": "Next page"})
+            a.label(klass="pages-toggle", for_="menu-open", _t="Pages")
         with a.nav():
             groups = dict(menu(pages))
             switched = all(heading in groups for _, heading in SPANS)
@@ -242,7 +261,7 @@ def web_blueprint(pages: list[EnvPage], source: DataSource) -> Blueprint:
     def page_or_asset(name: str):
         page = by_name.get(name)
         if page is not None:
-            return render_live(page, source)
+            return render_live(page, source, portrait=request.args.get("shape") == "portrait")
         if os.path.splitext(name)[1] in ASSETS:
             return send_from_directory(HTML_DIR, name)
         return not_found_html(pages), 404

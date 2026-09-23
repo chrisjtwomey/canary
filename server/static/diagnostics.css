@@ -26,7 +26,7 @@
   grid-template-columns: repeat(4, 1fr);
   grid-template-rows: max-content minmax(0, 1fr);
   column-gap: 2.6cqw;
-  row-gap: 0.8cqh;
+  row-gap: 1.6cqh;
   min-height: 0;
 }
 
@@ -50,14 +50,14 @@
 
 .page-diagnostics .card .label {
   font-size: 1.3cqw;
-  margin-bottom: 0.8cqh;
+  margin-bottom: 1.4cqh;
 }
 
 .page-diagnostics .kv {
   display: grid;
   grid-template-columns: max-content 1fr;
   column-gap: 1.2cqw;
-  row-gap: 0.5cqh;
+  row-gap: 1.3cqh;
   align-items: baseline;
   font-size: 1.6cqw;
 }
@@ -74,12 +74,12 @@
 .page-diagnostics .bars {
   width: 7cqw;
   height: 4cqh;
-  margin-top: 1cqh;
+  margin-top: 1.6cqh;
 }
 
 .page-diagnostics .meter {
   height: 2cqh;
-  margin: 0.6cqh 0 1cqh 0;
+  margin: 1cqh 0 1.8cqh 0;
 }
 
 .page-diagnostics .empty {
@@ -95,4 +95,20 @@
 .page-diagnostics .empty .detail {
   font-size: 2.1cqw;
   margin-top: 2cqh;
+}
+
+/* Upright: each board's four cards two by two. */
+@container canvas (orientation: portrait) {
+  .page-diagnostics {
+    grid-template-rows: 8cqh;
+    row-gap: 2cqh;
+    padding: 0 5cqw 2cqh 5cqw;
+  }
+  .page-diagnostics .head .title { font-size: 4.6cqw; }
+  .page-diagnostics .board { grid-template-columns: 1fr 1fr; grid-template-rows: max-content; row-gap: 1.4cqh; column-gap: 5cqw; }
+  .page-diagnostics .board-head .name { font-size: 3.4cqw; }
+  .page-diagnostics .card .label { font-size: 2.6cqw; margin-bottom: 0.8cqh; }
+  .page-diagnostics .kv { font-size: 3.3cqw; row-gap: 0.5cqh; column-gap: 2cqw; }
+  .page-diagnostics .bars { width: 16cqw; height: 3cqh; margin-top: 0.8cqh; }
+  .page-diagnostics .meter { height: 1.4cqh; margin: 0.5cqh 0 1cqh 0; }
 }

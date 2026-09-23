@@ -56,3 +56,14 @@
   top: 74cqh;
   height: 23cqh;
 }
+
+@container (orientation: portrait) {
+  .page-air .title { left: 6cqw; top: 4cqh; }
+  .page-air .stamp { right: 6cqw; top: 4cqh; }
+  .page-air .hero { left: 5cqw; top: 9cqh; font-size: 34cqw; }
+  .page-air .verdict { left: 6cqw; top: 29cqh; font-size: 9.5cqw; }
+  .page-air .detail { left: 6cqw; top: 37cqh; width: 88cqw; font-size: 4.2cqw; }
+  .page-air .spark-label { right: 6cqw; top: 46cqh; font-size: 3.2cqw; }
+  .page-air .spark { left: 6cqw; right: 6cqw; top: 50cqh; width: auto; height: 24cqh; }
+  .page-air .scale { left: 4cqw; right: 4cqw; top: 78cqh; height: 18cqh; }
+}

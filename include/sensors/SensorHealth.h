@@ -18,11 +18,24 @@ struct SensorHealth {
     bool gasValid;                // it carried a real gas conversion
     bool heatStable;              // its heater reached its target
 
+    uint16_t bme688HeaterC;       // heater target, degrees C
+    uint16_t bme688HeaterMs;      // time at the target before each gas conversion
+
     bool     scd41Read;           // the SCD41's identity was read at its start
     uint64_t scd41Serial;
     bool     ascKnown, asc;       // automatic self-calibration
     bool     offsetKnown;
     float    offsetC;             // temperature offset, degrees C
+    bool     pressureKnown;
+    uint32_t pressurePa;          // the ambient pressure last handed to the SCD41
+
+    bool     pmSeen;              // a PMSA003I frame has been read
+    uint8_t  pmVersion;           // the frame's version byte
+    uint8_t  pmError;             // the frame's error code
+
+    bool     shtc3IdKnown;        // the SHTC3's ID register was read at its start
+    uint16_t shtc3Id;
+    bool     shtc3LowPower;       // it measures in its low-power mode
 };
 
 // Encodes the "health" object. Returns the length written, or 0 if the

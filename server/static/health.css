@@ -1,0 +1,95 @@
+.page-health-trace .title { position: absolute; left: 4.2cqw; top: 6cqh; }
+.page-health-trace .stamp { position: absolute; right: 4.2cqw; top: 6cqh; }
+
+.page-health-trace .span {
+  position: absolute;
+  right: 4.2cqw;
+  top: 13cqh;
+  font-size: 1.8cqw;
+  font-style: italic;
+  color: var(--ink-soft);
+}
+
+.page-health-trace .hero {
+  position: absolute;
+  left: 3.6cqw;
+  top: 12cqh;
+  font-size: 15cqw;
+}
+
+.page-health-trace .verdict {
+  position: absolute;
+  left: 4.2cqw;
+  top: 44cqh;
+  font-size: 4.8cqw;
+}
+
+.page-health-trace .detail {
+  position: absolute;
+  left: 4.4cqw;
+  top: 57cqh;
+  width: 50cqw;
+  font-size: 1.9cqw;
+}
+
+/* Before the dock reports, the verdict and detail stand alone near the top. */
+.page-health-trace .title + .verdict { top: 14cqh; font-size: 5cqw; }
+.page-health-trace .title + .verdict + .detail { top: 30cqh; font-size: 2.1cqw; }
+
+.page-health-trace .dial {
+  position: absolute;
+  right: 3cqw;
+  top: 16cqh;
+  width: 40cqw;
+  height: 66cqh;
+}
+
+.page-health-trace .dial canvas { width: 100%; height: 100%; }
+
+.page-health-trace .caption {
+  position: absolute;
+  right: 3cqw;
+  bottom: 4cqh;
+  width: 40cqw;
+  text-align: center;
+  font-size: 1.5cqw;
+  font-style: italic;
+  color: var(--ink-soft);
+}
+
+.page-health-trace .settings {
+  position: absolute;
+  left: 4.4cqw;
+  bottom: 4cqh;
+  width: 50cqw;
+}
+
+.page-health-trace .settings .label { font-size: 1.3cqw; margin-bottom: 1cqh; }
+
+.page-health-trace .settings .rows {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 1.6cqw;
+  row-gap: 0.5cqh;
+  align-items: baseline;
+  font-size: 1.5cqw;
+}
+
+.page-health-trace .settings .name { font-weight: 600; }
+.page-health-trace .settings .v { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+
+@container canvas (orientation: portrait) {
+  .page-health-trace .title { left: 6cqw; top: 4cqh; }
+  .page-health-trace .stamp { right: 6cqw; top: 4cqh; }
+  .page-health-trace .span { right: 6cqw; top: 7.5cqh; font-size: 3.2cqw; }
+  .page-health-trace .hero { left: 5cqw; top: 9cqh; font-size: 26cqw; }
+  .page-health-trace .verdict { left: 6cqw; top: 23cqh; font-size: 8.5cqw; }
+  .page-health-trace .detail { left: 6cqw; top: 30cqh; width: 88cqw; font-size: 4cqw; }
+  .page-health-trace .dial { left: 4cqw; right: 4cqw; top: 38cqh; width: auto; height: 34cqh; }
+  .page-health-trace .caption { left: 6cqw; right: 6cqw; top: 72cqh; bottom: auto; width: auto; font-size: 3.2cqw; }
+  .page-health-trace .settings { left: 6cqw; bottom: 3cqh; width: 88cqw; }
+  .page-health-trace .settings .label { font-size: 2.8cqw; }
+  .page-health-trace .settings .rows { font-size: 3.3cqw; row-gap: 0.4cqh; }
+  .page-health-trace .title + .verdict { top: 14cqh; font-size: 9cqw; }
+  .page-health-trace .title + .verdict + .detail { top: 26cqh; font-size: 4.4cqw; }
+}

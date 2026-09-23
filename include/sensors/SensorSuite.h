@@ -61,6 +61,8 @@ public:
     static const uint32_t kScd41WakeMs = 30;
     // SHTC3 normal-mode conversion, datasheet 12.1 ms max.
     static const uint32_t kShtc3MeasureMs = 13;
+    // Normal mode: kShtc3MeasureMs is its conversion time, not low power's.
+    static const bool kShtc3LowPower = false;
     // BME688 forced-mode profile: 300 C for 100 ms is Bosch's indoor VOC
     // example, and the plate needs 20-30 ms of that to reach temperature.
     static const uint16_t kBmeHeaterC = 300;
@@ -125,4 +127,9 @@ private:
     bool        ascKnown_ = false, asc_ = false;
     bool        offsetKnown_ = false;
     float       offsetC_ = 0.0f;
+    bool        pressureKnown_ = false;
+    uint32_t    pressurePa_ = 0;
+    bool        pmSeen_ = false;
+    uint8_t     pmVersion_ = 0, pmError_ = 0;
+    uint16_t    shtc3Id_ = 0;
 };

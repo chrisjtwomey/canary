@@ -8,7 +8,16 @@ bool SensorSuite::begin() {
     return shtc3State_.running && scd41State_.running && pmState_.running && bmeState_.running;
 }
 
-bool SensorSuite::startShtc3() { return shtc3_.begin(clock_.millis()); }
+// The ID is read again after begin() has checked it, because begin() leaves
+// the part asleep and keeps the value to itself.
+bool SensorSuite::startShtc3() {
+    if (!shtc3_.begin(clock_.millis())) return false;
+    if (shtc3_.wakeup(clock_.millis())) {
+        shtc3Id_ = shtc3_.readId();
+        shtc3_.sleep();
+    }
+    return true;
+}
 
 // The part answers questions about its settings only while idle, so they
 // are asked here, once a start, before it begins measuring.
@@ -98,7 +107,7 @@ Readings SensorSuite::sample(uint32_t epoch) {
 void SensorSuite::sampleShtc3(Readings& r) {
     if (!shtc3State_.running) return;
     if (!shtc3_.wakeup(clock_.millis())) return;
-    if (shtc3_.measure(clock_.millis(), false)) {
+    if (shtc3_.measure(clock_.millis(), kShtc3LowPower)) {
         clock_.waitMs(kShtc3MeasureMs);
         r.shtc3Valid = shtc3_.read(clock_.millis(), r.shtc3);
     }
@@ -120,7 +129,11 @@ void SensorSuite::sampleScd41(Readings& r) {
     // NDIR absorption scales with gas density, so the SCD41 needs the real
     // ambient pressure to convert correctly. The BME688 has just measured it.
     if (r.bme688Valid) {
-        scd41_.setAmbientPressure((uint32_t)(r.bme688.pressureHpa * 100.0f));
+        const uint32_t pa = (uint32_t)(r.bme688.pressureHpa * 100.0f);
+        if (scd41_.setAmbientPressure(pa)) {
+            pressureKnown_ = true;
+            pressurePa_ = pa;
+        }
     }
     bool ready = false;
     if (!scd41_.getDataReadyStatus(clock_.millis(), ready) || !ready) return;
@@ -137,6 +150,11 @@ void SensorSuite::samplePm(Readings& r) {
             r.pmValid = IPmsa003i::parseFrame(frame, r.pm);
             if (!r.pmValid) ++pmBadFrames_;
         }
+    }
+    if (r.pmValid) {
+        pmSeen_ = true;
+        pmVersion_ = r.pm.version;
+        pmError_ = r.pm.error;
     }
 }
 
@@ -155,5 +173,15 @@ SensorHealth SensorSuite::health() const {
     h.asc = asc_;
     h.offsetKnown = offsetKnown_;
     h.offsetC = offsetC_;
+    h.pressureKnown = pressureKnown_;
+    h.pressurePa = pressurePa_;
+    h.bme688HeaterC = kBmeHeaterC;
+    h.bme688HeaterMs = kBmeHeaterMs;
+    h.pmSeen = pmSeen_;
+    h.pmVersion = pmVersion_;
+    h.pmError = pmError_;
+    h.shtc3IdKnown = shtc3Id_ != 0;
+    h.shtc3Id = shtc3Id_;
+    h.shtc3LowPower = kShtc3LowPower;
     return h;
 }

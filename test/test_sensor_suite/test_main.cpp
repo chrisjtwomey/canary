@@ -212,6 +212,25 @@ void test_health_holds_the_scd41_settings_from_its_start_and_the_bme688s_last_st
     TEST_ASSERT_EQUAL_UINT32(0, h.restarts);
 }
 
+void test_health_holds_each_sensors_settings() {
+    suite->begin();
+    SensorHealth h = suite->health();
+    TEST_ASSERT_TRUE_MESSAGE(h.shtc3IdKnown, "read at the SHTC3's start");
+    TEST_ASSERT_EQUAL_HEX16(0x0887, h.shtc3Id);
+    TEST_ASSERT_FALSE(h.shtc3LowPower);
+    TEST_ASSERT_EQUAL_UINT16(300, h.bme688HeaterC);
+    TEST_ASSERT_EQUAL_UINT16(100, h.bme688HeaterMs);
+    TEST_ASSERT_FALSE_MESSAGE(h.pmSeen, "no frame yet");
+    TEST_ASSERT_FALSE_MESSAGE(h.pressureKnown, "no pressure handed over yet");
+    settle();
+    Readings r = suite->sample(room->epoch());
+    h = suite->health();
+    TEST_ASSERT_TRUE(r.pmValid && h.pmSeen);
+    TEST_ASSERT_EQUAL_HEX8(0x97, h.pmVersion);
+    TEST_ASSERT_TRUE(r.bme688Valid && h.pressureKnown);
+    TEST_ASSERT_UINT32_WITHIN(1, (uint32_t)(r.bme688.pressureHpa * 100.0f), h.pressurePa);
+}
+
 void test_sample_reports_nothing_for_a_dead_sensor_and_still_reads_the_rest() {
     DeadShtc3 dead;
     SensorSuite s(*clk, dead, *scd41, *pm, *bme);
@@ -271,6 +290,7 @@ int main(int, char**) {
     RUN_TEST(test_sample_retries_a_corrupt_pm_frame);
     RUN_TEST(test_health_counts_a_bad_pm_frame);
     RUN_TEST(test_health_holds_the_scd41_settings_from_its_start_and_the_bme688s_last_state);
+    RUN_TEST(test_health_holds_each_sensors_settings);
     RUN_TEST(test_sample_reports_nothing_for_a_dead_sensor_and_still_reads_the_rest);
     RUN_TEST(test_scd41_reports_only_when_the_5s_conversion_is_ready);
     RUN_TEST(test_fan_can_be_stopped_and_restarts_its_warm_up);

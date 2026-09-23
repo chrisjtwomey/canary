@@ -177,6 +177,53 @@
     if (s.now) dot(c.ctx, X(s.now[0]), Y(s.now[1]), 6, G[0]);
   }
 
+  // A day as a clock face, midnight at the top. The ring is firm where the
+  // board reported and faint where it did not; a hatched arc inside it marks
+  // a span a state was bad for; a dot outside it marks each fault, stacked
+  // outward when several share a quarter hour. A restart draws larger.
+  function dial(canvas, s) {
+    var c = prepare(canvas);
+    var cx = c.w / 2, cy = c.h / 2;
+    var side = Math.min(c.w, c.h);
+    var margin = Math.min(84, side * 0.18);
+    var R = side / 2 - margin;
+    var stackStep = (margin - 24) / 5;
+    function ang(f) { return f * Math.PI * 2 - Math.PI / 2; }
+    function at(f, r) { var t = ang(f); return [cx + r * Math.cos(t), cy + r * Math.sin(t)]; }
+
+    c.rc.circle(cx, cy, R * 2, { stroke: G[5], strokeWidth: 1.2, roughness: 0.6 });
+    (s.covered || []).forEach(function (sp) {
+      if (sp[1] - sp[0] < 0.002) return;
+      c.rc.arc(cx, cy, R * 2, R * 2, ang(sp[0]), ang(sp[1]), false,
+               { stroke: G[0], strokeWidth: 2.5, roughness: 0.6 });
+    });
+
+    (s.bands || []).forEach(function (b) {
+      var span = Math.max(b[1] - b[0], 0.006), n = 12, pts = [], i;
+      for (i = 0; i <= n; i++) pts.push(at(b[0] + span * i / n, R - 7));
+      for (i = n; i >= 0; i--) pts.push(at(b[0] + span * i / n, R - 28));
+      c.rc.polygon(pts, {
+        fill: G[3], fillStyle: 'hachure', hachureGap: 4, hachureAngle: -40,
+        fillWeight: 1.2, stroke: G[2], strokeWidth: 1, roughness: 0.7
+      });
+    });
+
+    (s.dots || []).forEach(function (d) {
+      var r = d.big ? 8.5 : 4;
+      var p = at(d.f, R + 16 + d.k * stackStep);
+      dot(c.ctx, p[0], p[1], r, G[0]);
+    });
+
+    if (s.now !== undefined) {
+      var p0 = at(s.now, R - 12), p1 = at(s.now, R + 12);
+      c.rc.line(p0[0], p0[1], p1[0], p1[1], { stroke: G[0], strokeWidth: 2.5, roughness: 0.4 });
+    }
+    (s.ticks || []).forEach(function (t) {
+      var p = at(t.f, R - 50);
+      label(c.ctx, t.label, p[0], p[1], { size: 18, align: 'center', baseline: 'middle' });
+    });
+  }
+
   function axis(canvas, s) {
     var c = prepare(canvas);
     var m = { l: 4, r: 24 };
@@ -226,8 +273,12 @@
     s.zones.forEach(function (z) {
       c.rc.rectangle(X(z.from), y0, X(z.to) - X(z.from), h, { fill: z.color, fillStyle: 'hachure',
         hachureGap: z.gap, hachureAngle: 45, fillWeight: 1, stroke: G[2], strokeWidth: 1.2, roughness: 1 });
-      label(c.ctx, z.label, (X(z.from) + X(z.to)) / 2, y0 + h + 40,
-        { size: 16, align: 'center', italic: true, color: G[3] });
+      c.ctx.font = 'italic 500 16px ' + FONT;
+      var wordFitsZone = c.ctx.measureText(z.label).width <= X(z.to) - X(z.from) - 4;
+      if (wordFitsZone) {
+        label(c.ctx, z.label, (X(z.from) + X(z.to)) / 2, y0 + h + 40,
+          { size: 16, align: 'center', italic: true, color: G[3] });
+      }
     });
     (s.ticks || []).forEach(function (t) {
       label(c.ctx, String(t), X(t), y0 + h + 20, { size: 15, align: 'center', color: G[3] });
@@ -380,7 +431,7 @@
   }
 
   var KINDS = { sparkline: sparkline, comfort: comfort, ribbon: ribbon, axis: axis,
-                trace: trace, column: column,
+                dial: dial, trace: trace, column: column,
                 dotcloud: dotcloud, scale: scale_, meter: meter, bars: bars };
 
   function render(specs) {

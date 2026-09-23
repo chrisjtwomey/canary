@@ -36,3 +36,17 @@
 .page-delta .block.second .hero { font-size: 6cqw; }
 .page-delta .block.second .hero .unit { font-size: 0.3em; }
 .page-delta .block.second .verdict { font-size: 3cqw; margin-top: 1cqh; }
+
+@container (orientation: portrait) {
+  .page-delta .title { left: 6cqw; top: 4cqh; }
+  .page-delta .stamp { right: 6cqw; top: 4cqh; }
+  .page-delta .stats { left: 6cqw; top: 9cqh; width: 88cqw; }
+  .page-delta .block.main .hero { font-size: 22cqw; }
+  .page-delta .block.main .verdict { font-size: 9cqw; margin-top: 2cqh; }
+  .page-delta .block .detail { font-size: 4.2cqw; margin-top: 1cqh; }
+  .page-delta .block .meaning { font-size: 4.4cqw; margin-top: 1cqh; }
+  .page-delta .block.second { margin-top: 2.5cqh; }
+  .page-delta .block.second .hero { font-size: 12cqw; }
+  .page-delta .block.second .verdict { font-size: 5.6cqw; }
+  .page-delta .columns { left: 2cqw; top: auto; bottom: 3cqh; width: 96cqw; height: 34cqh; gap: 0; }
+}

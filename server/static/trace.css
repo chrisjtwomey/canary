@@ -23,3 +23,13 @@
   top: 37cqh;
   height: 57cqh;
 }
+
+@container (orientation: portrait) {
+  .page-trace .title { left: 6cqw; top: 4cqh; }
+  .page-trace .stamp { right: 6cqw; top: 4cqh; }
+  .page-trace .stats { left: 6cqw; right: 6cqw; top: 9cqh; column-gap: 4cqw; }
+  .page-trace .stats .hero { font-size: 22cqw; }
+  .page-trace .stats .verdict { flex-basis: 100%; font-size: 9cqw; margin-top: 2cqh; }
+  .page-trace .stats .detail { font-size: 4.2cqw; }
+  .page-trace .chart { left: 3cqw; right: 3cqw; top: 42cqh; height: 54cqh; }
+}
