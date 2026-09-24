@@ -12,6 +12,7 @@ import os
 from datetime import datetime
 
 from airium import Airium
+from markupsafe import Markup
 
 import math
 
@@ -109,7 +110,7 @@ class DiagnosticsPage(EnvPage):
                     if entry.get("offline"):
                         a.span(klass="pill offline", id=f"{k}-offline", _t="Offline")
                     a.span(klass="stamp", id=f"{k}-age",
-                           _t=f"reported {age_span(age)} ago" if age is not None
+                           _t=Markup("reported {} ago").format(age_span(age)) if age is not None
                            else "no report yet")
 
             with a.div(klass="card"):
@@ -166,11 +167,12 @@ class DiagnosticsPage(EnvPage):
         changed = entry.get("changed")
         if changed:
             kv(a, "downgraded" if changed["older"] else "updated",
-               f"from {changed['from']}, {age_span(changed['age_s'])} ago", id=f"{k}-changed")
+               Markup("from {}, {} ago").format(changed["from"], age_span(changed["age_s"])),
+               id=f"{k}-changed")
         refused = entry.get("refused")
         if refused:
-            kv(a, "refused", f"{refused['count']} from {refused['version']}, "
-                             f"{age_span(refused['age_s'])} ago", id=f"{k}-refused")
+            kv(a, "refused", Markup("{} from {}, {} ago").format(
+                refused["count"], refused["version"], age_span(refused["age_s"])), id=f"{k}-refused")
 
     def _sensors(self, a: Airium, k: str, dock: dict, valid: dict) -> None:
         present = dock.get("sensors") or {}

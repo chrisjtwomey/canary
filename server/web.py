@@ -20,7 +20,6 @@ from __future__ import annotations
 import copy
 import functools
 import hashlib
-import html
 import json
 import math
 import os
@@ -31,7 +30,9 @@ from typing import Callable, Iterable
 from airium import Airium
 from epd_server.source import DataSource
 from flask import Blueprint, jsonify, request, send_from_directory
+from markupsafe import Markup
 
+from html_doc import Html
 from metrics import extremes, hour_ticks
 from pages.base import HTML_DIR, EnvPage
 from pages.diagnostics import DiagnosticsPage, DiagnosticsTracePage, HealthTracePage
@@ -177,7 +178,7 @@ def menu_bar(a: Airium, pages: list[EnvPage], browse_href: str, current: str) ->
             with a.div(klass="name-line"):
                 a.a(klass="brand label", href=browse_href or "./", _t="Canary")
                 a.span(klass="version", id="server-version", title="Server version",
-                       _t=html.escape(own_version(), quote=False))
+                       _t=own_version())
             with a.div(klass="views"):
                 for view, words in (("explore", "Explore"), ("logs", "Logs"), ("config", "Config")):
                     extra = {"aria-current": "page"} if current == view else {}
@@ -207,7 +208,7 @@ def menu_bar(a: Airium, pages: list[EnvPage], browse_href: str, current: str) ->
 
 def not_found_html(pages: list[EnvPage]) -> str:
     """The page a /web/ name with no page behind it gets."""
-    a = Airium()
+    a = Html()
     a("<!DOCTYPE html>")
     with a.html(lang="en"):
         page_head(a, "Canary \u00b7 Page not found")
@@ -224,7 +225,7 @@ def browse_html(pages: list[EnvPage]) -> str:
     """Every page, one at a time. browse.js picks the page from the URL's
     fragment, scales it to the window and reloads it every minute."""
     first = pages[0]
-    a = Airium()
+    a = Html()
     a("<!DOCTYPE html>")
     with a.html(lang="en"):
         page_head(a, "Canary")
@@ -240,7 +241,7 @@ def browse_html(pages: list[EnvPage]) -> str:
 def explore_html(pages: list[EnvPage]) -> str:
     """One measurement over a window. explore.js asks /history for each
     window the viewer picks and draws it with charts.js."""
-    a = Airium()
+    a = Html()
     a("<!DOCTYPE html>")
     with a.html(lang="en"):
         page_head(a, "Canary · Explore")
@@ -291,7 +292,7 @@ LEVEL_CHOICES = (("", "All levels"), ("DEBUG", "Debug and above"), ("INFO", "Inf
 def logs_html(pages: list[EnvPage], logging_on: bool) -> str:
     """What the boards log, newest at the end. logs.js asks /logs for the
     lines and adds new ones as they arrive."""
-    a = Airium()
+    a = Html()
     a("<!DOCTYPE html>")
     with a.html(lang="en"):
         page_head(a, "Canary \u00b7 Logs")
@@ -300,7 +301,7 @@ def logs_html(pages: list[EnvPage], logging_on: bool) -> str:
             with a.main(klass="logview"):
                 if not logging_on:
                     a.p(klass="banner", id="logging-off",
-                        _t='Board logging is off. Turn it on in <a href="config#mqtt">Config</a>.')
+                        _t=Markup('Board logging is off. Turn it on in <a href="config#mqtt">Config</a>.'))
                 with a.div(klass="filters"):
                     with a.select(id="board", **{"aria-label": "Board"}):
                         a.option(value="", _t="All boards")

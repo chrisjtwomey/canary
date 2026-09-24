@@ -24,7 +24,6 @@ its config.
 from __future__ import annotations
 
 import contextlib
-import html
 import os
 import shutil
 import zoneinfo
@@ -34,9 +33,11 @@ from typing import Any, Callable
 
 from airium import Airium
 from flask import Blueprint, Response, abort, jsonify, redirect, request
+from markupsafe import Markup
 
 import config_form as cf
 import dock_settings as ds
+from html_doc import Html
 from pages.base import EnvPage
 from metrics import age_span
 from transfer import Corrupt, Overlap, Transfer
@@ -153,12 +154,6 @@ def file_view(text: str) -> View:
     return View(text, text, values, dict(values), cf.defaults(cfg))
 
 
-def esc(value: Any) -> str:
-    """``value`` as HTML text or as an attribute's value. Airium writes text
-    as given and escapes only the quotes in an attribute."""
-    return html.escape(str(value), quote=False)
-
-
 def _id(key: str) -> str:
     return "f-" + key.replace(".", "-")
 
@@ -173,23 +168,23 @@ def _pool_names(view: View) -> list[str]:
 
 def _pool_row(a: Airium, key: str, name: str, pages: str, images: list[str]) -> None:
     with a.div(klass="row"):
-        a.input(type="text", klass="pool-name", name=key + ".name", value=esc(name),
+        a.input(type="text", klass="pool-name", name=key + ".name", value=name,
                 placeholder="name", spellcheck="false", autocomplete="off",
                 **{"aria-label": "Pool name"})
-        a.input(type="text", klass="chips", name=key + ".pages", value=esc(pages),
+        a.input(type="text", klass="chips", name=key + ".pages", value=pages,
                 spellcheck="false", autocomplete="off", placeholder="breathe.png, co2-trace.png",
-                **{"aria-label": "Images", "data-options": esc(" ".join(images))})
-        a.button(type="button", klass="remove", _t=esc("×"), **{"aria-label": "Remove this pool"})
+                **{"aria-label": "Images", "data-options": " ".join(images)})
+        a.button(type="button", klass="remove", _t="×", **{"aria-label": "Remove this pool"})
 
 
 def _time_row(a: Airium, key: str, at: str, pool: str, names: list[str]) -> None:
     with a.div(klass="row"):
-        a.input(type="time", step="1", name=key + ".at", value=esc(at),
+        a.input(type="time", step="1", name=key + ".at", value=at,
                 **{"aria-label": "Wake time"})
         with a.select(name=key + ".pool", **{"aria-label": "Pool"}):
             for n in names + ([pool] if pool and pool not in names else []):
-                a.option(value=esc(n), _t=esc(n), **({"selected": "selected"} if n == pool else {}))
-        a.button(type="button", klass="remove", _t=esc("×"), **{"aria-label": "Remove this time"})
+                a.option(value=n, _t=n, **({"selected": "selected"} if n == pool else {}))
+        a.button(type="button", klass="remove", _t="×", **{"aria-label": "Remove this time"})
 
 
 def _rows(a: Airium, f: cf.Field, view: View, images: list[str], heading: str) -> None:
@@ -197,8 +192,8 @@ def _rows(a: Airium, f: cf.Field, view: View, images: list[str], heading: str) -
     names = _pool_names(view)
     kind = "pools" if f.kind == "pools" else "times"
     with a.fieldset(klass=f"rows {kind}", id=_id(f.key),
-                    **{"data-key": f.key, "data-initial": esc(cf.initial(view.initial[f.key]))}):
-        a.legend(klass="name hide" if f.label == heading else "name", _t=esc(f.label))
+                    **{"data-key": f.key, "data-initial": cf.initial(view.initial[f.key])}):
+        a.legend(klass="name hide" if f.label == heading else "name", _t=f.label)
         a.input(type="hidden", name=f.key, value="1")
         with a.div(klass="list"):
             for first, second in rows:
@@ -213,9 +208,9 @@ def _rows(a: Airium, f: cf.Field, view: View, images: list[str], heading: str) -
                 _time_row(a, f.key, "", "", names)
         with a.div(klass="foot"):
             a.button(type="button", klass="add",
-                     _t=esc("Add a pool" if kind == "pools" else "Add a time"))
+                     _t="Add a pool" if kind == "pools" else "Add a time")
             if f.help:
-                a.p(klass="help", _t=esc(f.help))
+                a.p(klass="help", _t=f.help)
 
 
 def _control(a: Airium, f: cf.Field, view: View, env: str | None, locked: bool) -> None:
@@ -223,20 +218,20 @@ def _control(a: Airium, f: cf.Field, view: View, env: str | None, locked: bool) 
     if env is not None and f.scale != 1 and env.strip().isdigit():
         env = cf.input_text(f, int(env))
     lock = {"disabled": "disabled"} if env is not None or locked else {}
-    marks = {"data-default": esc(view.defaults[f.key])} if f.key in view.defaults else {}
+    marks = {"data-default": view.defaults[f.key]} if f.key in view.defaults else {}
     own = {"id": _id(f.key), "name": f.key, "data-key": f.key,
-           "data-initial": esc(cf.initial(view.initial.get(f.key, ""))), **lock, **marks}
+           "data-initial": cf.initial(view.initial.get(f.key, "")), **lock, **marks}
     with a.div(klass="control"):
         if f.kind == "choice":
             chosen = env if env is not None else value
             with a.div(klass="segments", role="radiogroup", id=_id(f.key),
                        **{"aria-labelledby": _id(f.key) + "-name", "data-key": f.key,
-                          "data-initial": esc(view.initial.get(f.key, ""))}, **marks):
+                          "data-initial": view.initial.get(f.key, "")}, **marks):
                 for choice, words in f.choices:
                     with a.label():
                         a.input(type="radio", name=f.key, value=choice, **lock,
                                 **({"checked": "checked"} if choice == chosen else {}))
-                        a.span(_t=esc(words))
+                        a.span(_t=words)
         elif f.kind in ("bool", "quiet"):
             on = (env or "").strip().lower() in ("1", "true", "yes", "on") if env is not None \
                 else value == "true"
@@ -245,7 +240,7 @@ def _control(a: Airium, f: cf.Field, view: View, env: str | None, locked: bool) 
                     **({"checked": "checked"} if on else {}))
             a.span(klass="state", **{"aria-hidden": "true"})
         else:
-            attrs: dict[str, Any] = {"value": esc(env if env is not None else value)}
+            attrs: dict[str, Any] = {"value": env if env is not None else value}
             if f.hint:
                 attrs["placeholder"] = f.hint
             if f.kind in ("int", "number"):
@@ -263,18 +258,18 @@ def _control(a: Airium, f: cf.Field, view: View, env: str | None, locked: bool) 
                     attrs["list"] = "zones"
                 if f.kind == "order":
                     attrs.update(klass="chips",
-                                 **{"data-options": esc(" ".join(_pool_names(view))),
+                                 **{"data-options": " ".join(_pool_names(view)),
                                     "data-options-from": "display.pools"})
             a.input(**own, **attrs)
             if f.unit:
-                a.span(klass="unit", _t=esc(f.unit))
+                a.span(klass="unit", _t=f.unit)
 
 
 def _reset_button(a: Airium, f: cf.Field, view: View) -> None:
     """Puts the default back; it shows once the value differs from it."""
     at_default = view.values.get(f.key) == view.defaults[f.key]
-    a.button(type="button", klass="reset", _t=esc("Reset"),
-             **{"aria-label": esc(f"Reset {f.label}")}, **({"hidden": "hidden"} if at_default else {}))
+    a.button(type="button", klass="reset", _t="Reset",
+             **{"aria-label": f"Reset {f.label}"}, **({"hidden": "hidden"} if at_default else {}))
 
 
 def _field(a: Airium, f: cf.Field, view: View, images: list[str], heading: str,
@@ -296,20 +291,20 @@ def _field(a: Airium, f: cf.Field, view: View, images: list[str], heading: str,
         else:
             with a.div(klass="head"):
                 if f.kind == "choice":
-                    a.span(klass="name", id=_id(f.key) + "-name", _t=esc(f.label))
+                    a.span(klass="name", id=_id(f.key) + "-name", _t=f.label)
                 else:
-                    a.label(klass="name", for_=_id(f.key), _t=esc(f.label))
+                    a.label(klass="name", for_=_id(f.key), _t=f.label)
                 if f.key in view.defaults and env is None and not locked:
                     _reset_button(a, f, view)
             if sheet:
                 a.span(klass="leader", **{"aria-hidden": "true"})
             _control(a, f, view, env, locked)
         if f.help and f.kind not in ("pools", "times"):
-            a.p(klass="help", _t=esc(f.help))
+            a.p(klass="help", _t=f.help)
         if env is not None:
-            a.p(klass="env", _t=esc(f"Set by {f.env_name}"))
+            a.p(klass="env", _t=f"Set by {f.env_name}")
         if error:
-            a.p(klass="error", id="e-" + _id(f.key)[2:], _t=esc(error))
+            a.p(klass="error", id="e-" + _id(f.key)[2:], _t=error)
 
 
 def _size(count: int) -> str:
@@ -327,12 +322,12 @@ def _export(a: Airium, store: str, size: int) -> None:
     """The row that downloads a store, greyed out while it holds nothing."""
     with a.div(klass="field", **{"data-export": store}):
         with a.div(klass="head"):
-            a.span(klass="name", _t=esc("Export"))
+            a.span(klass="name", _t="Export")
         with a.div(klass="control"):
-            a.a(klass="button" if size else "button off", _t=esc("Download"),
+            a.a(klass="button" if size else "button off", _t="Download",
                 **({"href": f"config/export/{store}", "download": "download"} if size
                    else {"aria-disabled": "true"}))
-            a.span(klass="unit", _t=esc(_size(size) if size else "No records yet."))
+            a.span(klass="unit", _t=_size(size) if size else "No records yet.")
 
 
 def _import(a: Airium, store: str, report: Report) -> None:
@@ -341,46 +336,46 @@ def _import(a: Airium, store: str, report: Report) -> None:
     form = f"import-{store}"
     with a.div(klass="field", **{"data-import": store}):
         with a.div(klass="head"):
-            a.label(klass="name", for_=f"file-{store}", _t=esc("Import"))
+            a.label(klass="name", for_=f"file-{store}", _t="Import")
         with a.div(klass="control"):
             a.input(type="file", id=f"file-{store}", name="file", form=form,
                     accept=".jsonl,application/x-ndjson")
             with a.label(klass="over"):
                 a.input(type="checkbox", name="replace", value="true", form=form)
-                a.span(_t=esc("Replace"))
-            a.button(type="submit", klass="button", form=form, _t=esc("Upload"))
+                a.span(_t="Replace")
+            a.button(type="submit", klass="button", form=form, _t="Upload")
         if report.store == store:
-            a.p(klass="error" if report.bad else "help", _t=esc(report.words))
+            a.p(klass="error" if report.bad else "help", _t=report.words)
 
 
 def _settings_line(a: Airium, state: DockState) -> None:
     """Whether the dock runs the saved settings, as a banner across the tab:
     a pill naming the state, then what it means. config.js puts a new one in
     its place from GET /web/config/live."""
-    last = f"Last report {age_span(state.age_s or 0)} ago."
+    last = Markup("Last report {} ago.").format(age_span(state.age_s or 0))
     if state.offline:
-        pill = ("offline", "Offline", f"{last} Settings unlock when the dock reports again.")
+        pill = ("offline", "Offline", last + " Settings unlock when the dock reports again.")
     elif state.applied is None:
         pill = None
     elif state.applied:
         pill = ("synced", "Synchronized", last)
     else:
         pill = ("waiting", "Not synchronized",
-                esc(f"The dock takes these settings before its next report, "
-                    f"at {state.next_report}."))
+                f"The dock takes these settings before its next report, "
+                f"at {state.next_report}.")
     with a.div(klass="dock-state", id="dock-state",
                **{"data-offline": "true" if state.offline else "false"}):
         with a.p(klass="banner dock-line", id="dock-applied"):
             if pill is None:
-                a.span(_t=esc("No report from the dock yet. Settings apply once it connects."))
+                a.span(_t="No report from the dock yet. Settings apply once it connects.")
             else:
                 klass, name, words = pill
-                a.span(klass=f"pill {klass}", id=f"dock-{klass}", _t=esc(name))
+                a.span(klass=f"pill {klass}", id=f"dock-{klass}", _t=name)
                 a.span(_t=words)
         if state.refused:
             names = ", ".join(_label_of(("dock", *key.split("."))) for key in state.refused)
             a.p(klass="error", id="dock-refused",
-                _t=esc(f"Refused by the dock: {names}. Check the dock's firmware version."))
+                _t=f"Refused by the dock: {names}. Check the dock's firmware version.")
 
 
 def _label_of(path: tuple) -> str:
@@ -419,31 +414,31 @@ def _recalibrate(a: Airium, state: DockState, report: Report, sheet: bool = Fals
     lock = {"disabled": "disabled"} if state.offline else {}
     with a.div(klass="field wide", **{"data-recalibrate": "scd41"}):
         with a.div(klass="head"):
-            a.label(klass="name", for_="recalibrate-ppm", _t=esc("Recalibrate"))
+            a.label(klass="name", for_="recalibrate-ppm", _t="Recalibrate")
         if sheet:
             a.span(klass="leader", **{"aria-hidden": "true"})
         with a.div(klass="control"):
             a.input(type="number", id="recalibrate-ppm", name="ppm", form=form,
-                    value=esc(state.ppm), step="1", inputmode="numeric",
+                    value=state.ppm, step="1", inputmode="numeric",
                     min=str(ds.RECALIBRATE_MIN_PPM), max=str(ds.RECALIBRATE_MAX_PPM), **lock)
-            a.span(klass="unit", _t=esc("ppm"))
-            a.button(type="submit", klass="button", form=form, _t=esc("Recalibrate"), **lock)
+            a.span(klass="unit", _t="ppm")
+            a.button(type="submit", klass="button", form=form, _t="Recalibrate", **lock)
         if report.store == "recalibrate":
-            a.p(klass="error" if report.bad else "help", _t=esc(report.words))
+            a.p(klass="error" if report.bad else "help", _t=report.words)
         else:
-            a.p(klass="help", id="recalibrate-state", _t=esc(_recalibration_words(state)))
+            a.p(klass="help", id="recalibrate-state", _t=_recalibration_words(state))
 
 
 def _savebar(a: Airium, writable: bool, status: str, *, discard: bool) -> None:
     with a.footer(klass="savebar"):
-        a.p(klass="status", _t=esc(status), **{"aria-live": "polite",
+        a.p(klass="status", _t=status, **{"aria-live": "polite",
                                           "data-idle": "No changes."})
         with a.div(klass="choice"):
             if discard:
-                a.a(klass="button discard", href="config", _t=esc("Discard"))
-            a.button(type="submit", name="action", value="check", _t=esc("Check"))
+                a.a(klass="button discard", href="config", _t="Discard")
+            a.button(type="submit", name="action", value="check", _t="Check")
             a.button(type="submit", name="action", value="save", klass="primary",
-                     _t=esc("Save and restart"), **({} if writable else {"disabled": "disabled"}))
+                     _t="Save and restart", **({} if writable else {"disabled": "disabled"}))
 
 
 @contextlib.contextmanager
@@ -468,7 +463,7 @@ def _position(a: Airium, g: cf.Group, view: View, locked: bool) -> None:
     lock = {"disabled": "disabled"} if locked or across.env_value() or down.env_value() else {}
     with a.div(klass="field position"):
         with a.div(klass="head"):
-            a.span(klass="name", id="position-name", _t=esc("Position"))
+            a.span(klass="name", id="position-name", _t="Position")
         a.span(klass="leader", **{"aria-hidden": "true"})
         with a.div(klass="control"):
             with a.div(klass="grid3", role="group",
@@ -495,10 +490,10 @@ def _head_size(a: Airium, view: View) -> None:
     except (KeyError, ValueError):
         saved = None
     if saved == (head["width"], head["height"]):
-        a.p(klass="help head-size", id="head-size", _t=esc(f"The head reports {said}."))
+        a.p(klass="help head-size", id="head-size", _t=f"The head reports {said}.")
     else:
         a.p(klass="error head-size", id="head-size",
-            _t=esc(f"Not the head's size: it reports {said}. Set Width and Height to match."))
+            _t=f"Not the head's size: it reports {said}. Set Width and Height to match.")
 
 
 def _runs(fields: tuple[cf.Field, ...], sheet: bool) -> list[tuple[str, list[cf.Field]]]:
@@ -523,17 +518,17 @@ def _group(a: Airium, g: cf.Group, view: View, images: list[str], locked: bool,
     if g.heading and sheet and " · " in g.heading:
         title, part = g.heading.split(" · ", 1)
         with a.h2(klass="group label"):
-            a.span(_t=esc(title))
-            a.span(klass="part", _t=esc(part))
+            a.span(_t=title)
+            a.span(klass="part", _t=part)
     elif g.heading:
-        a.h2(klass="group label", _t=esc(g.heading))
+        a.h2(klass="group label", _t=g.heading)
     with a.div(klass=f"content visual-{g.visual}" if g.visual else "content") if sheet \
             else _nothing():
         if sheet and g.visual:
             with a.div(klass="visual"):
                 a.canvas(id=f"visual-{g.visual}", **{"data-visual": g.visual,
                                                       "aria-hidden": "true"})
-                a.p(klass="caption", _t=esc(VISUAL_CAPTIONS[g.visual]))
+                a.p(klass="caption", _t=VISUAL_CAPTIONS[g.visual])
         with a.div(klass="fields"):
             for when, fields in _runs(g.fields, sheet):
                 boxed = when and len(fields) > 1
@@ -567,7 +562,7 @@ def config_html(pages: list[EnvPage], view: View, writable: bool,
     marked = _tab_problems(view)
     status = view.note or view.status or (
         "Not saved." if view.problem or view.errors else "No changes.")
-    a = Airium()
+    a = Html()
     a("<!DOCTYPE html>")
     with a.html(lang="en"):
         page_head(a, "Canary · Config")
@@ -575,7 +570,7 @@ def config_html(pages: list[EnvPage], view: View, writable: bool,
             menu_bar(a, pages, BROWSE_HREF, "config")
             with a.main(klass="settings"):
                 with a.div(klass="top"):
-                    a.h1(klass="title label", _t=esc("Config"))
+                    a.h1(klass="title label", _t="Config")
                     with a.div(klass="where"):
                         if bak is not None and writable:
                             with a.form(method="post", action="config", klass="restore",
@@ -583,24 +578,24 @@ def config_html(pages: list[EnvPage], view: View, writable: bool,
                                         **{"data-title": "Restore the previous version?",
                                            "data-confirm": "Restore and restart"}):
                                 a.input(type="hidden", name="mode", value="restore")
-                                a.span(klass="stamp", _t=esc(f"Last saved {_when(bak)}"))
+                                a.span(klass="stamp", _t=f"Last saved {_when(bak)}")
                                 a.button(type="submit", name="action", value="save",
-                                         klass="link", _t=esc("Restore"))
+                                         klass="link", _t="Restore")
                 with a.nav(klass="tabs", role="tablist", **{"aria-label": "Sections"},
                            **({"data-open": view.tab} if view.tab else {})):
                     for name, title in tabs:
                         a.a(href=f"#{name}", id=f"tab-{name}", role="tab",
                             klass="tab problem" if name in marked else "tab",
-                            _t=esc(title), **{"data-tab": name, "aria-controls": f"panel-{name}"})
+                            _t=title, **{"data-tab": name, "aria-controls": f"panel-{name}"})
                 if not writable:
                     a.p(klass="banner", id="read-only",
-                        _t=esc(READ_ONLY))
+                        _t=READ_ONLY)
                 if view.unreadable:
-                    a.p(klass="banner problem", id="unreadable", _t=esc(view.unreadable))
+                    a.p(klass="banner problem", id="unreadable", _t=view.unreadable)
                 if view.problem:
-                    a.p(klass="banner problem", id="problem", _t=esc(f"Not saved: {view.problem}"))
+                    a.p(klass="banner problem", id="problem", _t=f"Not saved: {view.problem}")
                 if view.note:
-                    a.p(klass="banner", id="note", _t=esc(view.note))
+                    a.p(klass="banner", id="note", _t=view.note)
                 if not view.unreadable:
                     with a.form(method="post", action="config", id="settings-form",
                                 novalidate="novalidate",
@@ -637,32 +632,32 @@ def config_html(pages: list[EnvPage], view: View, writable: bool,
                     a.input(type="hidden", name="tab", value=YAML_TAB)
                     with a.section(klass="panel", id=f"panel-{YAML_TAB}", role="tabpanel",
                                    **{"data-tab": YAML_TAB, "aria-labelledby": f"tab-{YAML_TAB}"}):
-                        a.textarea(name="text", rows="24", spellcheck="false", _t=esc(view.text),
+                        a.textarea(name="text", rows="24", spellcheck="false", _t=view.text,
                                    **{"aria-label": "config.yaml", "data-key": "text",
-                                      "data-initial": esc(view.file_text)})
+                                      "data-initial": view.file_text})
                         _savebar(a, writable, status, discard=True)
             with a.dialog(id="review", **{"aria-labelledby": "review-title"}):
                 with a.form(method="dialog"):
-                    a.h2(klass="label", id="review-title", _t=esc("Save and restart?"))
+                    a.h2(klass="label", id="review-title", _t="Save and restart?")
                     a.p(klass="lead", id="review-lead")
                     with a.div(klass="changes-box"):
                         with a.table(klass="changes"):
-                            a.tbody(id="review-list", _t=esc(""))
+                            a.tbody(id="review-list", _t="")
                     with a.div(klass="choice"):
-                        a.button(value="cancel", _t=esc("Cancel"))
+                        a.button(value="cancel", _t="Cancel")
                         a.button(value="confirm", klass="primary", id="review-confirm",
-                                 _t=esc("Save and restart"))
+                                 _t="Save and restart")
             if view.note in NOTICES:
                 title, lead, offers_save = NOTICES[view.note]
                 with a.dialog(id="notice", **{"aria-labelledby": "notice-title"}):
                     with a.form(method="dialog"):
-                        a.h2(klass="label", id="notice-title", _t=esc(title))
-                        a.p(klass="lead", _t=esc(lead))
+                        a.h2(klass="label", id="notice-title", _t=title)
+                        a.p(klass="lead", _t=lead)
                         with a.div(klass="choice"):
-                            a.button(value="close", autofocus="autofocus", _t=esc("Close"),
+                            a.button(value="close", autofocus="autofocus", _t="Close",
                                      **({} if offers_save else {"klass": "primary"}))
                             if offers_save:
-                                a.button(value="save", klass="primary", _t=esc("Save and restart"),
+                                a.button(value="save", klass="primary", _t="Save and restart",
                                          **({} if writable else {"disabled": "disabled"}))
             with a.datalist(id="zones"):
                 for zone in sorted(zoneinfo.available_timezones()):
@@ -677,15 +672,15 @@ def config_html(pages: list[EnvPage], view: View, writable: bool,
 def restarting_html(pages: list[EnvPage], tab: str) -> str:
     """The page a save without config.js gets: it opens the config page
     again after a minute, once the server is back."""
-    a = Airium()
+    a = Html()
     a("<!DOCTYPE html>")
     with a.html(lang="en"):
         page_head(a, "Canary · Restarting", refresh=f"60; url=config?saved=1#{tab}")
         with a.body(klass="web config"):
             menu_bar(a, pages, BROWSE_HREF, "config")
             with a.main(klass="settings"):
-                a.h1(klass="title label", _t=esc("Config"))
-                a.p(klass="banner", id="restarting", _t=esc("Restarting…"))
+                a.h1(klass="title label", _t="Config")
+                a.p(klass="banner", id="restarting", _t="Restarting…")
     return str(a)
 
 
@@ -737,7 +732,7 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
         if dock is None:
             abort(404)
         state = dock_state(dock)
-        a = Airium()
+        a = Html()
         _settings_line(a, state)
         return jsonify(state=str(a), recalibration=_recalibration_words(state),
                        offline=state.offline)

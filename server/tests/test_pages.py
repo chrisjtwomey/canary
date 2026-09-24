@@ -406,6 +406,18 @@ class TestDiagnostics:
         age = STATUS["boards"]["canary-dock"]["age_s"]
         assert soup.select_one("#dock-age [data-age]")["data-age"] == str(age)
 
+    def test_text_a_board_posts_is_shown_as_text(self, tz):
+        client = dict(DOCK_DOC["client"], board="<script>alert(1)</script>", version="<b>v1</b>")
+        dock = dict(STATUS["boards"]["canary-dock"], doc=dict(DOCK_DOC, client=client),
+                    refused={"version": "<i>v9</i>", "count": 1, "at": 0, "age_s": 30})
+        status = dict(STATUS, boards={"canary-dock": dock})
+        soup, _ = render(DiagnosticsPage("diagnostics", tz=tz, width=WIDTH, height=HEIGHT),
+                         {"status": status})
+        assert text(soup, "#board-dock .name") == "dock, <script>alert(1)</script>"
+        assert text(soup, "#dock-version") == "<b>v1</b>"
+        assert text(soup, "#dock-refused") == "1 from <i>v9</i>, 30 s ago"
+        assert soup.select("#board-dock script, #board-dock b, #board-dock i") == []
+
     def test_a_board_the_server_has_only_refused_still_shows(self, tz):
         refused = {"doc": None, "age_s": None,
                    "refused": {"version": "v0.4.0", "count": 1, "at": 0, "age_s": 30}}

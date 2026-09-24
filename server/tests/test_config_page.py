@@ -501,6 +501,17 @@ def test_a_key_the_dock_refused_is_named_as_the_form_names_it(dock_client, dock_
         "Refused by the dock: Fan warm-up. Check the dock's firmware version."
 
 
+def test_a_refused_key_the_form_does_not_know_is_shown_as_text(dock_client, dock_report, dock):
+    dock_report["client"] = {"dock": {"settings": {"version": dock.settings.version,
+                                                   "refused": ["<b>x</b>"]}}}
+
+    refused = one(soup_of(dock_client.get("/web/config")), "#dock-refused")
+
+    assert refused.get_text() == \
+        "Refused by the dock: dock.<b>x</b>. Check the dock's firmware version."
+    assert refused.select("b") == []
+
+
 def test_each_light_state_has_a_pattern_and_an_interval_shown_for_pulse_and_flash(
         dock_client, path):
     soup = soup_of(dock_client.get("/web/config"))

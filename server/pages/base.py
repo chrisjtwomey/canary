@@ -14,6 +14,9 @@ from zoneinfo import ZoneInfo
 from airium import Airium
 from epd_server import GreyscaleQuantiser
 from epd_server.page import Page as _Page
+from markupsafe import Markup
+
+from html_doc import Html
 
 _SERVER_DIR = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 HTML_DIR = os.path.join(_SERVER_DIR, "static")
@@ -58,7 +61,7 @@ class EnvPage(_Page):
 
     def template(self, **data):
         waiting = "latest" in self.requires and data.get("latest") is None
-        self.airium = Airium()
+        self.airium = Html()
         a = self.airium
         a("<!DOCTYPE html>")
         with a.html(lang="en"):
@@ -83,5 +86,5 @@ class EnvPage(_Page):
                             else:
                                 self.body(a, **data)
                 specs = json.dumps([] if waiting else self.charts(**data)).replace("<", "\\u003c")
-                a.script(type="application/json", id="charts", _t=specs)
-                a.script(_t="Charts.render(JSON.parse(document.getElementById('charts').textContent));")
+                a.script(type="application/json", id="charts", _t=Markup(specs))
+                a.script(_t=Markup("Charts.render(JSON.parse(document.getElementById('charts').textContent));"))

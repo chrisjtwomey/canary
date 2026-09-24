@@ -8,6 +8,8 @@ from __future__ import annotations
 import math
 from datetime import datetime, timedelta, tzinfo
 
+from markupsafe import Markup
+
 
 def dew_point_c(temp_c: float, rh_pct: float) -> float:
     """Magnus formula with the constants the mock uses for the reverse."""
@@ -342,9 +344,9 @@ def fmt_duration(seconds: float) -> str:
     return f"{d} d {h} h" if h else f"{d} d"
 
 
-def age_span(seconds: float) -> str:
+def age_span(seconds: float) -> Markup:
     """fmt_duration's words in a span that ago.js counts on from there."""
-    return f'<span data-age="{int(seconds)}">{fmt_duration(seconds)}</span>'
+    return Markup('<span data-age="{}">{}</span>').format(int(seconds), fmt_duration(seconds))
 
 
 def fmt_bytes(n: float) -> str:
