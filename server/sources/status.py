@@ -10,6 +10,7 @@ memory for the pages.
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from typing import Callable, Mapping
 
@@ -47,6 +48,10 @@ class DeviceReports:
     ``silence`` gives, for a board and the time now, how long it may go
     without a report before two of its posts are missed; past that, and
     OFFLINE_GRACE_S, the board is offline. Without it no board is judged.
+
+    The server answers each request on a thread of its own, so every method
+    holds ``lock``; a caller that needs several answers to agree holds it
+    across them.
     """
 
     def __init__(self, now: Callable[[], float] = time.time,
@@ -60,6 +65,7 @@ class DeviceReports:
         self.changes: dict[str, dict] = {}       # device -> {"from", "to", "at", "older"}
         self.refusals: dict[str, dict] = {}      # device -> {"version", "count", "at"}
         self.count = 0
+        self.lock = threading.RLock()
         if store is not None:
             self._restore()
 
@@ -76,14 +82,16 @@ class DeviceReports:
     @property
     def latest(self) -> dict | None:
         """The newest report of any board."""
-        newest = self._newest()
-        return newest["doc"] if newest else None
+        with self.lock:
+            newest = self._newest()
+            return newest["doc"] if newest else None
 
     @property
     def received(self) -> float | None:
         """When the newest report arrived."""
-        newest = self._newest()
-        return newest["received"] if newest else None
+        with self.lock:
+            newest = self._newest()
+            return newest["received"] if newest else None
 
     def _newest(self) -> dict | None:
         if not self.by_device:
@@ -95,35 +103,38 @@ class DeviceReports:
         report, both None when the server has refused all it sent, ``offline``
         when the server judges it, and ``changed`` and ``refused`` when there
         is one to tell."""
-        entry = self.by_device.get(name)
-        refused = self.refusals.get(name)
-        if entry is None and refused is None:
-            return None
-        now = self.now()
-        out = {"doc": entry["doc"] if entry else None,
-               "age_s": max(0, int(now - entry["received"])) if entry else None}
-        if entry and self.silence is not None:
-            out["offline"] = out["age_s"] > self.silence(name, now) + OFFLINE_GRACE_S
-        change = self.changes.get(name)
-        if change is not None:
-            out["changed"] = {**change, "age_s": max(0, int(self.now() - change["at"]))}
-        if refused is not None:
-            out["refused"] = {**refused, "age_s": max(0, int(self.now() - refused["at"]))}
-        return out
+        with self.lock:
+            entry = self.by_device.get(name)
+            refused = self.refusals.get(name)
+            if entry is None and refused is None:
+                return None
+            now = self.now()
+            out = {"doc": entry["doc"] if entry else None,
+                   "age_s": max(0, int(now - entry["received"])) if entry else None}
+            if entry and self.silence is not None:
+                out["offline"] = out["age_s"] > self.silence(name, now) + OFFLINE_GRACE_S
+            change = self.changes.get(name)
+            if change is not None:
+                out["changed"] = {**change, "age_s": max(0, int(self.now() - change["at"]))}
+            if refused is not None:
+                out["refused"] = {**refused, "age_s": max(0, int(self.now() - refused["at"]))}
+            return out
 
     def devices(self) -> list[str]:
         """Every board that has reported, newest first, then any the server
         has only refused."""
-        reported = [d for d, _ in sorted(self.by_device.items(),
-                                         key=lambda kv: kv[1]["doc"]["ts"], reverse=True)]
-        return reported + [d for d in self.refusals if d not in self.by_device]
+        with self.lock:
+            reported = [d for d, _ in sorted(self.by_device.items(),
+                                             key=lambda kv: kv[1]["doc"]["ts"], reverse=True)]
+            return reported + [d for d in self.refusals if d not in self.by_device]
 
     def refused(self, device: str, version: str) -> None:
         """The server turned a post away because of the board's version: the
         hook ``DisplayServer(on_refused=...)`` calls."""
-        held = self.refusals.get(device)
-        count = held["count"] + 1 if held and held["version"] == version else 1
-        self.refusals[device] = {"version": version, "count": count, "at": self.now()}
+        with self.lock:
+            held = self.refusals.get(device)
+            count = held["count"] + 1 if held and held["version"] == version else 1
+            self.refusals[device] = {"version": version, "count": count, "at": self.now()}
 
     def accept(self, doc: dict) -> bool:
         """Take one report. False when the store already held it."""
@@ -144,10 +155,11 @@ class DeviceReports:
             ts = doc.get("ts")
             if isinstance(ts, bool) or not isinstance(ts, int):
                 raise ValueError("ts must be an integer epoch")
-        fresh = self._keep(docs)
-        for doc, new in zip(docs, fresh):
-            self._note(doc, new)
-        return fresh
+        with self.lock:
+            fresh = self._keep(docs)
+            for doc, new in zip(docs, fresh):
+                self._note(doc, new)
+            return fresh
 
     def _note(self, doc: dict, new: bool) -> None:
         device = str(doc.get("device", ""))
@@ -208,11 +220,12 @@ class StatusSource(DataSource):
 
     def status(self) -> dict | None:
         r = self.reports
-        if (r.latest is None or r.received is None) and not r.refusals:
-            return None
-        age = max(0, int(r.now() - r.received)) if r.received is not None else None
-        return {"doc": r.latest, "age_s": age, "count": r.count,
-                "boards": {d: r.device(d) for d in r.devices()}}
+        with r.lock:
+            if (r.latest is None or r.received is None) and not r.refusals:
+                return None
+            age = max(0, int(r.now() - r.received)) if r.received is not None else None
+            return {"doc": r.latest, "age_s": age, "count": r.count,
+                    "boards": {d: r.device(d) for d in r.devices()}}
 
     def history(self, hours: int) -> dict[str, list[dict]]:
         """Each board's reports of the last ``hours``, oldest first, by board."""

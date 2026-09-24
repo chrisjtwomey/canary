@@ -1,4 +1,7 @@
 """The board's reports: accepted by POST, served as the status dataset."""
+import sys
+import threading
+
 import pytest
 from bs4 import BeautifulSoup
 
@@ -237,3 +240,37 @@ def test_no_board_is_judged_without_the_rule():
     reports.accept({"ts": 1, "device": "canary-dock", "client": {"ip": "x"}})
 
     assert "offline" not in reports.device("canary-dock")
+
+
+def test_reports_from_several_threads_at_once_are_all_counted():
+    """The server answers each request on its own thread."""
+    before = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)     # switch threads as often as possible
+    reports = DeviceReports(now=lambda: 1e9)
+    status = StatusSource(reports)
+    errors = []
+
+    def post(board):
+        for ts in range(2000):
+            reports.accept({"ts": ts, "device": f"{board}-{ts % 50}", "client": {}})
+
+    def read():
+        for _ in range(500):
+            try:
+                status.status()
+            except Exception as exc:    # noqa: BLE001 - any failure is the finding
+                errors.append(exc)
+
+    try:
+        threads = [threading.Thread(target=post, args=(b,)) for b in ("a", "b", "c")]
+        threads.append(threading.Thread(target=read))
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+    finally:
+        sys.setswitchinterval(before)
+
+    assert errors == []
+    assert reports.count == 6000
+    assert len(reports.devices()) == 150
