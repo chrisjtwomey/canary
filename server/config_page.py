@@ -127,7 +127,8 @@ def head_panel(entry: dict | None) -> dict | None:
     """The head's panel from its newest report: width, height and board, or
     None before it has said."""
     client = ((entry or {}).get("doc") or {}).get("client") or {}
-    width, height = client.get("width"), client.get("height")
+    panel = client.get("head") or {}
+    width, height = panel.get("width"), panel.get("height")
     if not isinstance(width, int) or not isinstance(height, int) or width <= 0 or height <= 0:
         return None
     return {"width": width, "height": height, "board": str(client.get("board") or "")}

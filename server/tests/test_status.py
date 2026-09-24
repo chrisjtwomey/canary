@@ -125,7 +125,7 @@ def test_a_posted_report_reaches_the_diagnostics_page(tmp_path, tz):
     rsp = client.post("/sensor-readings", json={
         "ts": AT, "device": "canary-dock", "valid": {"co2": True},
         "client": {"board": "Inkplate5V2", "ip": "192.168.1.42", "rssi": -61,
-                   "sensors": {"scd41": True}},
+                   "dock": {"sensors": {"scd41": True}}},
     })
     assert rsp.status_code == 200 and rsp.get_json() == [True]
 

@@ -51,7 +51,7 @@ def restarts(history: list[dict]) -> int:
 def queue_of(c: dict) -> dict | None:
     """The board's queue, ``{"held", "capacity", "store"}``, or None for a
     board that queues nothing: the head reports an empty store."""
-    backlog = c.get("backlog")
+    backlog = (c.get("dock") or {}).get("backlog")
     if not isinstance(backlog, dict) or not backlog.get("store"):
         return None
     return backlog
@@ -154,12 +154,10 @@ class DiagnosticsPage(EnvPage):
                     with a.div(klass="meter"):
                         a.canvas(id=f"{k}-queue-meter")
 
-            # The head has a panel and fetches pages; the dock has sensors. A
-            # board says which it is by what it reports.
-            if "sensors" in c:
-                self._sensors(a, k, c, valid)
-            else:
-                self._panel_and_fetch(a, k, c)
+            if isinstance(c.get("dock"), dict):
+                self._sensors(a, k, c["dock"], valid)
+            elif isinstance(c.get("head"), dict):
+                self._panel_and_fetch(a, k, c["head"])
 
     @staticmethod
     def _version_history(a: Airium, k: str, entry: dict) -> None:
@@ -174,8 +172,8 @@ class DiagnosticsPage(EnvPage):
             kv(a, "refused", f"{refused['count']} from {refused['version']}, "
                              f"{age_span(refused['age_s'])} ago", id=f"{k}-refused")
 
-    def _sensors(self, a: Airium, k: str, c: dict, valid: dict) -> None:
-        present = c.get("sensors") or {}
+    def _sensors(self, a: Airium, k: str, dock: dict, valid: dict) -> None:
+        present = dock.get("sensors") or {}
         with a.div(klass="card"):
             a.div(klass="label", _t="Sensors")
             with a.div(klass="kv"):
@@ -187,18 +185,18 @@ class DiagnosticsPage(EnvPage):
                     else:
                         state = "warming up"
                     kv(a, name, state, id=f"{k}-sensor-{key}")
-                bsec = c.get("bsec") or {}
+                bsec = dock.get("bsec") or {}
                 if bsec.get("running"):
                     word = IAQ_ACCURACY[max(0, min(3, int(bsec.get("accuracy", 0))))]
                     kv(a, "index", f"{word} accuracy, {bsec.get('late', 0)} late", id=f"{k}-bsec")
 
-    def _panel_and_fetch(self, a: Airium, k: str, c: dict) -> None:
-        fetch = c.get("fetch") or {}
+    def _panel_and_fetch(self, a: Airium, k: str, head: dict) -> None:
+        fetch = head.get("fetch") or {}
         with a.div(klass="card"):
             a.div(klass="label", _t="Panel and fetch")
             with a.div(klass="kv"):
-                kv(a, "pixels", f"{c.get('width', '—')} × {c.get('height', '—')}, 8 greys")
-                temp = c.get("panel_temp_c")
+                kv(a, "pixels", f"{head.get('width', '—')} × {head.get('height', '—')}, 8 greys")
+                temp = head.get("panel_temp_c")
                 kv(a, "controller", f"{temp} °C" if temp is not None else "—", id=f"{k}-panel-temp")
                 url = fetch.get("next_url") or ""
                 kv(a, "next", os.path.basename(url) or "—", id=f"{k}-next-page")
@@ -531,7 +529,7 @@ class HealthTracePage(EnvPage):
             a.canvas(id="health-dial")
         a.div(klass="caption", _t="the last 24 hours: "
                                   "large dots restarts, small dots damaged answers")
-        self._settings(a, newest, (doc.get("client") or {}).get("bsec") or {})
+        self._settings(a, newest, ((doc.get("client") or {}).get("dock") or {}).get("bsec") or {})
 
     @staticmethod
     def _settings(a: Airium, health: dict, bsec: dict) -> None:

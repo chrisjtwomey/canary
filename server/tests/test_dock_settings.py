@@ -33,7 +33,7 @@ def board(settings=DockSettings(), requests=None, report=None, now=at(12, 0)):
 
 
 def report(offline=False, age_s=60, **client):
-    return {"doc": {"ts": 1, "device": DOCK, "client": client}, "age_s": age_s,
+    return {"doc": {"ts": 1, "device": DOCK, "client": {"dock": client}}, "age_s": age_s,
             "offline": offline}
 
 

@@ -295,15 +295,24 @@ NO_SENSOR_VERDICT = "No sensor."
 
 
 def sensor_absent(status: dict | None, sensor: str) -> bool:
-    """True when the board's last report says ``sensor`` is not running.
+    """True when the newest report with a ``client.dock.sensors`` block says
+    ``sensor`` is not running.
 
-    ``sensor`` is a key of the report's ``client.sensors`` block. No report,
-    or one that does not name the sensor, counts as present, so a page keeps
-    saying it is warming up until the board says otherwise.
+    Only the dock sends that block, and the head's reports are often newer,
+    so the newest report of any board will not do. No such report, or one
+    that does not name the sensor, counts as present, so a page keeps saying
+    it is warming up until the board says otherwise.
     """
-    doc = (status or {}).get("doc") or {}
-    sensors = (doc.get("client") or {}).get("sensors") or {}
-    return sensors.get(sensor) is False
+    status = status or {}
+    boards = status.get("boards") or {}
+    docs = [entry.get("doc") or {} for entry in boards.values()] or [status.get("doc") or {}]
+    def sensors(doc: dict):
+        return ((doc.get("client") or {}).get("dock") or {}).get("sensors")
+
+    named = [d for d in docs if isinstance(sensors(d), dict)]
+    if not named:
+        return False
+    return sensors(max(named, key=lambda d: d.get("ts") or 0)).get(sensor) is False
 
 
 def rssi_quality(dbm: int) -> tuple[int, str]:

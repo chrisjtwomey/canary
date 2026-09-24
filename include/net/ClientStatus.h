@@ -3,8 +3,12 @@
 #include <cstdint>
 
 // What the board says about itself, posted beside the readings as the
-// "client" object. Diagnostics, not measurements.
+// "client" object. Diagnostics, not measurements. Network, memory and
+// version are common; each board's own fields go in a block named for it,
+// "head" (panel and fetches) or "dock" (sensors, queue, BSEC, settings).
 struct ClientStatus {
+    enum Role : uint8_t { HEAD, DOCK };
+    Role        role;
     const char* board;
     const char* version;
     const char* ip;
@@ -30,8 +34,7 @@ struct ClientStatus {
     uint32_t    bsecLateCalls;   // times BSEC was asked later than it wanted
     uint32_t    bsecSavedEpoch;  // its last state save this boot; 0 for none
     uint16_t    bsecSampleS;     // seconds between its samples
-    const char* settingsVersion; // the board settings it runs, "" before any; null on a
-                                 // board without settings, which sends neither block
+    const char* settingsVersion; // the board settings it runs, "" before any
     uint32_t    settingsRefused; // the keys of them it refused, as BoardSettings.h's bits
     uint32_t    recalibratedId;  // the last recalibration it ran; 0 for none
     uint16_t    recalibratedPpm;

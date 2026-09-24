@@ -275,10 +275,13 @@ DOCK_DOC = {
     "client": {
         "board": "TinyS3", "version": "v0.1.0-dev", "ip": "192.168.1.42", "rssi": -61,
         "uptime_s": 8040, "heap_free": 120000, "heap_size": 327680,
-        "psram_free": 4000000, "psram_size": 4194304, "mock_sensors": True,
-        "sensors": {"shtc3": True, "scd41": True, "pmsa003i": True, "bme688": False},
-        "backlog": {"held": 7, "capacity": 1480, "store": "psram"},
-        "bsec": {"running": True, "restored": True, "accuracy": 2, "late": 1, "saved": 0},
+        "psram_free": 4000000, "psram_size": 4194304,
+        "dock": {
+            "mock_sensors": True,
+            "sensors": {"shtc3": True, "scd41": True, "pmsa003i": True, "bme688": False},
+            "backlog": {"held": 7, "capacity": 1480, "store": "psram"},
+            "bsec": {"running": True, "restored": True, "accuracy": 2, "late": 1, "saved": 0},
+        },
     },
 }
 HEAD_DOC = {
@@ -286,11 +289,12 @@ HEAD_DOC = {
     "client": {
         "board": "Inkplate5V2", "version": "v0.1.0-dev", "ip": "192.168.1.43", "rssi": -70,
         "uptime_s": 400, "heap_free": 100000, "heap_size": 327680,
-        "psram_free": 4000000, "psram_size": 4194304, "panel_temp_c": 27,
-        "width": 1280, "height": 720, "rotation": 0,
-        "fetch": {"next_url": "http://h:8080/day.png", "next_in_s": 120, "backoff_step": 0,
-                  "ok": 12, "failed": 1},
-        "backlog": {"held": 0, "capacity": 0, "store": ""},
+        "psram_free": 4000000, "psram_size": 4194304,
+        "head": {
+            "panel_temp_c": 27, "width": 1280, "height": 720, "rotation": 0,
+            "fetch": {"next_url": "http://h:8080/day.png", "next_in_s": 120, "backoff_step": 0,
+                      "ok": 12, "failed": 1},
+        },
     },
 }
 STATUS = {
@@ -312,7 +316,8 @@ def status_history(hours=24):
         held = 3 * (i - 60) if 60 <= i < 72 else 0
         out["canary-dock"].append({"ts": ts, "device": "canary-dock",
                                    "client": {"rssi": -61 - (i % 7), "uptime_s": i * 600, "heap_free": 120000 - i * 10,
-                                              "backlog": {"held": held, "capacity": 1480, "store": "psram"}}})
+                                              "dock": {"backlog": {"held": held, "capacity": 1480,
+                                                                   "store": "psram"}}}})
     return out
 
 
@@ -365,7 +370,8 @@ class TestDiagnostics:
         assert [s["canvas"] for s in specs] == ["#head-rssi-bars", "#head-heap-meter"]
 
     def test_a_queue_before_its_capacity_is_known_is_a_count(self, tz):
-        client = dict(DOCK_DOC["client"], backlog={"held": 0, "capacity": 0, "store": "psram"})
+        client = dict(DOCK_DOC["client"], dock=dict(DOCK_DOC["client"]["dock"],
+                                                    backlog={"held": 0, "capacity": 0, "store": "psram"}))
         dock = dict(DOCK_DOC, client=client)
         status = dict(STATUS, boards={"canary-dock": {"doc": dock, "age_s": 5}})
         soup, specs = render(DiagnosticsPage("diagnostics", tz=tz, width=WIDTH, height=HEIGHT),
@@ -461,7 +467,7 @@ class TestDiagnosticsTrace:
     def test_an_empty_queue_keeps_a_floor_under_its_axis(self, tz):
         history = status_history()
         for d in history["canary-dock"]:
-            d["client"]["backlog"]["held"] = 0
+            d["client"]["dock"]["backlog"]["held"] = 0
         specs = render(DiagnosticsTracePage("diagnostics-trace", tz=tz, width=WIDTH, height=HEIGHT),
                        {"status": STATUS, "status_history_24h": history})[1]
         assert specs[1]["y"] == {"min": 0, "max": 10}
@@ -591,16 +597,25 @@ def absent(sensor):
     """A board report naming ``sensor`` as not running."""
     sensors = {"shtc3": True, "scd41": True, "pmsa003i": True, "bme688": True}
     sensors[sensor] = False
-    return {"doc": {"ts": 0, "client": {"sensors": sensors}}, "age_s": 5, "count": 1}
+    return {"doc": {"ts": 0, "client": {"dock": {"sensors": sensors}}}, "age_s": 5, "count": 1}
 
 
 class TestAbsentSensor:
     def test_no_report_or_no_sensors_block_counts_as_present(self):
         assert not sensor_absent(None, "scd41")
         assert not sensor_absent({"doc": {"ts": 1}}, "scd41")
-        assert not sensor_absent({"doc": {"client": {"sensors": {}}}}, "scd41")
+        assert not sensor_absent({"doc": {"client": {"dock": {"sensors": {}}}}}, "scd41")
         assert sensor_absent(absent("scd41"), "scd41")
         assert not sensor_absent(absent("scd41"), "shtc3")
+
+    def test_a_newer_report_without_sensors_does_not_hide_the_dock_s(self):
+        dock = absent("scd41")["doc"]
+        head = {"ts": 10, "client": {"board": "Inkplate5V2", "head": {"width": 1280}}}
+        status = {"doc": head, "age_s": 5, "count": 2,
+                  "boards": {"canary-head": {"doc": head}, "canary-dock": {"doc": dock}}}
+
+        assert sensor_absent(status, "scd41")
+        assert not sensor_absent(status, "shtc3")
 
     def test_every_metric_names_a_sensor_the_board_reports(self):
         for m in (TEMP, RH, CO2, PM25, IAQ, PRESSURE):

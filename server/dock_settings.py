@@ -15,9 +15,9 @@ light is dark until the next reading, and a recalibration waiting to run.
      "bsec": {"sample_s": 300},
      "recalibrate": {"id": 1758650400, "ppm": 420}}
 
-The dock reports what it applied in its client status, as ``settings`` with
-the version and any keys it refused, and its last recalibration as
-``recalibrated``.
+The dock reports what it applied in its client status's ``dock`` block, as
+``settings`` with the version and any keys it refused, and its last
+recalibration as ``recalibrated``.
 """
 from __future__ import annotations
 
@@ -237,9 +237,11 @@ class BoardSettings:
     def _entry(self) -> dict:
         return self.reported(DOCK) or {}
 
-    def _client(self) -> dict:
-        client = (self._entry().get("doc") or {}).get("client")
-        return client if isinstance(client, dict) else {}
+    def _dock(self) -> dict:
+        """The dock block of the dock's newest report."""
+        client = (self._entry().get("doc") or {}).get("client") or {}
+        dock = client.get("dock") if isinstance(client, dict) else None
+        return dock if isinstance(dock, dict) else {}
 
     def offline(self) -> tuple[bool, int | None]:
         """Whether the dock has missed two of its slots, and how long ago it
@@ -249,7 +251,7 @@ class BoardSettings:
 
     def last_recalibration(self) -> dict | None:
         """The dock's report of its last recalibration, or None."""
-        done = self._client().get("recalibrated")
+        done = self._dock().get("recalibrated")
         return done if isinstance(done, dict) and done.get("id") else None
 
     def pending(self) -> dict | None:
@@ -286,7 +288,7 @@ class BoardSettings:
     def applied(self) -> tuple[bool | None, list[str]]:
         """Whether the dock runs these settings, None when it has not said,
         and the keys it refused."""
-        reported = self._client().get("settings")
+        reported = self._dock().get("settings")
         if not isinstance(reported, dict):
             return None, []
         refused = reported.get("refused")

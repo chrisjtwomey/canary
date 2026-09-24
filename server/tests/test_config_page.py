@@ -477,12 +477,12 @@ def test_a_reference_out_of_range_is_refused_on_the_dock_tab(dock_client, dock):
 
 
 @pytest.mark.parametrize("dock_report, words", [
-    ({"client": {"settings": {"version": "00000000"}}},
+    ({"client": {"dock": {"settings": {"version": "00000000"}}}},
      "The dock takes these settings before its next report, at 21:50."),
-    ({"client": {"recalibrated": {"id": 1_758_600_000, "ppm": 420, "ok": True,
-                                  "correction_ppm": -12}}},
+    ({"client": {"dock": {"recalibrated": {"id": 1_758_600_000, "ppm": 420, "ok": True,
+                                           "correction_ppm": -12}}}},
      "Corrected by -12 ppm."),
-    ({"client": {"recalibrated": {"id": 1_758_600_000, "ppm": 420, "ok": False}}},
+    ({"client": {"dock": {"recalibrated": {"id": 1_758_600_000, "ppm": 420, "ok": False}}}},
      "The SCD41 refused it."),
 ])
 def test_the_dock_tab_says_what_the_dock_reported(dock_client, words):
@@ -492,8 +492,8 @@ def test_the_dock_tab_says_what_the_dock_reported(dock_client, words):
 
 
 def test_a_key_the_dock_refused_is_named_as_the_form_names_it(dock_client, dock_report, dock):
-    dock_report["client"] = {"settings": {"version": dock.settings.version,
-                                          "refused": ["pm.warmup_s"]}}
+    dock_report["client"] = {"dock": {"settings": {"version": dock.settings.version,
+                                                   "refused": ["pm.warmup_s"]}}}
 
     soup = soup_of(dock_client.get("/web/config"))
 
@@ -534,7 +534,7 @@ def test_the_bsec_rate_is_saved_as_a_number(dock_client, path):
 
 
 
-@pytest.mark.parametrize("dock_report", [{"client": {"settings": {"version": "00000000"}}}])
+@pytest.mark.parametrize("dock_report", [{"client": {"dock": {"settings": {"version": "00000000"}}}}])
 @pytest.mark.parametrize("dock_offline", [True])
 def test_an_offline_dock_greys_out_its_tab(dock_client, path):
     panel = one(soup_of(dock_client.get("/web/config")), "#panel-dock")
@@ -548,7 +548,7 @@ def test_an_offline_dock_greys_out_its_tab(dock_client, path):
     assert not panel.select('[data-field^="dock."] .reset')
 
 
-@pytest.mark.parametrize("dock_report", [{"client": {"settings": {"version": "00000000"}}}])
+@pytest.mark.parametrize("dock_report", [{"client": {"dock": {"settings": {"version": "00000000"}}}}])
 @pytest.mark.parametrize("dock_offline", [True])
 def test_the_dock_lines_come_fresh_for_config_js(dock_client):
     live = dock_client.get("/web/config/live").get_json()
@@ -583,7 +583,7 @@ def test_a_greyed_out_field_keeps_its_value_when_another_tab_saves(dock_client, 
     assert "brightness_pct: 40" in open(path).read()
 
 
-@pytest.mark.parametrize("dock_report", [{"client": {"settings": {"version": "00000000"}}}])
+@pytest.mark.parametrize("dock_report", [{"client": {"dock": {"settings": {"version": "00000000"}}}}])
 def test_a_dock_that_reports_can_be_changed(dock_client):
     panel = one(soup_of(dock_client.get("/web/config")), "#panel-dock")
 
@@ -613,7 +613,8 @@ def test_a_report_interval_set_by_the_environment_shows_in_minutes(dock_client, 
 
 
 def test_a_dock_on_the_saved_settings_is_synchronized(dock_client, dock_report, dock):
-    dock_report["client"] = {"settings": {"version": dock.settings.version, "refused": []}}
+    dock_report["client"] = {"dock": {"settings": {"version": dock.settings.version,
+                                                   "refused": []}}}
 
     soup = soup_of(dock_client.get("/web/config"))
 
@@ -628,7 +629,8 @@ def image_client(path, tz, head):
     app = Flask(__name__)
     app.register_blueprint(config_blueprint(
         make_pages(tz, width=1280, height=720), path, check_config, lambda: None,
-        boards=lambda device: {"doc": {"client": head}} if device == "canary-head" else None))
+        boards=lambda device: {"doc": {"client": {"board": head.get("board"), "head": head}}}
+        if device == "canary-head" else None))
     return app.test_client()
 
 

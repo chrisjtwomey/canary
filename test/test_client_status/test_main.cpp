@@ -8,8 +8,10 @@
 #include "sensors/SensorHealth.h"
 #include "net/Url.h"
 
-static ClientStatus status() {
+// Every field set, so each test shows which of them a role sends.
+static ClientStatus status(ClientStatus::Role role = ClientStatus::DOCK) {
     ClientStatus s = {};
+    s.role = role;
     s.board = "Inkplate5V2"; s.version = "v0.1.0"; s.ip = "192.168.1.42";
     s.rssi = -61; s.uptimeS = 8040;
     s.heapFree = 120000; s.heapSize = 327680; s.psramFree = 4000000; s.psramSize = 4194304;
@@ -27,23 +29,33 @@ static ClientStatus status() {
 void setUp() {}
 void tearDown() {}
 
-void test_client_json_carries_every_field() {
+void test_the_head_sends_the_common_fields_and_its_own_block() {
     char buf[768];
-    size_t n = clientStatusJson(status(), buf, sizeof(buf));
+    size_t n = clientStatusJson(status(ClientStatus::HEAD), buf, sizeof(buf));
     TEST_ASSERT_EQUAL_UINT(strlen(buf), n);
-    TEST_ASSERT_NOT_NULL(strstr(buf, "\"board\":\"Inkplate5V2\""));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "\"rssi\":-61"));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "\"uptime_s\":8040"));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "\"heap_size\":327680"));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "\"panel_temp_c\":27"));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "\"mock_sensors\":true"));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "\"sensors\":{\"shtc3\":true,\"scd41\":true,\"pmsa003i\":false,\"bme688\":true}"));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "\"fetch\":{\"next_url\":\"http://h:8080/day.png\",\"next_in_s\":120,\"backoff_step\":0,\"ok\":12,\"failed\":1}"));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "\"backlog\":{\"held\":7,\"capacity\":1480,\"store\":\"psram\"}"));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "\"bsec\":{\"running\":true,\"restored\":true,\"accuracy\":2"
-                                     ",\"late\":3,\"saved\":1757443200,\"sample_s\":300}"));
-    TEST_ASSERT_EQUAL_CHAR('{', buf[0]);
-    TEST_ASSERT_EQUAL_CHAR('}', buf[n - 1]);
+    TEST_ASSERT_EQUAL_STRING(
+        "{\"board\":\"Inkplate5V2\",\"version\":\"v0.1.0\",\"ip\":\"192.168.1.42\",\"rssi\":-61"
+        ",\"uptime_s\":8040,\"heap_free\":120000,\"heap_size\":327680"
+        ",\"psram_free\":4000000,\"psram_size\":4194304"
+        ",\"head\":{\"panel_temp_c\":27,\"width\":1280,\"height\":720,\"rotation\":0"
+        ",\"fetch\":{\"next_url\":\"http://h:8080/day.png\",\"next_in_s\":120,\"backoff_step\":0"
+        ",\"ok\":12,\"failed\":1}}}", buf);
+}
+
+void test_the_dock_sends_the_common_fields_and_its_own_block() {
+    char buf[1024];
+    size_t n = clientStatusJson(status(ClientStatus::DOCK), buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_UINT(strlen(buf), n);
+    TEST_ASSERT_NOT_NULL(strstr(buf, "\"psram_size\":4194304,\"dock\":{\"mock_sensors\":true"
+        ",\"sensors\":{\"shtc3\":true,\"scd41\":true,\"pmsa003i\":false,\"bme688\":true}"
+        ",\"backlog\":{\"held\":7,\"capacity\":1480,\"store\":\"psram\"}"
+        ",\"bsec\":{\"running\":true,\"restored\":true,\"accuracy\":2"
+        ",\"late\":3,\"saved\":1757443200,\"sample_s\":300}"
+        ",\"settings\":{\"version\":\"\",\"refused\":[]}"));
+    TEST_ASSERT_NULL(strstr(buf, "\"head\""));
+    TEST_ASSERT_NULL(strstr(buf, "\"fetch\""));
+    TEST_ASSERT_NULL(strstr(buf, "\"panel_temp_c\""));
+    TEST_ASSERT_EQUAL_STRING("}}}", buf + n - 3);
 }
 
 void test_client_json_needs_room_or_writes_nothing() {
@@ -133,9 +145,9 @@ void test_health_that_does_not_fit_writes_nothing() {
     TEST_ASSERT_EQUAL_STRING("", buf);
 }
 
-void test_a_board_without_settings_sends_no_settings() {
+void test_the_head_sends_no_settings() {
     char buf[1024];
-    clientStatusJson(status(), buf, sizeof(buf));
+    clientStatusJson(status(ClientStatus::HEAD), buf, sizeof(buf));
     TEST_ASSERT_NULL(strstr(buf, "\"settings\""));
     TEST_ASSERT_NULL(strstr(buf, "\"recalibrated\""));
 }
@@ -152,7 +164,7 @@ void test_the_dock_says_which_settings_it_runs_and_its_last_recalibration() {
     TEST_ASSERT_NOT_NULL(strstr(buf, ",\"settings\":{\"version\":\"3f2a9c1e\""
                                      ",\"refused\":[\"pm.warmup_s\",\"log.level\"]}"));
     TEST_ASSERT_NOT_NULL(strstr(buf, ",\"recalibrated\":{\"id\":1758650400,\"ppm\":420"
-                                     ",\"ok\":true,\"correction_ppm\":-12}}"));
+                                     ",\"ok\":true,\"correction_ppm\":-12}}}"));
 }
 
 void test_the_dock_client_object_fits_its_buffer_with_every_key_refused() {
@@ -168,8 +180,9 @@ void test_the_dock_client_object_fits_its_buffer_with_every_key_refused() {
 
 int main(int, char**) {
     UNITY_BEGIN();
-    RUN_TEST(test_client_json_carries_every_field);
-    RUN_TEST(test_a_board_without_settings_sends_no_settings);
+    RUN_TEST(test_the_head_sends_the_common_fields_and_its_own_block);
+    RUN_TEST(test_the_dock_sends_the_common_fields_and_its_own_block);
+    RUN_TEST(test_the_head_sends_no_settings);
     RUN_TEST(test_the_dock_says_which_settings_it_runs_and_its_last_recalibration);
     RUN_TEST(test_the_dock_client_object_fits_its_buffer_with_every_key_refused);
     RUN_TEST(test_client_json_needs_room_or_writes_nothing);

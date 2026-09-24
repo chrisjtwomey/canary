@@ -205,6 +205,7 @@ static void fetchAndDraw() {
 static ClientStatus clientStatus(uint32_t nowMs) {
     strncpy(ipText, WiFi.localIP().toString().c_str(), sizeof(ipText) - 1);
     ClientStatus s = {};
+    s.role = ClientStatus::HEAD;
     s.board = epdBoard().deviceName();
     s.version = CLIENT_VERSION;
     s.ip = ipText;
@@ -223,7 +224,6 @@ static ClientStatus clientStatus(uint32_t nowMs) {
     s.backoffStep = refresh.step();
     s.fetchOk = fetchOk;
     s.fetchFailed = fetchFailed;
-    s.backlogStore = "";
     return s;
 }
 

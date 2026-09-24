@@ -79,43 +79,55 @@ the PM fan needs thirty seconds before its counts mean anything.
 
 Beside the measurements, every posted document carries what the board
 knows about itself. None of it is a measurement of the room; the
-Diagnostics page shows it.
+Diagnostics page shows it. Network, memory and version are common to both
+boards; each board's own fields sit in a block named for it, `head` or
+`dock`, and a board sends only its own.
 
 ```json
 "client": {
-  "board": "Inkplate5V2", "version": "v0.1.0-dev", "ip": "192.168.1.42", "rssi": -61,
+  "board": "Inkplate5V2", "version": "v0.1.0-dev", "ip": "192.168.1.43", "rssi": -70,
+  "uptime_s": 400,
+  "heap_free": 100000, "heap_size": 327680, "psram_free": 4000000, "psram_size": 4194304,
+  "head": {
+    "panel_temp_c": 27, "width": 1280, "height": 720, "rotation": 0,
+    "fetch": { "next_url": "http://h:8080/day.png", "next_in_s": 120, "backoff_step": 0,
+               "ok": 12, "failed": 1 }
+  }
+}
+
+"client": {
+  "board": "canary-dock", "version": "v0.1.0-dev", "ip": "192.168.1.42", "rssi": -61,
   "uptime_s": 8040,
   "heap_free": 120000, "heap_size": 327680, "psram_free": 4000000, "psram_size": 4194304,
-  "panel_temp_c": 27, "width": 1280, "height": 720, "rotation": 0,
-  "mock_sensors": true,
-  "sensors": { "shtc3": true, "scd41": true, "pmsa003i": true, "bme688": true },
-  "fetch": { "next_url": "http://h:8080/day.png", "next_in_s": 120, "backoff_step": 0,
-             "ok": 12, "failed": 1 },
-  "backlog": { "held": 0, "capacity": 1480, "store": "psram" },
-  "bsec": { "running": true, "restored": true, "accuracy": 2, "late": 0, "saved": 1757443200,
-            "sample_s": 300 },
-  "settings": { "version": "5bd4ecec", "refused": [] },
-  "recalibrated": { "id": 1758650400, "ppm": 420, "ok": true, "correction_ppm": -12 }
+  "dock": {
+    "mock_sensors": true,
+    "sensors": { "shtc3": true, "scd41": true, "pmsa003i": true, "bme688": true },
+    "backlog": { "held": 0, "capacity": 1480, "store": "psram" },
+    "bsec": { "running": true, "restored": true, "accuracy": 2, "late": 0,
+              "saved": 1757443200, "sample_s": 300 },
+    "settings": { "version": "5bd4ecec", "refused": [] },
+    "recalibrated": { "id": 1758650400, "ppm": 420, "ok": true, "correction_ppm": -12 }
+  }
 }
 ```
 
-`sensors.*` says which parts are running: a flag goes false when its part
-stops giving readings, and true again when a restart brings it back.
-`valid.*` says which are warm now. `panel_temp_c` is the e-paper power controller's sensor, which
-reads the board, not the air. `fetch` is the page loop's state. `backlog`
-is how many readings waited in the dock's queue when this one was taken,
-about how many it holds when full, at the size of the newest (0 before the
-first), and where they wait: `psram`, `ram` when the board has no PSRAM to
-spare, or empty on the head, which queues nothing. A reading keeps the `client` object
-it was queued with, so a batch that arrives after an outage fills in how the
-board fared through it; the server keeps the report with the highest `ts` as
-the newest. `bsec` is
-BSEC's own state: whether it runs, whether it took a saved state when it
-started, the accuracy of its index, how many of its samples were late,
-when it last saved its state this boot (0 for not yet), and the seconds
-between its samples, 3 or 300. `settings` and
-`recalibrated` come from the dock alone (ARCHITECTURE §3.8): the version of
-the settings it runs and the keys of them it refused, and the last
+In `head`, `panel_temp_c` is the e-paper power controller's sensor, which
+reads the board, not the air, and `fetch` is the page loop's state.
+
+In `dock`, `sensors.*` says which parts are running: a flag goes false when
+its part stops giving readings, and true again when a restart brings it
+back; `valid.*` says which are warm now. `backlog` is how many readings
+waited in the queue when this one was taken, about how many it holds when
+full, at the size of the newest (0 before the first), and where they wait:
+`psram`, or `ram` when the board has no PSRAM to spare. A reading keeps the
+`client` object it was queued with, so a batch that arrives after an outage
+fills in how the board fared through it; the server keeps the report with
+the highest `ts` as the newest. `bsec` is BSEC's own state: whether it
+runs, whether it took a saved state when it started, the accuracy of its
+index, how many of its samples were late, when it last saved its state
+this boot (0 for not yet), and the seconds between its samples, 3 or 300.
+`settings` and `recalibrated` (ARCHITECTURE §3.8) are the version of the
+settings it runs and the keys of them it refused, and the last
 recalibration it ran, with the id the server gave it and the correction the
 SCD41 made; an `id` of 0 is none yet.
 
