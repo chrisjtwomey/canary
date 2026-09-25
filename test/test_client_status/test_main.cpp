@@ -80,6 +80,11 @@ void test_a_board_whose_chip_gave_no_temperature_leaves_it_out() {
     TEST_ASSERT_NOT_NULL(strstr(buf, "\"psram_size\":4194304,\"head\":"));
 }
 
+void test_a_status_with_no_chip_temperature_set_has_none() {
+    ClientStatus s = {};
+    TEST_ASSERT_EQUAL(ClientStatus::kNoTemp, s.chipTempC);
+}
+
 void test_a_board_with_no_start_reason_says_unknown() {
     ClientStatus s = status();
     s.reset = nullptr;
@@ -230,6 +235,7 @@ int main(int, char**) {
     RUN_TEST(test_the_dock_client_object_fits_its_buffer_with_every_key_refused);
     RUN_TEST(test_a_start_reason_is_named_in_esp_idfs_order);
     RUN_TEST(test_a_board_whose_chip_gave_no_temperature_leaves_it_out);
+    RUN_TEST(test_a_status_with_no_chip_temperature_set_has_none);
     RUN_TEST(test_a_board_with_no_start_reason_says_unknown);
     RUN_TEST(test_the_head_client_object_fits_its_buffer_at_its_longest);
     RUN_TEST(test_client_json_needs_room_or_writes_nothing);

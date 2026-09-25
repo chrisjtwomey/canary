@@ -16,7 +16,7 @@ struct ClientStatus {
     int         rssi;            // dBm
     uint32_t    uptimeS;
     const char* reset;           // why it last started: resetReasonName()
-    int16_t     chipTempC;       // by the chip's own sensor; kNoTemp when it gave none
+    int16_t     chipTempC = kNoTemp;   // by the chip's own sensor; kNoTemp when it gave none
     uint32_t    heapFree, heapSize;
     uint32_t    psramFree, psramSize;
     int         panelTempC;

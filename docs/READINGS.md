@@ -86,7 +86,7 @@ boards; each board's own fields sit in a block named for it, `head` or
 ```json
 "client": {
   "board": "Inkplate5V2", "version": "v0.1.0-dev", "ip": "192.168.1.43", "rssi": -70,
-  "uptime_s": 400, "reset": "power_on", "chip_temp_c": 53,
+  "uptime_s": 400, "reset": "power_on",
   "heap_free": 100000, "heap_size": 327680, "psram_free": 4000000, "psram_size": 4194304,
   "head": {
     "panel_temp_c": 27, "width": 1280, "height": 720, "rotation": 0,
@@ -113,7 +113,8 @@ boards; each board's own fields sit in a block named for it, `head` or
 ```
 
 `chip_temp_c` is the chip's own sensor: it reads the chip, not the air, and
-is left out when the chip gives none. `reset` is why the board last
+is left out when the chip gives none. Only the dock sends it: the head's
+classic ESP32 reads a fixed 53 °C. `reset` is why the board last
 started, as ESP-IDF's `esp_reset_reason()` names it: `power_on`, `software`
 (a restart the firmware asked for, as after an update), `deep_sleep` (a
 wake), `external`, `usb`, `jtag` or `sdio` are expected; `panic`,
