@@ -1,5 +1,5 @@
 """GET /board-settings: the dock's settings from config.yaml, the light's
-quiet hours, and a recalibration waiting to run."""
+dark hours, and a recalibration waiting to run."""
 from datetime import datetime
 
 import pytest
@@ -7,7 +7,7 @@ from epd_server.config import ConfigError
 
 from dock_settings import (DOCK, RECALIBRATE_WITHIN_S, BoardSettings, DockSettings,
                            load_dock_settings)
-from schedule import PostSchedule, parse_hhmm
+from schedule import ClockSchedule, parse_hhmm
 from server import check_config
 from sources.calibration import CalibrationStore
 from tests.conftest import TZ
@@ -17,7 +17,8 @@ def at(hour, minute):
     return datetime(2026, 9, 23, hour, minute, tzinfo=TZ).timestamp()
 
 
-POSTS = PostSchedule(300, TZ, parse_hhmm("01:00"), parse_hhmm("07:00"), 1800)
+SYNC = ClockSchedule([(parse_hhmm("07:00"), 300), (parse_hhmm("01:00"), 1800)], TZ, "dock.sync")
+NIGHT = (parse_hhmm("01:00"), parse_hhmm("07:00"))
 
 
 @pytest.fixture
@@ -28,7 +29,7 @@ def requests(tmp_path):
 
 
 def board(settings=DockSettings(), requests=None, report=None, now=at(12, 0)):
-    return BoardSettings(settings, POSTS, requests, lambda device: report,
+    return BoardSettings(settings, SYNC, requests, lambda device: report,
                          now=lambda: now)
 
 
@@ -40,7 +41,7 @@ def report(offline=False, age_s=60, **client):
 def test_a_config_without_a_dock_block_gives_the_defaults():
     assert load_dock_settings({}) == DockSettings(
         pm_warmup_s=35, scd41_temperature_offset_c=4.0, scd41_self_calibration=True,
-        shtc3_low_power=False, led_brightness_pct=15, led_off_in_quiet_hours=False,
+        shtc3_low_power=False, led_brightness_pct=15, led_dark=None,
         log_level="debug", bsec_sample_s=300, led_looks=(
             ("starting", "pulse", 0.5), ("no_wifi", "flash", 1.0), ("post_failed", "flash", 2.0),
             ("sensor_missing", "flash", 3.0), ("well", "pulse", 1.0)))
@@ -51,11 +52,11 @@ def test_it_reads_each_key_of_the_dock_block():
         "pm": {"warmup_s": 0},
         "scd41": {"temperature_offset_c": 2.5, "self_calibration": False},
         "shtc3": {"low_power": True},
-        "led": {"brightness_pct": 40, "off_in_quiet_hours": True},
+        "led": {"brightness_pct": 40, "dark": {"from": "01:00", "to": "07:00"}},
         "log": {"level": "info"},
         "bsec": {"sample_s": 3}}})
 
-    assert settings == DockSettings(0, 2.5, False, True, 40, True, "info", 3)
+    assert settings == DockSettings(0, 2.5, False, True, 40, NIGHT, "info", 3)
 
 
 @pytest.mark.parametrize("block, key", [
@@ -72,6 +73,10 @@ def test_it_reads_each_key_of_the_dock_block():
     ({"led": {"no_wifi": {"interval_s": 0.2}}}, "dock.led.no_wifi.interval_s"),
     ({"led": {"starting": {"interval_s": 11}}}, "dock.led.starting.interval_s"),
     ({"led": {"post_failed": {"interval_s": True}}}, "dock.led.post_failed.interval_s"),
+    ({"led": {"dark": {"from": "01:00"}}}, "dock.led.dark"),
+    ({"led": {"dark": {"from": "25:00", "to": "07:00"}}}, "dock.led.dark:"),
+    ({"led": {"dark": {"from": "07:00", "to": "07:00"}}}, "dock.led.dark"),
+    ({"led": {"dark": True}}, "dock.led.dark"),
 ])
 def test_a_value_out_of_range_is_refused_by_its_key(block, key):
     with pytest.raises(ConfigError, match=f"^{key} "):
@@ -105,9 +110,13 @@ def test_the_version_changes_with_any_setting_and_only_then():
     assert DockSettings(log_level="info").version != base.version
 
 
-def test_the_light_in_quiet_hours_is_not_part_of_the_version():
-    """It is a choice of when, which the answer carries as dark."""
-    assert DockSettings(led_off_in_quiet_hours=True).version == DockSettings().version
+def test_the_lights_dark_hours_are_not_part_of_the_version():
+    """They are a choice of when, which the answer carries as dark."""
+    assert DockSettings(led_dark=NIGHT).version == DockSettings().version
+
+
+def test_dark_hours_given_as_nothing_are_none():
+    assert load_dock_settings({"dock": {"led": {"dark": {}}}}).led_dark is None
 
 
 def test_the_answer_is_the_settings_and_their_version(requests):
@@ -137,17 +146,17 @@ def test_only_the_dock_has_settings(args, requests):
 
 @pytest.mark.parametrize("now, dark", [
     (at(0, 50), False),     # next slot 00:55
-    (at(0, 56), True),      # next slot 01:00, in quiet hours
+    (at(0, 56), True),      # next slot 01:00, in the dark hours
     (at(6, 45), False),     # next slot 07:00, out of them
     (at(3, 10), True),
 ])
-def test_the_light_is_dark_before_a_slot_in_quiet_hours(now, dark, requests):
-    settings = DockSettings(led_off_in_quiet_hours=True)
+def test_the_light_is_dark_before_a_slot_in_its_dark_hours(now, dark, requests):
+    settings = DockSettings(led_dark=NIGHT)
 
     assert board(settings, requests, now=now).answer({"device": DOCK})["led"]["dark"] is dark
 
 
-def test_the_light_stays_on_in_quiet_hours_unless_asked(requests):
+def test_the_light_has_no_dark_hours_unless_given(requests):
     assert board(requests=requests, now=at(3, 10)).answer({"device": DOCK})["led"]["dark"] is False
 
 
@@ -207,21 +216,29 @@ def test_the_dock_is_offline_as_its_reports_say(requests):
 
 @pytest.mark.parametrize("now, silence", [
     (at(12, 3), 8 * 60),        # slots 12:00 and 11:55: two missed by 12:03 means none since 11:55
-    (at(1, 20), 25 * 60),       # 01:00, the first quiet slot, and 00:55 before it
-    (at(1, 40), 40 * 60),       # quiet: 01:30 and 01:00
+    (at(1, 20), 25 * 60),       # 01:00, the night range's first slot, and 00:55 before it
+    (at(1, 40), 40 * 60),       # the night range: 01:30 and 01:00
     (at(7, 3), 33 * 60),        # 07:00 and 06:30
 ])
 def test_the_dock_may_be_silent_until_two_slots_are_missed(now, silence):
     from server import make_silence
-    assert make_silence(POSTS)("canary-dock", now) == silence
-    assert make_silence(POSTS)("canary-head", now) == 120
+    assert make_silence(SYNC)("canary-dock", now) == silence
+    assert make_silence(SYNC)("canary-head", now) == 120
 
 
-def test_only_the_dock_has_a_next_post():
-    from server import make_next_post
-    now = POSTS.slot_before(1790330000) + 10
-    assert make_next_post(POSTS)("canary-dock", now) == POSTS.seconds_until_next(now)
-    assert make_next_post(POSTS)("canary-head", now) is None
+def test_a_range_that_is_off_lengthens_the_silence_the_dock_may_keep():
+    from server import make_silence
+    off_at_night = ClockSchedule([(parse_hhmm("07:00"), 300), (parse_hhmm("22:00"), 0)], TZ,
+                                 "dock.sync")
+    # The last two slots before 03:00 are 21:55 and 21:50.
+    assert make_silence(off_at_night)("canary-dock", at(3, 0)) == 5 * 3600 + 10 * 60
+
+
+def test_only_the_dock_has_a_next_sync():
+    from server import make_next_sync
+    now = SYNC.slot_before(1790330000) + 10
+    assert make_next_sync(SYNC)("canary-dock", now) == SYNC.seconds_until_next(now)
+    assert make_next_sync(SYNC)("canary-head", now) is None
 
 
 def test_a_recalibration_past_the_hour_and_not_run_has_expired(requests):
@@ -234,5 +251,5 @@ def test_a_recalibration_past_the_hour_and_not_run_has_expired(requests):
 
 
 @pytest.mark.parametrize("now, slot", [(at(12, 3), "12:05"), (at(1, 10), "01:30")])
-def test_the_next_report_is_the_next_slot_in_local_time(now, slot, requests):
-    assert board(requests=requests, now=now).next_report() == slot
+def test_the_next_sync_is_the_next_slot_in_local_time(now, slot, requests):
+    assert board(requests=requests, now=now).next_sync() == slot

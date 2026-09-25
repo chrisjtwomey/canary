@@ -24,10 +24,9 @@ from ruamel.yaml.comments import CommentedMap, CommentedSeq
 from ruamel.yaml.error import CommentMark
 from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 from ruamel.yaml.tokens import CommentToken
-from ruamel.yaml.util import load_yaml_guess_indent
 
 import dock_settings as ds
-from schedule import DEFAULT_QUIET
+from schedule import DEFAULT_DOCK_SYNC, MAX_RANGES
 
 # A key the file does not have.
 MISSING: Any = object()
@@ -52,7 +51,7 @@ class Field:
     key: str
     label: str
     help: str = ""
-    kind: str = "text"      # text zone int number bool choice time quiet pools order times
+    kind: str = "text"      # text zone int number bool choice time window pools order times clock
     default: Any = None
     hint: str = ""
     choices: tuple[tuple[str, str], ...] = ()
@@ -86,7 +85,7 @@ class Group:
     once rather than saving; ``position``, a grid that sets the group's two
     alignments together; or ``head``, the size the head reports. ``visual``
     names a drawing of the group's values that can also set them: ``dial``,
-    the day's reports, ``slot``, the time before one report, or ``panel``,
+    the day's syncs, ``slot``, the time before one sync, or ``panel``,
     the image and its drawn area."""
     heading: str
     fields: tuple[Field, ...]
@@ -182,19 +181,12 @@ TABS: tuple[Tab, ...] = (
         ), action="position"),
     ), sheet=True),
     Tab("dock", "Dock", (
-        Group("Report schedule", (
-            Field("posts.every", "Report every", "", "int", 300, unit="minutes", minimum=1,
-                  scale=60),
-            Field("posts.quiet", "Slow mode",
-                  "A time range of less frequent reports.", "quiet", True, env=False),
-            Field("posts.quiet.from", "From", "", "time", when="posts.quiet=true", env=False),
-            Field("posts.quiet.to", "To", "", "time", when="posts.quiet=true", env=False),
-            Field("posts.quiet.every", "Report every", "", "int",
-                  lambda cfg: effective(cfg, "posts.every"),
-                  unit="minutes", minimum=1, scale=60, when="posts.quiet=true", env=False,
-                  long="Report every, in slow mode"),
+        Group("Sync schedule", (
+            Field("dock.sync", "Sync schedule",
+                  "Each range runs until the next one starts. 0 minutes = off.", "clock",
+                  DEFAULT_DOCK_SYNC, env=False),
         ), visual="dial"),
-        Group("Before each report · PMSA003I", (
+        Group("Before each sync · PMSA003I", (
             Field("dock.pm.warmup_s", "Fan warm-up", "0 = always on.", "int", ds.PM_WARMUP_S,
                   unit="seconds", minimum=0, maximum=ds.PM_WARMUP_MAX_S),
         ), visual="slot"),
@@ -216,7 +208,11 @@ TABS: tuple[Tab, ...] = (
         Group("Status light", (
             Field("dock.led.brightness_pct", "Brightness", "0 = off.", "int",
                   ds.LED_BRIGHTNESS_PCT, unit="%", minimum=0, maximum=100),
-            Field("dock.led.off_in_quiet_hours", "Off in slow mode", "", "bool", False),
+            Field("dock.led.dark", "Dark hours", "", "window", False, env=False),
+            Field("dock.led.dark.from", "From", "", "time", when="dock.led.dark=true", env=False,
+                  long="Dark hours from"),
+            Field("dock.led.dark.to", "To", "", "time", when="dock.led.dark=true", env=False,
+                  long="Dark hours to"),
             *(field for state, pattern, interval in ds.LED_LOOKS
               for field in _led_fields(state, pattern, interval)),
         )),
@@ -365,27 +361,50 @@ def _pool_rows(v: Any) -> list[tuple[str, str]]:
     return [(str(n), ", ".join(map(str, p if isinstance(p, list) else [p]))) for n, p in v.items()]
 
 
-def _quiet_block(cfg: dict) -> dict | None:
-    """posts.quiet when the file gives one; None when the defaults apply or it is off."""
-    q = lookup(cfg, ("posts", "quiet"))
-    return q if isinstance(q, dict) and q else None
+# The fields that are rows of inputs rather than one.
+ROWS = ("pools", "times", "clock")
+# The window the light's dark hours start from when they are turned on.
+DARK_KEY = "dock.led.dark"
+DARK_PATH = ("dock", "led", "dark")
+
+
+def _dark_block(cfg: dict) -> dict | None:
+    """The light's dark hours when the file gives them; None when they are off."""
+    d = lookup(cfg, DARK_PATH)
+    return d if isinstance(d, dict) and d else None
+
+
+def _clock_rows(v: Any) -> list[tuple[str, str]]:
+    """A schedule's ranges as the form's rows: the start, and the interval in minutes."""
+    if not isinstance(v, list):
+        return []
+    rows = []
+    for r in v:
+        if isinstance(r, dict):
+            every = r.get("every", "")
+            minutes = every // 60 if isinstance(every, int) and not isinstance(every, bool) \
+                and every % 60 == 0 else every
+            rows.append((str(r.get("from", "")), str(minutes)))
+    return rows
 
 
 def shown(cfg: dict) -> dict[str, Any]:
     """Each field's value as its input shows it: a string, or rows for the
-    pools and the wake times."""
+    pools, the wake times and a schedule's ranges."""
     out: dict[str, Any] = {}
-    quiet = _quiet_block(cfg)
+    dark = _dark_block(cfg)
     for f in FIELDS:
         v = lookup(cfg, f.path)
         if f.kind == "pools":
             out[f.key] = _pool_rows(v)
         elif f.kind == "times":
             out[f.key] = time_rows(cfg)
-        elif f.kind == "quiet":
-            out[f.key] = "false" if v is not MISSING and not v else "true"
-        elif f.key.startswith("posts.quiet.") and quiet is None:
-            out[f.key] = _as_input(_scaled(f, DEFAULT_QUIET[f.path[-1]]))
+        elif f.kind == "clock":
+            out[f.key] = _clock_rows(_in_order(default_of(f, cfg) if v is MISSING else v))
+        elif f.kind == "window":
+            out[f.key] = "true" if dark is not None else "false"
+        elif f.key.startswith(DARK_KEY + ".") and dark is None:
+            out[f.key] = ds.DEFAULT_LED_DARK[f.path[-1]]
         else:
             out[f.key] = _as_input(_scaled(f, default_of(f, cfg) if v is MISSING else v))
     return out
@@ -393,13 +412,13 @@ def shown(cfg: dict) -> dict[str, Any]:
 
 def defaults(cfg: dict) -> dict[str, str]:
     """Each field's default as its input shows it, for the fields that have one."""
-    quiet = _quiet_block(cfg)
+    dark = _dark_block(cfg)
     out: dict[str, str] = {}
     for f in FIELDS:
-        if f.kind in ("pools", "times"):
+        if f.kind in ROWS:
             continue
-        if f.key.startswith("posts.quiet.") and quiet is None:
-            d: Any = DEFAULT_QUIET[f.path[-1]]
+        if f.key.startswith(DARK_KEY + ".") and dark is None:
+            d: Any = ds.DEFAULT_LED_DARK[f.path[-1]]
         else:
             d = default_of(f, cfg)
         if d is not None:
@@ -418,6 +437,8 @@ def submitted(form) -> dict[str, Any]:
             out[f.key] = list(zip(form.getlist(f.key + ".name"), form.getlist(f.key + ".pages")))
         elif f.kind == "times":
             out[f.key] = list(zip(form.getlist(f.key + ".at"), form.getlist(f.key + ".pool")))
+        elif f.kind == "clock":
+            out[f.key] = list(zip(form.getlist(f.key + ".from"), form.getlist(f.key + ".every")))
         else:
             out[f.key] = form.getlist(f.key)[-1]
     return out
@@ -485,6 +506,41 @@ def _parse_times(rows) -> list[tuple[str, str]]:
     return list(out.items())
 
 
+def _in_order(ranges: Any) -> Any:
+    """A schedule's ranges from the earliest start, as the form writes them;
+    anything else as it is."""
+    if isinstance(ranges, list) and all(isinstance(r, dict) for r in ranges):
+        return sorted(ranges, key=lambda r: str(r.get("from", "")))
+    return ranges
+
+
+def _parse_clock(rows) -> list[dict]:
+    """A schedule's rows as its ranges, from the earliest start."""
+    ranges: dict[str, int] = {}
+    for at, every in rows:
+        at, every = at.strip(), every.strip()
+        if not at and not every:
+            continue
+        m = _HHMM.fullmatch(at)
+        if not m or int(m[1]) > 23 or int(m[2]) > 59:
+            raise FieldError(f"{at or 'A range'}: not a time.")
+        at = f"{int(m[1]):02d}:{m[2]}"
+        try:
+            minutes = int(every)
+        except ValueError:
+            raise FieldError(f"From {at}: enter a whole number of minutes.") from None
+        if not 0 <= minutes <= 24 * 60:
+            raise FieldError(f"From {at}: enter 0 to {24 * 60} minutes.")
+        if at in ranges:
+            raise FieldError(f"Two ranges start at {at}.")
+        ranges[at] = minutes * 60
+    if not ranges:
+        raise FieldError("Keep at least one range.")
+    if len(ranges) > MAX_RANGES:
+        raise FieldError(f"At most {MAX_RANGES} ranges.")
+    return [{"from": at, "every": ranges[at]} for at in sorted(ranges)]
+
+
 def parse(f: Field, raw: Any) -> Any:
     """The value to write for what the input holds; None takes the key out,
     so the server uses its default."""
@@ -492,8 +548,10 @@ def parse(f: Field, raw: Any) -> Any:
         return _parse_pools(raw)
     if f.kind == "times":
         return _parse_times(raw)
+    if f.kind == "clock":
+        return _parse_clock(raw)
     raw = str(raw).strip()
-    if f.kind in ("bool", "quiet"):
+    if f.kind in ("bool", "window"):
         return raw == "true"
     if raw == "":
         return None
@@ -554,9 +612,16 @@ def _plain(s: str) -> bool:
 
 def _node(value: Any) -> Any:
     """``value`` as ruamel writes it: strings quoted when they must be, lists
-    on one line, mappings as blocks."""
+    on one line, mappings as blocks, and a list of mappings one to a line."""
     if isinstance(value, str):
         return value if _plain(value) else DoubleQuotedScalarString(value)
+    if isinstance(value, list) and value and all(isinstance(v, dict) for v in value):
+        seq = CommentedSeq()
+        for v in value:
+            item = CommentedMap((_node(k), _node(x)) for k, x in v.items())
+            item.fa.set_flow_style()
+            seq.append(item)
+        return seq
     if isinstance(value, list):
         seq = CommentedSeq(_node(v) for v in value)
         seq.fa.set_flow_style()
@@ -640,21 +705,41 @@ def _yaml(indent: int = 2, offset: int = 0) -> YAML:
     return y
 
 
+_KEY_LINE = re.compile(r"( *)[^ #\-][^:#]*:(\s|$)")
+_DASH_LINE = re.compile(r"( *)- ")
+
+
+def _indents(text: str) -> tuple[int, int]:
+    """How far ``text`` indents a mapping under its key, and a list's dash
+    past its key: 2 and 2 when the file has no example of either.
+
+    ruamel's own guess takes both from the first list it meets, which says
+    nothing of how the mappings are indented."""
+    mapping, offset, key_at = None, None, None
+    for line in text.splitlines():
+        key, dash = _KEY_LINE.match(line), _DASH_LINE.match(line)
+        if key:
+            at = len(key[1])
+            if key_at is not None and at > key_at and mapping is None:
+                mapping = at - key_at
+            key_at = at
+        elif dash and key_at is not None and offset is None:
+            offset = len(dash[1]) - key_at
+    return mapping or 2, offset if offset is not None and offset >= 0 else 2
+
+
 class Doc:
     """config.yaml as ruamel holds it, with edits that keep its comments."""
 
     def __init__(self, text: str):
         if text.strip():
+            self.ind, self.offset = _indents(text)
             try:
-                root, ind, offset = load_yaml_guess_indent(text)
+                root = _yaml(self.ind, self.offset).load(text)
             except Exception:  # noqa: BLE001 - any ruamel failure means the form cannot edit it
                 raise FormError("Not valid YAML. Fix it in the YAML tab.") from None
-            self.ind = ind or 2
-            self.offset = offset or 0
-            # load_yaml_guess_indent loads without preserve_quotes.
-            root = _yaml(self.ind, self.offset).load(text)
         else:
-            root, self.ind, self.offset = None, 2, 0
+            root, self.ind, self.offset = None, 2, 2
         if root is None:
             root = CommentedMap()
         if not isinstance(root, CommentedMap):
@@ -845,7 +930,7 @@ def apply(text: str, form) -> Edit:
     for f in FIELDS:
         if f.key not in form or f.env_value() is not None:
             continue
-        raw = rows[f.key] if f.kind in ("pools", "times") else form.getlist(f.key)[-1]
+        raw = rows[f.key] if f.kind in ROWS else form.getlist(f.key)[-1]
         try:
             values[f.key] = parse(f, raw)
         except FieldError as exc:
@@ -869,7 +954,7 @@ def apply(text: str, form) -> Edit:
             expect[tuple(key.split("."))] = MISSING
 
     for f in FIELDS:
-        if f.key not in values or f.key.startswith("posts.quiet"):
+        if f.key not in values or f.key.startswith(DARK_KEY):
             continue
         value = values[f.key]
         if f.kind == "pools":
@@ -885,6 +970,12 @@ def apply(text: str, form) -> Edit:
             if kind == "times" and dict(time_rows(cfg)) != dict(value):
                 doc.set_times(value)
                 times = value
+                changed.append(f.key)
+        elif f.kind == "clock":
+            cur = lookup(cfg, f.path)
+            if not _same(_in_order(cur), value) and not (cur is MISSING
+                                                         and value == default_of(f, cfg)):
+                put(f.path, value)
                 changed.append(f.key)
         elif kind == "times" and f.key in INTERVAL_KEYS:
             continue
@@ -908,8 +999,8 @@ def apply(text: str, form) -> Edit:
         times = []
         changed.append("display.schedule.times")
 
-    if "posts.quiet" in values:
-        changed += _apply_quiet(doc, cfg, values, put, take)
+    if DARK_KEY in values:
+        changed += _apply_dark(cfg, values, put)
 
     if not changed:
         return Edit(text, {}, [])
@@ -918,37 +1009,23 @@ def apply(text: str, form) -> Edit:
     return Edit(new_text, {}, changed)
 
 
-def _apply_quiet(doc: Doc, cfg: dict, values: dict, put, take) -> list[str]:
-    """posts.quiet: ``{}`` when it is off; absent when it is on at the
-    defaults; otherwise a block of the times the form gives."""
-    path = ("posts", "quiet")
-    cur = lookup(cfg, path)
-    if not values["posts.quiet"]:
-        if cur is not MISSING and not cur:
+def _apply_dark(cfg: dict, values: dict, put) -> list[str]:
+    """The light's dark hours: ``{}`` when they are off, otherwise a block of
+    the times the form gives, or the file's, or the defaults."""
+    cur = _dark_block(cfg)
+    if not values[DARK_KEY]:
+        if cur is None:
             return []
-        put(path, {})
-        return ["posts.quiet"]
-    given = {k: values[f"posts.quiet.{k}"] for k in DEFAULT_QUIET if f"posts.quiet.{k}" in values}
-    if _quiet_block(cfg) is None:
-        block = {k: DEFAULT_QUIET[k] if given.get(k) is None else given[k] for k in DEFAULT_QUIET}
-        if cur is MISSING and block == DEFAULT_QUIET:
-            return []
-        if block == DEFAULT_QUIET:
-            take("posts.quiet")
-            return []
-        put(path, block)
-        return ["posts.quiet"]
-    changed = []
-    for k, v in given.items():
-        key, now = f"posts.quiet.{k}", lookup(cfg, path + (k,))
-        if v is None:
-            if now is not MISSING:
-                take(key)
-        elif not _same(now, v) and not (now is MISSING
-                                        and _same(default_of(BY_KEY[key], cfg), v)):
-            put(path + (k,), v)
-            changed.append(key)
-    return changed
+        put(DARK_PATH, {})
+        return [DARK_KEY]
+    block = {}
+    for k in ("from", "to"):
+        given = values.get(f"{DARK_KEY}.{k}")
+        block[k] = given or (cur or {}).get(k) or ds.DEFAULT_LED_DARK[k]
+    if _same(cur, block):
+        return []
+    put(DARK_PATH, block)
+    return [DARK_KEY]
 
 
 def _flat(d: Any, prefix: tuple = ()) -> dict[tuple, Any]:
@@ -1051,27 +1128,39 @@ def _unit_words(f: Field, v: Any) -> Any:
     return f"{shown} {f.unit}" if shown is not v else v
 
 
-def _quiet_words(cfg: dict) -> str:
-    q = lookup(cfg, ("posts", "quiet"))
-    if q is not MISSING and not q:
+def _every_words(every: Any) -> str:
+    if every == 0:
         return "off"
-    q = q if isinstance(q, dict) else DEFAULT_QUIET
-    every = q.get("every", lookup(cfg, ("posts", "every")))
-    every = 300 if every is MISSING else every
-    minutes = f"{every // 60} min" if isinstance(every, int) and every % 60 == 0 else f"{every} s"
-    return f"{q.get('from', '?')}–{q.get('to', '?')}, every {minutes}"
+    if isinstance(every, int) and every % 60 == 0:
+        return f"every {every // 60} min"
+    return f"every {every} s"
 
 
-def _with_quiet_words(cfg: dict) -> dict:
-    posts = cfg.get("posts")
-    posts = dict(posts) if isinstance(posts, dict) else {}
-    posts["quiet"] = _quiet_words(cfg)
-    return {**cfg, "posts": posts}
+def _clock_words(v: Any) -> str:
+    """A schedule as "07:00 every 5 min · 01:00 every 30 min"."""
+    if not isinstance(v, list):
+        return _words(v)
+    return " · ".join(f"{r.get('from', '?')} {_every_words(r.get('every'))}"
+                      if isinstance(r, dict) else str(r) for r in v)
+
+
+def _with_words(cfg: dict) -> dict:
+    """``cfg`` with the schedule and the dark hours each one setting in words,
+    so a change to either reads as one line."""
+    dock = cfg.get("dock")
+    dock = dict(dock) if isinstance(dock, dict) else {}
+    led = dock.get("led")
+    led = dict(led) if isinstance(led, dict) else {}
+    dark = _dark_block(cfg)
+    led["dark"] = f"{dark.get('from', '?')}–{dark.get('to', '?')}" if dark else "off"
+    dock["led"] = led
+    dock["sync"] = _clock_words(_in_order(effective(cfg, "dock.sync")))
+    return {**cfg, "dock": dock}
 
 
 def changes(old: dict, new: dict) -> list[dict[str, str]]:
     """Each setting that differs from ``old`` to ``new``, in words, in the form's order."""
-    old, new = _with_quiet_words(old), _with_quiet_words(new)
+    old, new = _with_words(old), _with_words(new)
     a, b = _flat(old), _flat(new)
     order = {f.key: i for i, f in enumerate(FIELDS)}
     out = []

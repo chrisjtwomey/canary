@@ -45,10 +45,10 @@ class DeviceReports:
     held in memory: the posts the server refused because of a board's version.
 
     ``silence`` gives, for a board and the time now, how long it may go
-    without a report before two of its posts are missed; past that, and
+    without a report before two of its syncs are missed; past that, and
     OFFLINE_GRACE_S, the board is offline. Without it no board is judged.
-    ``next_post`` gives, for a board and the time now, the seconds until its
-    next post slot, or None for a board without slots.
+    ``next_sync`` gives, for a board and the time now, the seconds until its
+    next sync slot, or None for a board without slots.
 
     The server answers each request on a thread of its own, so every method
     holds ``lock``; a caller that needs several answers to agree holds it
@@ -58,12 +58,12 @@ class DeviceReports:
     def __init__(self, now: Callable[[], float] = time.time,
                  store: ReadingsStore | None = None, keep_days: float = 0,
                  silence: Callable[[str, float], float] | None = None,
-                 next_post: Callable[[str, float], int | None] | None = None):
+                 next_sync: Callable[[str, float], int | None] | None = None):
         self.now = now
         self.store = store
         self.keep_days = keep_days
         self.silence = silence
-        self.next_post = next_post
+        self.next_sync = next_sync
         self.by_device: dict[str, dict] = {}     # device -> {"doc", "received"}
         self.refusals: dict[str, dict] = {}      # device -> {"version", "count", "at"}
         self.count = 0
@@ -103,7 +103,7 @@ class DeviceReports:
     def device(self, name: str) -> dict | None:
         """What is known of one board: ``{"doc", "age_s"}`` for its newest
         report, both None when the server has refused all it sent, ``offline``
-        when the server judges it, ``next_post_s`` for a board with post
+        when the server judges it, ``next_sync_s`` for a board with sync
         slots, and ``refused`` when there is one to tell."""
         with self.lock:
             entry = self.by_device.get(name)
@@ -115,10 +115,10 @@ class DeviceReports:
                    "age_s": max(0, int(now - entry["received"])) if entry else None}
             if entry and self.silence is not None:
                 out["offline"] = out["age_s"] > self.silence(name, now) + OFFLINE_GRACE_S
-            if entry and self.next_post is not None:
-                next_s = self.next_post(name, now)
+            if entry and self.next_sync is not None:
+                next_s = self.next_sync(name, now)
                 if next_s is not None:
-                    out["next_post_s"] = next_s
+                    out["next_sync_s"] = next_s
             if refused is not None:
                 out["refused"] = {**refused, "age_s": max(0, int(self.now() - refused["at"]))}
             return out

@@ -155,13 +155,13 @@ def test_status_history_groups_the_stored_reports_by_board(tmp_path):
     assert StatusSource(DeviceReports()).datasets()["status_history_24h"]() == {}
 
 
-def test_a_board_with_post_slots_says_when_its_next_is():
+def test_a_board_with_sync_slots_says_when_its_next_is():
     reports = DeviceReports(now=lambda: 1000.0,
-                            next_post=lambda device, now: 120 if device == "canary-dock" else None)
+                            next_sync=lambda device, now: 120 if device == "canary-dock" else None)
     reports.accept({"ts": 1, "device": "canary-dock", "client": {"rssi": -60}})
     reports.accept({"ts": 1, "device": "canary-head", "client": {"rssi": -60}})
-    assert reports.device("canary-dock")["next_post_s"] == 120
-    assert "next_post_s" not in reports.device("canary-head")
+    assert reports.device("canary-dock")["next_sync_s"] == 120
+    assert "next_sync_s" not in reports.device("canary-head")
 
 
 def test_a_refused_board_is_known_before_any_report_is_taken():

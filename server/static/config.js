@@ -304,6 +304,74 @@
     render();
   }
 
+  // ── A schedule: ranges round the clock ───────────────────────────
+  // Each row is a range from its start to the next row's. Split halves a
+  // range; × gives its hours to the range before. The rows stay in order of
+  // their starts, as the day runs.
+  var DAY_MIN = 1440;
+
+  function minutesOf(hhmm) {
+    var m = /^(\d{1,2}):(\d{2})$/.exec(hhmm || '');
+    return m ? (parseInt(m[1], 10) * 60 + parseInt(m[2], 10)) % DAY_MIN : NaN;
+  }
+
+  function hhmm(minutes) {
+    var m = ((minutes % DAY_MIN) + DAY_MIN) % DAY_MIN;
+    return ('0' + Math.floor(m / 60)).slice(-2) + ':' + ('0' + (m % 60)).slice(-2);
+  }
+
+  function clock(box) {
+    var list = box.querySelector('.list');
+    var blank = box.querySelector('template');
+    var max = parseInt(box.getAttribute('data-max'), 10) || 8;
+
+    function rows() { return all('.list > .row', box); }
+    function startOf(row) { return minutesOf(row.querySelector('input[type=time]').value); }
+
+    function limits() {
+      var n = rows().length;
+      rows().forEach(function (row) {
+        row.querySelector('.split').disabled = n >= max;
+        row.querySelector('.remove').disabled = n <= 1;
+      });
+    }
+
+    function sort() {
+      var sorted = rows().slice().sort(function (a, b) { return startOf(a) - startOf(b); });
+      var focused = document.activeElement;
+      sorted.forEach(function (row) { list.appendChild(row); });
+      if (focused && box.contains(focused)) focused.focus();
+    }
+
+    list.addEventListener('click', function (e) {
+      var split = e.target.closest('.split');
+      if (!split || split.disabled) return;
+      var row = split.closest('.row');
+      var start = startOf(row);
+      if (isNaN(start)) return;
+      var later = rows().map(startOf).filter(function (m) { return m > start; });
+      var end = later.length ? Math.min.apply(null, later)
+                             : Math.min.apply(null, rows().map(startOf)) + DAY_MIN;
+      // Halfway, on a five-minute step; a range too short for that stays whole.
+      var middle = start + Math.round((end - start) / 10) * 5;
+      if (middle <= start || middle >= end) return;
+      var half = blank.content.firstElementChild.cloneNode(true);
+      half.querySelector('input[type=time]').value = hhmm(middle);
+      half.querySelector('input[type=number]').value =
+        row.querySelector('input[type=number]').value;
+      row.after(half);
+      sort();
+      limits();
+      half.querySelector('input[type=time]').focus();
+      box.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    list.addEventListener('change', function (e) {
+      if (e.target.type === 'time') sort();
+    });
+    box.addEventListener('input', limits);
+    limits();
+  }
+
   function poolsChanged() {
     var pools = poolNames();
     all('.times select[name]').forEach(function (sel) {
@@ -316,12 +384,13 @@
     all('input[data-options-from]').forEach(function (i) { if (i._tags) i._tags.render(); });
   }
 
-  // ── Rows: the pools, and the wake times ──────────────────────────
+  // ── Rows: the pools, the wake times, and a schedule's ranges ─────
   all('fieldset.rows').forEach(function (box) {
     var list = box.querySelector('.list');
     var blank = box.querySelector('template');
+    var add = box.querySelector('.add');
     all('input.chips', list).forEach(tags);
-    box.querySelector('.add').addEventListener('click', function () {
+    if (add) add.addEventListener('click', function () {
       var row = blank.content.firstElementChild.cloneNode(true);
       list.appendChild(row);
       all('input.chips', row).forEach(tags);
@@ -331,11 +400,13 @@
     });
     list.addEventListener('click', function (e) {
       var remove = e.target.closest('.remove');
-      if (!remove) return;
+      if (!remove || remove.disabled) return;
       remove.closest('.row').remove();
       poolsChanged();
-      edited();
+      // An input event, so the drawings of the tab redraw as for a typed change.
+      box.dispatchEvent(new Event('input', { bubbles: true }));
     });
+    if (box.classList.contains('clock')) clock(box);
     if (box.classList.contains('pools')) {
       list.addEventListener('input', function (e) {
         if (e.target.classList.contains('pool-name')) poolsChanged();

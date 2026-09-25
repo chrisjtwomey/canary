@@ -29,6 +29,11 @@ def as_posted(text: str, **changes) -> MultiDict:
             for at, pool in v:
                 form.add(f.key + ".at", at)
                 form.add(f.key + ".pool", pool)
+        elif f.kind == "clock":
+            form.add(f.key, "1")
+            for start, every in v:
+                form.add(f.key + ".from", start)
+                form.add(f.key + ".every", every)
         else:
             form.add(f.key, v)
     for k, v in changes.items():
@@ -104,32 +109,71 @@ def test_a_string_pyyaml_would_misread_is_quoted(value):
     assert cf.read(e.text)["mqtt"]["prefix"] == value.strip()
 
 
-def test_quiet_hours_off_are_an_empty_block():
-    e = edit(posts__quiet="false")
-    assert "  quiet: {}         # a slower cadence overnight" in e.text
-    assert cf.read(e.text)["posts"]["quiet"] == {}
+def test_dark_hours_turned_on_write_the_defaults_quoted():
+    e = edit(dock__led__dark="true")
+    assert ('    dark:           # dark hours, as {from: "01:00", to: "07:00"}; {} for none\n'
+            '      from: "01:00"\n      to: "07:00"\n') in e.text
+    assert cf.read(e.text)["dock"]["led"]["dark"] == {"from": "01:00", "to": "07:00"}
 
 
-def test_quiet_hours_back_on_at_the_defaults_take_the_block_out():
-    off = edit(posts__quiet="false").text
-    e = edit(off, posts__quiet="true")
-    assert "quiet" not in cf.read(e.text)["posts"]
+def test_dark_hours_turned_off_are_an_empty_block_again():
+    on = edit(dock__led__dark="true", dock__led__dark__from="23:30").text
+    assert cf.read(on)["dock"]["led"]["dark"] == {"from": "23:30", "to": "07:00"}
+    e = edit(on, dock__led__dark="false")
+    assert cf.read(e.text)["dock"]["led"]["dark"] == {}
 
 
-def test_quiet_hours_from_the_defaults_write_the_whole_block_quoted():
-    text = EXAMPLE.replace('  quiet:            # a slower cadence overnight, in '
-                           'server.timezone; `quiet: {}` turns it off\n    from: "01:00"\n'
-                           '    to: "07:00"\n    every: 1800\n', "")
-    assert "quiet" not in cf.read(text)["posts"]
-    e = edit(text, posts__quiet__to="06:30")
-    assert '    from: "01:00"\n    to: "06:30"\n    every: 1800\n' in e.text
-    assert cf.read(e.text)["posts"]["quiet"] == {"from": "01:00", "to": "06:30", "every": 1800}
+def test_dark_hours_left_off_change_nothing():
+    e = edit(dock__led__dark="false")
+    assert e.text == EXAMPLE and e.changed == []
 
 
-def test_a_quiet_time_is_quoted_so_pyyaml_reads_a_string():
-    e = edit(posts__quiet__from="23:30")
-    assert '    from: "23:30"' in e.text
-    assert cf.read(e.text)["posts"]["quiet"]["from"] == "23:30"
+def test_the_sync_schedule_is_shown_in_minutes_from_the_earliest_start():
+    assert cf.shown(cf.read(EXAMPLE))["dock.sync"] == [("01:00", "30"), ("07:00", "5")]
+
+
+def test_a_split_schedule_is_written_one_range_to_a_line_in_seconds():
+    e = edit(dock__sync__from=["01:00", "07:00", "22:00"], dock__sync__every=["30", "10", "0"])
+    assert ('  sync:             # when it takes a reading and syncs, in server.timezone: '
+            'each range runs until\n') in e.text
+    assert ('    - {from: "01:00", every: 1800}\n    - {from: "07:00", every: 600}\n'
+            '    - {from: "22:00", every: 0}\n') in e.text
+    assert cf.read(e.text)["dock"]["sync"] == [{"from": "01:00", "every": 1800},
+                                               {"from": "07:00", "every": 600},
+                                               {"from": "22:00", "every": 0}]
+    assert e.changed == ["dock.sync"]
+
+
+def test_ranges_in_any_order_are_written_from_the_earliest_start():
+    e = edit(dock__sync__from=["22:00", "07:00"], dock__sync__every=["0", "5"])
+    assert cf.read(e.text)["dock"]["sync"] == [{"from": "07:00", "every": 300},
+                                               {"from": "22:00", "every": 0}]
+
+
+def test_a_schedule_without_a_block_is_written_where_the_dock_block_is():
+    text = EXAMPLE.replace('  sync:             # when it takes a reading and syncs, in '
+                           'server.timezone: each range runs until\n'
+                           '                    # the next starts, slots on the wall clock '
+                           '(:00, :05 ...); every: 0 is off\n'
+                           '    - {from: "01:00", every: 1800}\n    - {from: "07:00", every: 300}\n',
+                           "")
+    assert "sync" not in cf.read(text)["dock"]
+    assert edit(text).changed == []
+    e = edit(text, dock__sync__from=["00:00"], dock__sync__every=["10"])
+    assert cf.read(e.text)["dock"]["sync"] == [{"from": "00:00", "every": 600}]
+
+
+@pytest.mark.parametrize("starts, everies, words", [
+    (["07:00", "25:00"], ["5", "5"], "25:00: not a time."),
+    (["07:00"], ["1.5"], "From 07:00: enter a whole number of minutes."),
+    (["07:00"], ["-5"], "From 07:00: enter 0 to 1440 minutes."),
+    (["07:00", "7:00"], ["5", "10"], "Two ranges start at 07:00."),
+    ([], [], "Keep at least one range."),
+    ([f"{h:02d}:00" for h in range(9)], ["5"] * 9, "At most 8 ranges."),
+])
+def test_a_schedule_the_form_cannot_write_is_refused_at_its_field(starts, everies, words):
+    e = cf.apply(EXAMPLE, as_posted(EXAMPLE, dock__sync__from=starts, dock__sync__every=everies))
+    assert e.errors == {"dock.sync": words} and e.text == EXAMPLE
 
 
 def test_pools_change_come_and_go_and_keep_their_order():
@@ -162,8 +206,7 @@ def test_a_field_an_environment_variable_sets_is_left_alone(monkeypatch):
 @pytest.mark.parametrize("key, value, words", [
     ("server.port", "abc", "whole number"),
     ("server.port", "70000", "at most 65535"),
-    ("posts.every", "1.5", "whole number"),
-    ("posts.quiet.from", "25:00", "HH:MM"),
+    ("dock.led.dark.from", "25:00", "HH:MM"),
     ("image.innerAlignX", "middle", "one of"),
 ])
 def test_a_value_the_form_cannot_write_is_refused_at_its_field(key, value, words):
@@ -192,8 +235,8 @@ def _settings(config: dict):
     s = load_settings(config)
     schedule = s.core.server.schedule
     server = dataclasses.replace(s.core.server, schedule=None)
-    return (dataclasses.replace(s, core=dataclasses.replace(s.core, server=server), posts=None),
-            type(schedule).__name__, vars(getattr(schedule, "pools")), vars(s.posts))
+    return (dataclasses.replace(s, core=dataclasses.replace(s.core, server=server), dock_sync=None),
+            type(schedule).__name__, vars(getattr(schedule, "pools")), s.dock_sync.describe())
 
 
 def _with(config: dict, path: tuple, value) -> dict:
@@ -210,18 +253,15 @@ BASE = {"display": {"pools": {"co2": ["breathe.png"]},
                     "schedule": {"type": "interval", "every": 300}}}
 
 
-@pytest.mark.parametrize("f", [f for f in cf.FIELDS if f.default is not None and f.kind != "quiet"
+@pytest.mark.parametrize("f", [f for f in cf.FIELDS if f.default is not None and f.kind != "window"
                                and not callable(f.default)], ids=lambda f: f.key)
 def test_a_fields_default_is_what_the_server_takes_without_the_key(f):
     assert _settings(_with(BASE, f.path, f.default)) == _settings(BASE)
 
 
-QUIET = _with(BASE, ("posts", "quiet"), {"from": "01:00", "to": "07:00"})
-
-
 @pytest.mark.parametrize("key, base", [
     ("image.innerWidth", BASE), ("image.innerHeight", BASE),
-    ("display.schedule.order", BASE), ("posts.quiet.every", QUIET),
+    ("display.schedule.order", BASE),
 ])
 def test_a_default_worked_out_from_the_config_is_what_the_server_takes(key, base):
     f = cf.BY_KEY[key]
@@ -242,22 +282,17 @@ def test_every_field_is_named_once_and_every_condition_names_a_field():
             assert f.when.split("=")[0] in cf.BY_KEY, f.key
 
 
-def test_changes_are_in_words_with_quiet_hours_on_one_line():
+def test_changes_are_in_words_with_the_schedule_and_dark_hours_each_on_one_line():
     old = cf.read(EXAMPLE)
-    new = cf.read(edit(server__port="9090", posts__quiet="false").text)
+    new = cf.read(edit(server__port="9090", dock__led__dark="true",
+                       dock__sync__from=["01:00", "07:00", "22:00"],
+                       dock__sync__every=["30", "5", "0"]).text)
     assert cf.changes(old, new) == [
         {"name": "Server · Port", "old": "8080", "new": "9090"},
-        {"name": "Dock · Slow mode", "old": "01:00–07:00, every 30 min", "new": "off"},
+        {"name": "Dock · Sync schedule", "old": "01:00 every 30 min · 07:00 every 5 min",
+         "new": "01:00 every 30 min · 07:00 every 5 min · 22:00 off"},
+        {"name": "Dock · Dark hours", "old": "off", "new": "01:00–07:00"},
     ]
-
-
-def test_the_report_interval_is_shown_in_minutes_and_kept_in_seconds():
-    assert cf.shown(cf.read(EXAMPLE))["posts.every"] == "5"
-    e = cf.apply(EXAMPLE, MultiDict({"posts.every": "10"}))
-
-    assert cf.read(e.text)["posts"]["every"] == 600
-    assert cf.changes(cf.read(EXAMPLE), cf.read(e.text)) == [
-        {"name": "Dock · Report every", "old": "5 minutes", "new": "10 minutes"}]
 
 
 @pytest.mark.parametrize("path, name", [
@@ -289,5 +324,5 @@ def test_the_edit_reads_back_as_pyyaml_reads_it():
 
 
 def test_a_field_named_by_its_place_on_the_page_has_its_full_name_in_messages():
-    assert cf.name_of(("posts", "quiet", "every")) == "Dock · Report every, in slow mode"
-    assert cf.name_of(("posts", "every")) == "Dock · Report every"
+    assert cf.name_of(("dock", "led", "dark", "from")) == "Dock · Dark hours from"
+    assert cf.name_of(("dock", "sync")) == "Dock · Sync schedule"

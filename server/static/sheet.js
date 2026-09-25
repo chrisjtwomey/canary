@@ -1,6 +1,6 @@
 /* The drawings on the Config page's sheet tabs, with rough.js for the
-   hand-drawn look the pages have: the day's reports as a dial, the time
-   before one report as a strip, and the image with its drawn area as a
+   hand-drawn look the pages have: the day's syncs as a dial, the time
+   before one sync as a strip, and the image with its drawn area as a
    panel. Each is drawn from the settings form's inputs, and dragging one
    writes the inputs, so the form stays what a save sends. A locked input,
    such as an offline dock's, cannot be dragged. The position grid sets the
@@ -71,36 +71,55 @@
     el.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
-  // The report intervals, which the form shows in minutes, in seconds.
-  function schedule() {
-    var every = number('posts.every') * 60;
-    var quietEvery = number('posts.quiet.every') * 60;
-    var from = minutesOf((input('posts.quiet.from') || {}).value);
-    var to = minutesOf((input('posts.quiet.to') || {}).value);
-    return {
-      every: every > 0 ? every : 300,
-      quietEvery: quietEvery > 0 ? quietEvery : (every > 0 ? every : 300),
-      quiet: on('posts.quiet') && !isNaN(from) && !isNaN(to) && from !== to,
-      from: from,
-      to: to,
-      dark: on('dock.led.off_in_quiet_hours')
-    };
+  var SYNC = 'dock.sync';
+
+  // The dock's sync ranges from the form's rows, in order of their starts:
+  // each {start, every, row}, the interval in seconds, 0 for off.
+  function ranges() {
+    var out = [];
+    form.querySelectorAll('fieldset[data-key="' + SYNC + '"] .list > .row').forEach(function (row) {
+      var start = minutesOf(row.querySelector('input[type=time]').value);
+      var every = parseInt(row.querySelector('input[type=number]').value, 10) * 60;
+      if (!isNaN(start)) out.push({ start: start, every: every >= 0 ? every : 0, row: row });
+    });
+    return out.sort(function (a, b) { return a.start - b.start; });
   }
 
-  function inQuiet(s, minute) {
-    if (!s.quiet) return false;
-    return s.from < s.to ? minute >= s.from && minute < s.to
-                         : minute >= s.from || minute < s.to;
+  // The range a minute of the day is in: the last to start at or before it,
+  // or before the first start, the last of the day.
+  function rangeAt(list, minute) {
+    var at = list[list.length - 1];
+    list.forEach(function (r) { if (r.start <= minute) at = r; });
+    return at;
+  }
+
+  function schedule() {
+    var list = ranges();
+    var from = minutesOf((input('dock.led.dark.from') || {}).value);
+    var to = minutesOf((input('dock.led.dark.to') || {}).value);
+    return {
+      ranges: list,
+      dark: on('dock.led.dark') && !isNaN(from) && !isNaN(to) && from !== to,
+      from: from,
+      to: to
+    };
   }
 
   // The minutes of the day a reading is taken on, as the server counts them.
   function slots(s) {
     var out = [];
+    if (!s.ranges.length) return out;
     for (var m = 0; m < DAY_MIN; m++) {
-      var step = inQuiet(s, m) ? s.quietEvery : s.every;
-      if ((m * 60) % step === 0) out.push(m);
+      var step = rangeAt(s.ranges, m).every;
+      if (step > 0 && (m * 60) % step === 0) out.push(m);
     }
     return out;
+  }
+
+  // The shortest time between two readings, for the strip.
+  function shortest(s) {
+    var steps = s.ranges.map(function (r) { return r.every; }).filter(function (e) { return e > 0; });
+    return steps.length ? Math.min.apply(null, steps) : 300;
   }
 
   // ── Drawing ──────────────────────────────────────────────────────
@@ -134,10 +153,10 @@
     ctx.restore();
   }
 
-  // ── The dial: the day's reports ──────────────────────────────────
-  // Midnight at the top, the day running clockwise. Each tick is a report;
-  // the hatched band is slow mode (posts.quiet), dragged by its ends; the line inside it
-  // is the light, dark.
+  // ── The dial: the day's syncs ────────────────────────────────────
+  // Midnight at the top, the day running clockwise. Each tick is a sync; a
+  // hatched band is a range that is off. A handle at each range's start drags
+  // it round. The line inside is the light's dark hours.
   function Dial(canvas) {
     this.canvas = canvas;
     this.drag = null;
@@ -161,16 +180,18 @@
     if (!p.w) return;
     var g = this.geometry(), cx = g.cx, cy = g.cy, R = g.R;
     var s = schedule();
-    var fixed = locked('posts.quiet.from');
+    var fixed = locked(SYNC + '.from');
     var ink = fixed ? G[4] : G[1];
 
-    if (s.quiet) {
-      var a0 = angleOf(s.from), a1 = angleOf(s.to);
+    s.ranges.forEach(function (r, i) {
+      if (r.every > 0) return;
+      var next = s.ranges[(i + 1) % s.ranges.length];
+      var a0 = angleOf(r.start), a1 = angleOf(next.start);
       if (a1 <= a0) a1 += 2 * Math.PI;
       p.rc.arc(cx, cy, 2 * (R - 10), 2 * (R - 10), a0, a1, true,
                { stroke: 'none', fill: fixed ? G[5] : G[3], fillStyle: 'hachure',
                  hachureGap: 5, fillWeight: 1.2, roughness: 1.2 });
-    }
+    });
     // The band is a ring: the middle is cleared for the light and the count.
     p.ctx.save();
     p.ctx.beginPath();
@@ -179,7 +200,7 @@
     p.ctx.fill();
     p.ctx.restore();
 
-    if (s.quiet && s.dark) {
+    if (s.dark) {
       var b0 = angleOf(s.from), b1 = angleOf(s.to);
       if (b1 <= b0) b1 += 2 * Math.PI;
       p.rc.arc(cx, cy, 2 * (R - 42), 2 * (R - 42), b0, b1, false,
@@ -189,10 +210,12 @@
     var readings = slots(s);
     p.ctx.save();
     p.ctx.strokeStyle = ink;
+    var tightest = shortest(s);
     readings.forEach(function (m) {
-      var a = angleOf(m), quiet = inQuiet(s, m);
-      var r0 = quiet ? R - 12 : R - 7;
-      p.ctx.lineWidth = quiet ? 2 : 1;
+      // A tick grows with its range's interval, so a slower range stands out.
+      var a = angleOf(m), slow = rangeAt(s.ranges, m).every > tightest;
+      var r0 = slow ? R - 12 : R - 7;
+      p.ctx.lineWidth = slow ? 2 : 1;
       p.ctx.beginPath();
       p.ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0);
       p.ctx.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R);
@@ -207,11 +230,12 @@
            { size: 13, italic: true, color: G[3] });
     });
     text(p.ctx, String(readings.length), cx, cy - 8, { size: 30, weight: 600, color: ink });
-    text(p.ctx, 'reports a day', cx, cy + 16, { size: 13, italic: true, color: G[3] });
+    text(p.ctx, readings.length === 1 ? 'sync a day' : 'syncs a day', cx, cy + 16,
+         { size: 13, italic: true, color: G[3] });
 
-    if (s.quiet && !fixed) {
-      [s.from, s.to].forEach(function (m) {
-        var a = angleOf(m);
+    if (!fixed && s.ranges.length > 1) {
+      s.ranges.forEach(function (r) {
+        var a = angleOf(r.start);
         p.rc.circle(cx + Math.cos(a) * (R - 22), cy + Math.sin(a) * (R - 22), 14,
                     { stroke: G[0], strokeWidth: 1.6, fill: G[7], fillStyle: 'solid',
                       roughness: 0.8 });
@@ -229,15 +253,14 @@
 
   Dial.prototype.down = function (e) {
     var s = schedule();
-    if (!s.quiet || locked('posts.quiet.from')) return;
+    if (s.ranges.length < 2 || locked(SYNC + '.from')) return;
     var r = this.canvas.getBoundingClientRect(), g = this.geometry();
     var x = e.clientX - r.left, y = e.clientY - r.top;
-    var ends = [['posts.quiet.from', s.from], ['posts.quiet.to', s.to]];
-    for (var i = 0; i < ends.length; i++) {
-      var a = angleOf(ends[i][1]);
+    for (var i = 0; i < s.ranges.length; i++) {
+      var a = angleOf(s.ranges[i].start);
       var hx = g.cx + Math.cos(a) * (g.R - 22), hy = g.cy + Math.sin(a) * (g.R - 22);
       if (Math.hypot(x - hx, y - hy) <= 14) {
-        this.drag = ends[i][0];
+        this.drag = s.ranges[i].row.querySelector('input[type=time]');
         this.canvas.setPointerCapture(e.pointerId);
         e.preventDefault();
         return;
@@ -245,15 +268,27 @@
     }
   };
 
+  // A start moves up to its neighbours' and no further, so the ranges keep their order.
   Dial.prototype.move = function (e) {
     if (!this.drag) return;
-    set(this.drag, hhmm(this.minuteAt(e)));
+    var el = this.drag, list = ranges();
+    var i = list.findIndex(function (r) { return r.row.contains(el); });
+    if (i < 0) return;
+    var prev = list[(i - 1 + list.length) % list.length].start;
+    var next = list[(i + 1) % list.length].start;
+    var m = this.minuteAt(e);
+    var span = (next - prev + DAY_MIN) % DAY_MIN || DAY_MIN;
+    var at = (m - prev + DAY_MIN) % DAY_MIN;
+    if (at < 5 || at > span - 5) return;
+    if (el.value === hhmm(m)) return;
+    el.value = hhmm(m);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
   };
 
-  // ── The strip: the time before one report ────────────────────────
-  // From the report before to this one, a day slot apart. The fan runs in
-  // the hatched band, dragged by its left edge; past the start of the strip
-  // it never stops.
+  // ── The strip: the time before one sync ──────────────────────────
+  // From the sync before to this one, the shortest gap the schedule has.
+  // The fan runs in the hatched band, dragged by its left edge; past the
+  // start of the strip it never stops.
   function Strip(canvas) {
     this.canvas = canvas;
     this.drag = false;
@@ -266,7 +301,7 @@
 
   Strip.prototype.geometry = function () {
     var r = this.canvas.getBoundingClientRect();
-    var span = schedule().every;
+    var span = shortest(schedule());
     var left = 14, right = r.width - 14;
     return {
       left: left, right: right, span: span,
@@ -308,7 +343,7 @@
     [g.left, g.right].forEach(function (x) {
       p.rc.line(x, axis - 34, x, axis + 8, { stroke: G[0], strokeWidth: 2, roughness: 0.8 });
     });
-    text(p.ctx, 'report', g.right, axis + 22, { size: 13, italic: true, align: 'right', color: G[2] });
+    text(p.ctx, 'sync', g.right, axis + 22, { size: 13, italic: true, align: 'right', color: G[2] });
     text(p.ctx, span(g.span) + ' before', g.left, axis + 22,
          { size: 13, italic: true, align: 'left', color: G[3] });
 

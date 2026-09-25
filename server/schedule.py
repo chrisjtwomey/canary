@@ -1,15 +1,19 @@
-"""When the dock posts its readings: slots on the wall clock, slower overnight.
+"""When a board syncs with the server: ranges round the clock, each with its
+own interval.
 
-A slot is a local time whose seconds past midnight are a multiple of the
-interval: :00, :05, :10 ... for five minutes, the hour and the half hour for
-thirty. Inside the quiet window the quiet interval applies. The dock asks
-nothing but "how long until the next one", which this answers.
+A schedule covers the whole day. Each range runs from its start to the next
+range's, and the last runs past midnight to the first, so there is no gap
+and no overlap; one range is the whole day. An interval of 0 turns its range
+off. A slot is a local time in a range that is on, whose seconds past
+midnight are a multiple of that range's interval: :00, :05, :10 ... for five
+minutes, the hour and the half hour for thirty. A board asks nothing but "how
+long until the next one", which this answers.
 
-The window is judged in local time, one minute at a time, rather than by
-working out where its edges fall. Some clocks change at 01:00, the window's
-own start: in spring 01:00 to 02:00 never happens, and in autumn it happens
-twice. Stepping through the minutes and asking of each whether it is inside
-gets both right without a special case.
+The ranges are judged in local time, one minute at a time, rather than by
+working out where their edges fall. Some clocks change at 01:00: in spring
+01:00 to 02:00 never happens, and in autumn it happens twice. Stepping
+through the minutes and asking of each which range it is in gets both right
+without a special case.
 """
 from __future__ import annotations
 
@@ -18,10 +22,14 @@ from datetime import datetime, time as clock_time, tzinfo
 
 # The slots fall on whole minutes, so every interval is a whole number of them.
 MINUTE = 60
+DAY = 24 * 60 * MINUTE
 # Two days of minutes: further than any gap between two slots can be.
 LOOK_AHEAD_MINUTES = 2 * 24 * 60
-# The dock posts every half hour overnight unless config.yaml says otherwise.
-DEFAULT_QUIET = {"from": "01:00", "to": "07:00", "every": 1800}
+# More ranges than a day needs, and few enough to set on one screen.
+MAX_RANGES = 8
+# The dock syncs every half hour from 01:00 to 07:00, and every five
+# minutes the rest of the day, unless config.yaml says otherwise.
+DEFAULT_DOCK_SYNC = [{"from": "01:00", "every": 1800}, {"from": "07:00", "every": 300}]
 
 
 def parse_hhmm(text: str) -> clock_time:
@@ -38,76 +46,108 @@ def parse_hhmm(text: str) -> clock_time:
 
 
 def _interval(seconds, name: str) -> int:
-    if isinstance(seconds, bool) or not isinstance(seconds, int) or seconds <= 0 \
+    if isinstance(seconds, bool) or not isinstance(seconds, int) or not 0 <= seconds <= DAY \
             or seconds % MINUTE:
-        raise ValueError(f"{name} must be a whole number of minutes in seconds, not {seconds!r}")
+        raise ValueError(f"{name} must be 0, for off, or a whole number of minutes up to "
+                         f"a day, in seconds, not {seconds!r}")
     return seconds
 
 
-class PostSchedule:
-    """The dock's post slots.
+class ClockSchedule:
+    """A board's sync slots.
 
     Args:
-        every: the interval outside the quiet window, in seconds.
-        tz: the zone the slots and the window are in.
-        quiet_from, quiet_to: the window, as times of day; it may run past
-            midnight. Both or neither.
-        quiet_every: the interval inside the window.
+        ranges: each range's start and interval in seconds, 0 for off, in
+            any order.
+        tz: the zone the day is in.
+        name: the config key the schedule comes from, which each message
+            starts with.
 
     Raises:
-        ValueError: an interval is not a whole number of minutes, or the
-            window is half given or empty.
+        ValueError: no ranges, more than MAX_RANGES, two that start at the
+            same time, or an interval that is not 0 or a whole number of
+            minutes up to a day.
     """
 
-    def __init__(self, every: int, tz: tzinfo, quiet_from: clock_time | None = None,
-                 quiet_to: clock_time | None = None, quiet_every: int | None = None):
-        self.every = _interval(every, "posts.every")
+    def __init__(self, ranges: list[tuple[clock_time, int]], tz: tzinfo, name: str = "sync"):
+        if not ranges:
+            raise ValueError(f"{name} needs at least one range")
+        if len(ranges) > MAX_RANGES:
+            raise ValueError(f"{name} has {len(ranges)} ranges; the most is {MAX_RANGES}")
+        starts = [start for start, _ in ranges]
+        for start in starts:
+            if starts.count(start) > 1:
+                raise ValueError(f"{name} has two ranges from {start.strftime('%H:%M')}")
+        self.ranges = sorted((start, _interval(every, f"{name} every"))
+                             for start, every in ranges)
         self.tz = tz
-        if (quiet_from is None) != (quiet_to is None):
-            raise ValueError("posts.quiet needs both from and to")
-        if quiet_from is not None and quiet_from == quiet_to:
-            raise ValueError("posts.quiet starts and ends at the same time")
-        self.quiet_from = quiet_from
-        self.quiet_to = quiet_to
-        self.quiet_every = _interval(quiet_every if quiet_every is not None else every,
-                                     "posts.quiet.every")
+        self.name = name
 
-    def quiet(self, local: datetime) -> bool:
-        """Whether a local time is inside the quiet window."""
-        if self.quiet_from is None:
-            return False
+    @classmethod
+    def from_config(cls, value, tz: tzinfo, name: str) -> ClockSchedule:
+        """The schedule a config value gives: a list of ``{from, every}``.
+
+        Raises:
+            ValueError: the value is not such a list, or the schedule cannot work.
+        """
+        if not isinstance(value, list) or not all(isinstance(r, dict) for r in value):
+            raise ValueError(f"{name} must be a list of ranges, each {{from: \"HH:MM\", every: "
+                             f"seconds}}")
+        ranges = []
+        for r in value:
+            if set(r) != {"from", "every"}:
+                raise ValueError(f"{name}: each range has exactly from and every, not "
+                                 f"{', '.join(map(str, r)) or 'nothing'}")
+            try:
+                start = parse_hhmm(r["from"])
+            except ValueError as exc:
+                raise ValueError(f"{name}: {exc}") from None
+            ranges.append((start, r["every"]))
+        return cls(ranges, tz, name)
+
+    def every_at(self, local: datetime) -> int:
+        """The interval of the range a local time is in; 0 when it is off."""
         t = local.time()
-        if self.quiet_from < self.quiet_to:
-            return self.quiet_from <= t < self.quiet_to
-        return t >= self.quiet_from or t < self.quiet_to
+        current = self.ranges[-1][1]   # before the first start, the last range runs on
+        for start, every in self.ranges:
+            if start > t:
+                break
+            current = every
+        return current
 
-    def seconds_until_next(self, now: float) -> int:
+    def _is_slot(self, minute: int) -> bool:
+        local = datetime.fromtimestamp(minute, self.tz)
+        step = self.every_at(local)
+        return step > 0 and (local.hour * 3600 + local.minute * 60) % step == 0
+
+    def seconds_until_next(self, now: float) -> int | None:
         """Whole seconds until the first slot after ``now``, rounded up so a
-        board that waits this long is never early for it."""
+        board that waits this long is never early for it. None when no range
+        holds a slot."""
         minute = (math.floor(now) // MINUTE + 1) * MINUTE
         for _ in range(LOOK_AHEAD_MINUTES):
-            local = datetime.fromtimestamp(minute, self.tz)
-            step = self.quiet_every if self.quiet(local) else self.every
-            if (local.hour * 3600 + local.minute * 60) % step == 0:
+            if self._is_slot(minute):
                 return max(1, math.ceil(minute - now))
             minute += MINUTE
-        raise AssertionError("no slot in two days")   # an interval divides some minute of the day
+        return None
 
-    def slot_before(self, t: float) -> int:
-        """The latest slot at or before ``t``."""
+    def slot_before(self, t: float) -> int | None:
+        """The latest slot at or before ``t``, or None when no range holds one."""
         minute = math.floor(t) // MINUTE * MINUTE
         for _ in range(LOOK_AHEAD_MINUTES):
-            local = datetime.fromtimestamp(minute, self.tz)
-            step = self.quiet_every if self.quiet(local) else self.every
-            if (local.hour * 3600 + local.minute * 60) % step == 0:
+            if self._is_slot(minute):
                 return minute
             minute -= MINUTE
-        raise AssertionError("no slot in two days")
+        return None
 
-    def describe(self) -> dict:
-        """The schedule as ``GET /about`` gives it."""
-        quiet = None
-        if self.quiet_from is not None:
-            quiet = {"from": self.quiet_from.strftime("%H:%M"),
-                     "to": self.quiet_to.strftime("%H:%M"), "every": self.quiet_every}
-        return {"every": self.every, "quiet": quiet}
+    def describe(self) -> list[dict]:
+        """The ranges as config.yaml writes them, from the earliest start."""
+        return [{"from": start.strftime("%H:%M"), "every": every} for start, every in self.ranges]
+
+
+def in_window(t: clock_time, start: clock_time, end: clock_time) -> bool:
+    """Whether a time of day falls from ``start`` up to ``end``, which may be
+    past midnight."""
+    if start < end:
+        return start <= t < end
+    return t >= start or t < end

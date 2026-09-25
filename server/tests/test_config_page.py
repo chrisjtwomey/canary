@@ -21,8 +21,7 @@ UNKNOWN_PAGE = ("display:\n  pools:\n    co2: [radon.png]\n"
                 "  schedule:\n    type: interval\n    every: 600\n")
 WITH_DISPLAY = ("server:\n  port: 8080   # the port\n"
                 "display:\n  pools:\n    co2: [breathe.png, co2-trace.png]\n"
-                "  schedule:\n    type: interval\n    every: 300\n"
-                "posts:\n  every: 300\n")
+                "  schedule:\n    type: interval\n    every: 300\n")
 
 
 @pytest.fixture
@@ -404,11 +403,11 @@ def dock_offline():
 @pytest.fixture
 def dock(tmp_path, dock_report, dock_offline):
     from dock_settings import BoardSettings, DockSettings
-    from schedule import PostSchedule
+    from schedule import ClockSchedule, parse_hhmm
     from sources.calibration import CalibrationStore
     from tests.conftest import AT, TZ
     store = CalibrationStore(tmp_path / "calibration.db")
-    yield BoardSettings(DockSettings(), PostSchedule(300, TZ), store,
+    yield BoardSettings(DockSettings(), ClockSchedule([(parse_hhmm("00:00"), 300)], TZ), store,
                         lambda device: ({"doc": dock_report, "age_s": 3600,
                                          "offline": dock_offline} if dock_report else None),
                         now=lambda: AT)
@@ -429,7 +428,7 @@ def test_the_dock_tab_holds_the_dock_block_and_a_recalibration(dock_client):
 
     assert attr(one(panel, '[data-field="dock.pm.warmup_s"] input'), "value") == "35"
     assert " ".join(one(panel, "#dock-applied").get_text().split()) == \
-        "No report from the dock yet. Settings apply once it connects."
+        "No sync from the dock yet. Settings apply once it connects."
     sections = panel.select(".section")
     assert len(sections) == 7 and all(sec.select_one("h2.group") for sec in sections)
     heading = one(panel, '.section:has([data-field="dock.scd41.self_calibration"]) h2')
@@ -462,7 +461,7 @@ def test_recalibrate_asks_the_dock_and_does_not_restart(dock_client, dock, path,
     assert open(path).read() == before
     assert restarts == []
     words = one(soup_of(dock_client.get("/web/config")), "#recalibrate-state").get_text()
-    assert words.startswith("Waiting for the dock's next report: 420 ppm, asked ")
+    assert words.startswith("Waiting for the dock's next sync: 420 ppm, asked ")
 
 
 def test_a_reference_out_of_range_is_refused_on_the_dock_tab(dock_client, dock):
@@ -478,7 +477,7 @@ def test_a_reference_out_of_range_is_refused_on_the_dock_tab(dock_client, dock):
 
 @pytest.mark.parametrize("dock_report, words", [
     ({"client": {"dock": {"settings": {"version": "00000000"}}}},
-     "The dock takes these settings before its next report, at 21:50."),
+     "The dock takes these settings before its next sync, at 21:50."),
     ({"client": {"dock": {"recalibrated": {"id": 1_758_600_000, "ppm": 420, "ok": True,
                                            "correction_ppm": -12}}}},
      "Corrected by -12 ppm."),
@@ -551,7 +550,7 @@ def test_an_offline_dock_greys_out_its_tab(dock_client, path):
     panel = one(soup_of(dock_client.get("/web/config")), "#panel-dock")
 
     assert one(panel, "#dock-offline").get_text() == "Offline"
-    assert "Last report 1 h ago." in panel.get_text()
+    assert "Last sync 1 h ago." in panel.get_text()
     for el in panel.select('[data-field^="dock."] input'):
         assert el.has_attr("disabled"), el
     assert one(panel, "#recalibrate-ppm").has_attr("disabled")
@@ -603,24 +602,55 @@ def test_a_dock_that_reports_can_be_changed(dock_client):
     assert not one(panel, "#recalibrate-ppm").has_attr("disabled")
     assert one(panel, "#dock-waiting").get_text() == "Not synchronized"
     assert " ".join(one(panel, "#dock-applied").get_text().split()) == \
-        "Not synchronized The dock takes these settings before its next report, at 21:50."
+        "Not synchronized The dock takes these settings before its next sync, at 21:50."
 
 
-def test_the_quiet_hours_settings_share_a_box_that_shows_with_them(dock_client):
+def test_the_dark_hours_share_a_box_that_shows_with_them(dock_client):
     panel = one(soup_of(dock_client.get("/web/config")), "#panel-dock")
     box = one(panel, ".subsection")
 
-    assert attr(box, "data-when") == "posts.quiet=true"
+    assert attr(box, "data-when") == "dock.led.dark=true"
     assert [attr(f, "data-field") for f in box.select("[data-field]")] == [
-        "posts.quiet.from", "posts.quiet.to", "posts.quiet.every"]
-    assert one(box, '[data-field="posts.quiet.every"] .name').get_text() == "Report every"
+        "dock.led.dark.from", "dock.led.dark.to"]
 
 
-def test_a_report_interval_set_by_the_environment_shows_in_minutes(dock_client, monkeypatch):
-    monkeypatch.setenv("POSTS_EVERY", "600")
-    field = one(soup_of(dock_client.get("/web/config")), '[data-field="posts.every"] input')
+def test_the_sync_schedule_is_a_row_for_each_range(dock_client):
+    box = one(soup_of(dock_client.get("/web/config")), '#panel-dock fieldset.rows.clock')
 
-    assert attr(field, "value") == "10" and field.has_attr("disabled")
+    assert attr(box, "data-key") == "dock.sync" and attr(box, "data-max") == "8"
+    assert [(attr(r.select_one('input[type=time]'), "value"),
+             attr(r.select_one('input[type=number]'), "value")) for r in box.select(".list > .row")] \
+        == [("01:00", "30"), ("07:00", "5")]
+    assert box.select_one(".add") is None and len(box.select(".list .split")) == 2
+
+
+def test_a_split_schedule_is_saved_under_dock_one_range_to_a_line(dock_client, path, restarts):
+    soup = soup_of(dock_client.get("/web/config"))
+    data = posted(soup)
+    data["dock.sync.from"] = ["01:00", "07:00", "22:00"]
+    data["dock.sync.every"] = ["30", "5", "0"]
+
+    dock_client.post("/web/config", data={**data, "action": "save"})
+
+    text = open(path).read()
+    assert ('  sync:\n    - {from: "01:00", every: 1800}\n    - {from: "07:00", every: 300}\n'
+            '    - {from: "22:00", every: 0}\n') in text
+    check_config(text)
+
+
+@pytest.mark.parametrize("dock_report", [{"client": {"dock": {"settings": {"version": "00000000"}}}}])
+@pytest.mark.parametrize("dock_offline", [True])
+def test_an_offline_dock_locks_its_schedule_and_another_tab_leaves_it(dock_client, path):
+    with open(path, "a") as f:
+        f.write('dock:\n  sync:\n    - {from: "00:00", every: 600}\n')
+    soup = soup_of(dock_client.get("/web/config"))
+    box = one(soup, 'fieldset.rows.clock')
+    assert all(el.has_attr("disabled") for el in box.select("input, button"))
+
+    data = {k: v for k, v in posted(soup, source__seed="9").items() if not k.startswith("dock.")}
+    dock_client.post("/web/config", data={**data, "action": "save"})
+
+    assert '- {from: "00:00", every: 600}' in open(path).read()
 
 
 def test_a_dock_on_the_saved_settings_is_synchronized(dock_client, dock_report, dock):
@@ -631,7 +661,7 @@ def test_a_dock_on_the_saved_settings_is_synchronized(dock_client, dock_report, 
 
     assert one(soup, "#dock-synced").get_text() == "Synchronized"
     assert " ".join(one(soup, "#dock-applied").get_text().split()) == \
-        "Synchronized Last report 1 h ago."
+        "Synchronized Last sync 1 h ago."
 
 
 # ── The Image tab ───────────────────────────────────────────────────
@@ -694,7 +724,7 @@ def test_a_recalibration_the_dock_never_ran_says_it_expired(dock_client, dock):
 
     words = one(soup_of(dock_client.get("/web/config")), "#recalibrate-state").get_text()
 
-    assert words == "Recalibration to 450 ppm expired: no report from the dock within an hour."
+    assert words == "Recalibration to 450 ppm expired: the dock did not sync within an hour."
 
 
 def test_before_any_recalibration_the_row_says_how_to_do_one(dock_client):

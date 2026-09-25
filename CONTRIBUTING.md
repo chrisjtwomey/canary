@@ -266,7 +266,7 @@ every five minutes on the wall clock (:00, :05, ...). A fetch that fails
 leaves the last image on the panel and backs off (`back-off step N`).
 
 The dock takes a reading 35 s after boot, once the PM fan has warmed up,
-and then on each of the server's slots (`posts` in `config.yaml`). It
+and then on each of the server's slots (`dock.sync` in `config.yaml`). It
 queues a readings document, with a `client` object beside the
 measurements, and the loop posts the queue to the server's
 `/sensor-readings` (`posted 1 reading (200); 0 queued`); the Diagnostics page is

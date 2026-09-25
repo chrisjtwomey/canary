@@ -1256,6 +1256,46 @@ fieldset.rows legend.hide {
   grid-template-columns: 9em minmax(0, 14em) auto;
 }
 
+/* A schedule's ranges: the start, the interval, and the two actions. */
+.clock .row {
+  grid-template-columns: 8em auto auto auto;
+  justify-content: start;
+}
+
+.clock .every {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings .rows .clock .every input,
+.settings .clock .every input {
+  width: 5.5em;
+}
+
+.rows .split {
+  padding: 0.1em 0.8em;
+  font: inherit;
+  font-size: 15px;
+  font-style: italic;
+  color: var(--ink-soft);
+  background: var(--paper);
+  border: 1.5px dashed var(--ink-mid);
+  border-radius: 1em;
+  cursor: pointer;
+}
+
+.rows .split:hover:not(:disabled) {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+.rows .split:disabled,
+.rows .remove:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 .settings .rows .row input,
 .settings .rows .row select {
   max-width: none;
@@ -1329,6 +1369,7 @@ fieldset.rows legend.hide {
 }
 
 html:not(.js) .rows .add,
+html:not(.js) .rows .split,
 html:not(.js) .rows .remove {
   display: none;
 }

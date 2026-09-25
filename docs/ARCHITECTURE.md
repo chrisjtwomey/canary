@@ -115,17 +115,19 @@ board restarts.
 land on :00, :05, … on the wall clock; the weather calendar keeps `times`.
 [CONTRIBUTING.md](../CONTRIBUTING.md) explains the pools.
 
-The dock's readings have a schedule of their own, the `posts` block in
-`config.yaml`: every 300 seconds, and every 1800 from 01:00 to 07:00. A
-slot is a local time whose seconds past midnight are a multiple of the
-interval, so readings land on :00, :05, … by day and on the hour and half
-hour by night, and 07:00 is a slot in both. Every response tells the dock
-how long until the next, in `Canary-Next-Sensor-Poll-Seconds`, rounded up so
-it is never early. `schedule.py` finds the slot by stepping through the
-minutes and asking of each whether it is inside the window, because some
-clocks change at 01:00, the window's own start: in spring that hour never
-happens, and in autumn it happens twice. Without an answer the dock keeps
-the last gap the server gave between two slots.
+The dock syncs on a schedule of its own, `dock.sync` in `config.yaml`: it takes a reading at each
+sync and posts its queue. The schedule covers the whole day as ranges round the clock, up to 8, each
+from its start until the next range's, the last running past midnight to the first; each has an
+interval, and 0 turns its range off. By default it is every 1800 seconds from 01:00 and every 300 from
+07:00. A slot is a local time in a range that is on, whose seconds past midnight are a multiple of that
+range's interval, so readings land on :00, :05, … by day and on the hour and half hour by night, and
+07:00 is a slot in both. Every response tells the dock how long until the next, in
+`Canary-Next-Sensor-Poll-Seconds`, rounded up so it is never early. `schedule.py` finds the slot by
+stepping through the minutes and asking of each which range it is in, because some clocks change at
+01:00, a range's start: in spring that hour never happens, and in autumn it happens twice. Without an
+answer the dock keeps the last gap the server gave between two slots. A schedule in which no range
+syncs is refused, since the dock would take no readings. The Dock tab edits it as a list of ranges
+beside a dial of the day: a range splits in two, or gives its hours to the range before.
 
 ### 3.4 The device is a head and a dock
 
@@ -253,14 +255,15 @@ panel, which works only in black and white; the Inkplate library makes every ele
 
 The `dock` block of `config.yaml`, the Dock tab on `/web/config`, sets what the dock does between readings: the
 fan's warm-up, the SCD41's temperature offset and self-calibration, the SHTC3's low-power mode, BSEC's sample
-rate, the LED's brightness and whether it goes dark in quiet hours, and the dock's log level. The dock asks `GET /board-settings` at the
+rate, the LED's brightness and its dark hours, and the dock's log level. The dock asks `GET /board-settings` at the
 pre-warm before each slot, applies what has changed, and keeps the answer in NVS, so it starts on the same settings
 after a power cut. The answer carries a version, a hash of the settings, and the dock reports the version it runs,
 and any key it refused, in its `client` object; the Dock tab says whether the dock has taken the saved settings.
 The dock holds each value to limits of its own, so a server that sends one out of range changes nothing. A board that has
-missed two of its posts, two slots for the dock and two minutes for the head, is offline: the Boards page marks it,
-and the Dock tab greys out its settings and its recalibration until the dock reports again, since nothing sent then
-would reach it. The saved values stay as they are.
+missed two of its syncs, two slots for the dock and two minutes for the head, is offline: the Boards page marks it,
+and the Dock tab greys out its settings and its recalibration until the dock syncs again, since nothing sent then
+would reach it. The saved values stay as they are. A range that is off lengthens the silence the dock may keep, since
+it has no slots to miss.
 
 Each setting takes effect where it can without a wait. The SCD41 takes its offset and self-calibration only while
 idle and forgets them at a power cycle, so the dock sets them at each start of the part, and a change stops its
@@ -272,8 +275,10 @@ the state BSEC learns at one is no use at the other, so each saved copy says its
 at its own, and a change of rate starts BSEC again from nothing. At 5 minutes Bosch counts the BME688's self-heating
 as negligible, and a reading carries the newest cycle, up to 5 minutes old.
 
-The LED's quiet hours are the server's: the answer says whether the next slot falls in them, so the LED goes dark
-at the pre-warm before the first quiet slot and comes back at the one before the first slot after them.
+The LED's dark hours, `dock.led.dark`, are the server's: the answer says whether the next slot falls in them, so
+the LED goes dark at the pre-warm before the first slot in them and comes back at the one before the first slot
+after them. They are a window of their own rather than a range of the sync schedule, so the light can stay dark
+while the dock syncs slowly.
 
 A recalibration is not a setting. The Dock tab asks for one with a reference in ppm, the server keeps the request
 with the time it was asked as its id, and the answer carries it for an hour or until the dock reports that id as
@@ -461,3 +466,4 @@ Dated decisions and status behind the text above, oldest first.
 - **2026-09-22**: the Storage tab downloads each store as a file and takes one back. The file is one JSON document a line, in the shape the board posted, and not the SQLite file: a store keeps a document under its board and its time and ignores a second with that key, so a file goes into another store of the same kind and adds only what is missing. An import writes the whole file or none of it, so a corrupt line leaves nothing behind, and when the store already holds some of them it writes nothing until the person says to put the file over them. The size beside Download is taken from the first lines and how many documents are held, so drawing the page costs the same whatever the store holds. An upload weighs at most 64 MB.
 - **2026-09-22**: the menu gives each group a row of its own, with the headings in a column beside the pages. Three days and Changes name the same five measurements, so they share one row and the heading is a switch between them; a hidden radio holds the choice, which keeps the switch working without JavaScript. On the browse page, `browse.js` moves the shown page to the same measurement over the other span, and flips the switch when a page from the other span is opened.
 - **2026-09-23**: the dock takes its settings from the server (§3.8) rather than from constants in its firmware, so changing how it runs needs no build. It asks at each pre-warm rather than reading them off the answer to a batch, because the pre-warm is when a setting can take effect before the slot, and a failed request costs nothing: the dock keeps what it runs. The pre-warm is a moment of its own, the fan's lead before each slot, since a fan kept on never starts. BSEC's sample rate is a setting too, 5 minutes by default: the dock's first run, which looked like a start from nothing, reached accuracy 3 about 5.5 hours in at 3 s, so a change costs hours of learning rather than days. A recalibration is a request with an id rather than a setting, so saving the config again never repeats one.
+- **2026-09-25**: the dock's `posts` schedule became `dock.sync`, ranges round the clock (§3.3). A sync is an exchange both ways, the dock's readings up and its settings and any update down, which "post" undersold. A schedule always covers the day: it starts as one range, a range is made by splitting one, and there are at most 8, so there is never a gap or an overlap to explain. A range may run past midnight, and an interval of 0 is off. The head gets a sync schedule of the same shape next, and its refreshes after that, so the Dock and Head tabs edit all three with one editor. A board is offline after two missed syncs, fixed in the code, since what is abnormal is the product's call and not the user's. The LED's dark hours moved from the old quiet window to `dock.led.dark` as a stopgap until the status light is redone.

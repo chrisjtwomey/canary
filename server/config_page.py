@@ -40,6 +40,7 @@ import dock_settings as ds
 from html_doc import Html
 from pages.base import EnvPage
 from metrics import age_span
+from schedule import MAX_RANGES
 from transfer import Corrupt, Overlap, Transfer
 from web import menu_bar, page_head
 
@@ -52,11 +53,11 @@ TAB_NAMES = [t.name for t in cf.TABS] + [YAML_TAB]
 
 # What each drawing on a sheet shows, and how to change it by dragging.
 VISUAL_CAPTIONS = {
-    "dial": "Each tick is a report; the inner line marks the light off. "
-            "Drag the ends of the hatched band to move slow mode.",
+    "dial": "Each tick is a sync. Hatching marks a range that is off; the inner line, "
+            "the light's dark hours. Drag a range's start to move it.",
     "panel": "The image, with the drawn area hatched. "
              "Drag the round handle to resize it; click a dot to move it.",
-    "slot": "The time before one report. "
+    "slot": "The time before one sync. "
             "Drag the fan band's left edge; past the start, the fan never stops.",
 }
 
@@ -119,9 +120,9 @@ class DockState:
     last: dict | None = None        # its report of the last one it ran
     ppm: str = str(ds.RECALIBRATE_MIN_PPM + 20)
     offline: bool = False           # it has missed two slots; nothing on the tab reaches it
-    age_s: int | None = None        # since its last report
+    age_s: int | None = None        # since its last sync
     expired: dict | None = None     # a recalibration that lapsed before the dock ran it
-    next_report: str = ""           # the local time of its next slot, HH:MM
+    next_sync: str = ""             # the local time of its next slot, HH:MM
 
 
 def head_panel(entry: dict | None) -> dict | None:
@@ -140,7 +141,7 @@ def dock_state(dock: ds.BoardSettings) -> DockState:
     offline, age = dock.offline()
     return DockState(applied, refused, dock.pending(), dock.last_recalibration(),
                      offline=offline, age_s=age, expired=dock.expired(),
-                     next_report=dock.next_report())
+                     next_sync=dock.next_sync())
 
 
 def file_view(text: str) -> View:
@@ -187,28 +188,53 @@ def _time_row(a: Airium, key: str, at: str, pool: str, names: list[str]) -> None
         a.button(type="button", klass="remove", _t="×", **{"aria-label": "Remove this time"})
 
 
-def _rows(a: Airium, f: cf.Field, view: View, images: list[str], heading: str) -> None:
+def _clock_row(a: Airium, key: str, start: str, every: str, locked: bool) -> None:
+    lock = {"disabled": "disabled"} if locked else {}
+    with a.div(klass="row"):
+        a.input(type="time", name=key + ".from", value=start, **{"aria-label": "From"}, **lock)
+        with a.span(klass="every"):
+            a.input(type="number", name=key + ".every", value=every, min="0",
+                    max=str(24 * 60), step="1", inputmode="numeric",
+                    **{"aria-label": "Every, in minutes"}, **lock)
+            a.span(klass="unit", _t="min")
+        a.button(type="button", klass="split", _t="Split",
+                 **{"aria-label": "Split this range in two"}, **lock)
+        a.button(type="button", klass="remove", _t="×",
+                 **{"aria-label": "Remove this range; the one before takes its hours"}, **lock)
+
+
+def _row(a: Airium, f: cf.Field, first: str, second: str, images: list[str],
+         names: list[str], locked: bool) -> None:
+    if f.kind == "pools":
+        _pool_row(a, f.key, first, second, images)
+    elif f.kind == "clock":
+        _clock_row(a, f.key, first, second, locked)
+    else:
+        _time_row(a, f.key, first, second, names)
+
+
+def _rows(a: Airium, f: cf.Field, view: View, images: list[str], heading: str,
+          locked: bool = False) -> None:
+    """A field of rows. ``locked`` applies to a schedule's ranges, the only
+    rows on a tab that locks."""
     rows = view.values.get(f.key, [])
     names = _pool_names(view)
-    kind = "pools" if f.kind == "pools" else "times"
-    with a.fieldset(klass=f"rows {kind}", id=_id(f.key),
-                    **{"data-key": f.key, "data-initial": cf.initial(view.initial[f.key])}):
+    marks = {"data-max": str(MAX_RANGES)} if f.kind == "clock" else {}
+    with a.fieldset(klass=f"rows {f.kind}", id=_id(f.key),
+                    **{"data-key": f.key, "data-initial": cf.initial(view.initial[f.key])},
+                    **marks):
         a.legend(klass="name hide" if f.label == heading else "name", _t=f.label)
-        a.input(type="hidden", name=f.key, value="1")
+        # With the rows locked, the key goes unposted and the file's value stands.
+        a.input(type="hidden", name=f.key, value="1", **({"disabled": "disabled"} if locked else {}))
         with a.div(klass="list"):
             for first, second in rows:
-                if kind == "pools":
-                    _pool_row(a, f.key, first, second, images)
-                else:
-                    _time_row(a, f.key, first, second, names)
+                _row(a, f, first, second, images, names, locked)
         with a.template():
-            if kind == "pools":
-                _pool_row(a, f.key, "", "", images)
-            else:
-                _time_row(a, f.key, "", "", names)
+            _row(a, f, "", "", images, names, locked)
         with a.div(klass="foot"):
-            a.button(type="button", klass="add",
-                     _t="Add a pool" if kind == "pools" else "Add a time")
+            if f.kind != "clock":
+                a.button(type="button", klass="add",
+                         _t="Add a pool" if f.kind == "pools" else "Add a time")
             if f.help:
                 a.p(klass="help", _t=f.help)
 
@@ -232,7 +258,7 @@ def _control(a: Airium, f: cf.Field, view: View, env: str | None, locked: bool) 
                         a.input(type="radio", name=f.key, value=choice, **lock,
                                 **({"checked": "checked"} if choice == chosen else {}))
                         a.span(_t=words)
-        elif f.kind in ("bool", "quiet"):
+        elif f.kind in ("bool", "window"):
             on = (env or "").strip().lower() in ("1", "true", "yes", "on") if env is not None \
                 else value == "true"
             a.input(type="hidden", name=f.key, value="false", **lock)
@@ -281,13 +307,13 @@ def _field(a: Airium, f: cf.Field, view: View, images: list[str], heading: str,
     env = f.env_value()
     error = view.errors.get(f.key)
     klass = "field by-position" if by_position else "field"
-    if f.kind in ("pools", "times"):
+    if f.kind in cf.ROWS:
         klass += " wide"
     if error:
         klass += " invalid"
     with a.div(klass=klass, **{"data-field": f.key}, **({"data-when": f.when} if f.when else {})):
-        if f.kind in ("pools", "times"):
-            _rows(a, f, view, images, heading)
+        if f.kind in cf.ROWS:
+            _rows(a, f, view, images, heading, locked)
         else:
             with a.div(klass="head"):
                 if f.kind == "choice":
@@ -299,7 +325,7 @@ def _field(a: Airium, f: cf.Field, view: View, images: list[str], heading: str,
             if sheet:
                 a.span(klass="leader", **{"aria-hidden": "true"})
             _control(a, f, view, env, locked)
-        if f.help and f.kind not in ("pools", "times"):
+        if f.help and f.kind not in cf.ROWS:
             a.p(klass="help", _t=f.help)
         if env is not None:
             a.p(klass="env", _t=f"Set by {f.env_name}")
@@ -352,22 +378,22 @@ def _settings_line(a: Airium, state: DockState) -> None:
     """Whether the dock runs the saved settings, as a banner across the tab:
     a pill naming the state, then what it means. config.js puts a new one in
     its place from GET /web/config/live."""
-    last = Markup("Last report {} ago.").format(age_span(state.age_s or 0))
+    last = Markup("Last sync {} ago.").format(age_span(state.age_s or 0))
     if state.offline:
-        pill = ("offline", "Offline", last + " Settings unlock when the dock reports again.")
+        pill = ("offline", "Offline", last + " Settings unlock when the dock syncs again.")
     elif state.applied is None:
         pill = None
     elif state.applied:
         pill = ("synced", "Synchronized", last)
     else:
         pill = ("waiting", "Not synchronized",
-                f"The dock takes these settings before its next report, "
-                f"at {state.next_report}.")
+                f"The dock takes these settings before its next sync, "
+                f"at {state.next_sync}.")
     with a.div(klass="dock-state", id="dock-state",
                **{"data-offline": "true" if state.offline else "false"}):
         with a.p(klass="banner dock-line", id="dock-applied"):
             if pill is None:
-                a.span(_t="No report from the dock yet. Settings apply once it connects.")
+                a.span(_t="No sync from the dock yet. Settings apply once it connects.")
             else:
                 klass, name, words = pill
                 a.span(klass=f"pill {klass}", id=f"dock-{klass}", _t=name)
@@ -388,11 +414,11 @@ def _recalibration_words(state: DockState) -> str:
     if state.pending:
         asked = datetime.fromtimestamp(state.pending["id"])
         lapses = datetime.fromtimestamp(state.pending["id"] + ds.RECALIBRATE_WITHIN_S)
-        return (f"Waiting for the dock's next report: {state.pending['ppm']} ppm, "
+        return (f"Waiting for the dock's next sync: {state.pending['ppm']} ppm, "
                 f"asked {_when(asked)}. Expires at {lapses:%H:%M}.")
     if state.expired:
         return (f"Recalibration to {state.expired['ppm']} ppm expired: "
-                "no report from the dock within an hour.")
+                "the dock did not sync within an hour.")
     last = state.last
     if not last:
         return ("Keep the dock in air of a known CO₂ level for 3 minutes, then enter that level. "

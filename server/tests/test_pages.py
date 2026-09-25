@@ -364,7 +364,7 @@ class TestDiagnostics:
     def test_each_board_s_own_rows_sit_in_its_client_card(self, tz):
         dock_client = dict(DOCK_DOC["client"], chip_temp_c=41,
                            dock=dict(DOCK_DOC["client"]["dock"], fan_warmup_s=35))
-        dock = {"doc": dict(DOCK_DOC, client=dock_client), "age_s": 40, "next_post_s": 200}
+        dock = {"doc": dict(DOCK_DOC, client=dock_client), "age_s": 40, "next_sync_s": 200}
         status = dict(STATUS, boards=dict(STATUS["boards"], **{"canary-dock": dock}))
         soup, _ = render(DiagnosticsPage("diagnostics", tz=tz, width=WIDTH, height=HEIGHT),
                          {"status": status})
@@ -375,7 +375,7 @@ class TestDiagnostics:
         client = [k.get_text() for k in soup.select("#board-dock .card")[0].select(".k")]
         assert client == ["version", "up", "chip"]
         sensors = [k.get_text() for k in soup.select("#board-dock .card")[3].select(".k")]
-        assert sensors == ["next report", "SHTC3", "SCD41", "PMSA003I", "fan", "BME688", "accuracy"]
+        assert sensors == ["next sync", "SHTC3", "SCD41", "PMSA003I", "fan", "BME688", "accuracy"]
         assert text(soup, "#dock-fan") == "35 s warm-up"
         assert "sub" in soup.select_one("#dock-fan")["class"]
         client = [k.get_text() for k in soup.select("#board-head .card")[0].select(".k")]
@@ -383,8 +383,8 @@ class TestDiagnostics:
         panel = [k.get_text() for k in soup.select("#board-head .card")[3].select(".k")]
         assert panel == ["next page", "fetched", "back-off", "temperature"]
         assert text(soup, "#dock-chip-temp") == "41 °C"
-        assert text(soup, "#dock-next-report") == "3 min"
-        assert soup.select_one("#dock-next-report [data-in]")["data-in"] == "200"
+        assert text(soup, "#dock-next-sync") == "3 min"
+        assert soup.select_one("#dock-next-sync [data-in]")["data-in"] == "200"
         assert soup.select_one("#dock-bsec").find_previous_sibling().get_text() == "accuracy"
         assert "sub" in soup.select_one("#dock-bsec")["class"]
 
@@ -400,7 +400,7 @@ class TestDiagnostics:
                          {"status": STATUS})
         assert soup.select_one("#dock-chip-temp") is None
         assert soup.select_one("#dock-fan") is None
-        assert soup.select_one("#dock-next-report") is None
+        assert soup.select_one("#dock-next-sync") is None
 
     def test_a_board_without_psram_shows_no_psram_row(self, tz):
         client = dict(HEAD_DOC["client"], psram_free=0, psram_size=0)

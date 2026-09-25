@@ -65,14 +65,17 @@ def test_a_blank_stamp_is_not_a_version(monkeypatch):
     assert server_version() != "   "
 
 
-def test_it_gives_the_docks_schedule_and_the_next_slot():
+def test_it_gives_the_docks_sync_ranges_and_the_next_slot():
     from datetime import datetime
     from zoneinfo import ZoneInfo
-    from schedule import PostSchedule
+    from schedule import ClockSchedule, parse_hhmm
     tz = ZoneInfo("Europe/Dublin")
     now = datetime(2026, 6, 15, 12, 3, 10, tzinfo=tz).timestamp()
+    sync = ClockSchedule([(parse_hhmm("07:00"), 300), (parse_hhmm("22:00"), 0)], tz)
 
-    answer = About("v1.0.0", now=at(now), posts=PostSchedule(300, tz)).answer({})
+    answer = About("v1.0.0", now=at(now), dock_sync=sync).answer({})
 
-    assert answer["posts"] == {"every": 300, "quiet": None, "next_s": 110}
-    assert About("v1.0.0").answer({})["posts"] is None
+    assert answer["sync"] == {"dock": {"ranges": [{"from": "07:00", "every": 300},
+                                                  {"from": "22:00", "every": 0}],
+                                       "next_s": 110}}
+    assert About("v1.0.0").answer({})["sync"] is None

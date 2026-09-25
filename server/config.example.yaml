@@ -43,14 +43,11 @@ calibration:        # sensor state the dock backs up whenever BSEC saves a copy
   # path: calibration.db  # relative to this file
   keep_days: 3      # each copy is kept this long; the board asks for one after a restart
 
-posts:              # when the dock posts its readings, on the wall clock (:00, :05, :10 ...)
-  every: 300
-  quiet:            # a slower cadence overnight, in server.timezone; `quiet: {}` turns it off
-    from: "01:00"
-    to: "07:00"
-    every: 1800
-
 dock:               # what the dock does between readings; it takes a change before its next one
+  sync:             # when it takes a reading and syncs, in server.timezone: each range runs until
+                    # the next starts, slots on the wall clock (:00, :05 ...); every: 0 is off
+    - {from: "01:00", every: 1800}
+    - {from: "07:00", every: 300}
   pm:
     warmup_s: 35    # the fan runs this long before each reading; 0 keeps it on
   scd41:
@@ -60,7 +57,7 @@ dock:               # what the dock does between readings; it takes a change bef
     low_power: false
   led:
     brightness_pct: 15
-    off_in_quiet_hours: false   # dark from the pre-warm before the first quiet slot
+    dark: {}        # dark hours, as {from: "01:00", to: "07:00"}; {} for none
     # The look of each state: off, solid, pulse or flash, repeating every
     # interval_s (0.25 to 10). The dock shows the first state that holds.
     starting: {pattern: pulse, interval_s: 0.5}

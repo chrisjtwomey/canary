@@ -35,7 +35,7 @@ from pages.day import DayPage
 from pages.diagnostics import DiagnosticsPage, DiagnosticsTracePage, HealthTracePage
 from pages.dust import DustPage
 from pages.pool import CO2, IAQ, PM25, PRESSURE, TEMP, DeltaPage, TracePage
-from schedule import DEFAULT_QUIET, PostSchedule, parse_hhmm
+from schedule import DEFAULT_DOCK_SYNC, ClockSchedule
 from sources.calibration import CalibrationStore
 from sources.corrections import SeaLevelSource, to_sea_level
 from sources.mock import MockReadingsSource
@@ -115,33 +115,43 @@ def follow_own_version(firmware, version: str):
     return dataclasses.replace(firmware, offer_dev_builds=not is_clean_tag(version))
 
 
-def make_silence(posts: PostSchedule) -> Callable[[str, float], float]:
-    """How long each board may go without a report before two of its posts
+def make_silence(dock_sync: ClockSchedule) -> Callable[[str, float], float]:
+    """How long each board may go without a report before two of its syncs
     are missed: the dock's since the second-latest slot, the head's two of
     its intervals."""
     def silence(device: str, now: float) -> float:
         if device != DOCK:
             return 2 * HEAD_REPORT_EVERY_S
-        return now - posts.slot_before(posts.slot_before(now) - 1)
+        latest = dock_sync.slot_before(now)
+        before = dock_sync.slot_before(latest - 1) if latest is not None else None
+        return now - before if before is not None else float("inf")
     return silence
 
 
-def make_next_post(posts: PostSchedule) -> Callable[[str, float], int | None]:
-    """The seconds until the dock's next post slot; the head has none."""
-    def next_post(device: str, now: float) -> int | None:
-        return posts.seconds_until_next(now) if device == DOCK else None
-    return next_post
+def make_next_sync(dock_sync: ClockSchedule) -> Callable[[str, float], int | None]:
+    """The seconds until the dock's next sync slot; the head has none."""
+    def next_sync(device: str, now: float) -> int | None:
+        return dock_sync.seconds_until_next(now) if device == DOCK else None
+    return next_sync
 
 
-def make_posts(config: dict, tz) -> PostSchedule:
-    """The dock's post schedule from the ``posts`` block: every five minutes,
-    and every half hour from 01:00 to 07:00, when the block says nothing."""
-    quiet = get_prop_by_keys(config, "posts", "quiet", default=DEFAULT_QUIET) or {}
-    every = int(get_prop_by_keys(config, "posts", "every", default=300))
-    if not quiet:
-        return PostSchedule(every, tz)
-    return PostSchedule(every, tz, parse_hhmm(quiet.get("from", "")),
-                        parse_hhmm(quiet.get("to", "")), int(quiet.get("every", every)))
+def make_dock_sync(config: dict, tz) -> ClockSchedule:
+    """The dock's sync schedule from ``dock.sync``: every five minutes, and
+    every half hour from 01:00 to 07:00, when config.yaml gives none.
+
+    Raises:
+        ConfigError: the schedule cannot work, or no range of it syncs, so
+            the dock would take no readings at all.
+    """
+    value = get_prop_by_keys(config, "dock", "sync", default=DEFAULT_DOCK_SYNC)
+    try:
+        sync = ClockSchedule.from_config(value, tz, "dock.sync")
+    except ValueError as exc:
+        raise ConfigError(str(exc)) from None
+    if sync.seconds_until_next(time.time()) is None:
+        raise ConfigError("dock.sync has no range that syncs, so the dock would take no "
+                          "readings: give one range an interval")
+    return sync
 
 
 @dataclasses.dataclass(frozen=True)
@@ -159,7 +169,7 @@ class Settings:
     logs_path: str
     logs_days: float
     altitude_m: float
-    posts: PostSchedule
+    dock_sync: ClockSchedule
     dock: DockSettings
 
 
@@ -199,7 +209,7 @@ def load_settings(config: dict) -> Settings:
         logs_path=str(get_prop_by_keys(config, "logs", "path", default="board-logs.db")),
         logs_days=float(get_prop_by_keys(config, "logs", "keep_days", default=7)),
         altitude_m=float(get_prop_by_keys(config, "site", "altitude_m", default=0)),
-        posts=make_posts(config, core.server.timezone),
+        dock_sync=make_dock_sync(config, core.server.timezone),
         dock=load_dock_settings(config),
     )
 
@@ -277,8 +287,8 @@ def main():
 
     status_store = ReadingsStore(os.path.join(cwd, settings.status_path))
     reports = DeviceReports(store=status_store, keep_days=settings.status_days,
-                            silence=make_silence(settings.posts),
-                            next_post=make_next_post(settings.posts))
+                            silence=make_silence(settings.dock_sync),
+                            next_sync=make_next_sync(settings.dock_sync))
     log.info("board reports in %s, %d held", status_store.path, status_store.count())
     store = None
     if settings.kind == "store":
@@ -288,8 +298,8 @@ def main():
     calibration = CalibrationStore(os.path.join(cwd, settings.calibration_path),
                                    keep_days=settings.calibration_days)
     ingest = ReadingsIngest(reports, store, settings.keep_days)
-    posts = settings.posts
-    about = About(version, core.firmware, posts=posts)
+    dock_sync = settings.dock_sync
+    about = About(version, core.firmware, dock_sync=dock_sync)
     pages = make_pages(tz, **core.image.page_kwargs())
     between = make_between(settings.seed, clock, store)
     history = HistoryQuery(make_history(between, settings.altitude_m), tz, now=clock)
@@ -297,7 +307,7 @@ def main():
     status = StatusSource(reports)
     board_logs = LogStore(os.path.join(cwd, settings.logs_path), keep_days=settings.logs_days)
     logs = LogsQuery(board_logs, tz)
-    board_settings = BoardSettings(settings.dock, posts, calibration, reports.device, now=clock)
+    board_settings = BoardSettings(settings.dock, dock_sync, calibration, reports.device, now=clock)
 
     try:
         server = DisplayServer(
@@ -319,7 +329,7 @@ def main():
             header_prefix="Canary",
             server_version=about.version,
             version_gate=True,
-            sensor_poll=posts.seconds_until_next,
+            sensor_poll=dock_sync.seconds_until_next,
             on_refused=reports.refused,
         )
     except ValueError as exc:

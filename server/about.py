@@ -3,7 +3,7 @@
 A board asks at boot, after a post the server would not take, and once an
 hour. It carries the same version and clock the response headers carry, and
 adds what only a document has room for: the firmware each board is offered,
-which library this server is built on, and the dock's post schedule.
+which library this server is built on, and each board's sync schedule.
 """
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from epd_server import __version__ as library_version
 from epd_server.config import FirmwareSettings
 from epd_server.firmware import FirmwareStore
 
-from schedule import PostSchedule
+from schedule import ClockSchedule
 
 
 class About:
@@ -26,15 +26,16 @@ class About:
             offer to each board: the newest that can work with ``version``.
             Without them the answer says there is none.
         now: the clock, for tests.
-        posts: the dock's post schedule, when the server keeps one.
+        dock_sync: the dock's sync schedule, when the server keeps one.
     """
 
     def __init__(self, version: str, firmware: FirmwareSettings | None = None,
-                 now: Callable[[], float] = time.time, posts: PostSchedule | None = None):
+                 now: Callable[[], float] = time.time,
+                 dock_sync: ClockSchedule | None = None):
         self.version = version
         self.firmware = firmware
         self.now = now
-        self.posts = posts
+        self.dock_sync = dock_sync
         self.stores = ({p: FirmwareStore(firmware.dir_for(p)) for p in firmware.names()}
                        if firmware and firmware.enabled else {})
 
@@ -47,13 +48,15 @@ class About:
                 "epoch": int(now),
             },
             "firmware": self._firmware(),
-            "posts": self._posts(now),
+            "sync": self._sync(now),
         }
 
-    def _posts(self, now: float) -> dict | None:
-        if self.posts is None:
+    def _sync(self, now: float) -> dict | None:
+        """Each board's ranges and the seconds to its next slot."""
+        if self.dock_sync is None:
             return None
-        return {**self.posts.describe(), "next_s": self.posts.seconds_until_next(now)}
+        return {"dock": {"ranges": self.dock_sync.describe(),
+                         "next_s": self.dock_sync.seconds_until_next(now)}}
 
     def _firmware(self) -> dict | None:
         """Each product's offer, None where the server holds nothing its

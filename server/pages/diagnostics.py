@@ -151,7 +151,7 @@ class DiagnosticsPage(EnvPage):
                 self._memory(a, k, c)
 
             if isinstance(c.get("dock"), dict):
-                self._sensors(a, k, c["dock"], valid, entry.get("next_post_s"))
+                self._sensors(a, k, c["dock"], valid, entry.get("next_sync_s"))
             elif isinstance(c.get("head"), dict):
                 self._panel(a, k, c["head"], entry.get("age_s") or 0)
 
@@ -185,16 +185,16 @@ class DiagnosticsPage(EnvPage):
             kv(a, "refused", Markup("{} from {}, {} ago").format(
                 refused["count"], refused["version"], age_span(refused["age_s"])), id=f"{k}-refused")
 
-    def _sensors(self, a: Airium, k: str, dock: dict, valid: dict, next_post_s: int | None) -> None:
-        """When the dock reports next, then each sensor, with the PM fan's mode
+    def _sensors(self, a: Airium, k: str, dock: dict, valid: dict, next_sync_s: int | None) -> None:
+        """When the dock syncs next, then each sensor, with the PM fan's mode
         and BSEC's accuracy under the sensor each belongs to."""
         present = dock.get("sensors") or {}
         bsec = dock.get("bsec") or {}
         with a.div(klass="card"):
             a.div(klass="label", _t="Sensors")
             with a.div(klass="kv"):
-                if next_post_s is not None:
-                    kv(a, "next report", in_span(next_post_s), id=f"{k}-next-report")
+                if next_sync_s is not None:
+                    kv(a, "next sync", in_span(next_sync_s), id=f"{k}-next-sync")
                 for key, name, flag in SENSORS:
                     if not present.get(key):
                         state = "missing"

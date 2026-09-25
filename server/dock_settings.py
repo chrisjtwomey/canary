@@ -25,12 +25,12 @@ import hashlib
 import json
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, time as clock_time
 from typing import Any, Callable
 
 from epd_server.config import ConfigError, get_prop_by_keys
 
-from schedule import PostSchedule
+from schedule import ClockSchedule, in_window, parse_hhmm
 
 DOCK = "canary-dock"
 
@@ -53,6 +53,8 @@ LED_LOOKS = (("starting", "pulse", 0.5), ("no_wifi", "flash", 1),
              ("well", "pulse", 1))
 LED_INTERVAL_MIN_S = 0.25
 LED_INTERVAL_MAX_S = 10.0
+# The window the form offers when the light's dark hours are turned on.
+DEFAULT_LED_DARK = {"from": "01:00", "to": "07:00"}
 LOG_LEVELS = ("error", "warning", "notice", "info", "debug")
 # BSEC's two rates, in seconds between samples. At 300 Bosch counts the
 # BME688's self-heating as negligible; a change starts IAQ learning again.
@@ -75,7 +77,7 @@ class DockSettings:
     scd41_self_calibration: bool = True
     shtc3_low_power: bool = False
     led_brightness_pct: int = LED_BRIGHTNESS_PCT
-    led_off_in_quiet_hours: bool = False
+    led_dark: tuple[clock_time, clock_time] | None = None   # the light's dark hours, from and to
     log_level: str = "debug"
     bsec_sample_s: int = 300
     led_looks: tuple[tuple[str, str, float], ...] = LED_LOOKS   # (state, pattern, interval_s)
@@ -133,6 +135,23 @@ def _led_look(config: dict, state: str, pattern: str, interval: float) -> tuple[
     return state, chosen, round(float(every), 3)
 
 
+def _window(config: dict, key: str) -> tuple[clock_time, clock_time] | None:
+    """A ``{from, to}`` window as two times of day; None when it is absent or ``{}``."""
+    value = _get(config, key, {})
+    if value == {}:
+        return None
+    if not isinstance(value, dict) or set(value) != {"from", "to"}:
+        raise ConfigError(f"dock.{key} must be {{from: \"HH:MM\", to: \"HH:MM\"}}, or {{}} "
+                          f"for none, not {value!r}")
+    try:
+        start, end = parse_hhmm(value["from"]), parse_hhmm(value["to"])
+    except ValueError as exc:
+        raise ConfigError(f"dock.{key}: {exc}") from None
+    if start == end:
+        raise ConfigError(f"dock.{key} starts and ends at the same time")
+    return start, end
+
+
 def load_dock_settings(config: dict) -> DockSettings:
     """The ``dock`` block of ``config``, with a default for each key it lacks.
 
@@ -162,7 +181,7 @@ def load_dock_settings(config: dict) -> DockSettings:
         scd41_self_calibration=_bool(config, "scd41.self_calibration", True),
         shtc3_low_power=_bool(config, "shtc3.low_power", False),
         led_brightness_pct=_int(config, "led.brightness_pct", LED_BRIGHTNESS_PCT, 0, 100),
-        led_off_in_quiet_hours=_bool(config, "led.off_in_quiet_hours", False),
+        led_dark=_window(config, "led.dark"),
         log_level=level,
         bsec_sample_s=rate,
         led_looks=tuple(_led_look(config, *look) for look in LED_LOOKS),
@@ -191,18 +210,18 @@ class BoardSettings:
 
     Args:
         settings: the ``dock`` block.
-        posts: the dock's post schedule, for the light's quiet hours.
+        sync: the dock's sync schedule, for its next slot.
         requests: where a recalibration waits; see CalibrationStore.
         reported: what the server knows of a device, as DeviceReports.device
             gives it, or None.
         now: the clock, for tests.
     """
 
-    def __init__(self, settings: DockSettings, posts: PostSchedule, requests,
+    def __init__(self, settings: DockSettings, sync: ClockSchedule, requests,
                  reported: Callable[[str], dict | None],
                  now: Callable[[], float] = time.time):
         self.settings = settings
-        self.posts = posts
+        self.sync = sync
         self.requests = requests
         self.reported = reported
         self.now = now
@@ -227,12 +246,16 @@ class BoardSettings:
 
     def dark(self) -> bool:
         """Whether the light stays dark until the next reading: when the next
-        slot falls in quiet hours and the settings ask for it."""
-        if not self.settings.led_off_in_quiet_hours:
+        slot falls in the light's dark hours."""
+        slot = self._next_slot()
+        if self.settings.led_dark is None or slot is None:
             return False
+        return in_window(slot.time(), *self.settings.led_dark)
+
+    def _next_slot(self) -> datetime | None:
         now = self.now()
-        slot = now + self.posts.seconds_until_next(now)
-        return self.posts.quiet(datetime.fromtimestamp(slot, self.posts.tz))
+        wait = self.sync.seconds_until_next(now)
+        return None if wait is None else datetime.fromtimestamp(now + wait, self.sync.tz)
 
     def _entry(self) -> dict:
         return self.reported(DOCK) or {}
@@ -270,11 +293,10 @@ class BoardSettings:
             return None
         return newest
 
-    def next_report(self) -> str:
-        """The local time of the dock's next slot, as HH:MM."""
-        now = self.now()
-        slot = now + self.posts.seconds_until_next(now)
-        return datetime.fromtimestamp(slot, self.posts.tz).strftime("%H:%M")
+    def next_sync(self) -> str:
+        """The local time of the dock's next slot, as HH:MM; empty when it has none."""
+        slot = self._next_slot()
+        return slot.strftime("%H:%M") if slot else ""
 
     def recalibrate(self, ppm) -> int:
         """Ask the dock to recalibrate its SCD41 to ``ppm`` at its next
