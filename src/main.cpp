@@ -36,6 +36,7 @@
 #include "head/Notice.h"
 #include "net/Backlog.h"        // postResult: what an HTTP status means for the sender
 #include "net/ClientStatus.h"
+#include "net/ResetReason.h"
 #include "net/RefreshTimer.h"
 #include "net/Url.h"
 
@@ -211,6 +212,7 @@ static ClientStatus clientStatus(uint32_t nowMs) {
     s.ip = ipText;
     s.rssi = WiFi.RSSI();
     s.uptimeS = nowMs / 1000;
+    s.reset = resetReasonName(esp_reset_reason());
     s.heapFree = ESP.getFreeHeap();
     s.heapSize = ESP.getHeapSize();
     s.psramFree = ESP.getFreePsram();

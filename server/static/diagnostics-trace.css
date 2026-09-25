@@ -15,6 +15,7 @@
 
 .page-diagnostics-trace .stat .name { font-size: 2.6cqw; margin-right: 1cqw; }
 .page-diagnostics-trace .stat .detail { font-size: 1.9cqw; }
+.page-diagnostics-trace .stat .fault { font-weight: 700; }
 
 /* Diagnostics: a row per measure, both boards on each, free memory tallest. */
 .page-diagnostics-trace .charts {

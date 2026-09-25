@@ -447,6 +447,18 @@ class TestDiagnostics:
 
 
 class TestDiagnosticsTrace:
+    def test_a_fault_is_counted_apart_and_a_wake_from_sleep_is_no_restart(self, tz):
+        history = status_history()
+        head = history["canary-head"]
+        # the fixture's one restart, at report 100, was a power-on
+        head[100]["client"] = dict(head[100]["client"], reset="power_on")
+        for i, reset in ((110, "panic"), (120, "deep_sleep")):
+            head[i]["client"] = dict(head[i]["client"], uptime_s=60, reset=reset)
+        soup, _ = render(DiagnosticsTracePage("diagnostics-trace", tz=tz, width=WIDTH, height=HEIGHT),
+                         {"status": STATUS, "status_history_24h": history})
+        assert text(soup, "#head-stat .detail") == "up 6 min, 2 restarts today, 1 fault"
+        assert text(soup, "#head-stat .detail .fault") == "1 fault"
+
     def test_one_chart_per_measure_with_both_boards_on_it(self, tz):
         page = DiagnosticsTracePage("diagnostics-trace", tz=tz, width=WIDTH, height=HEIGHT)
         assert page.requires == ("status", "status_history_24h")

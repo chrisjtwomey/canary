@@ -52,9 +52,9 @@ static int dockJson(const ClientStatus& s, char* buf, size_t len, int n) {
 size_t clientStatusJson(const ClientStatus& s, char* buf, size_t len) {
     int n = append(buf, len, 0,
         "{\"board\":\"%s\",\"version\":\"%s\",\"ip\":\"%s\",\"rssi\":%d,\"uptime_s\":%lu"
-        ",\"heap_free\":%lu,\"heap_size\":%lu,\"psram_free\":%lu,\"psram_size\":%lu",
+        ",\"reset\":\"%s\",\"heap_free\":%lu,\"heap_size\":%lu,\"psram_free\":%lu,\"psram_size\":%lu",
         s.board ? s.board : "", s.version ? s.version : "", s.ip ? s.ip : "", s.rssi,
-        (unsigned long)s.uptimeS,
+        (unsigned long)s.uptimeS, s.reset ? s.reset : "unknown",
         (unsigned long)s.heapFree, (unsigned long)s.heapSize,
         (unsigned long)s.psramFree, (unsigned long)s.psramSize);
     n = s.role == ClientStatus::DOCK ? dockJson(s, buf, len, n) : headJson(s, buf, len, n);

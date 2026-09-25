@@ -42,11 +42,20 @@ def ordered_boards(boards: dict) -> list[str]:
     return known + [d for d in boards if d not in known]
 
 
-def restarts(history: list[dict]) -> int:
-    """How many times the uptime fell between consecutive reports."""
-    ups = [d["client"].get("uptime_s") for d in history if isinstance(d.get("client"), dict)]
-    ups = [u for u in ups if u is not None]
-    return sum(1 for a, b in zip(ups, ups[1:]) if b < a)
+# The reasons a board gives for its start (the client object's "reset") that
+# are faults: a crash, a watchdog, a power dip.
+FAULT_STARTS = {"panic", "cpu_lockup", "int_watchdog", "task_watchdog", "watchdog", "brownout",
+                "power_glitch", "efuse"}
+
+
+def restarts(history: list[dict]) -> tuple[int, int]:
+    """How many times the uptime fell between consecutive reports, and how
+    many of those a fault caused. A wake from deep sleep is no restart."""
+    starts = [(d["client"].get("uptime_s"), d["client"].get("reset")) for d in history
+              if isinstance(d.get("client"), dict) and d["client"].get("uptime_s") is not None]
+    fell = [reset for (a, _), (b, reset) in zip(starts, starts[1:])
+            if b < a and reset != "deep_sleep"]
+    return len(fell), sum(1 for reset in fell if reset in FAULT_STARTS)
 
 
 def queue_of(c: dict) -> dict | None:
@@ -313,12 +322,15 @@ class DiagnosticsTracePage(EnvPage):
             for device in ordered_boards(boards):
                 k = board_key(device)
                 c = (boards[device].get("doc") or {}).get("client") or {}
-                n = restarts(history.get(device, []))
+                n, faults = restarts(history.get(device, []))
                 with a.div(klass="stat", id=f"{k}-stat"):
                     a.span(klass="name", _t=k)
-                    a.span(klass="detail", _t=(
-                        f"up {fmt_duration(c.get('uptime_s', 0))}, "
-                        + (f"{n} restart{'s' if n != 1 else ''} today" if n else "no restarts today")))
+                    line = (f"up {fmt_duration(c.get('uptime_s', 0))}, "
+                            + (f"{n} restart{'s' if n != 1 else ''} today" if n else "no restarts today"))
+                    if faults:
+                        line = Markup('{}, <span class="fault">{}</span>').format(
+                            line, f"{faults} fault{'s' if faults != 1 else ''}")
+                    a.span(klass="detail", _t=line)
         with a.div(klass="charts"):
             for t in TRACES:
                 with a.div(klass=f"chart chart-{t.key}"):
