@@ -10,7 +10,7 @@ light is dark until the next reading, and a recalibration waiting to run.
      "scd41": {"temperature_offset_c": 4.0, "self_calibration": true},
      "shtc3": {"low_power": false},
      "led": {"brightness_pct": 15, "dark": false,
-             "starting": {"pattern": "pulse", "interval_s": 0.5}, ...},
+             "looks": [{"trigger": "starting", "pattern": "pulse", "length_s": 0.5}, ...]},
      "log": {"level": "debug"},
      "bsec": {"sample_s": 300},
      "recalibrate": {"id": 1758650400, "ppm": 420}}
@@ -44,17 +44,37 @@ SCD41_OFFSET_C = 4.0
 SCD41_OFFSET_MAX_C = 20.0
 # The light's full brightness when it was set by eye on the bench.
 LED_BRIGHTNESS_PCT = 15
-# The light's looks: each state the dock can be in, highest first, with its
-# look by default. The dock shows the first that holds; its update has a look
-# of its own that no setting changes.
-LED_PATTERNS = ("off", "solid", "pulse", "flash")
+# The light's triggers: the states the dock can be in, highest first. The
+# dock shows the first that holds and has a look, and none of them when none
+# does; its update has a look of its own that no setting changes.
+LED_TRIGGERS = ("starting", "no_wifi", "post_failed", "sensor_missing", "well")
+# The patterns, in the order the Dock tab offers them. A pattern repeats
+# every length_s; a double or a triple is two or three flashes or quick
+# pulses of 0.3 s each, then dark for the rest of the length.
+LED_PATTERNS = ("off", "solid", "pulse", "double_pulse", "triple_pulse",
+                "flash", "double_flash", "triple_flash")
+# The patterns that hold one level, and so have no length.
+LED_STILL = ("off", "solid")
+# Each trigger's look by default, in the triggers' order.
 LED_LOOKS = (("starting", "pulse", 0.5), ("no_wifi", "flash", 1),
              ("post_failed", "flash", 2), ("sensor_missing", "flash", 3),
              ("well", "pulse", 1))
-LED_INTERVAL_MIN_S = 0.25
-LED_INTERVAL_MAX_S = 10.0
-# The window the form offers when the light's dark hours are turned on.
-DEFAULT_LED_DARK = {"from": "01:00", "to": "07:00"}
+DEFAULT_LED_LOOKS = [{"trigger": t, "pattern": p, "length_s": n} for t, p, n in LED_LOOKS]
+LED_LENGTH_MIN_S = 0.25
+LED_LENGTH_MAX_S = 10.0
+# A double's or a triple's group and a dark gap of one of its steps, as the
+# dock's StatusLed::minLengthMs has them.
+LED_GROUP_MIN_S = {"double_pulse": 0.9, "triple_pulse": 1.2,
+                   "double_flash": 0.9, "triple_flash": 1.2}
+# The length the dock is sent for a pattern that has none.
+LED_STILL_LENGTH_S = 1
+
+
+def led_min_length(pattern: str) -> float:
+    """The shortest length_s a pattern can have."""
+    return LED_GROUP_MIN_S.get(pattern, LED_LENGTH_MIN_S)
+# The window the form offers when the light's schedule is turned on.
+DEFAULT_LED_SCHEDULE = {"from": "07:00", "to": "01:00"}
 LOG_LEVELS = ("error", "warning", "notice", "info", "debug")
 # BSEC's two rates, in seconds between samples. At 300 Bosch counts the
 # BME688's self-heating as negligible; a change starts IAQ learning again.
@@ -77,10 +97,10 @@ class DockSettings:
     scd41_self_calibration: bool = True
     shtc3_low_power: bool = False
     led_brightness_pct: int = LED_BRIGHTNESS_PCT
-    led_dark: tuple[clock_time, clock_time] | None = None   # the light's dark hours, from and to
+    led_schedule: tuple[clock_time, clock_time] | None = None   # the hours the light is on
     log_level: str = "debug"
     bsec_sample_s: int = 300
-    led_looks: tuple[tuple[str, str, float], ...] = LED_LOOKS   # (state, pattern, interval_s)
+    led_looks: tuple[tuple[str, str, float], ...] = LED_LOOKS   # (trigger, pattern, length_s)
 
     def document(self) -> dict:
         """The settings as the dock reads them, without the version."""
@@ -90,8 +110,8 @@ class DockSettings:
                       "self_calibration": self.scd41_self_calibration},
             "shtc3": {"low_power": self.shtc3_low_power},
             "led": {"brightness_pct": self.led_brightness_pct,
-                    **{state: {"pattern": pattern, "interval_s": interval}
-                       for state, pattern, interval in self.led_looks}},
+                    "looks": [{"trigger": trigger, "pattern": pattern, "length_s": length}
+                              for trigger, pattern, length in self.led_looks]},
             "log": {"level": self.log_level},
             "bsec": {"sample_s": self.bsec_sample_s},
         }
@@ -122,27 +142,51 @@ def _bool(config: dict, key: str, default: bool) -> bool:
     return value
 
 
-def _led_look(config: dict, state: str, pattern: str, interval: float) -> tuple[str, str, float]:
-    chosen = _get(config, f"led.{state}.pattern", pattern)
-    if chosen not in LED_PATTERNS:
-        raise ConfigError(f"dock.led.{state}.pattern must be one of {', '.join(LED_PATTERNS)}, "
-                          f"not {chosen!r}")
-    every = _get(config, f"led.{state}.interval_s", interval)
-    if isinstance(every, bool) or not isinstance(every, (int, float)) \
-            or not LED_INTERVAL_MIN_S <= every <= LED_INTERVAL_MAX_S:
-        raise ConfigError(f"dock.led.{state}.interval_s must be from {LED_INTERVAL_MIN_S:g} to "
-                          f"{LED_INTERVAL_MAX_S:g}, not {every!r}")
-    return state, chosen, round(float(every), 3)
+def _led_looks(config: dict) -> tuple[tuple[str, str, float], ...]:
+    """``dock.led.looks``, a list of ``{trigger, pattern, length_s}``, in the
+    triggers' order. Off and solid need no length."""
+    value = _get(config, "led.looks", DEFAULT_LED_LOOKS)
+    if not isinstance(value, list) or not all(isinstance(v, dict) for v in value):
+        raise ConfigError("dock.led.looks must be a list of looks, each {trigger, pattern, "
+                          "length_s}, or [] for none")
+    looks: dict[str, tuple[str, str, float]] = {}
+    for look in value:
+        if not {"trigger", "pattern"} <= set(look) <= {"trigger", "pattern", "length_s"}:
+            raise ConfigError(f"dock.led.looks: each look has trigger, pattern and length_s, "
+                              f"not {', '.join(map(str, look)) or 'nothing'}")
+        trigger, pattern = look["trigger"], look["pattern"]
+        if trigger not in LED_TRIGGERS:
+            raise ConfigError(f"dock.led.looks: trigger must be one of {', '.join(LED_TRIGGERS)}, "
+                              f"not {trigger!r}")
+        if trigger in looks:
+            raise ConfigError(f"dock.led.looks has two looks for {trigger}")
+        if pattern not in LED_PATTERNS:
+            raise ConfigError(f"dock.led.looks: {trigger}'s pattern must be one of "
+                              f"{', '.join(LED_PATTERNS)}, not {pattern!r}")
+        if pattern in LED_STILL:
+            length = look.get("length_s", LED_STILL_LENGTH_S)
+        elif "length_s" not in look:
+            raise ConfigError(f"dock.led.looks: {trigger}'s {pattern} needs a length_s")
+        else:
+            length = look["length_s"]
+        shortest = led_min_length(pattern)
+        if isinstance(length, bool) or not isinstance(length, (int, float)) \
+                or not shortest <= length <= LED_LENGTH_MAX_S:
+            raise ConfigError(f"dock.led.looks: {trigger}'s length_s must be from {shortest:g} "
+                              f"to {LED_LENGTH_MAX_S:g} for {pattern}, not {length!r}")
+        looks[trigger] = (trigger, pattern, round(float(length), 3))
+    return tuple(looks[t] for t in LED_TRIGGERS if t in looks)
 
 
 def _window(config: dict, key: str) -> tuple[clock_time, clock_time] | None:
-    """A ``{from, to}`` window as two times of day; None when it is absent or ``{}``."""
+    """A ``{from, to}`` window as two times of day; None, for all day, when it
+    is absent or ``{}``."""
     value = _get(config, key, {})
     if value == {}:
         return None
     if not isinstance(value, dict) or set(value) != {"from", "to"}:
         raise ConfigError(f"dock.{key} must be {{from: \"HH:MM\", to: \"HH:MM\"}}, or {{}} "
-                          f"for none, not {value!r}")
+                          f"for all day, not {value!r}")
     try:
         start, end = parse_hhmm(value["from"]), parse_hhmm(value["to"])
     except ValueError as exc:
@@ -181,10 +225,10 @@ def load_dock_settings(config: dict) -> DockSettings:
         scd41_self_calibration=_bool(config, "scd41.self_calibration", True),
         shtc3_low_power=_bool(config, "shtc3.low_power", False),
         led_brightness_pct=_int(config, "led.brightness_pct", LED_BRIGHTNESS_PCT, 0, 100),
-        led_dark=_window(config, "led.dark"),
+        led_schedule=_window(config, "led.schedule"),
         log_level=level,
         bsec_sample_s=rate,
-        led_looks=tuple(_led_look(config, *look) for look in LED_LOOKS),
+        led_looks=_led_looks(config),
     )
 
 
@@ -246,11 +290,11 @@ class BoardSettings:
 
     def dark(self) -> bool:
         """Whether the light stays dark until the next reading: when the next
-        slot falls in the light's dark hours."""
+        slot falls outside the light's schedule."""
         slot = self._next_slot()
-        if self.settings.led_dark is None or slot is None:
+        if self.settings.led_schedule is None or slot is None:
             return False
-        return in_window(slot.time(), *self.settings.led_dark)
+        return not in_window(slot.time(), *self.settings.led_schedule)
 
     def _next_slot(self) -> datetime | None:
         now = self.now()

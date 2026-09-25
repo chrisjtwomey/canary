@@ -4,6 +4,8 @@
 #include <cstdio>
 #include <cstring>
 
+#include "dock/StatusLed.h"
+
 static const char* const kKeyNames[kSettingKeys] = {
     "pm.warmup_s",
     "scd41.temperature_offset_c",
@@ -12,20 +14,19 @@ static const char* const kKeyNames[kSettingKeys] = {
     "led.brightness_pct",
     "log.level",
     "bsec.sample_s",
-    "led.starting.pattern",       "led.starting.interval_s",
-    "led.no_wifi.pattern",        "led.no_wifi.interval_s",
-    "led.post_failed.pattern",    "led.post_failed.interval_s",
-    "led.sensor_missing.pattern", "led.sensor_missing.interval_s",
-    "led.well.pattern",           "led.well.interval_s",
+    "led.looks",
 };
 
 static const char* const kLedTriggerNames[kLedTriggers] = {
     "starting", "no_wifi", "post_failed", "sensor_missing", "well",
 };
-static const char* const kLedPatternNames[kLedPatterns] = {"off", "solid", "pulse", "flash"};
+static const char* const kLedPatternNames[kLedPatterns] = {
+    "off", "solid", "pulse", "flash",
+    "double_flash", "triple_flash", "double_pulse", "triple_pulse",
+};
 // The server's defaults, in StatusLed's numbering.
 static const uint8_t  kLedDefaultPattern[kLedTriggers] = {2, 3, 3, 3, 2};
-static const uint16_t kLedDefaultIntervalMs[kLedTriggers] = {500, 1000, 2000, 3000, 1000};
+static const uint16_t kLedDefaultLengthMs[kLedTriggers] = {500, 1000, 2000, 3000, 1000};
 
 // In log_utils.h's order, from LOG_ERROR.
 static const char* const kLevels[] = {"error", "warning", "notice", "info", "debug"};
@@ -41,7 +42,7 @@ BoardSettings defaultBoardSettings() {
     s.bsecSampleS = 300;
     for (uint8_t t = 0; t < kLedTriggers; ++t) {
         s.ledPattern[t] = kLedDefaultPattern[t];
-        s.ledIntervalMs[t] = kLedDefaultIntervalMs[t];
+        s.ledLengthMs[t] = kLedDefaultLengthMs[t];
     }
     return s;
 }
@@ -98,27 +99,36 @@ int indexOf(const char* name, const char* const* names, uint8_t count) {
     return -1;
 }
 
-void takeLedLook(JsonVariantConst look, uint8_t trigger, BoardSettings& s, Taker& t) {
-    const uint8_t key = kLedLook + 2 * trigger;
-    JsonVariantConst pattern = look["pattern"];
-    if (!pattern.isNull()) {
-        const int found = pattern.is<const char*>()
-            ? indexOf(pattern.as<const char*>(), kLedPatternNames, kLedPatterns) : -1;
-        if (found < 0) {
-            t.refuse(key);
-        } else {
-            s.ledPattern[trigger] = (uint8_t)found;
-        }
+int nameIn(JsonVariantConst v, const char* const* names, uint8_t count) {
+    return v.is<const char*>() ? indexOf(v.as<const char*>(), names, count) : -1;
+}
+
+// The looks, a list of {trigger, pattern, length_s}, replace all of `s`'s:
+// a trigger the list leaves out has none. False, with `s` as it was, when
+// the dock cannot use the list or any look in it.
+bool takeLedLooks(JsonVariantConst looks, BoardSettings& s) {
+    if (!looks.is<JsonArrayConst>()) return false;
+    uint8_t pattern[kLedTriggers];
+    uint16_t lengthMs[kLedTriggers];
+    for (uint8_t t = 0; t < kLedTriggers; ++t) {
+        pattern[t] = kLedNoLook;
+        lengthMs[t] = s.ledLengthMs[t];
     }
-    JsonVariantConst interval = look["interval_s"];
-    if (!interval.isNull()) {
-        const float ms = interval.is<float>() ? interval.as<float>() * 1000.0f : -1.0f;
-        if (ms < kLedIntervalMinMs - 0.5f || ms > kLedIntervalMaxMs + 0.5f) {
-            t.refuse(key + 1);
-        } else {
-            s.ledIntervalMs[trigger] = (uint16_t)(ms + 0.5f);
-        }
+    for (JsonVariantConst look : looks.as<JsonArrayConst>()) {
+        const int t = nameIn(look["trigger"], kLedTriggerNames, kLedTriggers);
+        if (t < 0 || pattern[t] != kLedNoLook) return false;
+        const int p = nameIn(look["pattern"], kLedPatternNames, kLedPatterns);
+        if (p < 0) return false;
+        JsonVariantConst length = look["length_s"];
+        const float ms = length.is<float>() ? length.as<float>() * 1000.0f : -1.0f;
+        if (ms < StatusLed::minLengthMs((StatusLed::Pattern)p) - 0.5f ||
+            ms > StatusLed::kMaxLengthMs + 0.5f) return false;
+        pattern[t] = (uint8_t)p;
+        lengthMs[t] = (uint16_t)(ms + 0.5f);
     }
+    memcpy(s.ledPattern, pattern, sizeof(pattern));
+    memcpy(s.ledLengthMs, lengthMs, sizeof(lengthMs));
+    return true;
 }
 
 }  // namespace
@@ -142,9 +152,8 @@ bool parseBoardSettings(const char* json, size_t len, const BoardSettings& curre
     t.take(doc["shtc3"]["low_power"], kShtc3LowPower, s.shtc3LowPower, boolUsable);
     t.take(doc["led"]["brightness_pct"], kLedBrightness, s.ledBrightnessPct, pctUsable);
     t.take(doc["bsec"]["sample_s"], kBsecSampleS, s.bsecSampleS, rateUsable);
-    for (uint8_t trigger = 0; trigger < kLedTriggers; ++trigger) {
-        takeLedLook(doc["led"][kLedTriggerNames[trigger]], trigger, s, t);
-    }
+    JsonVariantConst looks = doc["led"]["looks"];
+    if (!looks.isNull() && !takeLedLooks(looks, s)) t.refuse(kLedLooks);
 
     JsonVariantConst level = doc["log"]["level"];
     if (!level.isNull()) {

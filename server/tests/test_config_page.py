@@ -513,25 +513,53 @@ def test_a_refused_key_the_form_does_not_know_is_shown_as_text(dock_client, dock
     assert refused.select("b") == []
 
 
-def test_each_light_state_has_a_pattern_and_an_interval_shown_for_pulse_and_flash(
-        dock_client, path):
-    soup = soup_of(dock_client.get("/web/config"))
-    well = one(soup, '[data-field="dock.led.well.pattern"]')
+def look_rows(box) -> list[tuple[str, str, str]]:
+    return [(attr(one(r, 'select[name$=".trigger"] option[selected]'), "value"),
+             attr(one(r, 'select[name$=".pattern"] option[selected]'), "value"),
+             attr(one(r, "input[type=number]"), "value")) for r in box.select(".list > .row")]
 
-    assert [s.get_text() for s in well.select(".segments span")] == \
-        ["Off", "Solid", "Pulse", "Flash"]
-    assert attr(one(well, "input[checked]"), "value") == "pulse"
-    interval = one(soup, '[data-field="dock.led.well.interval_s"]')
-    assert attr(interval, "data-when") == "dock.led.well.pattern=pulse|flash"
-    assert interval.find_parent(class_="subsection") is None
-    assert attr(one(interval, "input"), "value") == "1"
 
-    dock_client.post("/web/config", data={
-        **posted(soup, dock__led__well__pattern="solid", dock__led__no_wifi__interval_s="0.5"),
-        "action": "save"})
+def test_the_light_has_a_row_for_each_look(dock_client):
+    box = one(soup_of(dock_client.get("/web/config")), "#panel-dock fieldset.rows.looks")
+
+    assert attr(box, "data-key") == "dock.led.looks"
+    assert look_rows(box) == [("starting", "pulse", "0.5"), ("no_wifi", "flash", "1"),
+                              ("post_failed", "flash", "2"), ("sensor_missing", "flash", "3"),
+                              ("well", "pulse", "1")]
+    assert [o.get_text() for o in box.select('.list > .row:first-child select[name$=".trigger"] '
+                                             'option')] \
+        == ["Starting", "No Wi-Fi", "Post failed", "Sensor missing", "Well"]
+    assert [o.get_text() for o in box.select('.list > .row:first-child select[name$=".pattern"] '
+                                             'option')] \
+        == ["Off", "Solid", "Pulse", "Double pulse", "Triple pulse", "Flash", "Double flash",
+            "Triple flash"]
+    assert box.select(".list .length.idle") == []
+    assert [s.get_text() for s in box.select(".heads span")] == ["Trigger", "Pattern", "Length"]
+    assert json.loads(attr(box, "data-min"))["triple_flash"] == "1.2"
+    assert one(box, ".add").get_text() == "Add a pattern"
+    assert json.loads(attr(box, "data-looks"))["no_wifi"] == ["flash", "1"]
+
+
+def test_a_look_that_holds_one_level_hides_its_length(dock_client, path):
+    with open(path, "a") as f:
+        f.write("dock:\n  led:\n    looks:\n      - {trigger: well, pattern: solid}\n")
+    box = one(soup_of(dock_client.get("/web/config")), "#panel-dock fieldset.rows.looks")
+
+    assert look_rows(box) == [("well", "solid", "1")]
+    assert len(box.select(".list .length.idle")) == 1
+
+
+def test_changed_looks_are_saved_under_the_light(dock_client, path):
+    data = posted(soup_of(dock_client.get("/web/config")))
+    data["dock.led.looks.trigger"] = ["well", "no_wifi"]
+    data["dock.led.looks.pattern"] = ["solid", "flash"]
+    data["dock.led.looks.length_s"] = ["1", "0.5"]
+
+    dock_client.post("/web/config", data={**data, "action": "save"})
 
     saved = open(path).read()
-    assert "pattern: solid" in saved and "interval_s: 0.5" in saved
+    assert ("    looks:\n      - {trigger: no_wifi, pattern: flash, length_s: 0.5}\n"
+            "      - {trigger: well, pattern: solid}\n") in saved
     check_config(saved)
 
 
@@ -607,13 +635,15 @@ def test_a_dock_that_reports_can_be_changed(dock_client):
         "Not synchronized The dock takes these settings before its next sync, at 21:50."
 
 
-def test_the_dark_hours_share_a_box_that_shows_with_them(dock_client):
+def test_the_lights_schedule_shares_a_box_that_shows_with_it(dock_client):
     panel = one(soup_of(dock_client.get("/web/config")), "#panel-dock")
     box = one(panel, ".subsection")
 
-    assert attr(box, "data-when") == "dock.led.dark=true"
+    assert attr(box, "data-when") == "dock.led.schedule=true"
     assert [attr(f, "data-field") for f in box.select("[data-field]")] == [
-        "dock.led.dark.from", "dock.led.dark.to"]
+        "dock.led.schedule.from", "dock.led.schedule.to"]
+    assert one(panel, '[data-field="dock.led.schedule"] .help').get_text() == \
+        "The hours the light is on. Off = all day."
 
 
 def test_each_time_input_has_a_button_for_the_pages_own_picker(dock_client):
@@ -624,7 +654,7 @@ def test_each_time_input_has_a_button_for_the_pages_own_picker(dock_client):
     assert all(attr(t.find_next_sibling("button"), "aria-label") == "Choose a time"
                for t in times)
     assert {attr(t, "name") for t in times} >= {"display.schedule.ranges.from", "dock.sync.from",
-                                                "dock.led.dark.from", "dock.led.dark.to"}
+                                                "dock.led.schedule.from", "dock.led.schedule.to"}
     template = one(soup, 'fieldset[data-key="dock.sync"] template')
     assert template.select_one(".time .pick") is not None
 
@@ -693,6 +723,8 @@ def test_an_offline_dock_locks_its_schedule_and_another_tab_leaves_it(dock_clien
     soup = soup_of(dock_client.get("/web/config"))
     box = one(soup, '#panel-dock fieldset.rows.clock')
     assert all(el.has_attr("disabled") for el in box.select("input, button"))
+    looks = one(soup, '#panel-dock fieldset.rows.looks')
+    assert all(el.has_attr("disabled") for el in looks.select("input, select, button"))
     assert all(b.has_attr("disabled") for b in box.select(".time .pick"))
     head = one(soup, '#panel-display fieldset.rows.clock')
     assert not any(el.has_attr("disabled") for el in head.select("input, button"))

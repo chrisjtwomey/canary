@@ -1,5 +1,5 @@
 """GET /board-settings: the dock's settings from config.yaml, the light's
-dark hours, and a recalibration waiting to run."""
+schedule, and a recalibration waiting to run."""
 from datetime import datetime
 
 import pytest
@@ -18,7 +18,7 @@ def at(hour, minute):
 
 
 SYNC = TimeRanges([(parse_hhmm("07:00"), 300), (parse_hhmm("01:00"), 1800)], TZ, "dock.sync")
-NIGHT = (parse_hhmm("01:00"), parse_hhmm("07:00"))
+DAY = (parse_hhmm("07:00"), parse_hhmm("01:00"))
 
 
 @pytest.fixture
@@ -41,7 +41,7 @@ def report(offline=False, age_s=60, **client):
 def test_a_config_without_a_dock_block_gives_the_defaults():
     assert load_dock_settings({}) == DockSettings(
         pm_warmup_s=35, scd41_temperature_offset_c=4.0, scd41_self_calibration=True,
-        shtc3_low_power=False, led_brightness_pct=15, led_dark=None,
+        shtc3_low_power=False, led_brightness_pct=15, led_schedule=None,
         log_level="debug", bsec_sample_s=300, led_looks=(
             ("starting", "pulse", 0.5), ("no_wifi", "flash", 1.0), ("post_failed", "flash", 2.0),
             ("sensor_missing", "flash", 3.0), ("well", "pulse", 1.0)))
@@ -52,11 +52,11 @@ def test_it_reads_each_key_of_the_dock_block():
         "pm": {"warmup_s": 0},
         "scd41": {"temperature_offset_c": 2.5, "self_calibration": False},
         "shtc3": {"low_power": True},
-        "led": {"brightness_pct": 40, "dark": {"from": "01:00", "to": "07:00"}},
+        "led": {"brightness_pct": 40, "schedule": {"from": "07:00", "to": "01:00"}},
         "log": {"level": "info"},
         "bsec": {"sample_s": 3}}})
 
-    assert settings == DockSettings(0, 2.5, False, True, 40, NIGHT, "info", 3)
+    assert settings == DockSettings(0, 2.5, False, True, 40, DAY, "info", 3)
 
 
 @pytest.mark.parametrize("block, key", [
@@ -69,28 +69,69 @@ def test_it_reads_each_key_of_the_dock_block():
     ({"log": {"level": "verbose"}}, "dock.log.level"),
     ({"bsec": {"sample_s": 60}}, "dock.bsec.sample_s"),
     ({"bsec": {"sample_s": "300"}}, "dock.bsec.sample_s"),
-    ({"led": {"well": {"pattern": "blink"}}}, "dock.led.well.pattern"),
-    ({"led": {"no_wifi": {"interval_s": 0.2}}}, "dock.led.no_wifi.interval_s"),
-    ({"led": {"starting": {"interval_s": 11}}}, "dock.led.starting.interval_s"),
-    ({"led": {"post_failed": {"interval_s": True}}}, "dock.led.post_failed.interval_s"),
-    ({"led": {"dark": {"from": "01:00"}}}, "dock.led.dark"),
-    ({"led": {"dark": {"from": "25:00", "to": "07:00"}}}, "dock.led.dark:"),
-    ({"led": {"dark": {"from": "07:00", "to": "07:00"}}}, "dock.led.dark"),
-    ({"led": {"dark": True}}, "dock.led.dark"),
+    ({"led": {"schedule": {"from": "07:00"}}}, "dock.led.schedule"),
+    ({"led": {"schedule": {"from": "25:00", "to": "01:00"}}}, "dock.led.schedule:"),
+    ({"led": {"schedule": {"from": "07:00", "to": "07:00"}}}, "dock.led.schedule"),
+    ({"led": {"schedule": True}}, "dock.led.schedule"),
 ])
 def test_a_value_out_of_range_is_refused_by_its_key(block, key):
     with pytest.raises(ConfigError, match=f"^{key} "):
         load_dock_settings({"dock": block})
 
 
-def test_a_look_the_block_gives_in_part_keeps_the_rest_of_its_default():
-    looks = dict((state, (pattern, every)) for state, pattern, every in load_dock_settings(
-        {"dock": {"led": {"well": {"pattern": "solid"}, "no_wifi": {"interval_s": 0.25}}}}
-    ).led_looks)
+def looks(*given):
+    return load_dock_settings({"dock": {"led": {"looks": list(given)}}}).led_looks
 
-    assert looks["well"] == ("solid", 1.0)
-    assert looks["no_wifi"] == ("flash", 0.25)
-    assert looks["starting"] == ("pulse", 0.5)
+
+def test_the_looks_are_the_ones_given_in_the_triggers_order():
+    assert looks({"trigger": "well", "pattern": "solid", "length_s": 2},
+                 {"trigger": "no_wifi", "pattern": "flash", "length_s": 0.25}) \
+        == (("no_wifi", "flash", 0.25), ("well", "solid", 2.0))
+
+
+def test_off_and_solid_need_no_length():
+    assert looks({"trigger": "well", "pattern": "solid"},
+                 {"trigger": "starting", "pattern": "off"}) \
+        == (("starting", "off", 1.0), ("well", "solid", 1.0))
+
+
+def test_a_double_or_a_triple_is_a_look_like_the_rest():
+    assert looks({"trigger": "well", "pattern": "triple_flash", "length_s": 1.9},
+                 {"trigger": "no_wifi", "pattern": "double_pulse", "length_s": 0.9}) \
+        == (("no_wifi", "double_pulse", 0.9), ("well", "triple_flash", 1.9))
+
+
+def test_no_looks_is_a_light_that_shows_nothing_but_an_update():
+    assert looks() == ()
+
+
+@pytest.mark.parametrize("value, words", [
+    ({"well": {"pattern": "pulse"}}, "must be a list of looks"),
+    ([["well", "pulse", 1]], "must be a list of looks"),
+    ([{"trigger": "well"}], "each look has trigger, pattern and length_s, not trigger"),
+    ([{"trigger": "well", "pattern": "pulse", "every": 1}], "each look has"),
+    ([{"trigger": "wifi", "pattern": "pulse"}], "trigger must be one of starting, no_wifi, "
+                                                "post_failed, sensor_missing, well, not 'wifi'"),
+    ([{"trigger": "well", "pattern": "off"}, {"trigger": "well", "pattern": "solid"}],
+     "has two looks for well"),
+    ([{"trigger": "well", "pattern": "blink"}], "well's pattern must be one of off, solid, pulse, "
+                                                "double_pulse, triple_pulse, flash, double_flash, "
+                                                "triple_flash, not 'blink'"),
+    ([{"trigger": "well", "pattern": "pulse"}], "well's pulse needs a length_s"),
+    ([{"trigger": "well", "pattern": "pulse", "length_s": 0.2}], "well's length_s must be "
+                                                                  "from 0.25 to 10 for pulse, "
+                                                                  "not 0.2"),
+    ([{"trigger": "well", "pattern": "double_flash", "length_s": 0.8}],
+     "well's length_s must be from 0.9 to 10 for double_flash, not 0.8"),
+    ([{"trigger": "well", "pattern": "triple_pulse", "length_s": 1.1}],
+     "well's length_s must be from 1.2 to 10 for triple_pulse, not 1.1"),
+    ([{"trigger": "well", "pattern": "pulse", "length_s": 11}], "well's length_s"),
+    ([{"trigger": "well", "pattern": "pulse", "length_s": True}], "well's length_s"),
+])
+def test_looks_that_cannot_work_are_refused_by_their_key(value, words):
+    with pytest.raises(ConfigError, match="^dock.led.looks") as caught:
+        load_dock_settings({"dock": {"led": {"looks": value}}})
+    assert words in str(caught.value)
 
 
 def test_a_look_is_part_of_the_version():
@@ -110,13 +151,13 @@ def test_the_version_changes_with_any_setting_and_only_then():
     assert DockSettings(log_level="info").version != base.version
 
 
-def test_the_lights_dark_hours_are_not_part_of_the_version():
-    """They are a choice of when, which the answer carries as dark."""
-    assert DockSettings(led_dark=NIGHT).version == DockSettings().version
+def test_the_lights_schedule_is_not_part_of_the_version():
+    """It is a choice of when, which the answer carries as dark."""
+    assert DockSettings(led_schedule=DAY).version == DockSettings().version
 
 
-def test_dark_hours_given_as_nothing_are_none():
-    assert load_dock_settings({"dock": {"led": {"dark": {}}}}).led_dark is None
+def test_a_schedule_given_as_nothing_is_all_day():
+    assert load_dock_settings({"dock": {"led": {"schedule": {}}}}).led_schedule is None
 
 
 def test_the_answer_is_the_settings_and_their_version(requests):
@@ -127,12 +168,12 @@ def test_the_answer_is_the_settings_and_their_version(requests):
         "pm": {"warmup_s": 35},
         "scd41": {"temperature_offset_c": 4.0, "self_calibration": True},
         "shtc3": {"low_power": False},
-        "led": {"brightness_pct": 15, "dark": False,
-                "starting": {"pattern": "pulse", "interval_s": 0.5},
-                "no_wifi": {"pattern": "flash", "interval_s": 1},
-                "post_failed": {"pattern": "flash", "interval_s": 2},
-                "sensor_missing": {"pattern": "flash", "interval_s": 3},
-                "well": {"pattern": "pulse", "interval_s": 1}},
+        "led": {"brightness_pct": 15, "dark": False, "looks": [
+            {"trigger": "starting", "pattern": "pulse", "length_s": 0.5},
+            {"trigger": "no_wifi", "pattern": "flash", "length_s": 1},
+            {"trigger": "post_failed", "pattern": "flash", "length_s": 2},
+            {"trigger": "sensor_missing", "pattern": "flash", "length_s": 3},
+            {"trigger": "well", "pattern": "pulse", "length_s": 1}]},
         "log": {"level": "debug"},
         "bsec": {"sample_s": 300},
     }
@@ -146,17 +187,17 @@ def test_only_the_dock_has_settings(args, requests):
 
 @pytest.mark.parametrize("now, dark", [
     (at(0, 50), False),     # next slot 00:55
-    (at(0, 56), True),      # next slot 01:00, in the dark hours
+    (at(0, 56), True),      # next slot 01:00, past the schedule
     (at(6, 45), False),     # next slot 07:00, out of them
     (at(3, 10), True),
 ])
-def test_the_light_is_dark_before_a_slot_in_its_dark_hours(now, dark, requests):
-    settings = DockSettings(led_dark=NIGHT)
+def test_the_light_is_dark_before_a_slot_outside_its_schedule(now, dark, requests):
+    settings = DockSettings(led_schedule=DAY)
 
     assert board(settings, requests, now=now).answer({"device": DOCK})["led"]["dark"] is dark
 
 
-def test_the_light_has_no_dark_hours_unless_given(requests):
+def test_the_light_is_on_all_day_without_a_schedule(requests):
     assert board(requests=requests, now=at(3, 10)).answer({"device": DOCK})["led"]["dark"] is False
 
 

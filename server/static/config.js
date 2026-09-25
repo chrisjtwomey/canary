@@ -382,17 +382,77 @@
     limits();
   }
 
+  // ── The light's looks: a trigger, its pattern and its length ─────
+  // One row to a trigger at most, kept in the triggers' order, which is the
+  // order the dock tries them in. A new row takes the first trigger with no
+  // row, in its default look.
+  function looks(box) {
+    var list = box.querySelector('.list');
+    var add = box.querySelector('.add');
+    var defaults = JSON.parse(box.getAttribute('data-looks'));
+    // Each pattern that has a length, and its shortest.
+    var shortest = JSON.parse(box.getAttribute('data-min'));
+    var order = Object.keys(defaults);
+    // Rendered disabled while the dock is offline, and kept so.
+    var locked = add && add.disabled;
+
+    function rows() { return all('.list > .row', box); }
+    function triggerOf(row) { return row.querySelector('select[name$=".trigger"]'); }
+    function patternOf(row) { return row.querySelector('select[name$=".pattern"]'); }
+    function used() { return rows().map(function (row) { return triggerOf(row).value; }); }
+
+    function limits() {
+      var taken = used();
+      rows().forEach(function (row) {
+        var own = triggerOf(row).value;
+        all('option', triggerOf(row)).forEach(function (o) {
+          o.disabled = o.value !== own && taken.indexOf(o.value) >= 0;
+        });
+        var min = shortest[patternOf(row).value];
+        row.querySelector('.length').classList.toggle('idle', min === undefined);
+        if (min !== undefined) row.querySelector('input[type=number]').min = min;
+      });
+      if (add) add.disabled = locked || taken.length >= order.length;
+    }
+
+    function sort() {
+      var sorted = rows().slice().sort(function (a, b) {
+        return order.indexOf(triggerOf(a).value) - order.indexOf(triggerOf(b).value);
+      });
+      var focused = document.activeElement;
+      sorted.forEach(function (row) { list.appendChild(row); });
+      if (focused && box.contains(focused)) focused.focus();
+    }
+
+    box._added = function (row) {
+      var taken = used().slice(0, -1);
+      var free = order.filter(function (t) { return taken.indexOf(t) < 0; })[0];
+      triggerOf(row).value = free;
+      patternOf(row).value = defaults[free][0];
+      row.querySelector('input[type=number]').value = defaults[free][1];
+      sort();
+      limits();
+    };
+    list.addEventListener('change', function (e) {
+      if (e.target.name && /\.trigger$/.test(e.target.name)) sort();
+    });
+    box.addEventListener('input', limits);
+    box.addEventListener('change', limits);
+    limits();
+  }
+
   function poolsChanged() {
     all('input[data-options-from]').forEach(function (i) { if (i._tags) i._tags.render(); });
   }
 
-  // ── Rows: the pools, and a schedule's ranges ────────────────────
+  // ── Rows: the pools, a schedule's ranges, the light's looks ──────
   all('fieldset.rows').forEach(function (box) {
     var list = box.querySelector('.list');
     var blank = box.querySelector('template');
     var add = box.querySelector('.add');
     all('input.chips', list).forEach(tags);
     if (add) add.addEventListener('click', function () {
+      if (add.disabled) return;
       var row = blank.content.firstElementChild.cloneNode(true);
       list.appendChild(row);
       all('input.chips', row).forEach(tags);
@@ -409,6 +469,7 @@
       box.dispatchEvent(new Event('input', { bubbles: true }));
     });
     if (box.classList.contains('clock')) clock(box);
+    if (box.classList.contains('looks')) looks(box);
     if (box.classList.contains('pools')) {
       list.addEventListener('input', function (e) {
         if (e.target.classList.contains('pool-name')) poolsChanged();

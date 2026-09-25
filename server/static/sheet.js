@@ -72,9 +72,9 @@
   }
 
   // The dock's schedule, which the strip draws the time before a sync of,
-  // and the light's dark hours, which only the dock's dial draws.
+  // and the light's schedule, which only the dock's dial draws.
   var SYNC = 'dock.sync';
-  var DARK = { 'dock.sync': 'dock.led.dark' };
+  var LIGHT = { 'dock.sync': 'dock.led.schedule' };
   // What a dial's count is of, for one and for more; a sync by default.
   var COUNTS = { 'display.schedule.ranges': ['page a day', 'pages a day'] };
 
@@ -99,12 +99,12 @@
   }
 
   function schedule(key) {
-    var dark = DARK[key];
-    var from = dark ? minutesOf((input(dark + '.from') || {}).value) : NaN;
-    var to = dark ? minutesOf((input(dark + '.to') || {}).value) : NaN;
+    var light = LIGHT[key];
+    var from = light ? minutesOf((input(light + '.from') || {}).value) : NaN;
+    var to = light ? minutesOf((input(light + '.to') || {}).value) : NaN;
     return {
       ranges: ranges(key),
-      dark: !!dark && on(dark) && !isNaN(from) && !isNaN(to) && from !== to,
+      light: !!light && on(light) && !isNaN(from) && !isNaN(to) && from !== to,
       from: from,
       to: to
     };
@@ -161,7 +161,7 @@
   // ── The dial: a day of syncs or page changes ─────────────────────
   // Midnight at the top, the day running clockwise. Each tick is a sync; a
   // hatched band is a range that is off. A handle at each range's start drags
-  // it round. The line inside is the light's dark hours.
+  // it round. The line inside is the light's schedule.
   function Dial(canvas) {
     this.canvas = canvas;
     this.key = canvas.getAttribute('data-schedule') || SYNC;
@@ -206,7 +206,7 @@
     p.ctx.fill();
     p.ctx.restore();
 
-    if (s.dark) {
+    if (s.light) {
       var b0 = angleOf(s.from), b1 = angleOf(s.to);
       if (b1 <= b0) b1 += 2 * Math.PI;
       p.rc.arc(cx, cy, 2 * (R - 42), 2 * (R - 42), b0, b1, false,

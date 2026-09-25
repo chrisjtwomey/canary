@@ -43,10 +43,10 @@ void test_the_defaults_are_the_servers() {
     StatusLed led;
     const StatusLed::Pattern patterns[] = {StatusLed::PULSE, StatusLed::FLASH, StatusLed::FLASH,
                                            StatusLed::FLASH, StatusLed::PULSE};
-    const uint32_t intervals[] = {500, 1000, 2000, 3000, 1000};
+    const uint32_t lengths[] = {500, 1000, 2000, 3000, 1000};
     for (uint8_t s = 0; s < StatusLed::kLooks; ++s) {
         TEST_ASSERT_EQUAL_INT(patterns[s], led.pattern((StatusLed::State)s));
-        TEST_ASSERT_EQUAL_UINT32(intervals[s], led.intervalMs((StatusLed::State)s));
+        TEST_ASSERT_EQUAL_UINT32(lengths[s], led.lengthMs((StatusLed::State)s));
     }
 }
 
@@ -97,7 +97,7 @@ void test_changing_state_starts_the_new_pattern_from_its_beginning() {
     TEST_ASSERT_EQUAL_UINT16(led.peakDuty(), led.dutyAt(750));
 }
 
-void test_a_flash_lights_the_start_of_each_interval() {
+void test_a_flash_lights_the_start_of_each_cycle() {
     StatusLed led;
     led.state(StatusLed::POST_FAILED, 0);
     const uint16_t peak = led.peakDuty();
@@ -108,7 +108,7 @@ void test_a_flash_lights_the_start_of_each_interval() {
     TEST_ASSERT_EQUAL_UINT16(peak, led.dutyAt(2000));
 }
 
-void test_a_short_interval_flashes_for_half_of_it() {
+void test_a_short_cycle_flashes_for_half_of_it() {
     StatusLed led;
     led.look(StatusLed::NO_WIFI, StatusLed::FLASH, 250);
     led.state(StatusLed::NO_WIFI, 0);
@@ -127,7 +127,7 @@ void test_solid_and_off_hold_one_level() {
     for (uint32_t t = 0; t < 2000; t += 10) TEST_ASSERT_EQUAL_UINT16(0, led.dutyAt(t));
 }
 
-void test_a_pulse_follows_its_interval() {
+void test_a_pulse_follows_its_length() {
     StatusLed led;
     led.look(StatusLed::STARTING, StatusLed::PULSE, 4000);
     led.state(StatusLed::STARTING, 0);
@@ -142,7 +142,7 @@ void test_a_look_that_cannot_be_shown_is_ignored() {
     led.look(StatusLed::WELL, StatusLed::kPatterns, 1000);
     led.look(StatusLed::UPDATING, StatusLed::OFF, 1000);
     TEST_ASSERT_EQUAL_INT(StatusLed::PULSE, led.pattern(StatusLed::WELL));
-    TEST_ASSERT_EQUAL_UINT32(1000, led.intervalMs(StatusLed::WELL));
+    TEST_ASSERT_EQUAL_UINT32(1000, led.lengthMs(StatusLed::WELL));
     led.state(StatusLed::UPDATING, 0);
     TEST_ASSERT_TRUE(led.dutyAt(500) > 0);
 }
@@ -153,6 +153,100 @@ void test_a_pattern_survives_the_millis_rollover() {
     led.state(StatusLed::WELL, start);
     TEST_ASSERT_EQUAL_UINT16(led.peakDuty(), led.dutyAt(start + 500));
     TEST_ASSERT_EQUAL_UINT16(0, led.dutyAt(start + 1000));
+}
+
+void test_it_shows_the_first_state_that_holds() {
+    StatusLed led;
+    led.show(StatusLed::flag(StatusLed::NO_WIFI) | StatusLed::flag(StatusLed::SENSOR_MISSING), 0);
+    TEST_ASSERT_EQUAL_INT(StatusLed::NO_WIFI, led.state());
+}
+
+void test_a_state_without_a_look_passes_the_light_to_the_next_that_holds() {
+    StatusLed led;
+    led.look(StatusLed::NO_WIFI, StatusLed::NONE, 0);
+    led.show(StatusLed::flag(StatusLed::NO_WIFI) | StatusLed::flag(StatusLed::SENSOR_MISSING), 0);
+    TEST_ASSERT_EQUAL_INT(StatusLed::SENSOR_MISSING, led.state());
+    TEST_ASSERT_EQUAL_INT(StatusLed::NONE, led.pattern(StatusLed::NO_WIFI));
+}
+
+void test_with_no_look_among_the_states_that_hold_the_light_is_dark() {
+    StatusLed led;
+    led.look(StatusLed::WELL, StatusLed::NONE, 1000);
+    led.show(StatusLed::flag(StatusLed::WELL), 0);
+    TEST_ASSERT_EQUAL_INT(StatusLed::DARK, led.state());
+    for (uint32_t t = 0; t < 2000; t += 10) TEST_ASSERT_EQUAL_UINT16(0, led.dutyAt(t));
+    led.show(0, 0);
+    TEST_ASSERT_EQUAL_INT(StatusLed::DARK, led.state());
+}
+
+void test_an_update_shows_before_every_other_state() {
+    StatusLed led;
+    led.show(StatusLed::flag(StatusLed::STARTING) | StatusLed::flag(StatusLed::UPDATING), 0);
+    TEST_ASSERT_EQUAL_INT(StatusLed::UPDATING, led.state());
+}
+
+void test_a_look_given_back_takes_the_light_again() {
+    StatusLed led;
+    const uint8_t both = StatusLed::flag(StatusLed::NO_WIFI) | StatusLed::flag(StatusLed::POST_FAILED);
+    led.look(StatusLed::NO_WIFI, StatusLed::NONE, 0);
+    led.show(both, 0);
+    led.look(StatusLed::NO_WIFI, StatusLed::FLASH, 1000);
+    led.show(both, 700);
+    TEST_ASSERT_EQUAL_INT(StatusLed::NO_WIFI, led.state());
+    TEST_ASSERT_EQUAL_UINT16(led.peakDuty(), led.dutyAt(700));
+}
+
+void test_a_triple_flash_lights_three_times_then_stays_dark_to_the_end_of_its_length() {
+    StatusLed led;
+    led.look(StatusLed::WELL, StatusLed::TRIPLE_FLASH, 1900);
+    led.state(StatusLed::WELL, 0);
+    const uint16_t peak = led.peakDuty();
+    for (uint32_t start = 0; start < 900; start += 300) {
+        TEST_ASSERT_EQUAL_UINT16(peak, led.dutyAt(start));
+        TEST_ASSERT_EQUAL_UINT16(peak, led.dutyAt(start + StatusLed::kFlashMs - 1));
+        TEST_ASSERT_EQUAL_UINT16(0, led.dutyAt(start + StatusLed::kFlashMs));
+    }
+    for (uint32_t t = 750; t < 1900; t += 10) TEST_ASSERT_EQUAL_UINT16(0, led.dutyAt(t));
+    TEST_ASSERT_EQUAL_UINT16(peak, led.dutyAt(1900));
+}
+
+void test_a_double_flash_lights_twice() {
+    StatusLed led;
+    led.look(StatusLed::WELL, StatusLed::DOUBLE_FLASH, 1000);
+    led.state(StatusLed::WELL, 0);
+    TEST_ASSERT_EQUAL_UINT16(led.peakDuty(), led.dutyAt(300));
+    TEST_ASSERT_EQUAL_UINT16(0, led.dutyAt(600));
+    TEST_ASSERT_EQUAL_UINT16(led.peakDuty(), led.dutyAt(1000));
+}
+
+void test_a_double_pulse_swells_twice_then_stays_dark() {
+    StatusLed led;
+    led.look(StatusLed::WELL, StatusLed::DOUBLE_PULSE, 1600);
+    led.state(StatusLed::WELL, 0);
+    const uint16_t peak = led.peakDuty();
+    TEST_ASSERT_EQUAL_UINT16(0, led.dutyAt(0));
+    TEST_ASSERT_EQUAL_UINT16(peak, led.dutyAt(150));
+    TEST_ASSERT_EQUAL_UINT16(0, led.dutyAt(300));
+    TEST_ASSERT_EQUAL_UINT16(peak, led.dutyAt(450));
+    for (uint32_t t = 600; t < 1600; t += 10) TEST_ASSERT_EQUAL_UINT16(0, led.dutyAt(t));
+    TEST_ASSERT_EQUAL_UINT16(peak, led.dutyAt(1750));
+}
+
+void test_a_triple_pulse_swells_three_times() {
+    StatusLed led;
+    led.look(StatusLed::WELL, StatusLed::TRIPLE_PULSE, 1900);
+    led.state(StatusLed::WELL, 0);
+    TEST_ASSERT_EQUAL_UINT16(led.peakDuty(), led.dutyAt(750));
+    TEST_ASSERT_EQUAL_UINT16(0, led.dutyAt(900));
+}
+
+void test_a_double_or_triple_needs_its_group_and_a_gap_of_one_step() {
+    TEST_ASSERT_EQUAL_UINT32(900, StatusLed::minLengthMs(StatusLed::DOUBLE_FLASH));
+    TEST_ASSERT_EQUAL_UINT32(900, StatusLed::minLengthMs(StatusLed::DOUBLE_PULSE));
+    TEST_ASSERT_EQUAL_UINT32(1200, StatusLed::minLengthMs(StatusLed::TRIPLE_FLASH));
+    TEST_ASSERT_EQUAL_UINT32(1200, StatusLed::minLengthMs(StatusLed::TRIPLE_PULSE));
+    TEST_ASSERT_EQUAL_UINT32(250, StatusLed::minLengthMs(StatusLed::FLASH));
+    TEST_ASSERT_EQUAL_UINT32(250, StatusLed::minLengthMs(StatusLed::PULSE));
 }
 
 // The brightest duty over one period of the current pattern.
@@ -205,12 +299,22 @@ int main(int, char**) {
     RUN_TEST(test_a_pulse_climbs_in_sixteen_steps);
     RUN_TEST(test_repeating_a_state_does_not_restart_its_pattern);
     RUN_TEST(test_changing_state_starts_the_new_pattern_from_its_beginning);
-    RUN_TEST(test_a_flash_lights_the_start_of_each_interval);
-    RUN_TEST(test_a_short_interval_flashes_for_half_of_it);
+    RUN_TEST(test_a_flash_lights_the_start_of_each_cycle);
+    RUN_TEST(test_a_short_cycle_flashes_for_half_of_it);
     RUN_TEST(test_solid_and_off_hold_one_level);
-    RUN_TEST(test_a_pulse_follows_its_interval);
+    RUN_TEST(test_a_pulse_follows_its_length);
     RUN_TEST(test_a_look_that_cannot_be_shown_is_ignored);
     RUN_TEST(test_a_pattern_survives_the_millis_rollover);
+    RUN_TEST(test_a_triple_flash_lights_three_times_then_stays_dark_to_the_end_of_its_length);
+    RUN_TEST(test_a_double_flash_lights_twice);
+    RUN_TEST(test_a_double_pulse_swells_twice_then_stays_dark);
+    RUN_TEST(test_a_triple_pulse_swells_three_times);
+    RUN_TEST(test_a_double_or_triple_needs_its_group_and_a_gap_of_one_step);
+    RUN_TEST(test_it_shows_the_first_state_that_holds);
+    RUN_TEST(test_a_state_without_a_look_passes_the_light_to_the_next_that_holds);
+    RUN_TEST(test_with_no_look_among_the_states_that_hold_the_light_is_dark);
+    RUN_TEST(test_an_update_shows_before_every_other_state);
+    RUN_TEST(test_a_look_given_back_takes_the_light_again);
     RUN_TEST(test_an_update_brightens_and_quickens_as_the_image_is_written);
     RUN_TEST(test_progress_past_the_end_is_the_end);
     return UNITY_END();

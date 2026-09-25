@@ -1334,7 +1334,7 @@ html:not(.js) .time .pick {
   color: var(--ink);
 }
 
-/* ── Rows: the pools, and a schedule's ranges ── */
+/* ── Rows: the pools, a schedule's ranges, the light's looks ── */
 fieldset.rows {
   min-width: 0;
   margin: 0;
@@ -1380,14 +1380,41 @@ fieldset.rows legend.hide {
   justify-content: start;
 }
 
-.clock .every {
+/* The light's looks: the trigger, the pattern, the length, and ×. */
+.looks .row,
+.looks .heads {
+  display: grid;
+  grid-template-columns: 10em 9em auto auto;
+  justify-content: start;
+  column-gap: 10px;
+}
+
+/* The columns are in ems of the row's size, so the smaller text is inside. */
+.looks .heads {
+  padding-bottom: 3px;
+}
+
+.looks .heads span {
+  font-size: 14px;
+  font-style: italic;
+  color: var(--ink-mid);
+}
+
+.clock .every,
+.looks .length {
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
 
+/* A pattern that does not repeat keeps its place, so the columns line up. */
+.looks .length.idle {
+  visibility: hidden;
+}
+
 .settings .rows .clock .every input,
-.settings .clock .every input {
+.settings .clock .every input,
+.settings .rows .looks .length input {
   width: 5.5em;
 }
 
@@ -1747,6 +1774,11 @@ html.js #note {
   .pools .row .chiplist {
     grid-column: 1 / -1;
     grid-row: 2;
+  }
+
+  /* The rows wrap, so the headings would name the wrong columns. */
+  .looks .heads {
+    display: none;
   }
 
   .changes th {

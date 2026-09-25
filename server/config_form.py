@@ -48,7 +48,7 @@ class Field:
     key: str
     label: str
     help: str = ""
-    kind: str = "text"      # text zone int number bool choice time window pools order clock
+    kind: str = "text"      # text zone int number bool choice time window pools order clock looks
     default: Any = None
     hint: str = ""
     choices: tuple[tuple[str, str], ...] = ()
@@ -110,22 +110,11 @@ class Tab:
         return [f for g in self.groups for f in g.fields]
 
 
-# The status light's states, as the Dock tab names them.
-LED_STATE_LABELS = {"starting": "Starting", "no_wifi": "No Wi-Fi", "post_failed": "Post failed",
-                    "sensor_missing": "Sensor missing", "well": "Well"}
-
-
-def _led_fields(state: str, pattern: str, interval: float) -> tuple[Field, Field]:
-    label = LED_STATE_LABELS[state]
-    key = f"dock.led.{state}"
-    return (
-        Field(f"{key}.pattern", label, "", "choice", pattern,
-              choices=tuple((p, p.capitalize()) for p in ds.LED_PATTERNS),
-              long=f"{label} pattern"),
-        Field(f"{key}.interval_s", "Interval", "", "number", interval, unit="s",
-              minimum=ds.LED_INTERVAL_MIN_S, maximum=ds.LED_INTERVAL_MAX_S,
-              when=f"{key}.pattern=pulse|flash", long=f"{label} interval"),
-    )
+# The status light's triggers, as the Dock tab names them, in their order.
+LED_TRIGGER_LABELS = {"starting": "Starting", "no_wifi": "No Wi-Fi", "post_failed": "Post failed",
+                      "sensor_missing": "Sensor missing", "well": "Well"}
+# The light's patterns, as the Dock tab names them.
+LED_PATTERN_LABELS = {p: p.replace("_", " ").capitalize() for p in ds.LED_PATTERNS}
 
 
 TABS: tuple[Tab, ...] = (
@@ -189,7 +178,7 @@ TABS: tuple[Tab, ...] = (
                   "Each time range runs until the next one starts; 0 minutes = off.", "clock",
                   DEFAULT_DOCK_SYNC, env=False),
         ), visual="dial", caption="Each tick is a sync and a reading. Hatching marks a time "
-                                  "range that is off; the inner line, the light's dark hours. "
+                                  "range that is off; the inner line, the light's schedule. "
                                   "Drag a time range's start to move it."),
         Group("Before each sync · PMSA003I", about="How long the fan runs before each reading", fields=(
             Field("dock.pm.warmup_s", "Fan warm-up", "0 = always on.", "int", ds.PM_WARMUP_S,
@@ -213,13 +202,16 @@ TABS: tuple[Tab, ...] = (
         Group("Status light", about="How the dock's light shows what it is doing", fields=(
             Field("dock.led.brightness_pct", "Brightness", "0 = off.", "int",
                   ds.LED_BRIGHTNESS_PCT, unit="%", minimum=0, maximum=100),
-            Field("dock.led.dark", "Dark hours", "", "window", False, env=False),
-            Field("dock.led.dark.from", "From", "", "time", when="dock.led.dark=true", env=False,
-                  long="Dark hours from"),
-            Field("dock.led.dark.to", "To", "", "time", when="dock.led.dark=true", env=False,
-                  long="Dark hours to"),
-            *(field for state, pattern, interval in ds.LED_LOOKS
-              for field in _led_fields(state, pattern, interval)),
+            Field("dock.led.schedule", "Schedule", "The hours the light is on. Off = all day.",
+                  "window", False, env=False),
+            Field("dock.led.schedule.from", "From", "", "time", when="dock.led.schedule=true",
+                  env=False, long="Schedule from"),
+            Field("dock.led.schedule.to", "To", "", "time", when="dock.led.schedule=true",
+                  env=False, long="Schedule to"),
+            Field("dock.led.looks", "Patterns",
+                  "The first row whose trigger is true sets the light. A trigger with no row "
+                  "is skipped. Length is one cycle of the pattern.", "looks",
+                  ds.DEFAULT_LED_LOOKS, env=False),
         )),
         Group("Log", about="How much the dock writes to its log", fields=(
             Field("dock.log.level", "Level", "", "choice", "debug",
@@ -359,15 +351,15 @@ def _pool_rows(v: Any) -> list[tuple[str, str]]:
 
 
 # The fields that are rows of inputs rather than one.
-ROWS = ("pools", "clock")
-# The window the light's dark hours start from when they are turned on.
-DARK_KEY = "dock.led.dark"
-DARK_PATH = ("dock", "led", "dark")
+ROWS = ("pools", "clock", "looks")
+# The light's schedule, a window the form edits as one switch and two times.
+LIGHT_KEY = "dock.led.schedule"
+LIGHT_PATH = ("dock", "led", "schedule")
 
 
-def _dark_block(cfg: dict) -> dict | None:
-    """The light's dark hours when the file gives them; None when they are off."""
-    d = lookup(cfg, DARK_PATH)
+def _light_block(cfg: dict) -> dict | None:
+    """The light's schedule when the file gives one; None when it is on all day."""
+    d = lookup(cfg, LIGHT_PATH)
     return d if isinstance(d, dict) and d else None
 
 
@@ -385,21 +377,32 @@ def _clock_rows(v: Any) -> list[tuple[str, str]]:
     return rows
 
 
+def _look_rows(v: Any) -> list[tuple[str, str, str]]:
+    """The light's looks as the form's rows: the trigger, the pattern and the
+    length in seconds, which off and solid still have, unseen."""
+    if not isinstance(v, list):
+        return []
+    return [(str(r.get("trigger", "")), str(r.get("pattern", "")),
+             str(r.get("length_s", ds.LED_STILL_LENGTH_S))) for r in v if isinstance(r, dict)]
+
+
 def shown(cfg: dict) -> dict[str, Any]:
     """Each field's value as its input shows it: a string, or rows for the
-    pools and a schedule's ranges."""
+    pools, a schedule's ranges and the light's looks."""
     out: dict[str, Any] = {}
-    dark = _dark_block(cfg)
+    light = _light_block(cfg)
     for f in FIELDS:
         v = lookup(cfg, f.path)
         if f.kind == "pools":
             out[f.key] = _pool_rows(v)
         elif f.kind == "clock":
             out[f.key] = _clock_rows(_in_order(default_of(f, cfg) if v is MISSING else v))
+        elif f.kind == "looks":
+            out[f.key] = _look_rows(_looks_in_order(default_of(f, cfg) if v is MISSING else v))
         elif f.kind == "window":
-            out[f.key] = "true" if dark is not None else "false"
-        elif f.key.startswith(DARK_KEY + ".") and dark is None:
-            out[f.key] = ds.DEFAULT_LED_DARK[f.path[-1]]
+            out[f.key] = "true" if light is not None else "false"
+        elif f.key.startswith(LIGHT_KEY + ".") and light is None:
+            out[f.key] = ds.DEFAULT_LED_SCHEDULE[f.path[-1]]
         else:
             out[f.key] = _as_input(_scaled(f, default_of(f, cfg) if v is MISSING else v))
     return out
@@ -407,13 +410,13 @@ def shown(cfg: dict) -> dict[str, Any]:
 
 def defaults(cfg: dict) -> dict[str, str]:
     """Each field's default as its input shows it, for the fields that have one."""
-    dark = _dark_block(cfg)
+    light = _light_block(cfg)
     out: dict[str, str] = {}
     for f in FIELDS:
         if f.kind in ROWS:
             continue
-        if f.key.startswith(DARK_KEY + ".") and dark is None:
-            d: Any = ds.DEFAULT_LED_DARK[f.path[-1]]
+        if f.key.startswith(LIGHT_KEY + ".") and light is None:
+            d: Any = ds.DEFAULT_LED_SCHEDULE[f.path[-1]]
         else:
             d = default_of(f, cfg)
         if d is not None:
@@ -432,6 +435,9 @@ def submitted(form) -> dict[str, Any]:
             out[f.key] = list(zip(form.getlist(f.key + ".name"), form.getlist(f.key + ".pages")))
         elif f.kind == "clock":
             out[f.key] = list(zip(form.getlist(f.key + ".from"), form.getlist(f.key + ".every")))
+        elif f.kind == "looks":
+            out[f.key] = list(zip(form.getlist(f.key + ".trigger"), form.getlist(f.key + ".pattern"),
+                                  form.getlist(f.key + ".length_s")))
         else:
             out[f.key] = form.getlist(f.key)[-1]
     return out
@@ -514,6 +520,53 @@ def _parse_clock(rows) -> list[dict]:
     return [{"from": at, "every": ranges[at]} for at in sorted(ranges)]
 
 
+def _looks_in_order(looks: Any) -> Any:
+    """The light's looks in the triggers' order, as the form writes them;
+    anything else as it is."""
+    if isinstance(looks, list) and all(isinstance(r, dict) for r in looks):
+        rank = {t: i for i, t in enumerate(ds.LED_TRIGGERS)}
+        return sorted(looks, key=lambda r: rank.get(r.get("trigger"), len(rank)))
+    return looks
+
+
+def _normal_looks(looks: Any) -> Any:
+    """The looks in order, without the length of off or solid, which the dock
+    does not use."""
+    looks = _looks_in_order(looks)
+    if not isinstance(looks, list):
+        return looks
+    return [{k: v for k, v in r.items() if k != "length_s" or r.get("pattern") not in ds.LED_STILL}
+            for r in looks]
+
+
+def _parse_looks(rows) -> list[dict]:
+    """The light's rows as its looks, in the triggers' order. Off and solid
+    are written without a length."""
+    looks: dict[str, dict] = {}
+    for trigger, pattern, length in rows:
+        trigger, pattern, length = trigger.strip(), pattern.strip(), length.strip()
+        label = LED_TRIGGER_LABELS.get(trigger)
+        if label is None:
+            raise FieldError("Choose a trigger for each row.")
+        if trigger in looks:
+            raise FieldError(f"Two rows for {label}.")
+        if pattern not in ds.LED_PATTERNS:
+            raise FieldError(f"{label}: choose a pattern.")
+        look: dict[str, Any] = {"trigger": trigger, "pattern": pattern}
+        if pattern not in ds.LED_STILL:
+            try:
+                seconds = float(length)
+            except ValueError:
+                raise FieldError(f"{label}: enter a length in seconds.") from None
+            shortest = ds.led_min_length(pattern)
+            if not shortest <= seconds <= ds.LED_LENGTH_MAX_S:
+                raise FieldError(f"{label}: enter {shortest:g} to {ds.LED_LENGTH_MAX_S:g} "
+                                 f"seconds for a {LED_PATTERN_LABELS[pattern].lower()}.")
+            look["length_s"] = int(seconds) if seconds.is_integer() else seconds
+        looks[trigger] = look
+    return [looks[t] for t in ds.LED_TRIGGERS if t in looks]
+
+
 def parse(f: Field, raw: Any) -> Any:
     """The value to write for what the input holds; None takes the key out,
     so the server uses its default."""
@@ -521,6 +574,8 @@ def parse(f: Field, raw: Any) -> Any:
         return _parse_pools(raw)
     if f.kind == "clock":
         return _parse_clock(raw)
+    if f.kind == "looks":
+        return _parse_looks(raw)
     raw = str(raw).strip()
     if f.kind in ("bool", "window"):
         return raw == "true"
@@ -913,7 +968,7 @@ def apply(text: str, form) -> Edit:
             expect[tuple(key.split("."))] = MISSING
 
     for f in FIELDS:
-        if f.key not in values or f.key.startswith(DARK_KEY):
+        if f.key not in values or f.key.startswith(LIGHT_KEY):
             continue
         value = values[f.key]
         if f.kind == "pools":
@@ -931,6 +986,12 @@ def apply(text: str, form) -> Edit:
                                                          and value == default_of(f, cfg)):
                 put(f.path, value)
                 changed.append(f.key)
+        elif f.kind == "looks":
+            cur = lookup(cfg, f.path)
+            if not _same(_normal_looks(cur), value) and not (
+                    cur is MISSING and value == _normal_looks(default_of(f, cfg))):
+                put(f.path, value)
+                changed.append(f.key)
         else:
             cur = lookup(cfg, f.path)
             if value is None:
@@ -944,8 +1005,8 @@ def apply(text: str, form) -> Edit:
     if errors:
         return Edit(text, errors, [])
 
-    if DARK_KEY in values:
-        changed += _apply_dark(cfg, values, put)
+    if LIGHT_KEY in values:
+        changed += _apply_light(cfg, values, put)
 
     if not changed:
         return Edit(text, {}, [])
@@ -954,23 +1015,23 @@ def apply(text: str, form) -> Edit:
     return Edit(new_text, {}, changed)
 
 
-def _apply_dark(cfg: dict, values: dict, put) -> list[str]:
-    """The light's dark hours: ``{}`` when they are off, otherwise a block of
-    the times the form gives, or the file's, or the defaults."""
-    cur = _dark_block(cfg)
-    if not values[DARK_KEY]:
+def _apply_light(cfg: dict, values: dict, put) -> list[str]:
+    """The light's schedule: ``{}`` when it is off, otherwise a block of the
+    times the form gives, or the file's, or the defaults."""
+    cur = _light_block(cfg)
+    if not values[LIGHT_KEY]:
         if cur is None:
             return []
-        put(DARK_PATH, {})
-        return [DARK_KEY]
+        put(LIGHT_PATH, {})
+        return [LIGHT_KEY]
     block = {}
     for k in ("from", "to"):
-        given = values.get(f"{DARK_KEY}.{k}")
-        block[k] = given or (cur or {}).get(k) or ds.DEFAULT_LED_DARK[k]
+        given = values.get(f"{LIGHT_KEY}.{k}")
+        block[k] = given or (cur or {}).get(k) or ds.DEFAULT_LED_SCHEDULE[k]
     if _same(cur, block):
         return []
-    put(DARK_PATH, block)
-    return [DARK_KEY]
+    put(LIGHT_PATH, block)
+    return [LIGHT_KEY]
 
 
 def _flat(d: Any, prefix: tuple = ()) -> dict[tuple, Any]:
@@ -1082,15 +1143,34 @@ def _clock_words(v: Any) -> str:
                       if isinstance(r, dict) else str(r) for r in v)
 
 
+def _seconds(v: Any) -> str:
+    return f"{v:g}" if isinstance(v, (int, float)) and not isinstance(v, bool) else str(v)
+
+
+def _look_words(v: Any) -> str:
+    """The light's looks as "No Wi-Fi triple flash 1.9 s · Well solid"."""
+    if not isinstance(v, list):
+        return _words(v)
+    if not v:
+        return "none"
+    return " · ".join(
+        " ".join([LED_TRIGGER_LABELS.get(r.get("trigger"), str(r.get("trigger"))),
+                  LED_PATTERN_LABELS.get(r.get("pattern"), str(r.get("pattern"))).lower(),
+                  *([f"{_seconds(r['length_s'])} s"] if "length_s" in r else [])])
+        if isinstance(r, dict) else str(r) for r in v)
+
+
 def _with_words(cfg: dict) -> dict:
-    """``cfg`` with the dock's sync schedule, the page schedule and the dark
-    hours each one setting in words, so a change to any reads as one line."""
+    """``cfg`` with the dock's sync schedule, the page schedule, and the
+    light's schedule and looks each one setting in words, so a change to any
+    reads as one line."""
     dock = cfg.get("dock")
     dock = dict(dock) if isinstance(dock, dict) else {}
     led = dock.get("led")
     led = dict(led) if isinstance(led, dict) else {}
-    dark = _dark_block(cfg)
-    led["dark"] = f"{dark.get('from', '?')}–{dark.get('to', '?')}" if dark else "off"
+    light = _light_block(cfg)
+    led["schedule"] = f"{light.get('from', '?')}–{light.get('to', '?')}" if light else "all day"
+    led["looks"] = _look_words(_normal_looks(effective(cfg, "dock.led.looks")))
     dock["led"] = led
     dock["sync"] = _clock_words(_in_order(effective(cfg, "dock.sync")))
     display = cfg.get("display")

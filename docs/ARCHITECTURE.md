@@ -158,8 +158,10 @@ dock at the pogo connector.
 ### 3.5 One LED says whether the dock is well
 
 The dock drives a yellow LED on IO6, behind a clear tile in the shell's front face. It shows the first of these
-states that holds, in the look the server's `dock.led` block sets for it: off, solid, a pulse or a flash, and the
-interval a pulse or a flash repeats at.
+states that holds and has a look in the server's `dock.led.looks`: a pattern, and the length of one cycle of it
+before it repeats. A state the list leaves out passes the light to the next one that holds, and with none the LED
+is dark. While `setup()` runs only Starting holds, since the others are not known yet, and Well holds
+only when no other state does.
 
 | State | When | Look by default |
 |---|---|---|
@@ -172,7 +174,8 @@ interval a pulse or a flash repeats at.
 
 The slow pulse is the heartbeat: a dock that has died goes dark, which a solid working state would hide. A pulse
 is sixteen equal steps of light, spaced in time along a sine; a flash is 150 ms of full light at the start of each
-interval.
+cycle. A double or a triple is two or three quick pulses or flashes of 300 ms each, then dark for the rest of the
+length, which is at least one of those steps longer than the group, so the gap always shows.
 
 `StatusLed` turns the time into an LEDC duty and holds no hardware, so the pattern is tested on the host.
 Brightness is perceived brightness, mapped through gamma 2.2 onto a 14-bit channel at 1 kHz. A task of its own
@@ -260,7 +263,7 @@ panel, which works only in black and white; the Inkplate library makes every ele
 
 The `dock` block of `config.yaml`, the Dock tab on `/web/config`, sets what the dock does between readings: the
 fan's warm-up, the SCD41's temperature offset and self-calibration, the SHTC3's low-power mode, BSEC's sample
-rate, the LED's brightness and its dark hours, and the dock's log level. The dock asks `GET /board-settings` at the
+rate, the LED's brightness, its schedule and its looks, and the dock's log level. The dock asks `GET /board-settings` at the
 pre-warm before each slot, applies what has changed, and keeps the answer in NVS, so it starts on the same settings
 after a power cut. The answer carries a version, a hash of the settings, and the dock reports the version it runs,
 and any key it refused, in its `client` object; the Dock tab says whether the dock has taken the saved settings.
@@ -280,10 +283,10 @@ the state BSEC learns at one is no use at the other, so each saved copy says its
 at its own, and a change of rate starts BSEC again from nothing. At 5 minutes Bosch counts the BME688's self-heating
 as negligible, and a reading carries the newest cycle, up to 5 minutes old.
 
-The LED's dark hours, `dock.led.dark`, are the server's: the answer says whether the next slot falls in them, so
-the LED goes dark at the pre-warm before the first slot in them and comes back at the one before the first slot
-after them. They are a window of their own rather than a range of the sync schedule, so the light can stay dark
-while the dock syncs slowly.
+The LED's schedule, `dock.led.schedule`, the hours it is on, is the server's: the answer says whether the next slot
+falls outside it, so the LED goes dark at the pre-warm before the first slot past its end and comes back at the one
+before the first slot in it again. Without a schedule the LED is on all day. It is a window of its own rather than
+a range of the sync schedule, so the light can stay dark while the dock syncs slowly.
 
 A recalibration is not a setting. The Dock tab asks for one with a reference in ppm, the server keeps the request
 with the time it was asked as its id, and the answer carries it for an hour or until the dock reports that id as
@@ -472,4 +475,7 @@ Dated decisions and status behind the text above, oldest first.
 - **2026-09-22**: the menu gives each group a row of its own, with the headings in a column beside the pages. Three days and Changes name the same five measurements, so they share one row and the heading is a switch between them; a hidden radio holds the choice, which keeps the switch working without JavaScript. On the browse page, `browse.js` moves the shown page to the same measurement over the other span, and flips the switch when a page from the other span is opened.
 - **2026-09-23**: the dock takes its settings from the server (§3.8) rather than from constants in its firmware, so changing how it runs needs no build. It asks at each pre-warm rather than reading them off the answer to a batch, because the pre-warm is when a setting can take effect before the slot, and a failed request costs nothing: the dock keeps what it runs. The pre-warm is a moment of its own, the fan's lead before each slot, since a fan kept on never starts. BSEC's sample rate is a setting too, 5 minutes by default: the dock's first run, which looked like a start from nothing, reached accuracy 3 about 5.5 hours in at 3 s, so a change costs hours of learning rather than days. A recalibration is a request with an id rather than a setting, so saving the config again never repeats one.
 - **2026-09-25**: the dock's `posts` schedule became `dock.sync`, ranges round the clock (§3.3). A sync is an exchange both ways, the dock's readings up and its settings and any update down, which "post" undersold. A schedule always covers the day: it starts as one range, a range is made by splitting one, and there are at most 8, so there is never a gap or an overlap to explain. A range may run past midnight, and an interval of 0 is off. The head gets a sync schedule of the same shape next, and its refreshes after that, so the Dock and Head tabs edit all three with one editor. A board is offline after two missed syncs, fixed in the code, since what is abnormal is the product's call and not the user's. The LED's dark hours moved from the old quiet window to `dock.led.dark` as a stopgap until the status light is redone.
+- **2026-09-25**: the LED's looks became a list, `dock.led.looks`, a row on the Dock tab for each trigger, with its pattern and interval (§3.5). A trigger without a row passes the light to the next state that holds rather than going dark: taking a row out says that state is not worth showing, not that the problems behind it are not. Only the dock knows which states hold at once, so the dock does the passing on. The order stays the triggers' own and a row's place means nothing, so the tab keeps the rows in that order.
+- **2026-09-25**: the LED's dark hours became its schedule, `dock.led.schedule`, the hours it is on, so each schedule on the tabs says when something happens rather than when it does not. Without one the light is on all day.
 - **2026-09-26**: the page schedule became ranges round the clock and the head's sync a plain interval, the other way round from before. What changes through the day is when the page should change, with none at night, while a sync only has to happen often enough. epd's `display.schedule` gained `type: timeranges`, which replaced `interval`, since one range all day does what `interval` did, and the ranges moved into epd as `TimeRanges`, since the page schedule is epd's; canary imports it for the dock's sync. A slot is a whole minute, so the page cannot change faster than once a minute.
+- **2026-09-26**: the looks gained a double and a triple of both the flash and the pulse, as named patterns rather than a count and a pause on every row, so a row stays three fields and each name says what it looks like. A new one needs the dock's firmware and the server both. The row's interval became its length, one cycle of the pattern, which reads the same for all of them: for a triple it is the group and the dark after it.

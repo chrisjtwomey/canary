@@ -8,12 +8,12 @@
 static const char kFull[] =
     "{\"version\":\"3f2a9c1e\",\"pm\":{\"warmup_s\":0},"
     "\"scd41\":{\"temperature_offset_c\":2.5,\"self_calibration\":false},"
-    "\"shtc3\":{\"low_power\":true},\"led\":{\"brightness_pct\":40,\"dark\":true,"
-    "\"starting\":{\"pattern\":\"solid\",\"interval_s\":0.25},"
-    "\"no_wifi\":{\"pattern\":\"off\",\"interval_s\":4},"
-    "\"post_failed\":{\"pattern\":\"pulse\",\"interval_s\":2.5},"
-    "\"sensor_missing\":{\"pattern\":\"flash\",\"interval_s\":10},"
-    "\"well\":{\"pattern\":\"off\",\"interval_s\":1}},"
+    "\"shtc3\":{\"low_power\":true},\"led\":{\"brightness_pct\":40,\"dark\":true,\"looks\":["
+    "{\"trigger\":\"starting\",\"pattern\":\"solid\",\"length_s\":0.25},"
+    "{\"trigger\":\"no_wifi\",\"pattern\":\"off\",\"length_s\":4},"
+    "{\"trigger\":\"post_failed\",\"pattern\":\"pulse\",\"length_s\":2.5},"
+    "{\"trigger\":\"sensor_missing\",\"pattern\":\"flash\",\"length_s\":10},"
+    "{\"trigger\":\"well\",\"pattern\":\"off\",\"length_s\":1}]},"
     "\"log\":{\"level\":\"info\"},\"bsec\":{\"sample_s\":3},"
     "\"recalibrate\":{\"id\":1758650400,\"ppm\":420}}";
 
@@ -36,9 +36,9 @@ void test_the_defaults_are_the_servers() {
     TEST_ASSERT_EQUAL_UINT8(5, s.logLevel);
     TEST_ASSERT_EQUAL_UINT16(300, s.bsecSampleS);
     const uint8_t patterns[kLedTriggers] = {2, 3, 3, 3, 2};   // pulse, flash, flash, flash, pulse
-    const uint16_t intervals[kLedTriggers] = {500, 1000, 2000, 3000, 1000};
+    const uint16_t lengths[kLedTriggers] = {500, 1000, 2000, 3000, 1000};
     TEST_ASSERT_EQUAL_UINT8_ARRAY(patterns, s.ledPattern, kLedTriggers);
-    TEST_ASSERT_EQUAL_UINT16_ARRAY(intervals, s.ledIntervalMs, kLedTriggers);
+    TEST_ASSERT_EQUAL_UINT16_ARRAY(lengths, s.ledLengthMs, kLedTriggers);
 }
 
 void test_it_reads_every_key() {
@@ -53,9 +53,9 @@ void test_it_reads_every_key() {
     TEST_ASSERT_EQUAL_UINT8(4, a.settings.logLevel);
     TEST_ASSERT_EQUAL_UINT16(3, a.settings.bsecSampleS);
     const uint8_t patterns[kLedTriggers] = {1, 0, 2, 3, 0};   // solid, off, pulse, flash, off
-    const uint16_t intervals[kLedTriggers] = {250, 4000, 2500, 10000, 1000};
+    const uint16_t lengths[kLedTriggers] = {250, 4000, 2500, 10000, 1000};
     TEST_ASSERT_EQUAL_UINT8_ARRAY(patterns, a.settings.ledPattern, kLedTriggers);
-    TEST_ASSERT_EQUAL_UINT16_ARRAY(intervals, a.settings.ledIntervalMs, kLedTriggers);
+    TEST_ASSERT_EQUAL_UINT16_ARRAY(lengths, a.settings.ledLengthMs, kLedTriggers);
     TEST_ASSERT_TRUE(a.dark);
     TEST_ASSERT_EQUAL_UINT32(1758650400, a.recalibrateId);
     TEST_ASSERT_EQUAL_UINT16(420, a.recalibratePpm);
@@ -75,6 +75,7 @@ void test_a_key_the_answer_lacks_keeps_the_current_value() {
     SettingsAnswer a;
     TEST_ASSERT_TRUE(parse("{\"version\":\"a\"}", a, current));
     TEST_ASSERT_EQUAL_UINT8(80, a.settings.ledBrightnessPct);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(current.ledPattern, a.settings.ledPattern, kLedTriggers);
     TEST_ASSERT_FALSE(a.dark);
     TEST_ASSERT_EQUAL_UINT32(0, a.recalibrateId);
 }
@@ -84,11 +85,7 @@ void test_a_value_out_of_the_docks_limits_is_refused_and_the_current_kept() {
     TEST_ASSERT_TRUE(parse("{\"version\":\"a\",\"pm\":{\"warmup_s\":10},"
                            "\"scd41\":{\"temperature_offset_c\":25,\"self_calibration\":1},"
                            "\"shtc3\":{\"low_power\":\"yes\"},\"led\":{\"brightness_pct\":101,"
-                           "\"starting\":{\"pattern\":\"blink\",\"interval_s\":0.2},"
-                           "\"no_wifi\":{\"pattern\":2,\"interval_s\":10.5},"
-                           "\"post_failed\":{\"pattern\":\"\",\"interval_s\":\"2\"},"
-                           "\"sensor_missing\":{\"pattern\":true,\"interval_s\":0},"
-                           "\"well\":{\"pattern\":\"Pulse\",\"interval_s\":-1}},"
+                           "\"looks\":{\"well\":{\"pattern\":\"off\",\"length_s\":1}}},"
                            "\"log\":{\"level\":\"verbose\"},\"bsec\":{\"sample_s\":60}}", a));
     TEST_ASSERT_EQUAL_UINT32((1u << kSettingKeys) - 1, a.refused);
     BoardSettings d = defaultBoardSettings();
@@ -100,15 +97,67 @@ void test_a_value_out_of_the_docks_limits_is_refused_and_the_current_kept() {
     TEST_ASSERT_EQUAL_UINT8(d.logLevel, a.settings.logLevel);
     TEST_ASSERT_EQUAL_UINT16(d.bsecSampleS, a.settings.bsecSampleS);
     TEST_ASSERT_EQUAL_UINT8_ARRAY(d.ledPattern, a.settings.ledPattern, kLedTriggers);
-    TEST_ASSERT_EQUAL_UINT16_ARRAY(d.ledIntervalMs, a.settings.ledIntervalMs, kLedTriggers);
+    TEST_ASSERT_EQUAL_UINT16_ARRAY(d.ledLengthMs, a.settings.ledLengthMs, kLedTriggers);
 }
 
-void test_a_look_the_answer_gives_in_part_changes_that_part() {
+void test_a_trigger_the_looks_leave_out_has_none() {
     SettingsAnswer a;
-    TEST_ASSERT_TRUE(parse("{\"version\":\"a\",\"led\":{\"well\":{\"interval_s\":3}}}", a));
-    TEST_ASSERT_EQUAL_UINT8(2, a.settings.ledPattern[4]);
-    TEST_ASSERT_EQUAL_UINT16(3000, a.settings.ledIntervalMs[4]);
+    TEST_ASSERT_TRUE(parse("{\"version\":\"a\",\"led\":{\"looks\":["
+                           "{\"trigger\":\"well\",\"pattern\":\"solid\",\"length_s\":3}]}}", a));
+    const uint8_t patterns[kLedTriggers] = {kLedNoLook, kLedNoLook, kLedNoLook, kLedNoLook, 1};
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(patterns, a.settings.ledPattern, kLedTriggers);
+    TEST_ASSERT_EQUAL_UINT16(3000, a.settings.ledLengthMs[4]);
     TEST_ASSERT_EQUAL_UINT32(0, a.refused);
+}
+
+void test_no_looks_leave_every_trigger_without_one() {
+    SettingsAnswer a;
+    TEST_ASSERT_TRUE(parse("{\"version\":\"a\",\"led\":{\"looks\":[]}}", a));
+    for (uint8_t t = 0; t < kLedTriggers; ++t) TEST_ASSERT_EQUAL_UINT8(kLedNoLook, a.settings.ledPattern[t]);
+    TEST_ASSERT_EQUAL_UINT32(0, a.refused);
+}
+
+void test_it_reads_the_doubles_and_triples() {
+    SettingsAnswer a;
+    TEST_ASSERT_TRUE(parse("{\"version\":\"a\",\"led\":{\"looks\":["
+                           "{\"trigger\":\"no_wifi\",\"pattern\":\"double_flash\",\"length_s\":0.9},"
+                           "{\"trigger\":\"post_failed\",\"pattern\":\"triple_flash\",\"length_s\":1.9},"
+                           "{\"trigger\":\"sensor_missing\",\"pattern\":\"double_pulse\",\"length_s\":2},"
+                           "{\"trigger\":\"well\",\"pattern\":\"triple_pulse\",\"length_s\":1.2}]}}", a));
+    const uint8_t patterns[kLedTriggers] = {kLedNoLook, 4, 5, 6, 7};
+    const uint16_t lengths[kLedTriggers] = {500, 900, 1900, 2000, 1200};
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(patterns, a.settings.ledPattern, kLedTriggers);
+    TEST_ASSERT_EQUAL_UINT16_ARRAY(lengths, a.settings.ledLengthMs, kLedTriggers);
+    TEST_ASSERT_EQUAL_UINT32(0, a.refused);
+}
+
+void test_looks_the_dock_cannot_use_are_refused_whole() {
+    const char* const bad[] = {
+        "{\"trigger\":\"well\",\"pattern\":\"blink\",\"length_s\":1}",
+        "{\"trigger\":\"Well\",\"pattern\":\"solid\",\"length_s\":1}",
+        "{\"trigger\":\"well\",\"pattern\":\"solid\",\"length_s\":0.2}",
+        "{\"trigger\":\"well\",\"pattern\":\"solid\",\"length_s\":10.5}",
+        "{\"trigger\":\"well\",\"pattern\":\"solid\",\"length_s\":\"1\"}",
+        "{\"trigger\":\"well\",\"pattern\":\"solid\"}",
+        "{\"trigger\":\"well\",\"pattern\":\"solid\",\"length_s\":1},"
+        "{\"trigger\":\"well\",\"pattern\":\"pulse\",\"length_s\":1}",
+        "{\"pattern\":\"solid\",\"length_s\":1}",
+        "{\"trigger\":\"well\",\"pattern\":\"double_flash\",\"length_s\":0.8}",
+        "{\"trigger\":\"well\",\"pattern\":\"triple_pulse\",\"length_s\":1.1}",
+    };
+    char json[256];
+    SettingsAnswer a;
+    const BoardSettings d = defaultBoardSettings();
+    for (const char* look : bad) {
+        snprintf(json, sizeof(json),
+                 "{\"version\":\"a\",\"led\":{\"looks\":[{\"trigger\":\"starting\",\"pattern\":"
+                 "\"solid\",\"length_s\":1},%s]}}", look);
+        TEST_ASSERT_TRUE(parse(json, a));
+        TEST_ASSERT_EQUAL_UINT32_MESSAGE(1u << kLedLooks, a.refused, look);
+        TEST_ASSERT_EQUAL_UINT8_ARRAY_MESSAGE(d.ledPattern, a.settings.ledPattern, kLedTriggers, look);
+        TEST_ASSERT_EQUAL_UINT16_ARRAY_MESSAGE(d.ledLengthMs, a.settings.ledLengthMs,
+                                               kLedTriggers, look);
+    }
 }
 
 void test_the_warm_up_limits_are_0_or_30_to_600() {
@@ -164,7 +213,10 @@ int main(int, char**) {
     RUN_TEST(test_a_whole_number_offset_is_a_number_too);
     RUN_TEST(test_a_key_the_answer_lacks_keeps_the_current_value);
     RUN_TEST(test_a_value_out_of_the_docks_limits_is_refused_and_the_current_kept);
-    RUN_TEST(test_a_look_the_answer_gives_in_part_changes_that_part);
+    RUN_TEST(test_a_trigger_the_looks_leave_out_has_none);
+    RUN_TEST(test_no_looks_leave_every_trigger_without_one);
+    RUN_TEST(test_it_reads_the_doubles_and_triples);
+    RUN_TEST(test_looks_the_dock_cannot_use_are_refused_whole);
     RUN_TEST(test_the_warm_up_limits_are_0_or_30_to_600);
     RUN_TEST(test_a_recalibration_out_of_range_is_not_run);
     RUN_TEST(test_an_answer_without_a_version_or_not_json_is_not_taken);

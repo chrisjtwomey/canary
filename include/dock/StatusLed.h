@@ -6,9 +6,10 @@
 // dutyAt() and writes it to the LEDC channel, so the pattern is tested on
 // the host.
 //
-// Each state but UPDATING shows a look the server can set: off, solid, a
-// pulse or a flash, repeating at an interval. The defaults give a heartbeat
-// while the dock works, so a dead dock and a well one do not look alike.
+// Each state but UPDATING shows a look the server can set: a pattern and the
+// length of one cycle of it, or none, which passes the light to the next
+// state that holds. The defaults give a heartbeat while the dock works, so a
+// dead dock and a well one do not look alike.
 //
 // Brightness is perceived brightness, mapped to duty through gamma 2.2, up
 // to a cap in percent of full: 15 by default, set by eye on a breadboard with
@@ -21,9 +22,14 @@ public:
 
     // A pulse is 16 equal steps of light, spaced in time along a sine.
     static const uint8_t  kSteps = 16;
-    // A flash is this long at the start of each interval, or half the
-    // interval when that is shorter.
+    // A flash is this long at the start of each cycle, or half the cycle
+    // when that is shorter.
     static const uint32_t kFlashMs = 150;
+    // Each flash or quick pulse of a double or a triple: a flash lights for
+    // kFlashMs of it. The rest of the cycle is dark, and is at least as long.
+    static const uint32_t kGroupStepMs = 300;
+    static const uint32_t kMinLengthMs = 250;
+    static const uint32_t kMaxLengthMs = 10000;
 
     // Updating starts as a pulse a second at a quarter of the light, and
     // quickens and brightens with the image written, to four pulses a second
@@ -40,11 +46,49 @@ public:
         SENSOR_MISSING,  // a sensor does not answer
         WELL,            // reading and posting, with everything answering
         UPDATING,        // writing a new image; see progress()
+        DARK,            // no state that holds has a look
     };
     // The states a look is set for: all before UPDATING.
     static const uint8_t kLooks = UPDATING;
 
-    enum Pattern : uint8_t { OFF, SOLID, PULSE, FLASH, kPatterns };
+    enum Pattern : uint8_t {
+        OFF, SOLID, PULSE, FLASH,
+        DOUBLE_FLASH, TRIPLE_FLASH, DOUBLE_PULSE, TRIPLE_PULSE,
+        kPatterns,
+        NONE = 0xFF,
+    };
+
+    // How many flashes or quick pulses a double or a triple has; 0 for the rest.
+    static constexpr uint8_t groupOf(Pattern p) {
+        return p == DOUBLE_FLASH || p == DOUBLE_PULSE ? 2
+             : p == TRIPLE_FLASH || p == TRIPLE_PULSE ? 3 : 0;
+    }
+
+    // The shortest cycle a pattern can have: a double's or a triple's group
+    // and a dark gap of one step.
+    static constexpr uint32_t minLengthMs(Pattern p) {
+        return groupOf(p) ? (groupOf(p) + 1u) * kGroupStepMs : kMinLengthMs;
+    }
+
+    // A set of states, as show() takes them.
+    static constexpr uint8_t flag(State s) { return (uint8_t)(1u << s); }
+
+    // Shows the first state in `holding` that has a look, UPDATING before
+    // the rest; with none, the light is dark.
+    void show(uint8_t holding, uint32_t nowMs) {
+        State wanted = DARK;
+        if (holding & flag(UPDATING)) {
+            wanted = UPDATING;
+        } else {
+            for (uint8_t s = 0; s < kLooks; ++s) {
+                if ((holding & flag((State)s)) && pattern_[s] != NONE) {
+                    wanted = (State)s;
+                    break;
+                }
+            }
+        }
+        state(wanted, nowMs);
+    }
 
     // Changing the state starts its pattern; repeating the current one does not.
     void state(State wanted, uint32_t nowMs) {
@@ -55,17 +99,26 @@ public:
 
     State state() const { return state_; }
 
-    // The look of state `s`. A state without a look, a pattern out of range
-    // or an interval of 0 changes nothing. The LED task reads it while the
-    // loop sets it; a torn read shows one step of a wrong look.
-    void look(State s, Pattern pattern, uint32_t intervalMs) {
-        if (s >= kLooks || pattern >= kPatterns || intervalMs == 0) return;
+    // The look of state `s`: a pattern, and the length of one cycle of it.
+    // NONE leaves the state without one, whatever the length. A state that
+    // takes no look, a pattern out of range or a length of 0 changes nothing.
+    // The LED task reads it while the loop sets it; a torn read shows one
+    // step of a wrong look.
+    void look(State s, Pattern pattern, uint32_t lengthMs) {
+        if (s >= kLooks) return;
+        if (pattern == NONE) {
+            pattern_[s] = NONE;
+            return;
+        }
+        if (pattern >= kPatterns || lengthMs == 0) return;
         pattern_[s] = pattern;
-        intervalMs_[s] = intervalMs;
+        lengthMs_[s] = lengthMs;
     }
 
-    Pattern pattern(State s) const { return s < kLooks ? (Pattern)pattern_[s] : PULSE; }
-    uint32_t intervalMs(State s) const { return s < kLooks ? intervalMs_[s] : 0; }
+    Pattern pattern(State s) const {
+        return s < kLooks ? (Pattern)pattern_[s] : s == UPDATING ? PULSE : OFF;
+    }
+    uint32_t lengthMs(State s) const { return s < kLooks ? lengthMs_[s] : 0; }
 
     // The cap, in percent of full brightness; above 100 is 100. The LED task
     // reads it, so it is one byte.
@@ -85,15 +138,29 @@ public:
                 ((kSteps - 1 - kUpdateDimmestStep) * progress_ + 500) / 1000);
             return pulseDuty(since % period, period, top);
         }
-        const uint32_t interval = intervalMs_[state_];
-        switch (pattern_[state_]) {
-            case OFF:   return 0;
+        if (state_ == DARK) return 0;
+        const uint32_t length = lengthMs_[state_];
+        const uint32_t phase = since % length;
+        const Pattern pattern = (Pattern)pattern_[state_];
+        switch (pattern) {
             case SOLID: return peakDuty();
-            case PULSE: return pulseDuty(since % interval, interval);
-            default: {
-                const uint32_t lit = interval / 2 < kFlashMs ? interval / 2 : kFlashMs;
-                return since % interval < lit ? peakDuty() : 0;
+            case PULSE: return pulseDuty(phase, length);
+            case FLASH: {
+                const uint32_t lit = length / 2 < kFlashMs ? length / 2 : kFlashMs;
+                return phase < lit ? peakDuty() : 0;
             }
+            case DOUBLE_FLASH:
+            case TRIPLE_FLASH:
+            case DOUBLE_PULSE:
+            case TRIPLE_PULSE: {
+                if (phase >= groupOf(pattern) * kGroupStepMs) return 0;
+                const uint32_t step = phase % kGroupStepMs;
+                if (pattern == DOUBLE_FLASH || pattern == TRIPLE_FLASH) {
+                    return step < kFlashMs ? peakDuty() : 0;
+                }
+                return pulseDuty(step, kGroupStepMs);
+            }
+            default: return 0;
         }
     }
 
@@ -122,6 +189,6 @@ private:
     uint16_t progress_ = 0;
     // The server's defaults, which dock_settings.py also holds.
     volatile uint8_t  pattern_[kLooks] = {PULSE, FLASH, FLASH, FLASH, PULSE};
-    volatile uint32_t intervalMs_[kLooks] = {500, 1000, 2000, 3000, 1000};
+    volatile uint32_t lengthMs_[kLooks] = {500, 1000, 2000, 3000, 1000};
     volatile uint8_t capPct_ = kDefaultBrightnessPct;
 };

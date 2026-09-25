@@ -338,16 +338,20 @@ static volatile uint16_t updatePermille = 0;
 
 static_assert(kLedTriggers == StatusLed::kLooks, "a look for each state but UPDATING");
 static_assert(kLedPatterns == StatusLed::kPatterns, "BoardSettings numbers the patterns as StatusLed");
+static_assert(kLedNoLook == StatusLed::NONE, "BoardSettings marks no look as StatusLed does");
 
-// The first state that holds, in StatusLed::State's order.
-static StatusLed::State ledState() {
-    if (updating) return StatusLed::UPDATING;
-    if (!running) return StatusLed::STARTING;
-    if (WiFi.status() != WL_CONNECTED) return StatusLed::NO_WIFI;
-    if (postFailed) return StatusLed::POST_FAILED;
+// The states that hold. While starting, the others are not known yet, and
+// WELL holds only when no other does.
+static uint8_t ledStates() {
+    if (updating) return StatusLed::flag(StatusLed::UPDATING);
+    if (!running) return StatusLed::flag(StatusLed::STARTING);
+    uint8_t holding = 0;
+    if (WiFi.status() != WL_CONNECTED) holding |= StatusLed::flag(StatusLed::NO_WIFI);
+    if (postFailed) holding |= StatusLed::flag(StatusLed::POST_FAILED);
     const bool sensed = sensors.shtc3Present() && sensors.scd41Present() &&
                         sensors.pmPresent() && sensors.bme688Present();
-    return sensed ? StatusLed::WELL : StatusLed::SENSOR_MISSING;
+    if (!sensed) holding |= StatusLed::flag(StatusLed::SENSOR_MISSING);
+    return holding ? holding : StatusLed::flag(StatusLed::WELL);
 }
 
 // The fast pulse's shortest step lasts about 11 ms, so a 5 ms tick keeps
@@ -361,7 +365,7 @@ static void ledTask(void*) {
     uint16_t written = 0xFFFF;
     for (;;) {
         const uint32_t nowMs = millis();
-        statusLed.state(ledState(), nowMs);
+        statusLed.show(ledStates(), nowMs);
         statusLed.progress(updatePermille);
         const uint16_t duty = statusLed.dutyAt(nowMs);
         if (duty != written) {
@@ -438,7 +442,7 @@ static void applySettings() {
     statusLed.brightness(ledDark ? 0 : boardSettings.ledBrightnessPct);
     for (uint8_t t = 0; t < kLedTriggers; ++t) {
         statusLed.look((StatusLed::State)t, (StatusLed::Pattern)boardSettings.ledPattern[t],
-                       boardSettings.ledIntervalMs[t]);
+                       boardSettings.ledLengthMs[t]);
     }
     setBsecSampleS(boardSettings.bsecSampleS);
     setLogLevel(boardSettings.logLevel);

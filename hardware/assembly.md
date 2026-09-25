@@ -280,7 +280,7 @@ image, and every later firmware — comes from the server.
 
 The LED then tells you where it is. By default: a fast pulse while it connects and starts the sensors, a slow one
 when it is reading and posting, and a flash when something is wrong: every second with no Wi-Fi, every 2 s when a
-post fails, every 3 s when a sensor is missing. The server's Dock tab sets these looks.
+post fails, every 3 s when a sensor is missing. The server's Dock tab sets these patterns.
 
 ## Appendix: every joint
 

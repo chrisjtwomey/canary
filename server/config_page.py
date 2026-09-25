@@ -24,6 +24,7 @@ its config.
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import shutil
 import zoneinfo
@@ -210,35 +211,69 @@ def _clock_row(a: Airium, key: str, start: str, every: str, locked: bool) -> Non
                  **lock)
 
 
-def _row(a: Airium, f: cf.Field, first: str, second: str, images: list[str],
-         locked: bool) -> None:
+def _look_row(a: Airium, key: str, trigger: str, pattern: str, length: str,
+              locked: bool) -> None:
+    lock = {"disabled": "disabled"} if locked else {}
+    with a.div(klass="row"):
+        with a.select(name=key + ".trigger", **{"aria-label": "Trigger"}, **lock):
+            for t, words in cf.LED_TRIGGER_LABELS.items():
+                a.option(value=t, _t=words, **({"selected": "selected"} if t == trigger else {}))
+        with a.select(name=key + ".pattern", **{"aria-label": "Pattern"}, **lock):
+            for p, words in cf.LED_PATTERN_LABELS.items():
+                a.option(value=p, _t=words, **({"selected": "selected"} if p == pattern else {}))
+        # Off and solid keep their length, unseen, so each row posts all three.
+        with a.span(klass="length idle" if pattern in ds.LED_STILL else "length"):
+            a.input(type="number", name=key + ".length_s", value=length,
+                    min=f"{ds.led_min_length(pattern):g}", max=f"{ds.LED_LENGTH_MAX_S:g}",
+                    step="any", inputmode="decimal", **{"aria-label": "Length, in seconds"},
+                    **lock)
+            a.span(klass="unit", _t="s")
+        a.button(type="button", klass="remove", _t="×",
+                 **{"aria-label": "Remove this pattern; its trigger is skipped"}, **lock)
+
+
+def _row(a: Airium, f: cf.Field, cells: tuple, images: list[str], locked: bool) -> None:
     if f.kind == "pools":
-        _pool_row(a, f.key, first, second, images)
+        _pool_row(a, f.key, *cells, images)
+    elif f.kind == "clock":
+        _clock_row(a, f.key, *cells, locked)
     else:
-        _clock_row(a, f.key, first, second, locked)
+        _look_row(a, f.key, *cells, locked)
 
 
+# What a new row starts as: a look takes its trigger's default once it has one.
+BLANK_ROWS = {"looks": ("", "pulse", "1")}
 # The words on each field's button that adds a row.
-ADD_WORDS = {"pools": "Add a pool", "clock": "Add a time range"}
+ADD_WORDS = {"pools": "Add a pool", "clock": "Add a time range", "looks": "Add a pattern"}
 
 
 def _rows(a: Airium, f: cf.Field, view: View, images: list[str], heading: str,
           locked: bool = False) -> None:
-    """A field of rows. ``locked`` applies to a schedule's ranges, the only
-    rows on a tab that locks."""
+    """A field of rows. ``locked`` applies to the Dock tab's rows, the only
+    ones on a tab that locks."""
     rows = view.values.get(f.key, [])
     marks = {"data-max": str(MAX_RANGES)} if f.kind == "clock" else {}
+    if f.kind == "looks":
+        marks = {"data-looks": json.dumps({t: [p, f"{n:g}"] for t, p, n in ds.LED_LOOKS},
+                                          separators=(",", ":")),
+                 "data-min": json.dumps({p: f"{ds.led_min_length(p):g}" for p in ds.LED_PATTERNS
+                                         if p not in ds.LED_STILL}, separators=(",", ":"))}
     with a.fieldset(klass=f"rows {f.kind}", id=_id(f.key),
                     **{"data-key": f.key, "data-initial": cf.initial(view.initial[f.key])},
                     **marks):
         a.legend(klass="name hide" if f.label == heading else "name", _t=f.label)
         # With the rows locked, the key goes unposted and the file's value stands.
         a.input(type="hidden", name=f.key, value="1", **({"disabled": "disabled"} if locked else {}))
+        if f.kind == "looks":
+            # The selects and inputs name themselves; these are for the eye.
+            with a.div(klass="heads", **{"aria-hidden": "true"}):
+                for words in ("Trigger", "Pattern", "Length"):
+                    a.span(_t=words)
         with a.div(klass="list"):
-            for first, second in rows:
-                _row(a, f, first, second, images, locked)
+            for cells in rows:
+                _row(a, f, cells, images, locked)
         with a.template():
-            _row(a, f, "", "", images, locked)
+            _row(a, f, BLANK_ROWS.get(f.kind, ("", "")), images, locked)
         with a.div(klass="foot"):
             if f.kind in ADD_WORDS:
                 a.button(type="button", klass="add", _t=ADD_WORDS[f.kind],

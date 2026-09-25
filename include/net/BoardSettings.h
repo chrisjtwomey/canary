@@ -5,7 +5,9 @@
 // The status light's triggers that have a look, in StatusLed::State's order,
 // and its patterns, in StatusLed::Pattern's.
 static const uint8_t kLedTriggers = 5;
-static const uint8_t kLedPatterns = 4;
+static const uint8_t kLedPatterns = 8;
+// The pattern of a trigger the server gives no look: StatusLed::NONE.
+static const uint8_t kLedNoLook = 0xFF;
 
 // The dock's settings as the server's GET /board-settings gives them, held to
 // the dock's own limits whatever the server says.
@@ -18,8 +20,8 @@ struct BoardSettings {
     uint8_t  ledBrightnessPct;
     uint8_t  logLevel;           // log_utils.h's numbering: 1 error to 5 debug
     uint16_t bsecSampleS;        // IBsec::kLpSampleS or kUlpSampleS
-    uint8_t  ledPattern[kLedTriggers];
-    uint16_t ledIntervalMs[kLedTriggers];
+    uint8_t  ledPattern[kLedTriggers];   // kLedNoLook for a trigger with none
+    uint16_t ledLengthMs[kLedTriggers];  // one cycle of the pattern
 };
 
 // The server's defaults, which the dock runs until the server has said anything.
@@ -34,9 +36,8 @@ enum SettingKey : uint8_t {
     kLedBrightness,
     kLogLevel,
     kBsecSampleS,
-    // Each trigger's pattern, then its interval: kLedLook + 2 * trigger (+ 1).
-    kLedLook,
-    kSettingKeys = kLedLook + 2 * kLedTriggers,
+    kLedLooks,
+    kSettingKeys,
 };
 
 // The key as the server names it, e.g. "pm.warmup_s".
@@ -68,5 +69,3 @@ static const uint16_t kPmWarmupMaxS = 600;
 static const float    kScd41OffsetMaxC = 20.0f;
 static const uint16_t kRecalibrateMinPpm = 400;
 static const uint16_t kRecalibrateMaxPpm = 2000;
-static const uint16_t kLedIntervalMinMs = 250;
-static const uint16_t kLedIntervalMaxMs = 10000;

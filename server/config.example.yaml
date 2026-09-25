@@ -63,14 +63,19 @@ dock:               # what the dock does between readings; it takes a change bef
     low_power: false
   led:
     brightness_pct: 15
-    dark: {}        # dark hours, as {from: "01:00", to: "07:00"}; {} for none
-    # The look of each state: off, solid, pulse or flash, repeating every
-    # interval_s (0.25 to 10). The dock shows the first state that holds.
-    starting: {pattern: pulse, interval_s: 0.5}
-    no_wifi: {pattern: flash, interval_s: 1}
-    post_failed: {pattern: flash, interval_s: 2}
-    sensor_missing: {pattern: flash, interval_s: 3}
-    well: {pattern: pulse, interval_s: 1}
+    schedule: {}    # the hours the light is on, as {from: "07:00", to: "01:00"}; {} for all day
+    # A look for each trigger: "off" (in quotes), solid, pulse, double_pulse,
+    # triple_pulse, flash, double_flash or triple_flash, with length_s, one
+    # cycle of it (0.25 to 10 s; a double at least 0.9, a triple 1.2). A double
+    # or a triple is 2 or 3 quick pulses or flashes of 0.3 s, then dark for the
+    # rest of the length. The dock shows the first trigger that holds and has
+    # a look, in this order; one left out is skipped.
+    looks:
+      - {trigger: starting, pattern: pulse, length_s: 0.5}
+      - {trigger: no_wifi, pattern: flash, length_s: 1}
+      - {trigger: post_failed, pattern: flash, length_s: 2}
+      - {trigger: sensor_missing, pattern: flash, length_s: 3}
+      - {trigger: well, pattern: pulse, length_s: 1}
   bsec:
     sample_s: 300   # BSEC's air quality sample: 3 or 300 s; a change starts its learning again
   log:

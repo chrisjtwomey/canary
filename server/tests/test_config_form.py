@@ -35,6 +35,12 @@ def as_posted(text: str, **changes) -> MultiDict:
             for start, every in v:
                 form.add(f.key + ".from", start)
                 form.add(f.key + ".every", every)
+        elif f.kind == "looks":
+            form.add(f.key, "1")
+            for trigger, pattern, interval in v:
+                form.add(f.key + ".trigger", trigger)
+                form.add(f.key + ".pattern", pattern)
+                form.add(f.key + ".length_s", interval)
         else:
             form.add(f.key, v)
     for k, v in changes.items():
@@ -110,22 +116,22 @@ def test_a_string_pyyaml_would_misread_is_quoted(value):
     assert cf.read(e.text)["mqtt"]["prefix"] == value.strip()
 
 
-def test_dark_hours_turned_on_write_the_defaults_quoted():
-    e = edit(dock__led__dark="true")
-    assert ('    dark:           # dark hours, as {from: "01:00", to: "07:00"}; {} for none\n'
-            '      from: "01:00"\n      to: "07:00"\n') in e.text
-    assert cf.read(e.text)["dock"]["led"]["dark"] == {"from": "01:00", "to": "07:00"}
+def test_the_lights_schedule_turned_on_writes_the_defaults_quoted():
+    e = edit(dock__led__schedule="true")
+    assert ('    schedule:       # the hours the light is on, as {from: "07:00", to: "01:00"}; '
+            '{} for all day\n      from: "07:00"\n      to: "01:00"\n') in e.text
+    assert cf.read(e.text)["dock"]["led"]["schedule"] == {"from": "07:00", "to": "01:00"}
 
 
-def test_dark_hours_turned_off_are_an_empty_block_again():
-    on = edit(dock__led__dark="true", dock__led__dark__from="23:30").text
-    assert cf.read(on)["dock"]["led"]["dark"] == {"from": "23:30", "to": "07:00"}
-    e = edit(on, dock__led__dark="false")
-    assert cf.read(e.text)["dock"]["led"]["dark"] == {}
+def test_the_lights_schedule_turned_off_is_an_empty_block_again():
+    on = edit(dock__led__schedule="true", dock__led__schedule__to="23:30").text
+    assert cf.read(on)["dock"]["led"]["schedule"] == {"from": "07:00", "to": "23:30"}
+    e = edit(on, dock__led__schedule="false")
+    assert cf.read(e.text)["dock"]["led"]["schedule"] == {}
 
 
-def test_dark_hours_left_off_change_nothing():
-    e = edit(dock__led__dark="false")
+def test_the_lights_schedule_left_off_changes_nothing():
+    e = edit(dock__led__schedule="false")
     assert e.text == EXAMPLE and e.changed == []
 
 
@@ -177,6 +183,83 @@ def test_a_schedule_the_form_cannot_write_is_refused_at_its_field(starts, everie
     assert e.errors == {"dock.sync": words} and e.text == EXAMPLE
 
 
+LOOKS_LINES = ('    looks:\n'
+               '      - {trigger: starting, pattern: pulse, length_s: 0.5}\n'
+               '      - {trigger: no_wifi, pattern: flash, length_s: 1}\n'
+               '      - {trigger: post_failed, pattern: flash, length_s: 2}\n'
+               '      - {trigger: sensor_missing, pattern: flash, length_s: 3}\n'
+               '      - {trigger: well, pattern: pulse, length_s: 1}\n')
+
+
+def looks(text=EXAMPLE, *rows):
+    """An edit of the light's looks to ``rows`` of (trigger, pattern, interval)."""
+    return cf.apply(text, as_posted(text, **{
+        "dock__led__looks__trigger": [r[0] for r in rows],
+        "dock__led__looks__pattern": [r[1] for r in rows],
+        "dock__led__looks__length_s": [r[2] for r in rows]}))
+
+
+def test_the_lights_looks_are_a_row_for_each_trigger_in_their_order():
+    assert cf.shown(cf.read(EXAMPLE))["dock.led.looks"] == [
+        ("starting", "pulse", "0.5"), ("no_wifi", "flash", "1"), ("post_failed", "flash", "2"),
+        ("sensor_missing", "flash", "3"), ("well", "pulse", "1")]
+
+
+def test_a_double_or_a_triple_is_written_by_its_name():
+    e = looks(EXAMPLE, ("post_failed", "triple_flash", "1.9"), ("well", "double_pulse", "0.9"))
+    assert ('      - {trigger: post_failed, pattern: triple_flash, length_s: 1.9}\n'
+            '      - {trigger: well, pattern: double_pulse, length_s: 0.9}\n') in e.text
+    check_config(e.text)
+
+
+def test_looks_are_written_one_to_a_line_in_the_triggers_order():
+    e = looks(EXAMPLE, ("well", "solid", "1"), ("no_wifi", "flash", "0.25"))
+    assert ('    looks:\n      - {trigger: no_wifi, pattern: flash, length_s: 0.25}\n'
+            '      - {trigger: well, pattern: solid}\n') in e.text
+    assert e.errors == {} and e.changed == ["dock.led.looks"]
+    check_config(e.text)
+
+
+def test_no_looks_are_written_as_none():
+    e = looks(EXAMPLE)
+    assert "    looks: []\n" in e.text and e.changed == ["dock.led.looks"]
+    check_config(e.text)
+
+
+def test_the_interval_of_a_look_that_does_not_repeat_is_not_compared():
+    text = EXAMPLE.replace("{trigger: well, pattern: pulse, length_s: 1}",
+                           "{trigger: well, pattern: solid, length_s: 4}")
+    e = edit(text)
+    assert e.text == text and e.changed == []
+    e = looks(text, ("well", "off", "not a number"))
+    assert e.errors == {} and '      - {trigger: well, pattern: "off"}\n' in e.text
+    check_config(e.text)
+
+
+def test_looks_without_a_block_are_written_where_the_led_block_is():
+    text = EXAMPLE.replace(LOOKS_LINES, "")
+    assert "looks" not in cf.read(text)["dock"]["led"]
+    assert edit(text).changed == []
+    e = looks(text, ("well", "pulse", "2"))
+    assert cf.read(e.text)["dock"]["led"]["looks"] == [
+        {"trigger": "well", "pattern": "pulse", "length_s": 2}]
+
+
+@pytest.mark.parametrize("rows, words", [
+    ((("", "pulse", "1"),), "Choose a trigger for each row."),
+    ((("well", "pulse", "1"), ("well", "off", "1")), "Two rows for Well."),
+    ((("no_wifi", "blink", "1"),), "No Wi-Fi: choose a pattern."),
+    ((("no_wifi", "flash", ""),), "No Wi-Fi: enter a length in seconds."),
+    ((("no_wifi", "flash", "0.2"),), "No Wi-Fi: enter 0.25 to 10 seconds for a flash."),
+    ((("no_wifi", "pulse", "11"),), "No Wi-Fi: enter 0.25 to 10 seconds for a pulse."),
+    ((("no_wifi", "triple_flash", "1.1"),),
+     "No Wi-Fi: enter 1.2 to 10 seconds for a triple flash."),
+])
+def test_looks_the_form_cannot_write_are_refused_at_their_field(rows, words):
+    e = looks(EXAMPLE, *rows)
+    assert e.errors == {"dock.led.looks": words} and e.text == EXAMPLE
+
+
 def test_pools_change_come_and_go_and_keep_their_order():
     e = edit(display__pools__name=["comfort", "co2", "extra"],
              display__pools__pages=["comfort.png", "breathe.png, co2-trace.png", "day.png"])
@@ -216,7 +299,7 @@ def test_a_field_an_environment_variable_sets_is_left_alone(monkeypatch):
 @pytest.mark.parametrize("key, value, words", [
     ("server.port", "abc", "whole number"),
     ("server.port", "70000", "at most 65535"),
-    ("dock.led.dark.from", "25:00", "HH:MM"),
+    ("dock.led.schedule.from", "25:00", "HH:MM"),
     ("image.innerAlignX", "middle", "one of"),
 ])
 def test_a_value_the_form_cannot_write_is_refused_at_its_field(key, value, words):
@@ -294,17 +377,31 @@ def test_every_field_is_named_once_and_every_condition_names_a_field():
             assert f.when.split("=")[0] in cf.BY_KEY, f.key
 
 
-def test_changes_are_in_words_with_the_schedule_and_dark_hours_each_on_one_line():
+def test_changes_are_in_words_with_each_schedule_on_one_line():
     old = cf.read(EXAMPLE)
-    new = cf.read(edit(server__port="9090", dock__led__dark="true",
+    new = cf.read(edit(server__port="9090", dock__led__schedule="true",
                        dock__sync__from=["01:00", "07:00", "22:00"],
                        dock__sync__every=["30", "5", "0"]).text)
     assert cf.changes(old, new) == [
         {"name": "Server · Port", "old": "8080", "new": "9090"},
         {"name": "Dock · Sync schedule", "old": "01:00 every 30 min · 07:00 every 5 min",
          "new": "01:00 every 30 min · 07:00 every 5 min · 22:00 off"},
-        {"name": "Dock · Dark hours", "old": "off", "new": "01:00–07:00"},
+        {"name": "Dock · Schedule", "old": "all day", "new": "07:00–01:00"},
     ]
+
+
+def test_a_change_to_the_looks_reads_as_one_line():
+    new = cf.read(looks(EXAMPLE, ("no_wifi", "flash", "1"), ("well", "solid", "1")).text)
+    assert cf.changes(cf.read(EXAMPLE), new) == [
+        {"name": "Dock · Patterns",
+         "old": "Starting pulse 0.5 s · No Wi-Fi flash 1 s · Post failed flash 2 s · "
+                "Sensor missing flash 3 s · Well pulse 1 s",
+         "new": "No Wi-Fi flash 1 s · Well solid"}]
+
+
+def test_a_changed_double_or_triple_reads_by_its_name():
+    new = cf.read(looks(EXAMPLE, ("well", "triple_pulse", "1.9")).text)
+    assert cf.changes(cf.read(EXAMPLE), new)[0]["new"] == "Well triple pulse 1.9 s"
 
 
 @pytest.mark.parametrize("path, name", [
@@ -336,5 +433,5 @@ def test_the_edit_reads_back_as_pyyaml_reads_it():
 
 
 def test_a_field_named_by_its_place_on_the_page_has_its_full_name_in_messages():
-    assert cf.name_of(("dock", "led", "dark", "from")) == "Dock · Dark hours from"
+    assert cf.name_of(("dock", "led", "schedule", "from")) == "Dock · Schedule from"
     assert cf.name_of(("dock", "sync")) == "Dock · Sync schedule"
