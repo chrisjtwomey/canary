@@ -1,9 +1,10 @@
 """The splash screen the head holds in its firmware: the logo, alone.
 
-The head draws it when it starts, other than from deep sleep, and while it
-writes an update, with the progress bar and a line of its own under the logo.
-The bar fills by partial updates, which the panel does only in black and
-white, so this page is rendered in two levels with no dither.
+The head writes its own lines under the logo: its version when it starts,
+other than from deep sleep, and a progress bar and the version it installs
+while it writes an update. The bar fills by partial updates, which the panel
+does only in black and white, so this page is rendered in two levels with no
+dither.
 
 ``scripts/notices.py`` renders it into ``include/head/`` with the notices.
 """

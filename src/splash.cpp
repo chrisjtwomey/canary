@@ -5,8 +5,10 @@
 #include "epd.h"
 #include "head/Notice.h"
 #include "head/ProgressBar.h"
+#include "head/fonts/FrauncesDetail.h"
 #include "head/fonts/FrauncesDetailItalic.h"
 #include "log_utils.h"
+#include "version.h"
 
 // The splash screen the server's pipeline rendered in black and white
 // (scripts/notices.py), held in the firmware (board_build.embed_files).
@@ -27,9 +29,11 @@ static const int16_t kFillX = kBarX + kLine + kGap;
 static const int16_t kFillY = kBarY + kLine + kGap;
 static const int16_t kFillW = kBarW - 2 * (kLine + kGap);
 static const int16_t kFillH = kBarH - 2 * (kLine + kGap);
-// The baseline of the line under the bar, in the pages' italic at the size of
-// their detail text.
+// The baselines of the lines the head writes, in the pages' face at the size
+// of their detail text: the update's line under the bar, and the start's
+// version where the bar would be.
 static const int16_t kLineY = 622;
+static const int16_t kVersionY = 572;
 
 // In black and white.
 static const uint16_t kBlack = 1;
@@ -48,18 +52,17 @@ static void drawLogo() {
     noticeReplaced();
 }
 
-static void writeLine() {
-    char line[64];
-    snprintf(line, sizeof(line), "Installing firmware %s...", offeredVersion);
+// Centred on the panel.
+static void writeLine(const char* line, const GFXfont* font, int16_t baseline) {
     IBoard& board = epdBoard();
-    board.setFont(&FrauncesDetailItalic);
+    board.setFont(font);
     board.setTextSize(1);
     board.setTextWrap(false);
     board.setTextColor(kBlack);
     int16_t x, y;
     uint16_t w, h;
-    board.getTextBounds(line, 0, kLineY, &x, &y, &w, &h);
-    board.setCursor((kWidth - (int16_t)w) / 2 - x, kLineY);
+    board.getTextBounds(line, 0, baseline, &x, &y, &w, &h);
+    board.setCursor((kWidth - (int16_t)w) / 2 - x, baseline);
     board.print(line);
 }
 
@@ -70,6 +73,7 @@ static void fillBar(int steps) {
 
 void showSplash() {
     drawLogo();
+    writeLine(CLIENT_VERSION, &FrauncesDetail, kVersionY);
     epdBoard().display();
     epdBoard().setBlackAndWhite(false);
 }
@@ -82,7 +86,9 @@ void showUpdateProgress(int done, int total) {
             board.fillRect(kBarX, kBarY, kBarW, kBarH, kBlack);
             board.fillRect(kBarX + kLine, kBarY + kLine, kBarW - 2 * kLine, kBarH - 2 * kLine, kWhite);
             fillBar(bar.filled);
-            writeLine();
+            char line[64];
+            snprintf(line, sizeof(line), "Installing firmware %s...", offeredVersion);
+            writeLine(line, &FrauncesDetailItalic, kLineY);
             board.display();
             break;
         case ProgressBar::PARTIAL:

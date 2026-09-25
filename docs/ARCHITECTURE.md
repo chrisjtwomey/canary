@@ -242,7 +242,8 @@ at the size of their detail text, from a one-bit font `scripts/gfxfont.py` makes
 
 The head holds one more screen, the splash screen: the logo alone, from `hardware/canary-logo-screen.svg`, rendered
 by `scripts/notices.py` like the notices, but in black and white. The head draws it at every start but a wake from
-deep sleep, before it joins the network, and it stays until the first page or notice replaces it. While the head
+deep sleep, before it joins the network, with its firmware version under the logo, and it stays until the first
+page or notice replaces it. While the head
 writes an update, it draws the logo again with a progress bar under it, and under that "Installing firmware" and the
 version, in the pages' italic from a second one-bit font. The bar fills in ten steps, each a partial update of the
 panel, which works only in black and white; the Inkplate library makes every eleventh partial update a full refresh
