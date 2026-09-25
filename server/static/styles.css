@@ -200,6 +200,20 @@ canvas {
   margin-top: 2cqh;
 }
 
+/* The head's splash screen. The head draws its update progress bar under the
+   logo, placed from these sizes (src/splash.cpp). */
+.page-splash {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.page-splash .logo svg {
+  display: block;
+  width: 60cqw;
+  height: auto;
+}
+
 /* ── Upright ─────────────────────────────────────────────────── */
 /* A phone asks for a page taller than wide (web.py's PORTRAIT). Each page's
    stylesheet stacks its parts down the page; these are the sizes they share.

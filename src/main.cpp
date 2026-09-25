@@ -11,7 +11,9 @@
 //
 // Two things replace the page with a notice the firmware draws itself: a
 // server whose version this display cannot work with, and a server that has
-// not answered three fetches in a row.
+// not answered three fetches in a row. The firmware also draws the splash
+// screen: from the start until the first page, and while it writes an update,
+// with a progress bar.
 #include <Arduino.h>
 #include <WiFi.h>
 #include <ezTime.h>
@@ -34,6 +36,7 @@
 
 #include "head/AfterFetch.h"
 #include "head/Notice.h"
+#include "head/Splash.h"
 #include "net/Backlog.h"        // postResult: what an HTTP status means for the sender
 #include "net/ClientStatus.h"
 #include "net/ResetReason.h"
@@ -159,8 +162,11 @@ static void fetchSucceeded() {
 }
 
 static void takeOffer() {
+    beginUpdateProgress(fetched->response.firmwareVersion);
     // Mains power, so no battery to wait for.
-    takeOfferedUpdate(fetched->response, clientUserAgent(epdBoard().deviceName()), 100, 0);
+    takeOfferedUpdate(fetched->response, clientUserAgent(epdBoard().deviceName()), 100, 0,
+                      showUpdateProgress);
+    endUpdateProgress();
 }
 
 static const AfterFetchSteps kAfterFetch = {drawFetchedPage, drawVersionNotice,
@@ -261,6 +267,8 @@ void setup() {
 
     onTrial = otaTrialPending();
     if (onTrial) logf(LOG_NOTICE, "trial boot of %s", CLIENT_VERSION);
+    // A wake from deep sleep keeps the page it went to sleep on.
+    if (esp_reset_reason() != ESP_RST_DEEPSLEEP) showSplash();
     config = loadConfig(builtInSettings());
     applySdConfig(&config);
 

@@ -1,11 +1,12 @@
-"""The CANARY logo and its placing stencil, as SVG outlines for the enclosure.
+"""The CANARY logo as SVG outlines: for the enclosure, and for the head's panel.
 
 From the drawn logo (canary-source.jpeg) to two files enclosure.py imports:
 canary-logo.svg, the five white pieces glued into the dock's pill recess, and
 canary-stencil.svg, the plate that places them. Both are drawn for a flat
 print on a 0.2 mm nozzle: every line at least --line wide, every gap at least
 --gap, the letters spaced --spacing apart so the stencil's walls between them
-print.
+print. A third, canary-logo-screen.svg, is the drawing with none of that, for
+the head's splash screen (server/pages/splash.py).
 
     python3 -m venv .venv && .venv/bin/pip install pillow numpy scipy scikit-image potracer
     .venv/bin/python hardware/logo/trace.py --height 8 --pill 35 10
@@ -136,11 +137,12 @@ def main() -> None:
     ap.add_argument("--pill", type=float, nargs=2, default=(35.0, 10.0), metavar=("L", "H"), help="the recess, mm")
     ap.add_argument("--fit", type=float, default=0.15, help="the stencil's clearance to the recess, mm")
     ap.add_argument("--clearance", type=float, default=0.15, help="an opening's clearance to its piece, mm")
-    ap.add_argument("--out", default=os.path.dirname(here), help="where the two SVGs go")
+    ap.add_argument("--out", default=os.path.dirname(here), help="where the three SVGs go")
     args = ap.parse_args()
 
     m = ink_mask(args.image)
     ppm = pixels_per_mm(m, args.height)
+    print("screen: %d outlines -> canary-logo-screen.svg" % to_svg(m, ppm, os.path.join(args.out, "canary-logo-screen.svg")))
     m = space_letters(m, ppm, args.spacing)
     m = printable(m, ppm, args.line, args.gap)
     lab, n = ndi.label(m)

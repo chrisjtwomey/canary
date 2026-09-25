@@ -16,5 +16,6 @@ bool showVersionNotice(const char* ownVersion, const char* serverVersion, bool o
 // arrived, in RFC 3339, or empty when none has arrived since the head started.
 bool showUnreachableNotice(const char* lastPage);
 
-// A page is on the panel, so the next notice has to be drawn in full.
+// A page or the splash screen is on the panel, so the next notice has to be
+// drawn in full.
 void noticeReplaced();

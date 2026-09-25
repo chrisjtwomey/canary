@@ -240,6 +240,14 @@ The layout leaves its bottom free for the two facts the head only knows at run t
 the server's version, and then the board's own name, version and address. The head writes those in the pages' face
 at the size of their detail text, from a one-bit font `scripts/gfxfont.py` makes out of the server's font file.
 
+The head holds one more screen, the splash screen: the logo alone, from `hardware/canary-logo-screen.svg`, rendered
+by `scripts/notices.py` like the notices, but in black and white. The head draws it at every start but a wake from
+deep sleep, before it joins the network, and it stays until the first page or notice replaces it. While the head
+writes an update, it draws the logo again with a progress bar under it, and under that "Installing firmware" and the
+version, in the pages' italic from a second one-bit font. The bar fills in ten steps, each a partial update of the
+panel, which works only in black and white; the Inkplate library makes every eleventh partial update a full refresh
+(`include/head/ProgressBar.h`).
+
 ### 3.8 The server holds the dock's settings
 
 The `dock` block of `config.yaml`, the Dock tab on `/web/config`, sets what the dock does between readings: the
@@ -300,8 +308,10 @@ include/sensors/  src/sensors/
 include/net/  src/net/         Backlog, BoardSettings, Calibration, ClientStatus, RefreshTimer, ServerClock, Stamp, Url
 include/dock/                  StatusLed (§3.5), FanWindow and PostTimer: when the fan runs and the next reading falls
 include/head/  src/notice.cpp  what the head does after a fetch, and the notices it draws (§3.7)
+src/splash.cpp                 the splash screen, and the update's progress bar under it (§3.7)
 include/head/notices/          the notices, rendered by scripts/notices.py from server/pages/notice.py
-include/head/fonts/            the pages' face as a one-bit font, from scripts/gfxfont.py, for the notices' live lines
+include/head/splash.png        the splash screen, rendered by scripts/notices.py from server/pages/splash.py
+include/head/fonts/            the pages' face as one-bit fonts, from scripts/gfxfont.py, for the lines the head writes
 src/sim/main.cpp               the sensor loop as a host binary
 src/validate/main.cpp          the bench routine
 lib/bme68x/                    Bosch's BME68x API
