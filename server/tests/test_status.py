@@ -61,7 +61,7 @@ def test_a_restart_brings_back_each_boards_newest_report(tmp_path):
     assert after.device("canary-dock") == {"doc": {"ts": 1600, "device": "canary-dock",
                                                     "client": {"rssi": -65}}, "age_s": 400}
     assert after.device("canary-head")["age_s"] == 500
-    assert after.count == 3 and after.changes == {}
+    assert after.count == 3
 
 
 def test_a_restart_brings_back_nothing_the_store_has_pruned(tmp_path):
@@ -155,19 +155,13 @@ def test_status_history_groups_the_stored_reports_by_board(tmp_path):
     assert StatusSource(DeviceReports()).datasets()["status_history_24h"]() == {}
 
 
-def test_a_change_of_version_is_kept_and_a_step_back_called_one():
-    clock = [1000.0]
-    reports = DeviceReports(now=lambda: clock[0])
-    reports.accept({"ts": 1, "device": "canary-dock", "client": {"version": "v0.4.0"}})
-    reports.accept({"ts": 2, "device": "canary-dock", "client": {"version": "v0.4.0"}})
-    assert "changed" not in reports.device("canary-dock")
-    clock[0] = 1600.0
-    reports.accept({"ts": 3, "device": "canary-dock", "client": {"version": "v0.3.1"}})
-    clock[0] = 1660.0
-    assert reports.device("canary-dock")["changed"] == {
-        "from": "v0.4.0", "to": "v0.3.1", "at": 1600.0, "older": True, "age_s": 60}
-    reports.accept({"ts": 4, "device": "canary-dock", "client": {"version": "v0.3.2"}})
-    assert reports.device("canary-dock")["changed"]["older"] is False
+def test_a_board_with_post_slots_says_when_its_next_is():
+    reports = DeviceReports(now=lambda: 1000.0,
+                            next_post=lambda device, now: 120 if device == "canary-dock" else None)
+    reports.accept({"ts": 1, "device": "canary-dock", "client": {"rssi": -60}})
+    reports.accept({"ts": 1, "device": "canary-head", "client": {"rssi": -60}})
+    assert reports.device("canary-dock")["next_post_s"] == 120
+    assert "next_post_s" not in reports.device("canary-head")
 
 
 def test_a_refused_board_is_known_before_any_report_is_taken():

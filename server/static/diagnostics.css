@@ -20,12 +20,13 @@
   color: var(--ink);
 }
 
-/* One board: its name across the top, then its four cards in a row. */
+/* One board: its name across the top, then its four cards in a row, each
+   as wide as its longest row: the fourth is the head's Panel, with page names. */
 .page-diagnostics .board {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: 1fr 0.84fr 0.96fr 1.24fr;
   grid-template-rows: max-content minmax(0, 1fr);
-  column-gap: 2.6cqw;
+  column-gap: 1.6cqw;
   row-gap: 1.6cqh;
   min-height: 0;
 }
@@ -88,6 +89,9 @@
 .page-diagnostics .v {
   font-variant-numeric: tabular-nums;
 }
+
+/* A detail of the row above it, set in under that row's name. */
+.page-diagnostics .k.sub { padding-left: 1.2cqw; }
 
 .page-diagnostics .bars {
   width: 7cqw;

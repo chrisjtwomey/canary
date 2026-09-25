@@ -217,6 +217,13 @@ def test_the_dock_may_be_silent_until_two_slots_are_missed(now, silence):
     assert make_silence(POSTS)("canary-head", now) == 120
 
 
+def test_only_the_dock_has_a_next_post():
+    from server import make_next_post
+    now = POSTS.slot_before(1790330000) + 10
+    assert make_next_post(POSTS)("canary-dock", now) == POSTS.seconds_until_next(now)
+    assert make_next_post(POSTS)("canary-head", now) is None
+
+
 def test_a_recalibration_past_the_hour_and_not_run_has_expired(requests):
     board(requests=requests, now=at(12, 0)).recalibrate(420)
 

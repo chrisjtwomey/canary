@@ -349,6 +349,12 @@ def age_span(seconds: float) -> Markup:
     return Markup('<span data-age="{}">{}</span>').format(int(seconds), fmt_duration(seconds))
 
 
+def in_span(seconds: float) -> Markup:
+    """fmt_duration's words in a span that ago.js counts down from there, to "now"."""
+    s = max(0, int(seconds))
+    return Markup('<span data-in="{}">{}</span>').format(s, fmt_duration(s) if s else "now")
+
+
 def fmt_bytes(n: float) -> str:
     if n >= 1024 * 1024:
         return f"{n / 1048576:.1f} MB"

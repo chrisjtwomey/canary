@@ -218,7 +218,7 @@ than looping. To try the same version again, erase the board with
 To watch a board go back to the server's line, build an image under a tag
 the server's line is behind, flash it over USB, and leave the older image in
 the folder: the server offers it, logs that it is offering an older image,
-and the Diagnostics page says the board was downgraded.
+and logs that the board went back to it.
 
 A server past a tag moves every board to the newest image in the folder: a
 board flashed over USB with a build the folder does not hold is offered the

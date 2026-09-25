@@ -126,6 +126,13 @@ def make_silence(posts: PostSchedule) -> Callable[[str, float], float]:
     return silence
 
 
+def make_next_post(posts: PostSchedule) -> Callable[[str, float], int | None]:
+    """The seconds until the dock's next post slot; the head has none."""
+    def next_post(device: str, now: float) -> int | None:
+        return posts.seconds_until_next(now) if device == DOCK else None
+    return next_post
+
+
 def make_posts(config: dict, tz) -> PostSchedule:
     """The dock's post schedule from the ``posts`` block: every five minutes,
     and every half hour from 01:00 to 07:00, when the block says nothing."""
@@ -270,7 +277,8 @@ def main():
 
     status_store = ReadingsStore(os.path.join(cwd, settings.status_path))
     reports = DeviceReports(store=status_store, keep_days=settings.status_days,
-                            silence=make_silence(settings.posts))
+                            silence=make_silence(settings.posts),
+                            next_post=make_next_post(settings.posts))
     log.info("board reports in %s, %d held", status_store.path, status_store.count())
     store = None
     if settings.kind == "store":

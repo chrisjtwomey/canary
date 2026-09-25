@@ -42,12 +42,13 @@ class DeviceReports:
 
     A board that held a document while the server was down sends it late, so
     "newest" is by the board's own ``ts``, not by when it arrived. Beside it,
-    held in memory: the last time each board's version changed, and the posts
-    the server refused because of a board's version.
+    held in memory: the posts the server refused because of a board's version.
 
     ``silence`` gives, for a board and the time now, how long it may go
     without a report before two of its posts are missed; past that, and
     OFFLINE_GRACE_S, the board is offline. Without it no board is judged.
+    ``next_post`` gives, for a board and the time now, the seconds until its
+    next post slot, or None for a board without slots.
 
     The server answers each request on a thread of its own, so every method
     holds ``lock``; a caller that needs several answers to agree holds it
@@ -56,13 +57,14 @@ class DeviceReports:
 
     def __init__(self, now: Callable[[], float] = time.time,
                  store: ReadingsStore | None = None, keep_days: float = 0,
-                 silence: Callable[[str, float], float] | None = None):
+                 silence: Callable[[str, float], float] | None = None,
+                 next_post: Callable[[str, float], int | None] | None = None):
         self.now = now
         self.store = store
         self.keep_days = keep_days
         self.silence = silence
+        self.next_post = next_post
         self.by_device: dict[str, dict] = {}     # device -> {"doc", "received"}
-        self.changes: dict[str, dict] = {}       # device -> {"from", "to", "at", "older"}
         self.refusals: dict[str, dict] = {}      # device -> {"version", "count", "at"}
         self.count = 0
         self.lock = threading.RLock()
@@ -101,8 +103,8 @@ class DeviceReports:
     def device(self, name: str) -> dict | None:
         """What is known of one board: ``{"doc", "age_s"}`` for its newest
         report, both None when the server has refused all it sent, ``offline``
-        when the server judges it, and ``changed`` and ``refused`` when there
-        is one to tell."""
+        when the server judges it, ``next_post_s`` for a board with post
+        slots, and ``refused`` when there is one to tell."""
         with self.lock:
             entry = self.by_device.get(name)
             refused = self.refusals.get(name)
@@ -113,9 +115,10 @@ class DeviceReports:
                    "age_s": max(0, int(now - entry["received"])) if entry else None}
             if entry and self.silence is not None:
                 out["offline"] = out["age_s"] > self.silence(name, now) + OFFLINE_GRACE_S
-            change = self.changes.get(name)
-            if change is not None:
-                out["changed"] = {**change, "age_s": max(0, int(self.now() - change["at"]))}
+            if entry and self.next_post is not None:
+                next_s = self.next_post(name, now)
+                if next_s is not None:
+                    out["next_post_s"] = next_s
             if refused is not None:
                 out["refused"] = {**refused, "age_s": max(0, int(self.now() - refused["at"]))}
             return out
@@ -177,7 +180,7 @@ class DeviceReports:
         log.info("report %d from %s at %s", self.count, device or "?", client.get("ip", "?"))
 
     def _version_seen(self, device: str, entry: dict | None, version) -> None:
-        """Note a board now running another version, and forget a refusal
+        """Log a board now running another version, and forget a refusal
         its new version answers."""
         refused = self.refusals.get(device)
         if refused is not None and refused["version"] != version:
@@ -186,7 +189,6 @@ class DeviceReports:
         if not before or not version or before == version:
             return
         older = (version_order(version) or (0, 0, 0, 0)) < (version_order(before) or (0, 0, 0, 0))
-        self.changes[device] = {"from": before, "to": version, "at": self.now(), "older": older}
         if older:
             log.warning("%s went back from %s to %s", device or "?", before, version)
         else:

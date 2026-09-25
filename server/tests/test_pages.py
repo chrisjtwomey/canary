@@ -335,7 +335,8 @@ class TestDiagnostics:
         assert text(soup, "#head-uptime") == "6 min"
         assert text(soup, "#head-rssi") == "-70 dBm, fair"
         assert text(soup, "#head-panel-temp") == "27 °C"
-        assert text(soup, "#head-next-page") == "day.png"
+        assert text(soup, "#head-next-page") == "day.png, 1 min"   # 120 s from a report 59 s old
+        assert soup.select_one("#head-next-page [data-in]")["data-in"] == "61"
         assert text(soup, "#head-fetches") == "12 ok, 1 failed"
         assert soup.select_one("#head-sensor-scd41") is None
         # the dock: client, network, memory with its queue, and sensors
@@ -346,7 +347,7 @@ class TestDiagnostics:
         assert text(soup, "#dock-sensor-shtc3") == "ok"
         assert text(soup, "#dock-sensor-pmsa003i") == "warming up"
         assert text(soup, "#dock-sensor-bme688") == "missing"
-        assert text(soup, "#dock-bsec") == "medium accuracy, 1 late"
+        assert text(soup, "#dock-bsec") == "medium"
         assert text(soup, "#dock-queue") == "7 of ~1,500, in psram"
         assert soup.select_one("#head-queue") is None, "the head queues nothing"
         assert soup.select_one("#dock-fetches") is None
@@ -359,6 +360,47 @@ class TestDiagnostics:
         assert specs[4]["fraction"] == pytest.approx(120000 / 327680)
         assert specs[5]["fraction"] == pytest.approx(4000000 / 4194304)
         assert specs[6]["fraction"] == pytest.approx(7 / 1480)
+
+    def test_each_board_s_own_rows_sit_in_its_client_card(self, tz):
+        dock_client = dict(DOCK_DOC["client"], chip_temp_c=41,
+                           dock=dict(DOCK_DOC["client"]["dock"], fan_warmup_s=35))
+        dock = {"doc": dict(DOCK_DOC, client=dock_client), "age_s": 40, "next_post_s": 200}
+        status = dict(STATUS, boards=dict(STATUS["boards"], **{"canary-dock": dock}))
+        soup, _ = render(DiagnosticsPage("diagnostics", tz=tz, width=WIDTH, height=HEIGHT),
+                         {"status": status})
+        assert [card.select_one(".label").get_text() for card in soup.select("#board-dock .card")] == \
+            ["Client", "Network", "Memory", "Sensors"]
+        assert [card.select_one(".label").get_text() for card in soup.select("#board-head .card")] == \
+            ["Client", "Network", "Memory", "Panel"]
+        client = [k.get_text() for k in soup.select("#board-dock .card")[0].select(".k")]
+        assert client == ["version", "up", "chip"]
+        sensors = [k.get_text() for k in soup.select("#board-dock .card")[3].select(".k")]
+        assert sensors == ["next report", "SHTC3", "SCD41", "PMSA003I", "fan", "BME688", "accuracy"]
+        assert text(soup, "#dock-fan") == "35 s warm-up"
+        assert "sub" in soup.select_one("#dock-fan")["class"]
+        client = [k.get_text() for k in soup.select("#board-head .card")[0].select(".k")]
+        assert client == ["version", "up"]
+        panel = [k.get_text() for k in soup.select("#board-head .card")[3].select(".k")]
+        assert panel == ["next page", "fetched", "back-off", "temperature"]
+        assert text(soup, "#dock-chip-temp") == "41 °C"
+        assert text(soup, "#dock-next-report") == "3 min"
+        assert soup.select_one("#dock-next-report [data-in]")["data-in"] == "200"
+        assert soup.select_one("#dock-bsec").find_previous_sibling().get_text() == "accuracy"
+        assert "sub" in soup.select_one("#dock-bsec")["class"]
+
+    def test_a_fan_kept_running_is_always_on(self, tz):
+        dock_client = dict(DOCK_DOC["client"], dock=dict(DOCK_DOC["client"]["dock"], fan_warmup_s=0))
+        status = dict(STATUS, boards={"canary-dock": {"doc": dict(DOCK_DOC, client=dock_client), "age_s": 5}})
+        soup, _ = render(DiagnosticsPage("diagnostics", tz=tz, width=WIDTH, height=HEIGHT),
+                         {"status": status})
+        assert text(soup, "#dock-fan") == "always on"
+
+    def test_a_dock_that_gives_no_chip_temperature_or_fan_mode_has_neither_row(self, tz):
+        soup, _ = render(DiagnosticsPage("diagnostics", tz=tz, width=WIDTH, height=HEIGHT),
+                         {"status": STATUS})
+        assert soup.select_one("#dock-chip-temp") is None
+        assert soup.select_one("#dock-fan") is None
+        assert soup.select_one("#dock-next-report") is None
 
     def test_a_board_without_psram_shows_no_psram_row(self, tz):
         client = dict(HEAD_DOC["client"], psram_free=0, psram_size=0)
@@ -379,16 +421,19 @@ class TestDiagnostics:
         assert text(soup, "#dock-queue") == "0, in psram"
         assert specs[-1]["fraction"] == 0.0
 
-    def test_a_change_of_version_and_a_refusal_show_on_the_client_card(self, tz):
+    def test_a_refusal_shows_on_the_client_card(self, tz):
         dock = dict(STATUS["boards"]["canary-dock"],
-                    changed={"from": "v0.4.0", "to": "v0.3.1", "at": 0, "older": True, "age_s": 7200},
                     refused={"version": "v0.4.0", "count": 3, "at": 0, "age_s": 7300})
         status = dict(STATUS, boards={"canary-dock": dock})
         soup, _ = render(DiagnosticsPage("diagnostics", tz=tz, width=WIDTH, height=HEIGHT),
                          {"status": status})
-        assert text(soup, "#dock-changed") == "from v0.4.0, 2 h ago"
-        assert soup.select_one("#dock-changed").find_previous_sibling().get_text() == "downgraded"
         assert text(soup, "#dock-refused") == "3 from v0.4.0, 2 h 1 min ago"
+
+    def test_a_fetch_the_report_says_is_already_due_is_now(self, tz):
+        status = dict(STATUS, boards={"canary-head": dict(STATUS["boards"]["canary-head"], age_s=300)})
+        soup, _ = render(DiagnosticsPage("diagnostics", tz=tz, width=WIDTH, height=HEIGHT),
+                         {"status": status})
+        assert text(soup, "#head-next-page") == "day.png, now"
 
     def test_a_board_that_has_missed_two_posts_is_marked_offline(self, tz):
         dock = dict(STATUS["boards"]["canary-dock"], age_s=40980, offline=True)

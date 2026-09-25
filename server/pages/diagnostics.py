@@ -17,7 +17,7 @@ from markupsafe import Markup
 import math
 
 from metrics import (IAQ_ACCURACY, age_span, fmt_bytes, fmt_duration, fmt_hm, fmt_int, fmt_stamp,
-                     hour_ticks, rssi_quality)
+                     hour_ticks, in_span, rssi_quality)
 from pages.base import EnvPage
 
 # key in client.sensors, its name, and the valid flag that says it is warm
@@ -75,14 +75,16 @@ def about(n: int) -> str:
     return "~" + fmt_int(round(n, -digits))
 
 
-def kv(a: Airium, key: str, value: str, id: str | None = None) -> None:
-    a.span(klass="k", _t=key)
+def kv(a: Airium, key: str, value: str, id: str | None = None, sub: bool = False) -> None:
+    """One row. ``sub`` sets it under the row before it, as a detail of that one."""
+    a.span(klass="k sub" if sub else "k", _t=key)
+    klass = "v sub" if sub else "v"
     # Airium writes a None attribute as id="null", so an unnamed row would
     # carry an id, and every unnamed row would carry the same one.
     if id is None:
-        a.span(klass="v", _t=value)
+        a.span(klass=klass, _t=value)
     else:
-        a.span(klass="v", id=id, _t=value)
+        a.span(klass=klass, id=id, _t=value)
 
 
 class DiagnosticsPage(EnvPage):
@@ -128,8 +130,9 @@ class DiagnosticsPage(EnvPage):
                     kv(a, "version", str(c.get("version", "—")), id=f"{k}-version")
                     if doc:
                         kv(a, "up", fmt_duration(c.get("uptime_s", 0)), id=f"{k}-uptime")
-                    kv(a, "device", device or "—")
-                    self._version_history(a, k, entry)
+                        if c.get("chip_temp_c") is not None:
+                            kv(a, "chip", f"{c['chip_temp_c']} °C", id=f"{k}-chip-temp")
+                    self._refused(a, k, entry)
             if not doc:
                 return
 
@@ -145,49 +148,53 @@ class DiagnosticsPage(EnvPage):
                     a.canvas(id=f"{k}-rssi-bars")
 
             with a.div(klass="card"):
-                a.div(klass="label", _t="Memory")
-                with a.div(klass="kv"):
-                    kv(a, "heap", f"{fmt_bytes(c.get('heap_free', 0))} free of {fmt_bytes(c.get('heap_size', 0))}", id=f"{k}-heap")
-                with a.div(klass="meter"):
-                    a.canvas(id=f"{k}-heap-meter")
-                if c.get("psram_size"):
-                    with a.div(klass="kv"):
-                        kv(a, "psram", f"{fmt_bytes(c.get('psram_free', 0))} free of {fmt_bytes(c['psram_size'])}", id=f"{k}-psram")
-                    with a.div(klass="meter"):
-                        a.canvas(id=f"{k}-psram-meter")
-                queue = queue_of(c)
-                if queue is not None:
-                    held, capacity = queue.get("held", 0), queue.get("capacity", 0)
-                    count = f"{fmt_int(held)} of {about(capacity)}" if capacity else fmt_int(held)
-                    with a.div(klass="kv"):
-                        kv(a, "queue", f"{count}, in {queue['store']}", id=f"{k}-queue")
-                    with a.div(klass="meter"):
-                        a.canvas(id=f"{k}-queue-meter")
+                self._memory(a, k, c)
 
             if isinstance(c.get("dock"), dict):
-                self._sensors(a, k, c["dock"], valid)
+                self._sensors(a, k, c["dock"], valid, entry.get("next_post_s"))
             elif isinstance(c.get("head"), dict):
-                self._panel_and_fetch(a, k, c["head"])
+                self._panel(a, k, c["head"], entry.get("age_s") or 0)
 
     @staticmethod
-    def _version_history(a: Airium, k: str, entry: dict) -> None:
-        """The board's last change of version, and posts the server refused
-        because of its version."""
-        changed = entry.get("changed")
-        if changed:
-            kv(a, "downgraded" if changed["older"] else "updated",
-               Markup("from {}, {} ago").format(changed["from"], age_span(changed["age_s"])),
-               id=f"{k}-changed")
+    def _memory(a: Airium, k: str, c: dict) -> None:
+        """The board's memory, and the dock's queue."""
+        a.div(klass="label", _t="Memory")
+        with a.div(klass="kv"):
+            kv(a, "heap", f"{fmt_bytes(c.get('heap_free', 0))} free of {fmt_bytes(c.get('heap_size', 0))}", id=f"{k}-heap")
+        with a.div(klass="meter"):
+            a.canvas(id=f"{k}-heap-meter")
+        if c.get("psram_size"):
+            with a.div(klass="kv"):
+                kv(a, "psram", f"{fmt_bytes(c.get('psram_free', 0))} free of {fmt_bytes(c['psram_size'])}", id=f"{k}-psram")
+            with a.div(klass="meter"):
+                a.canvas(id=f"{k}-psram-meter")
+        queue = queue_of(c)
+        if queue is not None:
+            held, capacity = queue.get("held", 0), queue.get("capacity", 0)
+            count = f"{fmt_int(held)} of {about(capacity)}" if capacity else fmt_int(held)
+            with a.div(klass="kv"):
+                kv(a, "queue", f"{count}, in {queue['store']}", id=f"{k}-queue")
+            with a.div(klass="meter"):
+                a.canvas(id=f"{k}-queue-meter")
+
+    @staticmethod
+    def _refused(a: Airium, k: str, entry: dict) -> None:
+        """Posts the server refused because of the board's version."""
         refused = entry.get("refused")
         if refused:
             kv(a, "refused", Markup("{} from {}, {} ago").format(
                 refused["count"], refused["version"], age_span(refused["age_s"])), id=f"{k}-refused")
 
-    def _sensors(self, a: Airium, k: str, dock: dict, valid: dict) -> None:
+    def _sensors(self, a: Airium, k: str, dock: dict, valid: dict, next_post_s: int | None) -> None:
+        """When the dock reports next, then each sensor, with the PM fan's mode
+        and BSEC's accuracy under the sensor each belongs to."""
         present = dock.get("sensors") or {}
+        bsec = dock.get("bsec") or {}
         with a.div(klass="card"):
             a.div(klass="label", _t="Sensors")
             with a.div(klass="kv"):
+                if next_post_s is not None:
+                    kv(a, "next report", in_span(next_post_s), id=f"{k}-next-report")
                 for key, name, flag in SENSORS:
                     if not present.get(key):
                         state = "missing"
@@ -196,25 +203,32 @@ class DiagnosticsPage(EnvPage):
                     else:
                         state = "warming up"
                     kv(a, name, state, id=f"{k}-sensor-{key}")
-                bsec = dock.get("bsec") or {}
-                if bsec.get("running"):
-                    word = IAQ_ACCURACY[max(0, min(3, int(bsec.get("accuracy", 0))))]
-                    kv(a, "index", f"{word} accuracy, {bsec.get('late', 0)} late", id=f"{k}-bsec")
+                    if key == "pmsa003i" and dock.get("fan_warmup_s") is not None:
+                        warmup = dock["fan_warmup_s"]
+                        kv(a, "fan", f"{warmup} s warm-up" if warmup else "always on",
+                           id=f"{k}-fan", sub=True)
+                    if key == "bme688" and bsec.get("running"):
+                        word = IAQ_ACCURACY[max(0, min(3, int(bsec.get("accuracy", 0))))]
+                        kv(a, "accuracy", word, id=f"{k}-bsec", sub=True)
 
-    def _panel_and_fetch(self, a: Airium, k: str, head: dict) -> None:
+    @staticmethod
+    def _panel(a: Airium, k: str, head: dict, age_s: int) -> None:
+        """The head's panel and its fetches. ``age_s``: how old the report
+        is, taken off the time it gave to the next fetch."""
         fetch = head.get("fetch") or {}
         with a.div(klass="card"):
-            a.div(klass="label", _t="Panel and fetch")
+            a.div(klass="label", _t="Panel")
             with a.div(klass="kv"):
-                kv(a, "pixels", f"{head.get('width', '—')} × {head.get('height', '—')}, 8 greys")
-                temp = head.get("panel_temp_c")
-                kv(a, "controller", f"{temp} °C" if temp is not None else "—", id=f"{k}-panel-temp")
-                url = fetch.get("next_url") or ""
-                kv(a, "next", os.path.basename(url) or "—", id=f"{k}-next-page")
-                kv(a, "in", fmt_duration(fetch.get("next_in_s", 0)))
-                kv(a, "fetched", f"{fetch.get('ok', 0)} ok, {fetch.get('failed', 0)} failed", id=f"{k}-fetches")
+                page = os.path.basename(fetch.get("next_url") or "")
+                left = fetch.get("next_in_s", 0) - age_s
+                kv(a, "next page", Markup("{}, {}").format(page, in_span(left)) if page else "—",
+                   id=f"{k}-next-page")
+                kv(a, "fetched", f"{fetch.get('ok', 0)} ok, {fetch.get('failed', 0)} failed",
+                   id=f"{k}-fetches")
                 step = fetch.get("backoff_step", 0)
                 kv(a, "back-off", f"step {step}" if step else "none")
+                temp = head.get("panel_temp_c")
+                kv(a, "temperature", f"{temp} °C" if temp is not None else "—", id=f"{k}-panel-temp")
 
     def charts(self, **data) -> list[dict]:
         status: dict | None = data["status"]

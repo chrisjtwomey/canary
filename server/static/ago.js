@@ -1,7 +1,7 @@
-/* Each span marked data-age counts on from the moment the page got it, in
-   the words metrics.py's fmt_duration uses. The count starts from this
-   browser's clock, so a clock that differs from the server's does not
-   change it. */
+/* Each span marked data-age counts on from the moment the page got it, and
+   each marked data-in counts down to "now", in the words metrics.py's
+   fmt_duration uses. The count starts from this browser's clock, so a clock
+   that differs from the server's does not change it. */
 (function () {
   'use strict';
 
@@ -23,6 +23,12 @@
     document.querySelectorAll('[data-age]').forEach(function (el) {
       if (el._since === undefined) el._since = now;
       var text = words(+el.getAttribute('data-age') + (now - el._since) / 1000);
+      if (el.textContent !== text) el.textContent = text;
+    });
+    document.querySelectorAll('[data-in]').forEach(function (el) {
+      if (el._since === undefined) el._since = now;
+      var left = +el.getAttribute('data-in') - (now - el._since) / 1000;
+      var text = left >= 1 ? words(left) : 'now';
       if (el.textContent !== text) el.textContent = text;
     });
   }
