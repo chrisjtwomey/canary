@@ -14,11 +14,11 @@ static ClientStatus status(ClientStatus::Role role = ClientStatus::DOCK) {
     ClientStatus s = {};
     s.role = role;
     s.board = "Inkplate5V2"; s.version = "v0.1.0"; s.ip = "192.168.1.42";
-    s.rssi = -61; s.uptimeS = 8040; s.reset = "power_on";
+    s.rssi = -61; s.uptimeS = 8040; s.reset = "power_on"; s.chipTempC = 41;
     s.heapFree = 120000; s.heapSize = 327680; s.psramFree = 4000000; s.psramSize = 4194304;
     s.panelTempC = 27; s.width = 1280; s.height = 720; s.rotation = 0;
     s.mockSensors = true;
-    s.shtc3 = true; s.scd41 = true; s.pm = false; s.bme688 = true;
+    s.shtc3 = true; s.scd41 = true; s.pm = false; s.bme688 = true; s.fanWarmupS = 35;
     s.nextUrl = "http://h:8080/day.png"; s.nextInS = 120; s.backoffStep = 0;
     s.fetchOk = 12; s.fetchFailed = 1;
     s.backlogHeld = 7; s.backlogCapacity = 1480; s.backlogStore = "psram";
@@ -37,7 +37,7 @@ void test_the_head_sends_the_common_fields_and_its_own_block() {
     TEST_ASSERT_EQUAL_STRING(
         "{\"board\":\"Inkplate5V2\",\"version\":\"v0.1.0\",\"ip\":\"192.168.1.42\",\"rssi\":-61"
         ",\"uptime_s\":8040,\"reset\":\"power_on\",\"heap_free\":120000,\"heap_size\":327680"
-        ",\"psram_free\":4000000,\"psram_size\":4194304"
+        ",\"psram_free\":4000000,\"psram_size\":4194304,\"chip_temp_c\":41"
         ",\"head\":{\"panel_temp_c\":27,\"width\":1280,\"height\":720,\"rotation\":0"
         ",\"fetch\":{\"next_url\":\"http://h:8080/day.png\",\"next_in_s\":120,\"backoff_step\":0"
         ",\"ok\":12,\"failed\":1}}}", buf);
@@ -47,9 +47,9 @@ void test_the_dock_sends_the_common_fields_and_its_own_block() {
     char buf[1024];
     size_t n = clientStatusJson(status(ClientStatus::DOCK), buf, sizeof(buf));
     TEST_ASSERT_EQUAL_UINT(strlen(buf), n);
-    TEST_ASSERT_NOT_NULL(strstr(buf, "\"psram_size\":4194304,\"dock\":{\"mock_sensors\":true"
-        ",\"sensors\":{\"shtc3\":true,\"scd41\":true,\"pmsa003i\":false,\"bme688\":true}"
-        ",\"backlog\":{\"held\":7,\"capacity\":1480,\"store\":\"psram\"}"
+    TEST_ASSERT_NOT_NULL(strstr(buf, "\"psram_size\":4194304,\"chip_temp_c\":41"
+        ",\"dock\":{\"mock_sensors\":true,\"sensors\":{\"shtc3\":true,\"scd41\":true,\"pmsa003i\":false,\"bme688\":true}"
+        ",\"fan_warmup_s\":35,\"backlog\":{\"held\":7,\"capacity\":1480,\"store\":\"psram\"}"
         ",\"bsec\":{\"running\":true,\"restored\":true,\"accuracy\":2"
         ",\"late\":3,\"saved\":1757443200,\"sample_s\":300}"
         ",\"settings\":{\"version\":\"\",\"refused\":[]}"));
@@ -72,6 +72,14 @@ void test_a_start_reason_is_named_in_esp_idfs_order() {
     TEST_ASSERT_EQUAL_STRING("unknown", resetReasonName(-1));
 }
 
+void test_a_board_whose_chip_gave_no_temperature_leaves_it_out() {
+    ClientStatus s = status(ClientStatus::HEAD);
+    s.chipTempC = ClientStatus::kNoTemp;
+    char buf[768];
+    clientStatusJson(s, buf, sizeof(buf));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "\"psram_size\":4194304,\"head\":"));
+}
+
 void test_a_board_with_no_start_reason_says_unknown() {
     ClientStatus s = status();
     s.reset = nullptr;
@@ -86,7 +94,7 @@ void test_the_head_client_object_fits_its_buffer_at_its_longest() {
     url[sizeof(url) - 1] = '\0';
     ClientStatus s = status(ClientStatus::HEAD);
     s.board = "Inkplate5V2"; s.version = "v0.4.1-123-g0123abc-dirty";
-    s.ip = "192.168.100.200"; s.reset = "task_watchdog"; s.nextUrl = url;
+    s.ip = "192.168.100.200"; s.reset = "task_watchdog"; s.nextUrl = url; s.chipTempC = -32767;
     s.uptimeS = 4294967295u; s.nextInS = 4294967295u;
     s.fetchOk = 4294967295u; s.fetchFailed = 4294967295u;
     char buf[768];   // the head's clientJson
@@ -221,6 +229,7 @@ int main(int, char**) {
     RUN_TEST(test_the_dock_says_which_settings_it_runs_and_its_last_recalibration);
     RUN_TEST(test_the_dock_client_object_fits_its_buffer_with_every_key_refused);
     RUN_TEST(test_a_start_reason_is_named_in_esp_idfs_order);
+    RUN_TEST(test_a_board_whose_chip_gave_no_temperature_leaves_it_out);
     RUN_TEST(test_a_board_with_no_start_reason_says_unknown);
     RUN_TEST(test_the_head_client_object_fits_its_buffer_at_its_longest);
     RUN_TEST(test_client_json_needs_room_or_writes_nothing);

@@ -644,11 +644,14 @@ static ClientStatus clientStatus(uint32_t nowMs) {
     s.rssi = WiFi.RSSI();
     s.uptimeS = nowMs / 1000;
     s.reset = resetReasonName(esp_reset_reason());
+    const float chip = temperatureRead();
+    s.chipTempC = isnan(chip) ? ClientStatus::kNoTemp : (int16_t)lroundf(chip);
     s.heapFree = ESP.getFreeHeap();
     s.heapSize = ESP.getHeapSize();
     s.psramFree = ESP.getFreePsram();
     s.psramSize = ESP.getPsramSize();
     s.mockSensors = kMockSensors;
+    s.fanWarmupS = fanWindow.always() ? 0 : (uint16_t)(fanWindow.leadMs() / 1000);
     s.shtc3 = sensors.shtc3Present();
     s.scd41 = sensors.scd41Present();
     s.pm = sensors.pmPresent();

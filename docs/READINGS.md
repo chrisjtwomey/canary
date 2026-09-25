@@ -86,7 +86,7 @@ boards; each board's own fields sit in a block named for it, `head` or
 ```json
 "client": {
   "board": "Inkplate5V2", "version": "v0.1.0-dev", "ip": "192.168.1.43", "rssi": -70,
-  "uptime_s": 400, "reset": "power_on",
+  "uptime_s": 400, "reset": "power_on", "chip_temp_c": 53,
   "heap_free": 100000, "heap_size": 327680, "psram_free": 4000000, "psram_size": 4194304,
   "head": {
     "panel_temp_c": 27, "width": 1280, "height": 720, "rotation": 0,
@@ -97,11 +97,12 @@ boards; each board's own fields sit in a block named for it, `head` or
 
 "client": {
   "board": "canary-dock", "version": "v0.1.0-dev", "ip": "192.168.1.42", "rssi": -61,
-  "uptime_s": 8040, "reset": "software",
+  "uptime_s": 8040, "reset": "software", "chip_temp_c": 41,
   "heap_free": 120000, "heap_size": 327680, "psram_free": 4000000, "psram_size": 4194304,
   "dock": {
     "mock_sensors": true,
     "sensors": { "shtc3": true, "scd41": true, "pmsa003i": true, "bme688": true },
+    "fan_warmup_s": 35,
     "backlog": { "held": 0, "capacity": 1480, "store": "psram" },
     "bsec": { "running": true, "restored": true, "accuracy": 2, "late": 0,
               "saved": 1757443200, "sample_s": 300 },
@@ -111,33 +112,36 @@ boards; each board's own fields sit in a block named for it, `head` or
 }
 ```
 
-`reset` is why the board last started, as ESP-IDF's `esp_reset_reason()`
-names it: `power_on`, `software` (a restart the firmware asked for, as after
-an update), `deep_sleep` (a wake), `external`, `usb`, `jtag` or `sdio` are
-expected; `panic`, `cpu_lockup`, `int_watchdog`, `task_watchdog`,
-`watchdog`, `brownout`, `power_glitch` and `efuse` are faults; `unknown`
-is anything else. Diagnostics counts a fault apart from the other restarts,
-and a wake from deep sleep as no restart.
+`chip_temp_c` is the chip's own sensor: it reads the chip, not the air, and
+is left out when the chip gives none. `reset` is why the board last
+started, as ESP-IDF's `esp_reset_reason()` names it: `power_on`, `software`
+(a restart the firmware asked for, as after an update), `deep_sleep` (a
+wake), `external`, `usb`, `jtag` or `sdio` are expected; `panic`,
+`cpu_lockup`, `int_watchdog`, `task_watchdog`, `watchdog`, `brownout`,
+`power_glitch` and `efuse` are faults; `unknown` is anything else.
+Diagnostics counts a fault apart from the other restarts, and a wake from
+deep sleep as no restart.
 
 In `head`, `panel_temp_c` is the e-paper power controller's sensor, which
 reads the board, not the air, and `fetch` is the page loop's state.
 
 In `dock`, `sensors.*` says which parts are running: a flag goes false when
 its part stops giving readings, and true again when a restart brings it
-back; `valid.*` says which are warm now. `backlog` is how many readings
-waited in the queue when this one was taken, about how many it holds when
-full, at the size of the newest (0 before the first), and where they wait:
-`psram`, or `ram` when the board has no PSRAM to spare. A reading keeps the
-`client` object it was queued with, so a batch that arrives after an outage
-fills in how the board fared through it; the server keeps the report with
-the highest `ts` as the newest. `bsec` is BSEC's own state: whether it
-runs, whether it took a saved state when it started, the accuracy of its
-index, how many of its samples were late, when it last saved its state
-this boot (0 for not yet), and the seconds between its samples, 3 or 300.
-`settings` and `recalibrated` (ARCHITECTURE §3.8) are the version of the
-settings it runs and the keys of them it refused, and the last
-recalibration it ran, with the id the server gave it and the correction the
-SCD41 made; an `id` of 0 is none yet.
+back; `valid.*` says which are warm now. `fan_warmup_s` is how long the PM
+fan runs before each reading, 0 when it runs all the time. `backlog` is how
+many readings waited in the queue when this one was taken, about how many
+it holds when full, at the size of the newest (0 before the first), and
+where they wait: `psram`, or `ram` when the board has no PSRAM to spare. A
+reading keeps the `client` object it was queued with, so a batch that
+arrives after an outage fills in how the board fared through it; the server
+keeps the report with the highest `ts` as the newest. `bsec` is BSEC's own
+state: whether it runs, whether it took a saved state when it started, the
+accuracy of its index, how many of its samples were late, when it last
+saved its state this boot (0 for not yet), and the seconds between its
+samples, 3 or 300. `settings` and `recalibrated` (ARCHITECTURE §3.8) are
+the version of the settings it runs and the keys of them it refused, and
+the last recalibration it ran, with the id the server gave it and the
+correction the SCD41 made; an `id` of 0 is none yet.
 
 The dock queues every document when it takes the reading, and posts the
 queue oldest first, up to 100 documents at a time as one JSON array. The

@@ -34,12 +34,13 @@ static int dockJson(const ClientStatus& s, char* buf, size_t len, int n) {
     return append(buf, len, n,
         ",\"dock\":{\"mock_sensors\":%s"
         ",\"sensors\":{\"shtc3\":%s,\"scd41\":%s,\"pmsa003i\":%s,\"bme688\":%s}"
+        ",\"fan_warmup_s\":%u"
         ",\"backlog\":{\"held\":%lu,\"capacity\":%lu,\"store\":\"%s\"}"
         ",\"bsec\":{\"running\":%s,\"restored\":%s,\"accuracy\":%u,\"late\":%lu,\"saved\":%lu"
         ",\"sample_s\":%u}"
         ",\"settings\":{\"version\":\"%s\",\"refused\":%s}"
         ",\"recalibrated\":{\"id\":%lu,\"ppm\":%u,\"ok\":%s,\"correction_ppm\":%d}}",
-        b(s.mockSensors), b(s.shtc3), b(s.scd41), b(s.pm), b(s.bme688),
+        b(s.mockSensors), b(s.shtc3), b(s.scd41), b(s.pm), b(s.bme688), (unsigned)s.fanWarmupS,
         (unsigned long)s.backlogHeld, (unsigned long)s.backlogCapacity,
         s.backlogStore ? s.backlogStore : "",
         b(s.bsecRunning), b(s.bsecRestored), (unsigned)s.iaqAccuracy,
@@ -57,6 +58,7 @@ size_t clientStatusJson(const ClientStatus& s, char* buf, size_t len) {
         (unsigned long)s.uptimeS, s.reset ? s.reset : "unknown",
         (unsigned long)s.heapFree, (unsigned long)s.heapSize,
         (unsigned long)s.psramFree, (unsigned long)s.psramSize);
+    if (s.chipTempC != ClientStatus::kNoTemp) n = append(buf, len, n, ",\"chip_temp_c\":%d", s.chipTempC);
     n = s.role == ClientStatus::DOCK ? dockJson(s, buf, len, n) : headJson(s, buf, len, n);
     n = append(buf, len, n, "}");
     if (n < 0) {

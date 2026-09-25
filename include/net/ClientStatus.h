@@ -8,6 +8,7 @@
 // "head" (panel and fetches) or "dock" (sensors, queue, BSEC, settings).
 struct ClientStatus {
     enum Role : uint8_t { HEAD, DOCK };
+    static constexpr int16_t kNoTemp = INT16_MIN;
     Role        role;
     const char* board;
     const char* version;
@@ -15,6 +16,7 @@ struct ClientStatus {
     int         rssi;            // dBm
     uint32_t    uptimeS;
     const char* reset;           // why it last started: resetReasonName()
+    int16_t     chipTempC;       // by the chip's own sensor; kNoTemp when it gave none
     uint32_t    heapFree, heapSize;
     uint32_t    psramFree, psramSize;
     int         panelTempC;
@@ -22,6 +24,7 @@ struct ClientStatus {
     uint8_t     rotation;
     bool        mockSensors;
     bool        shtc3, scd41, pm, bme688;   // running now
+    uint16_t    fanWarmupS;      // how long the PM fan runs before each reading; 0 for always
     const char* nextUrl;
     uint32_t    nextInS;
     int         backoffStep;
