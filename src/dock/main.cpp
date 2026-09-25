@@ -365,15 +365,14 @@ static void ledTask(void*) {
         const uint16_t duty = statusLed.dutyAt(nowMs);
         if (duty != written) {
             written = duty;
-            ledcWrite(kLedChannel, duty);
+            ledcWrite(kLedPin, duty);
         }
         vTaskDelay(pdMS_TO_TICKS(kLedTickMs));
     }
 }
 
 static void startLed() {
-    ledcSetup(kLedChannel, StatusLed::kFrequencyHz, StatusLed::kResolutionBits);
-    ledcAttachPin(kLedPin, kLedChannel);
+    ledcAttachChannel(kLedPin, StatusLed::kFrequencyHz, StatusLed::kResolutionBits, kLedChannel);
     // Core 0: the loop and the BSEC task both run on core 1.
     xTaskCreatePinnedToCore(ledTask, "led", kLedStackBytes, nullptr, 1, nullptr, 0);
 }

@@ -30,7 +30,7 @@ jobs:
           path: |
             ~/.cache/pip
             ~/.platformio/.cache
-          key: ${{ runner.os }}-pio
+          key: ${{ runner.os }}-pio-${{ hashFiles('canary/platformio.ini') }}
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
