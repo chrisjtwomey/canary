@@ -591,8 +591,8 @@ TILE_FIT = 0.2                                # the shell's hole over the tile, 
 #   smaller than drawn, and 0.1 would not take the tile by hand. Raise this, not the tile, if a print is still tight
 TILE_LEAD = 0.4                               # lead-in chamfer at the hole's mouth, so the tile finds the hole and seats flush
 TILE_CLR = 0.25                               # the relief round the tile's back
-LOGO_PILL_L, LOGO_PILL_H, LOGO_DEPTH = 35.0, 9.6, 0.8   # the logo's pill recess in the front face: its white pieces
-#   (printed apart, 0.8 thick, 8 mm tall) are glued to its floor, flush with the face. It is centred across the
+LOGO_PILL_L, LOGO_PILL_H, LOGO_DEPTH = 35.0, 9.6, 0.8   # the logo's pill recess in the front face: the logo (one
+#   white piece, printed apart, 0.8 thick) is glued to its floor, flush with the face. It is centred across the
 #   shell and halfway up the face, 0.9 mm of face above and below it.
 LED_PIT = (5.0, 11.5, 2.3)                    # the access pit: half-width, front (D), floor (H). The front stays 0.6 behind the
 #   LED's step, and the floor is under the rim's bore where the two meet, so the LED can be pushed straight in.
@@ -701,13 +701,6 @@ def logo_recess():
     return pill
 
 LOGO_COMP = 'Logo (white, printed apart)'
-STENCIL_COMP = 'Logo stencil (tool, printed apart)'
-STENCIL_T = LOGO_DEPTH + 0.8                  # the stencil: LOGO_DEPTH of it fills the recess round the pieces, the rest
-STENCIL_FIT = 0.15                            # stands proud. It is this much smaller than the pill all round
-STENCIL_ARCH = (14.3, 1.6, 1.2, 5.0, 1.5)     # a grab arch at each end, standing on the stencil's top face: its X from
-#   the pill's centre, its width along X, each leg's width, the gap under the bar (a fingertip), and the bar's thickness.
-#   It stands past the openings, on the solid end of the pill, so nothing blocks a piece going in; the bar spans the
-#   pill's width there, so it prints as a short bridge.
 
 def svg_part(dockc, comp_name, svg, thickness, piece_name):
     """A component holding one SVG extruded thickness mm, its pieces still lying in the XY plane at the origin.
@@ -778,49 +771,12 @@ def into_recess(comp, sk, bodies):
     comp.features.moveFeatures.add(mv)
 
 def build_logo(dockc):
-    """The logo's white pieces (canary-logo.svg, 8 mm tall, traced for a 0.2 mm nozzle), LOGO_DEPTH thick, lying
-    on the recess floor. A separate print: export these bodies and print them flat."""
-    occ, sk, bodies = svg_part(dockc, LOGO_COMP, 'canary-logo.svg', LOGO_DEPTH, 'logo piece')
+    """The logo (canary-logo.svg, traced for a 0.2 mm nozzle): one white piece, a border round the letters that
+    is 0.25 smaller than the pill all round, LOGO_DEPTH thick, lying on the recess floor. A separate print: export
+    this body and print it flat."""
+    occ, sk, bodies = svg_part(dockc, LOGO_COMP, 'canary-logo.svg', LOGO_DEPTH, 'logo')
     into_recess(occ.component, sk, bodies)
     return occ, {b.name: 'white' for b in bodies}
-
-def build_stencil(dockc):
-    """The tool that places the pieces: the pill, STENCIL_FIT smaller all round, with an opening 0.15 clear of each
-    piece. It drops into the recess, each piece is glued through it, and it lifts straight out by the two arches.
-    Printed apart, recess side down, and hidden unless its light bulb is on."""
-    occ, sk, bodies = svg_part(dockc, STENCIL_COMP, 'canary-stencil.svg', STENCIL_T, 'stencil')
-    comp = occ.component
-    xa, wa, wl, gap, tbar = STENCIL_ARCH
-    bb = sk.boundingBox
-    xc, yc = (bb.minPoint.x + bb.maxPoint.x) / 2, (bb.minPoint.y + bb.maxPoint.y) / 2
-    r = LOGO_PILL_H / 2 - STENCIL_FIT                                      # the pill's rounded end: its edge closes in
-    straight = LOGO_PILL_L / 2 - STENCIL_FIT - r                           # past this X, so the arch is measured there
-    half = math.sqrt(max(r ** 2 - max(0.0, xa + wa / 2 - straight) ** 2, 0.25)) * M
-    def rect(sk_, x0, x1, y0, y1):
-        sk_.sketchCurves.sketchLines.addTwoPointRectangle(adsk.core.Point3D.create(x0, y0, 0), adsk.core.Point3D.create(x1, y1, 0))
-    def raise_(sk_, start, height):
-        coll = adsk.core.ObjectCollection.create()
-        for prof in sk_.profiles: coll.add(prof)
-        inp = comp.features.extrudeFeatures.createInput(coll, adsk.fusion.FeatureOperations.JoinFeatureOperation)
-        inp.participantBodies = bodies
-        inp.startExtent = adsk.fusion.OffsetStartDefinition.create(adsk.core.ValueInput.createByReal(start * M))
-        inp.setOneSideExtent(adsk.fusion.DistanceExtentDefinition.create(adsk.core.ValueInput.createByReal(height * M)),
-                             adsk.fusion.ExtentDirections.PositiveExtentDirection)
-        comp.features.extrudeFeatures.add(inp)
-        sk_.isVisible = False
-    legs = comp.sketches.add(comp.xYConstructionPlane)
-    for sgn in (-1.0, 1.0):
-        for side in (-1.0, 1.0):
-            rect(legs, xc + (sgn * xa - wa / 2) * M, xc + (sgn * xa + wa / 2) * M,
-                 yc + side * half - (wl * M if side > 0 else 0.0), yc + side * half + (wl * M if side < 0 else 0.0))
-    raise_(legs, STENCIL_T, gap)
-    bar = comp.sketches.add(comp.xYConstructionPlane)
-    for sgn in (-1.0, 1.0):
-        rect(bar, xc + (sgn * xa - wa / 2) * M, xc + (sgn * xa + wa / 2) * M, yc - half, yc + half)
-    raise_(bar, STENCIL_T + gap, tbar)
-    into_recess(comp, sk, list(comp.bRepBodies))
-    occ.isLightBulbOn = False
-    return occ, {b.name: 'beige' for b in comp.bRepBodies}
 
 def build_chassis(dockc, mh):
     body = boxb(B_XI0, B_XI1, SKIN, B_DBAY1, 0.0, 2.0)                                      # floor
@@ -1772,7 +1728,7 @@ def dock_electronics(dockc):
     occ = get_or_make_comp(dockc, DOCK_ELEC)
     for o in list(dockc.occurrences):
         if o.component.name not in ('Dock chassis', 'Dock shell', DOCK_ELEC) and not o.component.name.startswith('Logo'):
-            o.moveToComponent(occ)                                          # the logo and its stencil belong to the shell
+            o.moveToComponent(occ)                                          # the logo belongs to the shell
     return occ.component
 
 def parts(top):
@@ -2102,7 +2058,6 @@ def run(context):
     ch = build_chassis(dock.component, mh)
     sh = build_shell(dock.component, mh)
     logo = build_logo(dock.component)               # a separate white print, glued into the shell's recess
-    sten = build_stencil(dock.component)            # and the tool that places it (hidden)
     if BUILD_WIRING:                                # toggle these two components' light bulbs to hide the wiring
         wiring = [build_head_wiring(head.component), build_dock_wiring(elec, mh)]
     else:
@@ -2116,7 +2071,7 @@ def run(context):
         if o.component.name == 'USB-C plugs (toggle)': o.deleteMe()
     fitted = [build_ts_strips(elec), build_pw_socket(elec), build_plug(elec), build_status_led(elec), build_led_tile(elec)]
     refs = build_pogo_ref(root)
-    colour_all(des, app, head.component, elec, wiring + [p1, p2] + fitted + refs + [logo, sten])
+    colour_all(des, app, head.component, elec, wiring + [p1, p2] + fitted + refs + [logo])
     fin = {}
     fin.update(finish_shell([o for o in dock.component.occurrences if o.component.name == 'Dock shell'][0]))
     fin.update(finish_tray([o for o in head.component.occurrences if o.component.name == 'Head tray'][0]))
@@ -2126,7 +2081,7 @@ def run(context):
     lumps = {}
     for top in (head, dock):
         for o in top.component.occurrences:
-            if o.component.bRepBodies.count == 1 and 'wiring' not in o.component.name and 'Logo' not in o.component.name and 'stencil' not in o.component.name:
+            if o.component.bRepBodies.count == 1 and 'wiring' not in o.component.name:
                 lumps[o.component.name] = o.component.bRepBodies.item(0).lumps.count
     print(json.dumps({'lumps_must_all_be_1': lumps, 'inkplate_insertion_blocked_mm3': insertion_sweep(t), 'cover_pullout_blocked_mm3': cover_pullout(t, c), 'head tray': bb_mm(t.boundingBox), 'head cover': bb_mm(c.boundingBox),
                       'dock chassis': bb_mm(ch.boundingBox), 'dock shell': bb_mm(sh.boundingBox),

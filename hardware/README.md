@@ -18,8 +18,8 @@ On the desk it is 150.7 × 87.3 × 89.8 mm. One USB-C cable powers both halves.
 
 | In this folder | |
 |---|---|
-| `stl/`, `step/`, `3mf/` | The six printed parts, in print orientation (STEP is upright in each part's own frame). |
-| `canary-logo.svg`, `canary-stencil.svg` | The logo's outlines and the stencil's, in millimetres, imported by the script. |
+| `stl/`, `step/`, `3mf/` | The five printed parts, in print orientation (STEP is upright in each part's own frame). |
+| `canary-logo.svg` | The logo's outline, in millimetres, imported by the script. |
 | `canary-logo-screen.svg` | The logo as drawn, without the changes for printing: the head's splash screen. |
 | `images/` | Views of the model and the wiring drawings, used by the guides. |
 | `wiring/` | The circuit as text, one file per run of wire, for [WireViz](https://github.com/wireviz/WireViz). `render.sh` draws them into `images/`. |

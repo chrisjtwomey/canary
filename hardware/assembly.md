@@ -43,11 +43,11 @@ TinyS3's strips are glued in. Each step draws its own wires, so the circuit come
 
 
 ![The dock chassis, straight off the printer](images/step-01-printed-parts.png)
-Six pieces. Each is drawn to print without supports in one orientation, and only in that one —
+Five pieces. Each is drawn to print without supports in one orientation, and only in that one —
 [enclosure.md](enclosure.md#parts) gives it.
 
 1. Print the head tray, the head back cover, the dock chassis and the dock shell in PLA+ with a 0.4 mm nozzle.
-2. Print the logo pieces and the stencil in white with a 0.2 mm nozzle, on their own plate.
+2. Print the logo in white with a 0.2 mm nozzle, on its own plate.
 
 ## 2. Set the heat-set inserts
 
@@ -258,13 +258,12 @@ the board's own USB-C sits behind the dock's side wall while the head is docked.
 
 
 ![The logo in the recess in the front face](images/step-11-logo.png)
-White letters, 0.8 mm thick and 8 mm tall, in the pill recess in the shell's front face. They are separate
-pieces, and the stencil holds each one in place while the glue takes.
+One white piece, 0.8 mm thick, in the pill recess in the shell's front face: a border, the emblem and the
+letters, and a line under the letters that holds them together.
 
-1. Set the stencil into the recess, its handles resting on the face at each end.
-2. Put a little glue on the back of each piece, and drop it through its own opening.
-3. Press each piece flush with the face.
-4. Lift the stencil straight out before the glue sets.
+1. Put a thin layer of glue on the back of the logo.
+2. Set it into the recess, the right way up.
+3. Press it flush with the face, and hold it until the glue takes.
 
 ## 12. First power-up
 

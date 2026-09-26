@@ -1,18 +1,19 @@
 """The CANARY logo as SVG outlines: for the enclosure, and for the head's panel.
 
-From the drawn logo (canary-source.jpeg) to two files enclosure.py imports:
-canary-logo.svg, the five white pieces glued into the dock's pill recess, and
-canary-stencil.svg, the plate that places them. Both are drawn for a flat
-print on a 0.2 mm nozzle: every line at least --line wide, every gap at least
---gap, the letters spaced --spacing apart so the stencil's walls between them
-print. A third, canary-logo-screen.svg, is the drawing with none of that, for
-the head's splash screen (server/pages/splash.py).
+From the drawn logo (canary-source.jpeg) to canary-logo.svg, which
+enclosure.py imports: the logo as one white piece glued into the dock's pill
+recess. It is drawn for a flat print on a 0.2 mm nozzle: every line at least
+--line wide, every gap at least --gap, the letters spaced --spacing further
+apart. A second file, canary-logo-screen.svg, is the drawing with none of
+that, for the head's splash screen (server/pages/splash.py).
 
     python3 -m venv .venv && .venv/bin/pip install pillow numpy scipy scikit-image potracer
-    .venv/bin/python hardware/logo/trace.py --height 8 --pill 35 10
+    .venv/bin/python hardware/logo/trace.py --height 8 --pill 35 9.6
 
-The stencil's opening for each piece is its outer outline plus --clearance;
-the insides of the letters are left out, so the stencil has no loose islands.
+The piece is the pill, --fit smaller all round, as a border --border wide.
+The emblem reaches the border at its top and bottom and joins it there; a
+line --bar tall under the letters, from the emblem's A to the Y, holds the
+rest.
 """
 from __future__ import annotations
 
@@ -93,37 +94,39 @@ def to_svg(m: np.ndarray, ppm: float, path: str) -> int:
     return len(plist)
 
 
-def stencil(m: np.ndarray, ppm: float, pill_l: float, pill_h: float, fit: float, clearance: float) -> np.ndarray:
-    """The pill, fit smaller all round, minus each piece's outer outline grown by clearance."""
+def runs(row: np.ndarray) -> list[tuple[int, int]]:
+    """The first and last column of each stretch of True in row."""
+    edges = np.flatnonzero(np.diff(np.concatenate(([0], row.astype(np.int8), [0]))))
+    return list(zip(edges[::2], edges[1::2] - 1))
+
+
+def one_piece(m: np.ndarray, ppm: float, pill_l: float, pill_h: float, fit: float, border: float, bar: float,
+              gap: float) -> np.ndarray:
+    """The pieces in a border that is the pill, fit smaller all round, with a line under the letters that
+    overlaps the highest foot by 0.1 mm. Gaps narrower than gap close, which joins the emblem to the border."""
     ys, xs = np.nonzero(m)
     cx, cy = (xs.min() + xs.max()) / 2, (ys.min() + ys.max()) / 2   # the logo's centre is the pill's
-    pad = int(round(pill_l * ppm))
+    pad = int(round(pill_h * ppm))
     m = np.pad(m, pad)
     cx, cy = cx + pad, cy + pad
     yy, xx = np.mgrid[0:m.shape[0], 0:m.shape[1]]
     x, y = (xx - cx) / ppm, (yy - cy) / ppm
-    r = pill_h / 2 - fit
-    a = pill_l / 2 - fit - r
-    plate = ((np.abs(x) <= a) & (np.abs(y) <= r)) | ((np.abs(x) - a).clip(0) ** 2 + y ** 2 <= r * r)
+    def pill(inset: float) -> np.ndarray:
+        r = pill_h / 2 - inset
+        return (np.abs(x) - (pill_l - pill_h) / 2).clip(0) ** 2 + y ** 2 <= r * r
+    outer = pill(fit)
     lab, n = ndi.label(m)
-    openings = np.zeros_like(m)
-    for k in range(1, n + 1):
-        openings |= ndi.binary_fill_holes(lab == k)
-    openings = ndi.binary_dilation(openings, structure=disk(int(round(clearance * ppm))))
-    st = plate & ~openings
-    lab2, n2 = ndi.label(st)
-    sizes = ndi.sum(st, lab2, range(1, n2 + 1))
-    st = lab2 == (1 + int(np.argmax(sizes)))                        # the frame; any island would be loose
-    ys, xs = np.nonzero(st)
-    return st[ys.min() - 4:ys.max() + 5, xs.min() - 4:xs.max() + 5]
-
-
-def one_piece_ignoring(m: np.ndarray, ppm: float, width_mm: float) -> bool:
-    """Whether m stays connected when every part narrower than width_mm is ignored."""
-    core = ndi.binary_opening(m, structure=disk(max(1, int(round(width_mm * ppm / 2)))))
-    lab, n = ndi.label(core)
-    sizes = sorted(ndi.sum(core, lab, range(1, n + 1)), reverse=True)
-    return n == 1 or (len(sizes) > 1 and sizes[1] / ppm ** 2 < 0.2)
+    order = sorted(range(1, n + 1), key=lambda k: np.nonzero(lab == k)[1].min())
+    emblem, letters = lab == order[0], [lab == k for k in order[1:]]
+    feet = [np.nonzero(p)[0].max() for p in letters]
+    top = min(feet) - int(round(0.1 * ppm))
+    a_left_leg = runs(emblem[top])[-2]                                # the emblem's last two strokes on that row are the A's legs
+    y_foot = letters[-1] & (yy >= feet[-1] - int(round(0.15 * ppm)))
+    line = (yy >= top) & (yy < top + int(round(bar * ppm))) & (xx >= a_left_leg[0]) & (xx <= np.nonzero(y_foot)[1].max())
+    s = m | (outer & ~pill(fit + border)) | line
+    s = ndi.binary_closing(s, structure=disk(int(round(gap * ppm / 2)))) & outer
+    ys, xs = np.nonzero(s)
+    return s[ys.min() - 4:ys.max() + 5, xs.min() - 4:xs.max() + 5]
 
 
 def main() -> None:
@@ -134,10 +137,11 @@ def main() -> None:
     ap.add_argument("--line", type=float, default=0.3, help="thinnest stroke, mm")
     ap.add_argument("--gap", type=float, default=0.25, help="narrowest gap, mm")
     ap.add_argument("--spacing", type=float, default=0.7, help="extra space between letters, mm")
-    ap.add_argument("--pill", type=float, nargs=2, default=(35.0, 10.0), metavar=("L", "H"), help="the recess, mm")
-    ap.add_argument("--fit", type=float, default=0.15, help="the stencil's clearance to the recess, mm")
-    ap.add_argument("--clearance", type=float, default=0.15, help="an opening's clearance to its piece, mm")
-    ap.add_argument("--out", default=os.path.dirname(here), help="where the three SVGs go")
+    ap.add_argument("--pill", type=float, nargs=2, default=(35.0, 9.6), metavar=("L", "H"), help="the recess, mm")
+    ap.add_argument("--fit", type=float, default=0.25, help="the piece's clearance to the recess, all round, mm")
+    ap.add_argument("--border", type=float, default=0.6, help="the border's width, mm")
+    ap.add_argument("--bar", type=float, default=0.45, help="the line under the letters, its height, mm")
+    ap.add_argument("--out", default=os.path.dirname(here), help="where the two SVGs go")
     args = ap.parse_args()
 
     m = ink_mask(args.image)
@@ -145,17 +149,14 @@ def main() -> None:
     print("screen: %d outlines -> canary-logo-screen.svg" % to_svg(m, ppm, os.path.join(args.out, "canary-logo-screen.svg")))
     m = space_letters(m, ppm, args.spacing)
     m = printable(m, ppm, args.line, args.gap)
-    lab, n = ndi.label(m)
-    holes = ndi.label(~np.pad(m, 1))[1] - 1
-    w = m.shape[1] / ppm
-    print("logo: %.1f x %.1f mm, %d pieces, %d holes, thinnest stroke %.2f mm" % (w, args.height, n, holes, hairline_mm(m, ppm)))
+    print("letters: %.1f x %.1f mm, %d pieces, thinnest stroke %.2f mm" % (m.shape[1] / ppm, args.height,
+          ndi.label(m)[1], hairline_mm(m, ppm)))
+    m = one_piece(m, ppm, args.pill[0], args.pill[1], args.fit, args.border, args.bar, args.gap)
+    n = ndi.label(m)[1]
+    if n != 1:
+        raise SystemExit("logo: %d pieces, not one" % n)
+    print("logo: %.2f x %.2f mm, one piece" % ((m.shape[1] - 8) / ppm, (m.shape[0] - 8) / ppm))
     print("  outlines: %d -> %s" % (to_svg(m, ppm, os.path.join(args.out, "canary-logo.svg")), "canary-logo.svg"))
-
-    st = stencil(m, ppm, args.pill[0], args.pill[1], args.fit, args.clearance)
-    ok = one_piece_ignoring(st, ppm, 0.4)
-    print("stencil: %.1f x %.1f mm, %s" % (st.shape[1] / ppm, st.shape[0] / ppm,
-          "one piece ignoring everything under 0.4 mm" if ok else "BREAKS into pieces under 0.4 mm"))
-    print("  outlines: %d -> %s" % (to_svg(st, ppm, os.path.join(args.out, "canary-stencil.svg")), "canary-stencil.svg"))
 
 
 if __name__ == "__main__":

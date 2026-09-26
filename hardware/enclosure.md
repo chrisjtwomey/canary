@@ -7,8 +7,8 @@ Designed in Fusion (project **CANARY**, design **CANARY**); `enclosure.py` regen
 placement and the wiring layers from the numbers in this file. [assembly.md](assembly.md) builds it, and
 [bom.md](bom.md) lists what goes in it.
 
-The four enclosure parts print in **PLA+ with a 0.4 mm nozzle**; `logo` and `logo-stencil` need the **0.2 mm
-nozzle** and go on their own plate, the logo in white.
+The four enclosure parts print in **PLA+ with a 0.4 mm nozzle**; `logo` needs the **0.2 mm nozzle** and
+goes on its own plate, in white.
 
 On the desk: **150.7 wide × 87.3 deep × 89.8 tall mm**. The dock's top is one plane, 33.9 mm tall at the front
 edge and 25 mm at the rear, 5.15°. The rear is set by the TinyS3's USB-C under the skin; over the PMSA003I's
