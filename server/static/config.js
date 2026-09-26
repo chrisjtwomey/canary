@@ -735,6 +735,11 @@
       location.assign('config?' + location.hash);
     });
   });
+  // The empty query comes off again, or the next Discard would name the
+  // address the page is at and only jump to the fragment.
+  if (/\?$/.test(location.href.split('#')[0])) {
+    history.replaceState(history.state, '', location.pathname + location.hash);
+  }
 
   window.addEventListener('beforeunload', function (e) {
     if (leaving || changedIn(document).length === 0) return;
