@@ -755,14 +755,15 @@
     e.returnValue = '';
   });
 
-  // A check's result, with the save it offers: the save goes through the
-  // same review as the save bar's button.
+  // A check's result, with the save it offers. It lists what the save
+  // changes, so the save goes ahead without the review the save bar's
+  // button asks for.
   var notice = document.getElementById('notice');
   if (notice && notice.showModal) {
     notice.addEventListener('close', function () {
       if (notice.returnValue !== 'save') return;
       var button = document.querySelector('form:not([hidden]) .savebar button[value=save]');
-      if (button) button.click();
+      if (button && !button.disabled) save(button.form, button);
     });
     notice.showModal();
   }

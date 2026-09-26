@@ -66,7 +66,9 @@ VISUAL_CAPTIONS = {
 # its line, and whether it offers the save. Without scripts the note stays a
 # banner.
 NOTICES = {
-    "No problems found.": ("No problems found", "Save and restart to apply it.", True),
+    "No problems found.": ("No problems found", "Save and restart to apply these changes.",
+                           True),
+    "Nothing to save.": ("No changes", "config.yaml already says this.", False),
 }
 
 # One wording for the state, whether it is a banner or a refused save.
@@ -110,6 +112,7 @@ class View:
     report: Report = field(default_factory=Report)
     dock: DockState | None = None
     head: dict | None = None        # the head's panel as it reports it: width, height, board
+    changes: list[dict] = field(default_factory=list)   # what a check found a save would change
 
 
 @dataclass
@@ -499,6 +502,19 @@ def _recalibrate(a: Airium, state: DockState, report: Report, sheet: bool = Fals
             a.p(klass="help", id="recalibrate-state", _t=_recalibration_words(state))
 
 
+def _changes_table(a: Airium, changes: list[dict]) -> None:
+    """Each change as its setting, what it was and what it becomes."""
+    with a.div(klass="changes-box"):
+        with a.table(klass="changes"):
+            with a.tbody():
+                for c in changes:
+                    with a.tr():
+                        a.th(_t=c["name"])
+                        a.td(klass="old", _t=c["old"])
+                        a.td(klass="to", _t="→")
+                        a.td(klass="new", _t=c["new"])
+
+
 def _savebar(a: Airium, writable: bool, status: str, *, discard: bool) -> None:
     with a.footer(klass="savebar"):
         a.p(klass="status", _t=status, **{"aria-live": "polite",
@@ -728,10 +744,15 @@ def config_html(pages: list[EnvPage], view: View, writable: bool,
                                  _t="Save and restart")
             if view.note in NOTICES:
                 title, lead, offers_save = NOTICES[view.note]
-                with a.dialog(id="notice", **{"aria-labelledby": "notice-title"}):
+                if offers_save and not view.changes:
+                    lead = "Only comments and layout change. Save and restart to apply them."
+                with a.dialog(id="notice", **{"aria-labelledby": "notice-title"},
+                              **({"klass": "with-changes"} if view.changes else {})):
                     with a.form(method="dialog"):
                         a.h2(klass="label", id="notice-title", _t=title)
                         a.p(klass="lead", _t=lead)
+                        if view.changes:
+                            _changes_table(a, view.changes)
                         with a.div(klass="choice"):
                             a.button(value="close", autofocus="autofocus", _t="Close",
                                      **({} if offers_save else {"klass": "primary"}))
@@ -954,7 +975,11 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
             return jsonify(changes=cf.changes(cf.read(current), cf.read(text)),
                            same=text == current)
         if action != "save":
-            view.note = "No problems found."
+            if text == current:
+                view.note = "Nothing to save."
+            else:
+                view.note = "No problems found."
+                view.changes = cf.changes(cf.read(current), cf.read(text))
             return page(view)
         if text == current:
             if wants_json:

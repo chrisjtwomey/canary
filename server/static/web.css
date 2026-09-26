@@ -1705,6 +1705,10 @@ html:not(.js) .rows .remove {
   width: min(420px, calc(100vw - 32px));
 }
 
+#notice.with-changes {
+  width: min(640px, calc(100vw - 32px));
+}
+
 /* With scripts the note opens as #notice instead. */
 html.js #note {
   display: none;

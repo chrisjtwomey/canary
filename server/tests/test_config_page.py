@@ -175,9 +175,34 @@ def test_check_says_so_and_changes_nothing(client, path, restarts):
     assert one(soup_of(rsp), "#note").get_text() == "No problems found."
     notice = one(soup_of(rsp), "dialog#notice")
     assert one(notice, "#notice-title").get_text() == "No problems found"
-    assert one(notice, ".lead").get_text() == "Save and restart to apply it."
+    assert one(notice, ".lead").get_text() == "Save and restart to apply these changes."
+    assert "Display · Pools · co2" in [th.get_text() for th in notice.select(".changes th")]
     assert [b.get_text() for b in notice.select("button")] == ["Close", "Save and restart"]
     assert open(path).read() == GOOD and restarts == []
+
+
+def test_check_lists_each_change_as_save_would(client, path, restarts):
+    write(path, WITH_DISPLAY)
+    soup = soup_of(client.get("/web/config"))
+    rsp = client.post("/web/config", data={**posted(soup, server__port="9090"), "action": "check"})
+
+    notice = one(soup_of(rsp), "dialog#notice")
+    assert "with-changes" in notice["class"]
+    assert [[c.get_text() for c in tr.select("th, td")] for tr in notice.select(".changes tr")] \
+        == [["Server · Port", "8080", "→", "9090"]]
+    assert open(path).read() == WITH_DISPLAY and restarts == []
+
+
+def test_check_of_the_file_as_it_is_offers_no_save(client, path, restarts):
+    write(path, WITH_DISPLAY)
+    soup = soup_of(client.get("/web/config"))
+    rsp = client.post("/web/config", data={**posted(soup), "action": "check"})
+
+    notice = one(soup_of(rsp), "dialog#notice")
+    assert one(notice, "#notice-title").get_text() == "No changes"
+    assert one(notice, ".lead").get_text() == "config.yaml already says this."
+    assert notice.select(".changes") == []
+    assert [b.get_text() for b in notice.select("button")] == ["Close"]
 
 
 @pytest.mark.parametrize("text, words", [
