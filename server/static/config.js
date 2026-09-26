@@ -487,23 +487,27 @@
     var file = row.querySelector('input[type=file]');
     var button = row.querySelector('button');
     // The picker is the button, and the dialog asks about replacing.
-    file.hidden = true;
-    row.querySelector('.over').hidden = true;
+    row.querySelector('.pick').hidden = true;
 
     function say(words, bad) {
-      var p = row.querySelector('p') || row.appendChild(document.createElement('p'));
-      p.className = bad ? 'error' : 'help';
+      var p = row.querySelector('.report') || row.appendChild(document.createElement('p'));
+      p.className = 'report ' + (bad ? 'error' : 'help');
       p.textContent = words;
     }
 
-    function downloadable(answer) {
-      var box = document.querySelector('[data-export="' + store + '"]');
-      var link = box.querySelector('.button');
-      box.querySelector('.unit').textContent = answer.shown;
-      link.classList.remove('off');
-      link.removeAttribute('aria-disabled');
-      link.setAttribute('href', 'config/export/' + store);
-      link.setAttribute('download', 'download');
+    // What the store holds now: its line, its Download link and the disk.
+    function held(answer) {
+      var value = document.querySelector('[data-contents="' + store + '"] .value');
+      value.textContent = '';
+      answer.contents.forEach(function (part, i) {
+        if (i) value.appendChild(document.createTextNode(' · '));
+        value.appendChild(document.createElement('span')).textContent = part;
+      });
+      row.querySelector('[data-export]').hidden = !answer.records;
+      var disk = document.getElementById('visual-disk');
+      if (!disk) return;
+      disk.setAttribute('data-disk', JSON.stringify(answer.disk));
+      disk.dispatchEvent(new Event('held', { bubbles: true }));
     }
 
     function ask(answer) {
@@ -546,7 +550,7 @@
             return;
           }
           say(got.answer.words, got.answer.bad);
-          if (!got.answer.bad) downloadable(got.answer);
+          if (!got.answer.bad) held(got.answer);
           // Picking the same file again says nothing unless the input is empty.
           file.value = '';
         })

@@ -27,6 +27,7 @@ import contextlib
 import json
 import os
 import shutil
+import time
 import zoneinfo
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -42,7 +43,7 @@ import dock_settings as ds
 from html_doc import Html
 from pages.base import EnvPage
 from metrics import age_span
-from transfer import Corrupt, Overlap, Transfer
+from transfer import Corrupt, Held, Overlap, Transfer
 from web import menu_bar, page_head
 
 # The most an imported file may weigh.
@@ -60,6 +61,7 @@ VISUAL_CAPTIONS = {
              "Drag the round handle to resize it; click a dot to move it.",
     "slot": "The time before one sync. "
             "Drag the fan band's left edge; past the start, the fan never stops.",
+    "disk": "The lower bar is the files' part of the disk, drawn larger.",
 }
 
 # What a check or a save that changed nothing says, as a dialog's heading,
@@ -108,7 +110,9 @@ class View:
     status: str = ""                # the save bar's words, when no note says more
     tab: str = ""                   # the tab to open; empty lets the URL choose
     unreadable: str = ""            # why the form cannot show this file
-    sizes: dict[str, int] = field(default_factory=dict)      # store -> the download's bytes
+    held: dict[str, Held] = field(default_factory=dict)      # what each store holds
+    now: float = 0.0                # the epoch the store ages are measured to
+    disk: tuple[int, int] | None = None     # the stores' disk: total and free bytes
     report: Report = field(default_factory=Report)
     dock: DockState | None = None
     head: dict | None = None        # the head's panel as it reports it: width, height, board
@@ -380,45 +384,96 @@ def _field(a: Airium, f: cf.Field, view: View, images: list[str], heading: str,
             a.p(klass="error", id="e-" + _id(f.key)[2:], _t=error)
 
 
-def _size(count: int) -> str:
-    """A download's size, near enough to choose by."""
-    if count <= 0:
-        return "empty"
+def _bytes(count: int) -> str:
+    """"512 bytes", "64 kB", "3.1 MB", "412 GB": as sheet.js writes them."""
     if count < 1000:
-        return f"≈ {count} bytes"
-    if count < 1_000_000:
-        return f"≈ {count / 1000:.0f} kB"
-    return f"≈ {count / 1_000_000:.1f} MB"
+        return f"{count} bytes"
+    for unit, size in (("GB", 10**9), ("MB", 10**6)):
+        if count >= size:
+            n = count / size
+            return f"{n:.0f} {unit}" if n >= 100 else f"{n:.1f}".removesuffix(".0") + f" {unit}"
+    return f"{count / 1000:.0f} kB"
 
 
-def _export(a: Airium, store: str, size: int) -> None:
-    """The row that downloads a store, greyed out while it holds nothing."""
-    with a.div(klass="field", **{"data-export": store}):
+def _since(oldest: float, now: float) -> str:
+    """"since 09:14" today, "since 3 Sep" this year, "since 3 Sep 2025" before."""
+    t, today = datetime.fromtimestamp(oldest), datetime.fromtimestamp(now)
+    if t.date() == today.date():
+        return f"since {t:%H:%M}"
+    return f"since {t.day} {t:%b}" + ("" if t.year == today.year else f" {t.year}")
+
+
+def _contents_parts(held: Held, now: float) -> list[str]:
+    """["48,210 records", "3.1 MB", "since 3 Sep"], or that there are none."""
+    if not held.records:
+        return ["No records yet."]
+    parts = [f"{held.records:,} record{'' if held.records == 1 else 's'}", _bytes(held.size)]
+    if held.oldest is not None:
+        parts.append(_since(held.oldest, now))
+    return parts
+
+
+def _contents(a: Airium, store: str, view: View) -> None:
+    """What the store's file holds, as a line of the sheet."""
+    with a.div(klass="field contents", **{"data-contents": store}):
         with a.div(klass="head"):
-            a.span(klass="name", _t="Export")
+            a.span(klass="name", _t="Contents")
+        a.span(klass="leader", **{"aria-hidden": "true"})
         with a.div(klass="control"):
-            a.a(klass="button" if size else "button off", _t="Download",
-                **({"href": f"config/export/{store}", "download": "download"} if size
-                   else {"aria-disabled": "true"}))
-            a.span(klass="unit", _t=_size(size) if size else "No records yet.")
+            # Each part in a span of its own, so a line breaks between them.
+            with a.span(klass="value"):
+                for i, part in enumerate(_contents_parts(view.held[store], view.now)):
+                    if i:
+                        a(" · ")
+                    a.span(_t=part)
 
 
-def _import(a: Airium, store: str, report: Report) -> None:
-    """The row that takes a file back in. Its controls belong to the form
-    beside the settings form, because a form cannot hold another."""
+def _transfer(a: Airium, store: str, held: Held, report: Report) -> None:
+    """The store's file out and back in, as two links under its heading;
+    Download shows once the store holds a record. Upload's controls belong
+    to the form beside the settings form, because a form cannot hold
+    another. config.js hides the file input and Replace, and asks instead."""
     form = f"import-{store}"
-    with a.div(klass="field", **{"data-import": store}):
-        with a.div(klass="head"):
-            a.label(klass="name", for_=f"file-{store}", _t="Import")
-        with a.div(klass="control"):
+    with a.div(klass="transfer", **{"data-import": store}):
+        with a.p(klass="links"):
+            a.a(klass="link", href=f"config/export/{store}", download="download",
+                _t="Download", **{"data-export": store},
+                **({} if held.records else {"hidden": "hidden"}))
+            a.button(type="submit", klass="link", form=form, _t="Upload")
+        with a.p(klass="pick"):
             a.input(type="file", id=f"file-{store}", name="file", form=form,
-                    accept=".jsonl,application/x-ndjson")
+                    accept=".jsonl,application/x-ndjson", **{"aria-label": "File to upload"})
             with a.label(klass="over"):
                 a.input(type="checkbox", name="replace", value="true", form=form)
                 a.span(_t="Replace")
-            a.button(type="submit", klass="button", form=form, _t="Upload")
         if report.store == store:
-            a.p(klass="error" if report.bad else "help", _t=report.words)
+            a.p(klass="report error" if report.bad else "report help", _t=report.words)
+
+
+# Each store's name, as its group on the Storage tab heads it, in the tab's order.
+STORE_NAMES = {g.store: g.heading for t in cf.TABS for g in t.groups if g.store}
+
+
+def _disk_usage(stores: dict[str, Transfer]) -> tuple[int, int] | None:
+    """The total and free bytes of the disk the first store's file is on;
+    None without stores, or when the disk cannot be read."""
+    for store in stores.values():
+        try:
+            usage = shutil.disk_usage(os.path.dirname(os.path.abspath(store.path)))
+        except OSError:
+            return None
+        return usage.total, usage.free
+    return None
+
+
+def _disk_data(held: dict[str, Held], disk: tuple[int, int] | None) -> dict:
+    """What the disk drawing draws: each store's name and bytes, and the
+    disk's total and free bytes when they are known."""
+    data: dict[str, Any] = {"stores": [{"name": name, "size": held[store].size}
+                                       for store, name in STORE_NAMES.items() if store in held]}
+    if disk is not None:
+        data["total"], data["free"] = disk
+    return data
 
 
 def _settings_line(a: Airium, state: DockState) -> None:
@@ -603,6 +658,7 @@ def _group(a: Airium, g: cf.Group, view: View, images: list[str], locked: bool,
     lines, the part under the measurement, the heading and its line keep to
     their column, and the group's drawing, when it has one, comes before its
     fields."""
+    stored = g.store in view.held
     with a.div(klass="heading") if sheet else _nothing():
         if g.heading and sheet and " · " in g.heading:
             title, part = g.heading.split(" · ", 1)
@@ -613,18 +669,25 @@ def _group(a: Airium, g: cf.Group, view: View, images: list[str], locked: bool,
             a.h2(klass="group label", _t=g.heading)
         if g.heading and g.about:
             a.p(klass="about", _t=g.about)
+        if stored:
+            _transfer(a, g.store, view.held[g.store], view.report)
     with a.div(klass=f"content visual-{g.visual}" if g.visual else "content") if sheet \
             else _nothing():
         if sheet and g.visual:
             # A dial draws the schedule its group holds.
             key = next((f.key for f in g.fields if f.kind == "clock"), "")
+            marks = {"data-schedule": key} if key else {}
+            if g.visual == "disk":
+                marks["data-disk"] = json.dumps(_disk_data(view.held, view.disk),
+                                                separators=(",", ":"))
             with a.div(klass="visual"):
                 a.canvas(id="-".join(["visual", g.visual, *key.split(".")]) if key
                          else f"visual-{g.visual}",
-                         **{"data-visual": g.visual, "aria-hidden": "true"},
-                         **({"data-schedule": key} if key else {}))
+                         **{"data-visual": g.visual, "aria-hidden": "true"}, **marks)
                 a.p(klass="caption", _t=g.caption or VISUAL_CAPTIONS[g.visual])
         with a.div(klass="fields"):
+            if stored:
+                _contents(a, g.store, view)
             for when, fields in _runs(g.fields, sheet):
                 boxed = when and len(fields) > 1
                 with a.div(klass="subsection", **{"data-when": when}) if boxed else _nothing():
@@ -635,9 +698,6 @@ def _group(a: Airium, g: cf.Group, view: View, images: list[str], locked: bool,
                 _position(a, g, view, locked)
             if g.action == "head":
                 _head_size(a, view)
-            if g.store in view.sizes:
-                _export(a, g.store, view.sizes[g.store])
-                _import(a, g.store, view.report)
             if g.action == "recalibrate" and view.dock is not None:
                 _recalibrate(a, view.dock, view.report, sheet)
 
@@ -714,7 +774,7 @@ def config_html(pages: list[EnvPage], view: View, writable: bool,
                                     else:
                                         _group(a, g, view, images, locked)
                         _savebar(a, writable, status, discard=True)
-                    for store in view.sizes:
+                    for store in view.held:
                         a.form(method="post", action=f"config/import/{store}",
                                enctype="multipart/form-data", id=f"import-{store}")
                     if view.dock is not None:
@@ -820,7 +880,9 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
             return None
 
     def page(view: View, status: int = 200):
-        view.sizes = {name: store.size() for name, store in stores.items()}
+        view.held = {name: store.held() for name, store in stores.items()}
+        view.now = time.time()
+        view.disk = _disk_usage(stores)
         if dock is not None and view.dock is None:
             view.dock = dock_state(dock)
         if boards is not None:
@@ -880,11 +942,13 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
                           advice="Tick Replace and choose the file again.")
         except FileNotFoundError:
             return answer("This server does not keep those records.", 404, bad=True)
-        size = store.size()
+        held = {n: s.held() for n, s in stores.items()}
         words = f"Added {counts['added']:,} of {counts['total']:,} records."
         if counts["held"]:
             words += f" {counts['held']:,} replaced."
-        return answer(words, size=size, shown=_size(size), **counts)
+        return answer(words, contents=_contents_parts(held[name], time.time()),
+                      records=held[name].records, disk=_disk_data(held, _disk_usage(stores)),
+                      **counts)
 
     @bp.errorhandler(413)
     def too_big(exc):

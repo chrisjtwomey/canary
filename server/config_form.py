@@ -82,9 +82,10 @@ class Group:
     once rather than saving; ``position``, a grid that sets the group's two
     alignments together; or ``head``, the size the head reports. ``visual``
     names a drawing of the group's values that can also set them: ``dial``,
-    the day's syncs, ``slot``, the time before one sync, or ``panel``,
-    the image and its drawn area. ``caption`` says what the drawing shows,
-    when the page's own words for it do not. ``about`` is the line under the
+    the day's syncs, ``slot``, the time before one sync, ``panel``, the
+    image and its drawn area. ``disk``, the space the stores take on the
+    server's disk, only shows. ``caption`` says what the drawing shows, when
+    the page's own words for it do not. ``about`` is the line under the
     heading that says what the group is for."""
     heading: str
     fields: tuple[Field, ...]
@@ -219,6 +220,8 @@ TABS: tuple[Tab, ...] = (
         )),
     ), sheet=True),
     Tab("storage", "Storage", (
+        Group("Disk", about="The space the files below take on the server's disk", fields=(),
+              visual="disk"),
         Group("Sensor readings", about="The dock's readings, kept on the server", fields=(
             Field("source.path", "File", "", "text", "sensor-readings.db"),
             Field("source.keep_days", "Delete after", "0 = never.", "number", 0, unit="days",
@@ -239,7 +242,7 @@ TABS: tuple[Tab, ...] = (
             Field("calibration.keep_days", "Delete after", "0 = never.", "number", 3, unit="days",
                   minimum=0),
         ), store="calibration"),
-    )),
+    ), sheet=True),
     Tab("firmware", "Firmware", (
         Group("Updates", about="Whether the server offers new firmware to the boards", fields=(
             Field("client.firmware.enabled", "Update boards", "", "bool", False),

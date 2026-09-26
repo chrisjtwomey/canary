@@ -1,10 +1,11 @@
 /* The drawings on the Config page's sheet tabs, with rough.js for the
    hand-drawn look the pages have: a day of syncs or page changes as a
-   dial, the time before one sync as a strip, and the image with its
-   drawn area as a panel. Each is drawn from the settings form's inputs,
-   and dragging one writes the inputs, so the form stays what a save
-   sends. A locked input, such as an offline dock's, cannot be dragged.
-   The position grid sets the drawn area's two alignments the same way. */
+   dial, the time before one sync as a strip, the image with its drawn
+   area as a panel, and the space the stores take on the disk. The first
+   three are drawn from the settings form's inputs, and dragging one
+   writes the inputs, so the form stays what a save sends. A locked
+   input, such as an offline dock's, cannot be dragged. The position
+   grid sets the drawn area's two alignments the same way. */
 (function () {
   'use strict';
 
@@ -526,6 +527,113 @@
     set('image.innerHeight', snap(span(y, g.Y, g.H, DOWN[s.y]) / g.k, s.h));
   };
 
+  // ── The disk: the space the stores' files take ───────────────────
+  // The disk as a bar, the part in use hatched and the files' part solid at
+  // its start. Under it the files' part is drawn larger, as a detail view is
+  // on a drawing: a section a file, sized by its bytes and filled its own
+  // way, and a key to the fills below. It only shows.
+  var FILLS = [
+    { fillStyle: 'hachure', fill: G[3] },
+    { fillStyle: 'cross-hatch', fill: G[4] },
+    { fillStyle: 'dots', fill: G[3] },
+    { fillStyle: 'solid', fill: G[5] }
+  ];
+
+  function bytes(n) {
+    if (n < 1000) return n + ' bytes';
+    var units = [['GB', 1e9], ['MB', 1e6]];
+    for (var i = 0; i < units.length; i++) {
+      if (n >= units[i][1]) {
+        var v = n / units[i][1];
+        return (v >= 100 ? v.toFixed(0) : v.toFixed(1).replace(/\.0$/, '')) + ' ' + units[i][0];
+      }
+    }
+    return (n / 1000).toFixed(0) + ' kB';
+  }
+
+  function Disk(canvas) {
+    this.canvas = canvas;
+  }
+
+  Disk.prototype.data = function () {
+    try {
+      return JSON.parse(this.canvas.getAttribute('data-disk') || '{}');
+    } catch (e) {
+      return {};
+    }
+  };
+
+  Disk.prototype.draw = function () {
+    var d = this.data(), stores = d.stores || [];
+    var width = this.canvas.getBoundingClientRect().width;
+    if (!width) return;
+    var L = 4, R = width - 4;
+    var cols = Math.max(1, Math.min(stores.length, Math.floor((R - L) / 130)));
+    var rows = Math.ceil(stores.length / cols);
+    var known = d.total > 0;
+    var top = known ? 78 : 4, keyTop = top + 26 + 18;
+    this.canvas.style.height = (keyTop + rows * 40) + 'px';
+    var p = prepare(this.canvas);
+    if (!p.w) return;
+
+    var files = stores.reduce(function (sum, s) { return sum + s.size; }, 0);
+    if (known) {
+      var used = d.total - d.free;
+      var usedX = L + (used / d.total) * (R - L);
+      var markX = Math.min(usedX, L + Math.max(4, (files / d.total) * (R - L)));
+      text(p.ctx, bytes(used) + ' used', L, 10, { size: 13, italic: true, align: 'left', color: G[3] });
+      text(p.ctx, bytes(d.free) + ' free of ' + bytes(d.total), R, 10,
+           { size: 14, italic: true, align: 'right', color: G[1] });
+      p.rc.rectangle(L, 22, usedX - L, 20, { stroke: 'none', fill: G[4], fillStyle: 'hachure',
+                                             hachureGap: 5, roughness: 1.1 });
+      p.rc.rectangle(L, 22, markX - L, 20, { stroke: 'none', fill: G[0], fillStyle: 'solid',
+                                             roughness: 0.6 });
+      p.rc.rectangle(L, 22, R - L, 20, { stroke: G[1], strokeWidth: 1.4, roughness: 1.1 });
+      p.ctx.save();
+      p.ctx.setLineDash([3, 4]);
+      p.ctx.strokeStyle = G[3];
+      p.ctx.beginPath();
+      p.ctx.moveTo(L, 44);
+      p.ctx.lineTo(L, top - 2);
+      p.ctx.moveTo(markX, 44);
+      p.ctx.lineTo(R, top - 2);
+      p.ctx.stroke();
+      p.ctx.restore();
+      text(p.ctx, 'Files: ' + bytes(files), R, top - 12,
+           { size: 13, italic: true, align: 'right', color: G[2], halo: true });
+    }
+
+    // Each file at least wide enough to see, the rest shared by size.
+    var least = 6, shown = stores.filter(function (s) { return s.size > 0; });
+    var room = R - L - least * shown.length;
+    var x = L;
+    stores.forEach(function (s, i) {
+      if (!(s.size > 0)) return;
+      var w = least + (files ? room * s.size / files : 0);
+      p.rc.rectangle(x, top, w, 26, Object.assign({ stroke: 'none', hachureGap: 7,
+                                                    fillWeight: 0.8, roughness: 1.1 },
+                                                  FILLS[i % FILLS.length]));
+      if (x > L) p.rc.line(x, top, x, top + 26, { stroke: G[1], strokeWidth: 1.2, roughness: 0.6 });
+      x += w;
+    });
+    p.rc.rectangle(L, top, R - L, 26, { stroke: G[1], strokeWidth: 1.6, roughness: 1.1 });
+    if (!files) {
+      text(p.ctx, 'No files yet.', (L + R) / 2, top + 13, { size: 13, italic: true, color: G[3] });
+    }
+
+    // The key: a swatch filled as its section is, the file's name and bytes.
+    var slot = (R - L) / cols;
+    stores.forEach(function (s, i) {
+      var kx = L + (i % cols) * slot, ky = keyTop + Math.floor(i / cols) * 40;
+      p.rc.rectangle(kx, ky, 18, 18, Object.assign({ stroke: G[1], strokeWidth: 1, hachureGap: 5,
+                                                     fillWeight: 0.8, roughness: 0.8 },
+                                                   FILLS[i % FILLS.length]));
+      text(p.ctx, s.name, kx + 26, ky + 8, { size: 14, italic: true, align: 'left', color: G[1] });
+      text(p.ctx, s.size > 0 ? bytes(s.size) : 'no file yet', kx + 26, ky + 26,
+           { size: 13, italic: true, align: 'left', color: G[3] });
+    });
+  };
+
   // ── The position grid ────────────────────────────────────────────
   var grids = Array.prototype.slice.call(form.querySelectorAll('.grid3'));
   grids.forEach(function (grid) {
@@ -554,6 +662,7 @@
     if (kind === 'dial') drawings.push(new Dial(canvas));
     if (kind === 'slot') drawings.push(new Strip(canvas));
     if (kind === 'panel') drawings.push(new Panel(canvas));
+    if (kind === 'disk') drawings.push(new Disk(canvas));
   });
   if (!drawings.length && !grids.length) return;
 
@@ -563,6 +672,8 @@
   }
   form.addEventListener('input', redraw);
   form.addEventListener('change', redraw);
+  // config.js says so when an import changes what the stores hold.
+  form.addEventListener('held', redraw);
   // A canvas on a closed tab has no size; it draws when its tab opens.
   if (typeof ResizeObserver !== 'undefined') {
     var seen = new ResizeObserver(redraw);

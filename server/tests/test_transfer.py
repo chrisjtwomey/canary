@@ -3,9 +3,9 @@ import json
 import os
 
 import pytest
-from epd_server import ReadingsStore
+from epd_server import LogStore, ReadingsStore
 
-from transfer import Corrupt, Overlap, Transfer
+from transfer import Corrupt, Held, Overlap, Transfer
 from sources.calibration import CalibrationStore
 
 AT = 1_758_000_000
@@ -44,38 +44,31 @@ def test_a_document_keeps_everything_the_board_sent(readings):
     assert docs(readings)[2] == {"device": "dock", "ts": AT + 60, "co2": 700}
 
 
-def test_the_size_is_what_the_download_weighs(readings):
-    exact = sum(len(line.encode()) for line in readings.lines())
-    assert readings.size() == exact
+def test_the_size_is_what_the_file_takes_on_disk(readings, db):
+    assert readings.held().size == os.path.getsize(db)
 
 
-def test_the_size_of_a_big_store_is_taken_from_a_sample(tmp_path, monkeypatch):
-    monkeypatch.setattr("transfer.SAMPLE_ROWS", 10)
-    path = str(tmp_path / "big.db")
-    store = ReadingsStore(path)
-    store.add_many([{"device": "dock", "ts": AT + i, "co2": 700} for i in range(200)])
-    store.close()
-    export = Transfer("sensor-readings", path)
-    exact = sum(len(line.encode()) for line in export.lines())
-    assert abs(export.size() - exact) < exact * 0.02
+def test_it_counts_the_documents_and_finds_the_oldest(readings):
+    held = readings.held()
+    assert (held.records, held.oldest) == (3, AT)
 
 
 def test_a_store_that_does_not_exist_yet_holds_nothing(tmp_path):
     export = Transfer("sensor-readings", str(tmp_path / "none.db"))
-    assert export.size() == 0
+    assert export.held() == Held()
     assert list(export.lines()) == []
 
 
 def test_reading_a_store_does_not_create_the_file(tmp_path):
     path = str(tmp_path / "none.db")
-    Transfer("sensor-readings", path).size()
+    Transfer("sensor-readings", path).held()
     assert not os.path.exists(path)
 
 
-def test_a_store_with_no_documents_has_no_size(tmp_path):
+def test_a_store_with_no_documents_holds_none_but_its_file_takes_space(tmp_path):
     path = str(tmp_path / "empty.db")
     ReadingsStore(path).close()
-    assert Transfer("sensor-readings", path).size() == 0
+    assert Transfer("sensor-readings", path).held() == Held(0, os.path.getsize(path), None)
 
 
 def test_a_calibration_copy_comes_back_with_its_columns(tmp_path):
@@ -85,6 +78,26 @@ def test_a_calibration_copy_comes_back_with_its_columns(tmp_path):
     assert docs(Transfer("calibration", path, "calibration")) == [
         {"device": "dock", "sensor": "bme688", "saved": AT, "accuracy": 3, "state": "QUJD",
          "sample_s": 300}]
+
+
+def test_a_calibration_copy_is_as_old_as_its_save(tmp_path):
+    path = str(tmp_path / "calibration.db")
+    store = CalibrationStore(path, keep_days=0, now=lambda: float(AT))
+    for saved in (AT - 600, AT):
+        store.add("dock", {"bme688": {"state": "QUJD", "accuracy": 3, "saved": saved,
+                                      "sample_s": 300}})
+    held = Transfer("calibration", path, "calibration").held()
+    assert (held.records, held.oldest) == (2, AT - 600)
+
+
+def test_a_log_line_is_as_old_as_its_arrival(tmp_path):
+    path = str(tmp_path / "board-logs.db")
+    arrivals = iter([AT + 5.5, AT + 9.0])
+    store = LogStore(path, now=lambda: next(arrivals))
+    store.add("dock", "one")
+    store.add("dock", "two")
+    held = Transfer("board-logs", path, "logs").held()
+    assert (held.records, held.oldest) == (2, AT + 5.5)
 
 
 def test_the_documents_go_back_into_a_store_unchanged(readings, tmp_path):

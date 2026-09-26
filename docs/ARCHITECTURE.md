@@ -338,7 +338,7 @@ server/
   web.py                       /web/: the pages in a browser, the explorer, and GET /history
   config_page.py               /web/config: config.yaml as a form in tabs and as text, checked, saved, and restarted on
   config_form.py               the form's fields, and how a filled-in form edits config.yaml
-  transfer.py                  a store out to a file and back in, from the Storage tab
+  transfer.py                  a store out to a file and back in, and what it holds, for the Storage tab
   schedule.py                  the dock's reading slots, slower overnight (§3.3)
   dock_settings.py             the dock block and GET /board-settings (§3.8)
   sources/                     the mock room, readings ingest, calibration store, device status, sea-level pressure
@@ -480,3 +480,4 @@ Dated decisions and status behind the text above, oldest first.
 - **2026-09-25**: the LED's dark hours became its schedule, `dock.led.schedule`, the hours it is on, so each schedule on the tabs says when something happens rather than when it does not. Without one the light is on all day.
 - **2026-09-26**: the page schedule became ranges round the clock and the head's sync a plain interval, the other way round from before. What changes through the day is when the page should change, with none at night, while a sync only has to happen often enough. epd's `display.schedule` gained `type: timeranges`, which replaced `interval`, since one range all day does what `interval` did, and the ranges moved into epd as `TimeRanges`, since the page schedule is epd's; canary imports it for the dock's sync. A slot is a whole minute, so the page cannot change faster than once a minute.
 - **2026-09-26**: the looks gained a double and a triple of both the flash and the pulse, as named patterns rather than a count and a pause on every row, so a row stays three fields and each name says what it looks like. A new one needs the dock's firmware and the server both. The row's interval became its length, one cycle of the pattern, which reads the same for all of them: for a triple it is the group and the dark after it.
+- **2026-09-26**: the Storage tab is a spec sheet like the Dock tab. Each store shows its records, its file's size on disk and the date of its oldest record, and the tab opens with a drawing of the server's disk, used and free, with the files' part drawn larger below it, since at a few MB it would not show on a bar hundreds of GB long. The size is the file's on disk rather than an estimate of the download, so the drawing and the line agree and one number stands for each file. The disk is the one the first store's file is on: in a container, the one its folder is mounted from.

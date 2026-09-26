@@ -9,6 +9,7 @@ put a document over one that is already there unless it is told to.
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable, Iterator
@@ -21,8 +22,6 @@ from sources.calibration import MAX_ACCURACY, SAMPLE_S, SENSORS
 # Rows read, written or asked about in one go. Three key columns a row keeps
 # the question about a batch under any SQLite's limit on how many values it takes.
 ROWS_AT_A_TIME = 300
-# How many lines the size of a download is measured from.
-SAMPLE_ROWS = 500
 # How long a write waits for the server's own connection to finish.
 BUSY_SECONDS = 30
 
@@ -102,18 +101,29 @@ class Kind:
     keys: tuple[str, ...]           # the columns a document is kept under
     insert: tuple[str, ...]         # the columns a row is written to
     row: Callable[[Any], tuple]
+    time: str                       # the epoch its keep_days is counted from
 
 
 KINDS = {
     "readings": Kind("readings", ("doc",), "ts", ("device", "ts"),
-                     ("device", "ts", "doc"), _readings_row),
+                     ("device", "ts", "doc"), _readings_row, "ts"),
     "calibration": Kind("calibration", ("device", "sensor", "saved", "accuracy", "state", "sample_s"),
                         "saved", ("device", "sensor", "saved"),
                         ("device", "sensor", "saved", "accuracy", "state", "sample_s"),
-                        _calibration_row),
+                        _calibration_row, "saved"),
     "logs": Kind("lines", ("board", "received", "level", "text"), "id",
-                 ("board", "received", "text"), ("board", "received", "level", "text"), _logs_row),
+                 ("board", "received", "text"), ("board", "received", "level", "text"), _logs_row,
+                 "received"),
 }
+
+
+@dataclass(frozen=True)
+class Held:
+    """What a store holds: how many documents, the bytes its file takes on
+    disk, and the epoch of the oldest document, None while it holds none."""
+    records: int = 0
+    size: int = 0
+    oldest: float | None = None
 
 
 class Transfer:
@@ -134,27 +144,18 @@ class Transfer:
     def table(self) -> str:
         return self.kind.table
 
-    def size(self) -> int:
-        """About how many bytes the download is: the length of the first
-        :data:`SAMPLE_ROWS` lines, over how many documents are held. 0 when
-        the store holds nothing or the file is not there yet.
-
-        A sample, so the page costs the same to draw whether the store holds
-        a day or a year.
-        """
+    def held(self) -> Held:
+        """What the store holds; nothing when the file is not there yet. An
+        empty store's file still takes its bytes."""
         db = self._open("ro")
         if db is None:
-            return 0
+            return Held()
         try:
-            held = db.execute(f"SELECT COUNT(*) FROM {self.table}").fetchone()[0]
-            if not held:
-                return 0
-            rows = db.execute(f"SELECT {self._columns} FROM {self.table}"
-                              f" LIMIT {SAMPLE_ROWS}").fetchall()
-            each = sum(len(self._line(row).encode()) for row in rows) / len(rows)
-            return round(each * held)
+            records, oldest = db.execute(
+                f"SELECT COUNT(*), MIN({self.kind.time}) FROM {self.table}").fetchone()
         finally:
             db.close()
+        return Held(records, os.path.getsize(self.path), oldest)
 
     def lines(self) -> Iterator[str]:
         """Each document as a line of JSON, oldest first."""

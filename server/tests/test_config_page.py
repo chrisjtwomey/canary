@@ -4,14 +4,16 @@ import io
 import json
 import os
 import stat
+from datetime import datetime
+from types import SimpleNamespace
 
 import pytest
 from bs4 import BeautifulSoup
 from epd_server import ReadingsStore
 from flask import Flask
 
-from config_page import config_blueprint
-from transfer import Corrupt, Overlap, Transfer
+from config_page import _bytes, _contents_parts, _since, config_blueprint
+from transfer import Corrupt, Held, Overlap, Transfer
 from server import check_config, make_pages
 from tests.html import attr, one
 
@@ -314,24 +316,75 @@ def stores(tmp_path):
 
 
 @pytest.fixture
-def exporting(path, restarts, tz, stores):
+def exporting(path, restarts, tz, stores, monkeypatch):
+    monkeypatch.setattr("config_page.time.time", lambda: 1_758_086_460.0)
     app = Flask(__name__)
     app.register_blueprint(config_blueprint(make_pages(tz, width=1280, height=720), path,
                                             check_config, lambda: restarts.append(1), stores))
     return app.test_client()
 
 
+def contents(soup, store):
+    """The Contents line's words, spaced as the browser shows them."""
+    return " ".join(one(soup, f'[data-contents="{store}"] .value').get_text().split())
+
+
 def test_a_store_with_documents_offers_them_as_a_download(exporting):
     soup = soup_of(exporting.get("/web/config"))
-    row = one(soup, '[data-export="sensor-readings"]')
-    assert attr(one(row, "a.button"), "href") == "config/export/sensor-readings"
-    assert one(row, ".unit").get_text().startswith("≈ ")
+    link = one(soup, '[data-export="sensor-readings"]')
+    assert attr(link, "href") == "config/export/sensor-readings"
+    assert not link.has_attr("hidden")
+    assert contents(soup, "sensor-readings").startswith("2 records · ")
 
 
-def test_a_store_holding_nothing_cannot_be_downloaded(exporting):
-    row = one(soup_of(exporting.get("/web/config")), '[data-export="board-reports"]')
-    assert not one(row, "a.button").has_attr("href")
-    assert one(row, ".unit").get_text() == "No records yet."
+def test_a_store_holding_nothing_offers_no_download(exporting):
+    soup = soup_of(exporting.get("/web/config"))
+    assert one(soup, '[data-export="board-reports"]').has_attr("hidden")
+    assert contents(soup, "board-reports") == "No records yet."
+
+
+def disk_of(client):
+    return json.loads(attr(one(soup_of(client.get("/web/config")), "canvas#visual-disk"),
+                           "data-disk"))
+
+
+def test_the_disk_drawing_has_each_stores_file_in_the_tabs_order(exporting, stores):
+    disk = disk_of(exporting)
+    assert disk["stores"] == [
+        {"name": "Sensor readings", "size": os.path.getsize(stores["sensor-readings"].path)},
+        {"name": "Board reports", "size": 0}]
+
+
+def test_the_disk_drawing_has_the_disks_total_and_free_bytes(exporting, monkeypatch):
+    monkeypatch.setattr("config_page.shutil.disk_usage", lambda path: SimpleNamespace(
+        total=500 * 10**9, used=88 * 10**9, free=412 * 10**9))
+    disk = disk_of(exporting)
+    assert (disk["total"], disk["free"]) == (500 * 10**9, 412 * 10**9)
+
+
+def test_a_disk_that_cannot_be_read_leaves_only_the_files(exporting, monkeypatch):
+    def unreadable(path):
+        raise PermissionError(path)
+    monkeypatch.setattr("config_page.shutil.disk_usage", unreadable)
+    assert "total" not in disk_of(exporting)
+
+
+def test_contents_counts_the_records_and_says_since_when():
+    now = datetime(2026, 9, 26, 12, 0).timestamp()
+    held = Held(48_210, 3_100_000, datetime(2026, 9, 3, 9, 14).timestamp())
+    assert _contents_parts(held, now) == ["48,210 records", "3.1 MB", "since 3 Sep"]
+    assert _contents_parts(Held(1, 120, now), now) == ["1 record", "120 bytes", "since 12:00"]
+
+
+def test_bytes_are_written_as_a_person_reads_them():
+    assert [_bytes(n) for n in (999, 64_400, 3_140_000, 46_020_000_000, 412_300_000_000)] == [
+        "999 bytes", "64 kB", "3.1 MB", "46 GB", "412 GB"]
+
+
+def test_since_names_the_year_only_when_it_is_not_this_one():
+    now = datetime(2026, 9, 26, 12, 0).timestamp()
+    assert _since(datetime(2026, 9, 26, 9, 14).timestamp(), now) == "since 09:14"
+    assert _since(datetime(2025, 12, 31, 23, 0).timestamp(), now) == "since 31 Dec 2025"
 
 
 def test_the_download_is_every_document_of_that_store(exporting):
@@ -347,8 +400,9 @@ def test_a_store_the_page_does_not_offer_is_not_served(exporting):
     assert exporting.get("/web/config/export/config.yaml").status_code == 404
 
 
-def test_without_stores_the_storage_tab_has_no_export_row(client):
-    assert soup_of(client.get("/web/config")).select("[data-export]") == []
+def test_without_stores_the_storage_tab_offers_no_download(client):
+    soup = soup_of(client.get("/web/config"))
+    assert soup.select("[data-export]") == [] and soup.select("[data-contents]") == []
 
 
 def sending(client, store, docs, **form):
@@ -369,7 +423,8 @@ def test_a_file_of_new_records_goes_in_and_says_how_many(exporting):
     rsp = sending(exporting, "sensor-readings", [{"device": "dock", "ts": 1_758_000_600, "co2": 800}])
     assert rsp.status_code == 200
     assert rsp.json["words"] == "Added 1 of 1 records."
-    assert rsp.json["shown"].startswith("≈ ")
+    assert (rsp.json["contents"][0], rsp.json["records"]) == ("3 records", 3)
+    assert rsp.json["disk"]["stores"][0]["name"] == "Sensor readings"
 
 
 def test_records_the_store_holds_stop_the_import_and_say_so(exporting):
@@ -412,7 +467,7 @@ def test_a_page_that_cannot_ask_gets_the_answer_under_the_row(exporting):
                          content_type="multipart/form-data",
                          data={"file": (io.BytesIO(text.encode()), "readings.jsonl")})
     row = one(soup_of(rsp), '[data-import="sensor-readings"]')
-    assert one(row, "p").get_text() == "Added 1 of 1 records."
+    assert one(row, ".report").get_text() == "Added 1 of 1 records."
 
 
 # ── The Dock tab ────────────────────────────────────────────────────

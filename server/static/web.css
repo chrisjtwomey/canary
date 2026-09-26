@@ -815,6 +815,16 @@ html.js .field.by-position {
   display: none;
 }
 
+/* Only scripts draw, so without them a drawing and its caption go, and its
+   group's fields take the whole width. */
+html:not(.js) .panel.sheet .visual {
+  display: none;
+}
+
+html:not(.js) .panel.sheet .content {
+  display: block;
+}
+
 .panel.sheet .visual canvas {
   display: block;
   width: 100%;
@@ -840,6 +850,77 @@ html.js .field.by-position {
 
 .panel.sheet .visual-slot .visual canvas {
   height: 110px;
+}
+
+/* The disk and the files on it, as wide as the lines below; sheet.js
+   sets the height the key needs. */
+.panel.sheet .visual-disk .visual {
+  max-width: 560px;
+}
+
+.panel.sheet .visual-disk .visual canvas {
+  height: 180px;
+}
+
+/* What a store's file holds: read, not set. */
+.panel.sheet .field.contents .value {
+  font-style: italic;
+  color: var(--ink-mid);
+}
+
+.panel.sheet .field.contents .value span {
+  white-space: nowrap;
+}
+
+/* A store's file out and back in, under its heading. Only a page without
+   config.js shows the file input and Replace: with it, Upload is the
+   picker and a dialog asks about replacing. */
+.transfer {
+  margin-top: 12px;
+}
+
+.transfer .links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+}
+
+.transfer .pick {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+
+.transfer .pick input[type="file"] {
+  max-width: 100%;
+}
+
+.transfer .pick .over {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-style: italic;
+  color: var(--ink-mid);
+}
+
+.transfer .report {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.35;
+  color: var(--ink-mid);
+}
+
+.transfer .report.error {
+  padding-left: 8px;
+  font-style: normal;
+  color: var(--ink);
+  border-left: 3px solid var(--ink);
 }
 
 .panel.sheet .fields {
@@ -1029,22 +1110,6 @@ html.js .field.by-position {
   color: var(--ink-faint);
   border-color: var(--ink-faint);
   cursor: default;
-}
-
-/* Only a page without config.js shows these: with it, the button is the
-   picker and the dialog asks about overwriting. */
-.field .control input[type="file"] {
-  max-width: 100%;
-  font-size: 13px;
-}
-
-.field .control .over {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 14px;
-  font-style: italic;
-  color: var(--ink-mid);
 }
 
 form:empty {

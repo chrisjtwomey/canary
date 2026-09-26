@@ -106,7 +106,8 @@ no login yet, so anyone who can reach the server can change its config.
 The Storage tab downloads each store as a file, one JSON document a line,
 and takes such a file back. A store keeps a document under its board and its
 time, so an import adds what is missing and asks before it puts anything
-over what is held.
+over what is held. The tab also shows what each store holds, and the space
+the files take on the server's disk.
 
 Selenium needs a chromedriver that matches Chrome. If a stale one is on
 your PATH (Homebrew's, say) it is used and fails; `brew upgrade
