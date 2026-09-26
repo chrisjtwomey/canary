@@ -120,17 +120,21 @@ LED_PATTERN_LABELS = {p: p.replace("_", " ").capitalize() for p in ds.LED_PATTER
 
 TABS: tuple[Tab, ...] = (
     Tab("server", "Server", (
-        Group("", (
+        Group("Network", about="Where the boards and browsers reach the server", fields=(
             Field("server.port", "Port", "", "int", 8080, minimum=1, maximum=65535),
+        )),
+        Group("Pages", about="When the server draws each page", fields=(
             Field("server.regen_lead_seconds", "Pre-render pages", "Before each page change.", "int", 120,
                   unit="seconds", minimum=0),
-            Field("debug", "Debug log", "", "bool", False),
         )),
         Group("Location", about="Where the device is, for its local time and sea-level pressure", fields=(
             Field("server.timezone", "Time zone", "", "zone", lambda cfg: host_zone()),
             Field("site.altitude_m", "Altitude", "", "number", 0, unit="m"),
         )),
-    )),
+        Group("Log", about="How much the server writes to its log", fields=(
+            Field("debug", "Debug log", "", "bool", False),
+        )),
+    ), sheet=True),
     Tab("display", "Display", (
         Group("Page schedule", about="When to change to the next page", fields=(
             Field("display.schedule.ranges", "Page schedule",
@@ -246,19 +250,20 @@ TABS: tuple[Tab, ...] = (
     Tab("firmware", "Firmware", (
         Group("Updates", about="Whether the server offers new firmware to the boards", fields=(
             Field("client.firmware.enabled", "Update boards", "", "bool", False),
-            Field("client.firmware.dir", "Folder", "", "text", "firmware"),
+            Field("client.firmware.dir", "Folder", "", "text", "firmware",
+                  when="client.firmware.enabled=true"),
         )),
-    )),
+    ), sheet=True),
     Tab("mqtt", "MQTT", (
-        Group("", (
-            Field("mqtt.enabled", "Board logs", "Keep what boards log over MQTT, and show it on Logs.",
-                  "bool", False),
-            Field("mqtt.host", "Host", "", "text", "localhost"),
-            Field("mqtt.port", "Port", "", "int", 1883, minimum=1, maximum=65535),
+        Group("Board logs", about="What the boards log over MQTT, kept for the Logs page", fields=(
+            Field("mqtt.enabled", "Keep logs", "", "bool", False),
+            Field("mqtt.host", "Host", "", "text", "localhost", when="mqtt.enabled=true"),
+            Field("mqtt.port", "Port", "", "int", 1883, minimum=1, maximum=65535,
+                  when="mqtt.enabled=true"),
             Field("mqtt.prefix", "Prefix", "Each board logs to <prefix>/<board>.", "text",
-                  "mqtt/canary"),
+                  "mqtt/canary", when="mqtt.enabled=true"),
         )),
-    )),
+    ), sheet=True),
 )
 
 FIELDS: tuple[Field, ...] = tuple(f for t in TABS for f in t.fields)
