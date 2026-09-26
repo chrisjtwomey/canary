@@ -74,16 +74,20 @@
 
   // The dock's schedule, which the strip draws the time before a sync of,
   // and the light's schedule, which only the dock's dial draws.
-  var SYNC = 'dock.sync';
-  var LIGHT = { 'dock.sync': 'dock.led.schedule' };
+  var SYNC = 'dock.sync.week';
+  var LIGHT = { 'dock.sync.week': 'dock.led.schedule' };
   // What a dial's count is of, for one and for more; a sync by default.
-  var COUNTS = { 'display.schedule.ranges': ['page a day', 'pages a day'] };
+  var COUNTS = { 'display.schedule.week': ['page a day', 'pages a day'] };
 
-  // A schedule's ranges from the form's rows, in order of their starts:
-  // each {start, every, row}, the interval in seconds, 0 for off.
+  // The ranges of the group of days a schedule shows, from the form's rows,
+  // in order of their starts: each {start, every, row}, the interval in
+  // seconds, 0 for off.
   function ranges(key) {
     var out = [];
-    form.querySelectorAll('fieldset[data-key="' + key + '"] .list > .row').forEach(function (row) {
+    var week = form.querySelector('fieldset[data-key="' + key + '"]');
+    var group = week && (week.querySelector('.group:not([hidden])') || week.querySelector('.group'));
+    if (!group) return out;
+    group.querySelectorAll('.list > .row').forEach(function (row) {
       var start = minutesOf(row.querySelector('input[type=time]').value);
       var every = parseInt(row.querySelector('input[type=number]').value, 10) * 60;
       if (!isNaN(start)) out.push({ start: start, every: every >= 0 ? every : 0, row: row });
@@ -97,6 +101,13 @@
     var at = list[list.length - 1];
     list.forEach(function (r) { if (r.start <= minute) at = r; });
     return at;
+  }
+
+  // Whether a schedule's ranges cannot be changed, as an offline dock's cannot.
+  function scheduleLocked(key) {
+    var first = ranges(key)[0];
+    var el = first && first.row.querySelector('input[type=time]');
+    return !el || el.disabled;
   }
 
   function schedule(key) {
@@ -187,7 +198,7 @@
     if (!p.w) return;
     var g = this.geometry(), cx = g.cx, cy = g.cy, R = g.R;
     var s = schedule(this.key);
-    var fixed = locked(this.key + '.from');
+    var fixed = scheduleLocked(this.key);
     var ink = fixed ? G[4] : G[1];
 
     s.ranges.forEach(function (r, i) {
@@ -261,7 +272,7 @@
 
   Dial.prototype.down = function (e) {
     var s = schedule(this.key);
-    if (s.ranges.length < 2 || locked(this.key + '.from')) return;
+    if (s.ranges.length < 2 || scheduleLocked(this.key)) return;
     var r = this.canvas.getBoundingClientRect(), g = this.geometry();
     var x = e.clientX - r.left, y = e.clientY - r.top;
     for (var i = 0; i < s.ranges.length; i++) {
@@ -672,8 +683,9 @@
   }
   form.addEventListener('input', redraw);
   form.addEventListener('change', redraw);
-  // config.js says so when an import changes what the stores hold.
-  form.addEventListener('held', redraw);
+  // config.js asks for one when what a drawing shows changes without an
+  // input: an import, or another group of days chosen.
+  form.addEventListener('redraw', redraw);
   // A canvas on a closed tab has no size; it draws when its tab opens.
   if (typeof ResizeObserver !== 'undefined') {
     var seen = new ResizeObserver(redraw);

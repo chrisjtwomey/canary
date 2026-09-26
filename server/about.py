@@ -14,7 +14,7 @@ from epd_server import __version__ as library_version
 from epd_server.config import FirmwareSettings
 from epd_server.firmware import FirmwareStore
 
-from epd_server.timeranges import TimeRanges
+from epd_server.timeranges import Week
 
 
 class About:
@@ -32,7 +32,7 @@ class About:
 
     def __init__(self, version: str, firmware: FirmwareSettings | None = None,
                  now: Callable[[], float] = time.time,
-                 syncs: dict[str, TimeRanges] | None = None):
+                 syncs: dict[str, Week] | None = None):
         self.version = version
         self.firmware = firmware
         self.now = now
@@ -53,10 +53,10 @@ class About:
         }
 
     def _sync(self, now: float) -> dict | None:
-        """Each board's ranges and the seconds to its next slot."""
+        """Each board's week of ranges and the seconds to its next slot."""
         if not self.syncs:
             return None
-        return {board: {"ranges": sync.describe(), "next_s": sync.seconds_until_next(now)}
+        return {board: {"week": sync.describe(), "next_s": sync.seconds_until_next(now)}
                 for board, sync in self.syncs.items()}
 
     def _firmware(self) -> dict | None:

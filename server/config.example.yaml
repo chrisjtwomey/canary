@@ -22,9 +22,12 @@ display:
     diagnostics: [diagnostics.png, diagnostics-trace.png, health-trace.png]
   schedule:
     type: timeranges
-    ranges:         # when the page changes, in server.timezone: each range runs until the next
-                    # starts, slots on the wall clock (:00, :05 ...); every: 0 is off
-      - {from: "00:00", every: 300}
+    week:           # when the page changes, in server.timezone: each day is in one group, and
+                    # each range runs until the next starts that day, slots on the wall clock
+                    # (:00, :05 ...); every: 0 is off
+      - days: [mon, tue, wed, thu, fri, sat, sun]
+        ranges:
+          - {from: "00:00", every: 300}
     reshuffle_hours: 3
 
 image:
@@ -50,10 +53,13 @@ head:               # the board with the panel
     every: 1800     # seconds, on the wall clock from midnight; 0 for only beside each page
 
 dock:               # what the dock does between readings; it takes a change before its next one
-  sync:             # when it takes a reading and syncs, in server.timezone: each range runs until
-                    # the next starts, slots on the wall clock (:00, :05 ...); every: 0 is off
-    - {from: "01:00", every: 1800}
-    - {from: "07:00", every: 300}
+  sync:             # when it takes a reading and syncs, in server.timezone
+    week:           # each day is in one group, and each range runs until the next starts that
+                    # day, slots on the wall clock (:00, :05 ...); every: 0 is off
+      - days: [mon, tue, wed, thu, fri, sat, sun]
+        ranges:
+          - {from: "01:00", every: 1800}
+          - {from: "07:00", every: 300}
   pm:
     warmup_s: 35    # the fan runs this long before each reading; 0 keeps it on
   scd41:

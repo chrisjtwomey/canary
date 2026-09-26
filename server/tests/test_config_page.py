@@ -8,6 +8,7 @@ from datetime import datetime
 from types import SimpleNamespace
 
 import pytest
+import yaml
 from bs4 import BeautifulSoup
 from epd_server import ReadingsStore
 from flask import Flask
@@ -19,13 +20,14 @@ from tests.html import attr, one
 
 GOOD = "server:\n  timezone: Europe/Dublin\nsource:\n  kind: mock\n"
 EDITED = "server:\n  timezone: Europe/Dublin\nsource:\n  kind: mock\n  seed: 9\n"
+EVERY_DAY = "      - days: [mon, tue, wed, thu, fri, sat, sun]\n        ranges:\n"
 UNKNOWN_PAGE = ("display:\n  pools:\n    co2: [radon.png]\n"
-                "  schedule:\n    type: timeranges\n    ranges:\n"
-                "      - {from: \"00:00\", every: 600}\n")
+                "  schedule:\n    type: timeranges\n    week:\n" + EVERY_DAY +
+                "          - {from: \"00:00\", every: 600}\n")
 WITH_DISPLAY = ("server:\n  port: 8080   # the port\n"
                 "display:\n  pools:\n    co2: [breathe.png, co2-trace.png]\n"
-                "  schedule:\n    type: timeranges\n    ranges:\n"
-                "      - {from: \"00:00\", every: 300}\n")
+                "  schedule:\n    type: timeranges\n    week:\n" + EVERY_DAY +
+                "          - {from: \"00:00\", every: 300}\n")
 
 
 @pytest.fixture
@@ -733,9 +735,10 @@ def test_each_time_input_has_a_button_for_the_pages_own_picker(dock_client):
     assert times and all(t.parent.name == "span" and "time" in t.parent["class"] for t in times)
     assert all(attr(t.find_next_sibling("button"), "aria-label") == "Choose a time"
                for t in times)
-    assert {attr(t, "name") for t in times} >= {"display.schedule.ranges.from", "dock.sync.from",
+    assert {attr(t, "name") for t in times} >= {"display.schedule.week.0.from",
+                                                "dock.sync.week.0.from",
                                                 "dock.led.schedule.from", "dock.led.schedule.to"}
-    template = one(soup, 'fieldset[data-key="dock.sync"] template')
+    template = one(soup, 'fieldset[data-key="dock.sync.week"] template')
     assert template.select_one(".time .pick") is not None
 
 
@@ -747,51 +750,72 @@ def test_the_display_tab_holds_the_heads_sync_as_one_interval(dock_client):
     assert one(panel, '[data-field="head.sync.every"] .unit').get_text() == "minutes"
 
 
-def test_the_page_schedule_is_a_row_for_each_range_beside_a_dial(dock_client, path, restarts):
+def test_the_page_schedule_is_a_week_of_groups_beside_a_dial(dock_client, path, restarts):
     write(path, WITH_DISPLAY)
     soup = soup_of(dock_client.get("/web/config"))
     panel = one(soup, "#panel-display")
-    box = one(panel, "fieldset.rows.clock")
+    box = one(panel, "fieldset.week")
 
-    assert attr(box, "data-key") == "display.schedule.ranges"
-    assert [attr(r.select_one("input[type=time]"), "value") for r in box.select(".list > .row")] \
+    assert attr(box, "data-key") == "display.schedule.week"
+    group = one(box, ".group")
+    assert attr(one(group, 'input[name="display.schedule.week.0.days"]'), "value") == \
+        "mon,tue,wed,thu,fri,sat,sun"
+    assert [attr(r.select_one("input[type=time]"), "value") for r in group.select(".list > .row")] \
         == ["00:00"]
-    assert attr(one(panel, "canvas[data-visual=dial]"), "data-schedule") == \
-        "display.schedule.ranges"
+    assert attr(one(panel, "canvas[data-visual=dial]"), "data-schedule") == "display.schedule.week"
     assert one(panel, ".visual .caption").get_text().startswith("Each tick is a page change.")
 
     data = posted(soup)
-    data["display.schedule.ranges.from"] = ["00:00", "23:00"]
-    data["display.schedule.ranges.every"] = ["60", "0"]
+    data["display.schedule.week.0.days"] = ["mon,tue,wed,thu,fri"]
+    data["display.schedule.week.0.from"] = ["00:00", "23:00"]
+    data["display.schedule.week.0.every"] = ["60", "0"]
+    data["display.schedule.week.1.days"] = ["sat,sun"]
+    data["display.schedule.week.1.from"] = ["09:00"]
+    data["display.schedule.week.1.every"] = ["10"]
     dock_client.post("/web/config", data={**data, "action": "save"})
 
     text = open(path).read()
-    assert ('    ranges:\n      - {from: "00:00", every: 3600}\n'
-            '      - {from: "23:00", every: 0}\n') in text
+    assert ('    week:\n      - days: [mon, tue, wed, thu, fri]\n        ranges:\n'
+            '          - {from: "00:00", every: 3600}\n          - {from: "23:00", every: 0}\n'
+            '      - days: [sat, sun]\n        ranges:\n'
+            '          - {from: "09:00", every: 600}\n') in text
     check_config(text)
 
 
-def test_the_sync_schedule_is_a_row_for_each_range(dock_client):
-    box = one(soup_of(dock_client.get("/web/config")), '#panel-dock fieldset.rows.clock')
+def test_the_sync_schedule_is_one_group_of_every_day_with_a_row_for_each_range(dock_client):
+    box = one(soup_of(dock_client.get("/web/config")), "#panel-dock fieldset.week")
+    rows = one(box, "fieldset.rows.clock")
 
-    assert attr(box, "data-key") == "dock.sync" and attr(box, "data-max") == "8"
+    assert attr(box, "data-key") == "dock.sync.week" and attr(rows, "data-max") == "8"
+    assert one(box, ".group-name").get_text() == "Every day"
+    days = box.select(".days button")
+    assert [b.get_text() for b in days] == list("MTWTFSS")
+    assert [attr(b, "aria-label") for b in days][:2] == ["Monday", "Tuesday"]
+    assert all(attr(b, "aria-pressed") == "true" for b in days)
     assert [(attr(r.select_one('input[type=time]'), "value"),
-             attr(r.select_one('input[type=number]'), "value")) for r in box.select(".list > .row")] \
+             attr(r.select_one('input[type=number]'), "value")) for r in rows.select(".list > .row")] \
         == [("01:00", "30"), ("07:00", "5")]
-    assert one(box, ".add").get_text() == "Add a time range" and box.select(".split") == []
+    assert one(rows, ".add").get_text() == "Add a time range"
 
 
-def test_a_split_schedule_is_saved_under_dock_one_range_to_a_line(dock_client, path, restarts):
-    soup = soup_of(dock_client.get("/web/config"))
-    data = posted(soup)
-    data["dock.sync.from"] = ["01:00", "07:00", "22:00"]
-    data["dock.sync.every"] = ["30", "5", "0"]
+def test_a_week_is_saved_under_dock_with_each_group_and_its_ranges(dock_client, path, restarts):
+    data = posted(soup_of(dock_client.get("/web/config")))
+    data["dock.sync.week.0.days"] = ["mon,tue,wed,thu,fri"]
+    data["dock.sync.week.0.from"] = ["01:00", "07:00", "22:00"]
+    data["dock.sync.week.0.every"] = ["30", "5", "0"]
+    data["dock.sync.week.1.days"] = ["sat,sun"]
+    data["dock.sync.week.1.from"] = ["00:00"]
+    data["dock.sync.week.1.every"] = ["30"]
 
     dock_client.post("/web/config", data={**data, "action": "save"})
 
     text = open(path).read()
-    assert ('  sync:\n    - {from: "01:00", every: 1800}\n    - {from: "07:00", every: 300}\n'
-            '    - {from: "22:00", every: 0}\n') in text
+    assert '- {from: "01:00", every: 1800}\n' in text and '- {from: "22:00", every: 0}\n' in text
+    assert yaml.safe_load(text)["dock"]["sync"]["week"] == [
+        {"days": ["mon", "tue", "wed", "thu", "fri"],
+         "ranges": [{"from": "01:00", "every": 1800}, {"from": "07:00", "every": 300},
+                    {"from": "22:00", "every": 0}]},
+        {"days": ["sat", "sun"], "ranges": [{"from": "00:00", "every": 1800}]}]
     check_config(text)
 
 
@@ -799,14 +823,15 @@ def test_a_split_schedule_is_saved_under_dock_one_range_to_a_line(dock_client, p
 @pytest.mark.parametrize("dock_offline", [True])
 def test_an_offline_dock_locks_its_schedule_and_another_tab_leaves_it(dock_client, path):
     with open(path, "a") as f:
-        f.write('dock:\n  sync:\n    - {from: "00:00", every: 600}\n')
+        f.write('dock:\n  sync:\n    week:\n      - days: [mon, tue, wed, thu, fri, sat, sun]\n'
+                '        ranges:\n          - {from: "00:00", every: 600}\n')
     soup = soup_of(dock_client.get("/web/config"))
-    box = one(soup, '#panel-dock fieldset.rows.clock')
+    box = one(soup, '#panel-dock fieldset.week')
     assert all(el.has_attr("disabled") for el in box.select("input, button"))
     looks = one(soup, '#panel-dock fieldset.rows.looks')
     assert all(el.has_attr("disabled") for el in looks.select("input, select, button"))
     assert all(b.has_attr("disabled") for b in box.select(".time .pick"))
-    head = one(soup, '#panel-display fieldset.rows.clock')
+    head = one(soup, '#panel-display fieldset.week')
     assert not any(el.has_attr("disabled") for el in head.select("input, button"))
 
     data = {k: v for k, v in posted(soup, source__seed="9").items() if not k.startswith("dock.")}

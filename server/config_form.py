@@ -26,8 +26,8 @@ from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 from ruamel.yaml.tokens import CommentToken
 
 import dock_settings as ds
-from epd_server.timeranges import MAX_RANGES
-from schedule import DEFAULT_DOCK_SYNC, DEFAULT_HEAD_SYNC_S, DEFAULT_PAGE_RANGES
+from epd_server.timeranges import DAYS, MAX_RANGES
+from schedule import DEFAULT_DOCK_WEEK, DEFAULT_HEAD_SYNC_S, DEFAULT_PAGE_WEEK
 
 # A key the file does not have.
 MISSING: Any = object()
@@ -48,7 +48,7 @@ class Field:
     key: str
     label: str
     help: str = ""
-    kind: str = "text"      # text zone int number bool choice time window pools order clock looks
+    kind: str = "text"      # text zone int number bool choice time window pools order week looks
     default: Any = None
     hint: str = ""
     choices: tuple[tuple[str, str], ...] = ()
@@ -137,9 +137,9 @@ TABS: tuple[Tab, ...] = (
     ), sheet=True),
     Tab("display", "Display", (
         Group("Page schedule", about="When to change to the next page", fields=(
-            Field("display.schedule.ranges", "Page schedule",
-                  "Each time range runs until the next one starts; 0 minutes = off.", "clock",
-                  DEFAULT_PAGE_RANGES, env=False),
+            Field("display.schedule.week", "Page schedule",
+                  "Each time range runs until the next one starts; 0 minutes = off.", "week",
+                  DEFAULT_PAGE_WEEK, env=False),
             Field("display.schedule.order", "Order", "", "order", lambda cfg: pool_names(cfg),
                   env=False),
             Field("display.schedule.reshuffle_hours", "Reshuffle",
@@ -179,9 +179,9 @@ TABS: tuple[Tab, ...] = (
     ), sheet=True),
     Tab("dock", "Dock", (
         Group("Sync schedule", about="How often to take a reading and update the server with it", fields=(
-            Field("dock.sync", "Sync schedule",
-                  "Each time range runs until the next one starts; 0 minutes = off.", "clock",
-                  DEFAULT_DOCK_SYNC, env=False),
+            Field("dock.sync.week", "Sync schedule",
+                  "Each time range runs until the next one starts; 0 minutes = off.", "week",
+                  DEFAULT_DOCK_WEEK, env=False),
         ), visual="dial", caption="Each tick is a sync and a reading. Hatching marks a time "
                                   "range that is off; the inner line, the light's schedule. "
                                   "Drag a time range's start to move it."),
@@ -359,7 +359,27 @@ def _pool_rows(v: Any) -> list[tuple[str, str]]:
 
 
 # The fields that are rows of inputs rather than one.
-ROWS = ("pools", "clock", "looks")
+ROWS = ("pools", "week", "looks")
+# Each day's name, short as a group's chip shows it, and whole.
+DAY_SHORT = {d: d.capitalize() for d in DAYS}
+DAY_LONG = dict(zip(DAYS, ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+                           "Sunday")))
+
+
+def days_words(days) -> str:
+    """"Every day", "Mon–Fri", "Sat–Sun", "Mon, Wed–Fri": a group's days,
+    Monday first, a run of two or more joined by a dash."""
+    picked = sorted({DAYS.index(d) for d in days if d in DAYS})
+    if len(picked) == len(DAYS):
+        return "Every day"
+    runs: list[list[int]] = []
+    for d in picked:
+        if runs and runs[-1][-1] == d - 1:
+            runs[-1].append(d)
+        else:
+            runs.append([d])
+    return ", ".join(DAY_SHORT[DAYS[r[0]]] if len(r) == 1
+                     else f"{DAY_SHORT[DAYS[r[0]]]}–{DAY_SHORT[DAYS[r[-1]]]}" for r in runs)
 # The light's schedule, a window the form edits as one switch and two times.
 LIGHT_KEY = "dock.led.schedule"
 LIGHT_PATH = ("dock", "led", "schedule")
@@ -385,6 +405,15 @@ def _clock_rows(v: Any) -> list[tuple[str, str]]:
     return rows
 
 
+def _week_rows(v: Any) -> list[tuple[str, list[tuple[str, str]]]]:
+    """A week as the form's groups: the days, as "mon,tue", and the group's rows."""
+    if not isinstance(v, list):
+        return []
+    return [(",".join(d for d in g["days"] if isinstance(d, str))
+             if isinstance(g.get("days"), list) else "",
+             _clock_rows(_in_order(g.get("ranges")))) for g in v if isinstance(g, dict)]
+
+
 def _look_rows(v: Any) -> list[tuple[str, str, str]]:
     """The light's looks as the form's rows: the trigger, the pattern and the
     length in seconds, which off and solid still have, unseen."""
@@ -396,15 +425,15 @@ def _look_rows(v: Any) -> list[tuple[str, str, str]]:
 
 def shown(cfg: dict) -> dict[str, Any]:
     """Each field's value as its input shows it: a string, or rows for the
-    pools, a schedule's ranges and the light's looks."""
+    pools, a schedule's groups of days and their ranges, and the light's looks."""
     out: dict[str, Any] = {}
     light = _light_block(cfg)
     for f in FIELDS:
         v = lookup(cfg, f.path)
         if f.kind == "pools":
             out[f.key] = _pool_rows(v)
-        elif f.kind == "clock":
-            out[f.key] = _clock_rows(_in_order(default_of(f, cfg) if v is MISSING else v))
+        elif f.kind == "week":
+            out[f.key] = _week_rows(_week_in_order(default_of(f, cfg) if v is MISSING else v))
         elif f.kind == "looks":
             out[f.key] = _look_rows(_looks_in_order(default_of(f, cfg) if v is MISSING else v))
         elif f.kind == "window":
@@ -441,14 +470,24 @@ def submitted(form) -> dict[str, Any]:
             continue
         if f.kind == "pools":
             out[f.key] = list(zip(form.getlist(f.key + ".name"), form.getlist(f.key + ".pages")))
-        elif f.kind == "clock":
-            out[f.key] = list(zip(form.getlist(f.key + ".from"), form.getlist(f.key + ".every")))
+        elif f.kind == "week":
+            out[f.key] = _submitted_week(form, f.key)
         elif f.kind == "looks":
             out[f.key] = list(zip(form.getlist(f.key + ".trigger"), form.getlist(f.key + ".pattern"),
                                   form.getlist(f.key + ".length_s")))
         else:
             out[f.key] = form.getlist(f.key)[-1]
     return out
+
+
+def _submitted_week(form, key: str) -> list[tuple[str, list[tuple[str, str]]]]:
+    """A week's groups as the form posts them: ``<key>.<n>.days``, and each
+    row's ``<key>.<n>.from`` and ``<key>.<n>.every``, in the order of ``n``."""
+    pattern = re.compile(re.escape(key) + r"\.(\d+)\.days")
+    groups = sorted({int(m[1]) for k in form if (m := pattern.fullmatch(k))})
+    return [(form.getlist(f"{key}.{n}.days")[-1],
+             list(zip(form.getlist(f"{key}.{n}.from"), form.getlist(f"{key}.{n}.every"))))
+            for n in groups]
 
 
 def initial(value: Any) -> str:
@@ -501,6 +540,19 @@ def _in_order(ranges: Any) -> Any:
     return ranges
 
 
+def _week_in_order(week: Any) -> Any:
+    """A week as the form writes it: each group's days Monday first and its
+    ranges from the earliest start, the groups in the order of their first
+    days; anything else as it is."""
+    if not (isinstance(week, list) and all(isinstance(g, dict) for g in week)
+            and all(isinstance(g.get("days"), list) and g["days"]
+                    and all(d in DAYS for d in g["days"]) for g in week)):
+        return week
+    groups = [{**g, "days": sorted(g["days"], key=DAYS.index), "ranges": _in_order(g.get("ranges"))}
+              for g in week]
+    return sorted(groups, key=lambda g: DAYS.index(g["days"][0]))
+
+
 def _parse_clock(rows) -> list[dict]:
     """A schedule's rows as its ranges, from the earliest start."""
     ranges: dict[str, int] = {}
@@ -526,6 +578,35 @@ def _parse_clock(rows) -> list[dict]:
     if len(ranges) > MAX_RANGES:
         raise FieldError(f"At most {MAX_RANGES} time ranges.")
     return [{"from": at, "every": ranges[at]} for at in sorted(ranges)]
+
+
+def _parse_week(groups) -> list[dict]:
+    """A week's groups as config.yaml writes them, as :func:`_week_in_order`
+    orders them. Each day must be in exactly one group."""
+    week: list[dict] = []
+    seen: set[str] = set()
+    for text, rows in groups:
+        days = [d.strip() for d in text.split(",") if d.strip()]
+        if not days:
+            raise FieldError("Each group needs at least one day.")
+        unknown = [d for d in days if d not in DAYS]
+        if unknown:
+            raise FieldError(f"{unknown[0]}: not a day.")
+        for d in days:
+            if d in seen:
+                raise FieldError(f"{DAY_LONG[d]} is in two groups.")
+            seen.add(d)
+        try:
+            ranges = _parse_clock(rows)
+        except FieldError as exc:
+            if len(groups) == 1:
+                raise
+            raise FieldError(f"{days_words(days)}: {exc}") from None
+        week.append({"days": sorted(days, key=DAYS.index), "ranges": ranges})
+    missing = [d for d in DAYS if d not in seen]
+    if missing:
+        raise FieldError(f"{days_words(missing)}: in no group. Each day needs one.")
+    return sorted(week, key=lambda g: DAYS.index(g["days"][0]))
 
 
 def _looks_in_order(looks: Any) -> Any:
@@ -580,8 +661,8 @@ def parse(f: Field, raw: Any) -> Any:
     so the server uses its default."""
     if f.kind == "pools":
         return _parse_pools(raw)
-    if f.kind == "clock":
-        return _parse_clock(raw)
+    if f.kind == "week":
+        return _parse_week(raw)
     if f.kind == "looks":
         return _parse_looks(raw)
     raw = str(raw).strip()
@@ -653,7 +734,10 @@ def _node(value: Any) -> Any:
         seq = CommentedSeq()
         for v in value:
             item = CommentedMap((_node(k), _node(x)) for k, x in v.items())
-            item.fa.set_flow_style()
+            # One that holds a list of mappings, as a group of days holds its
+            # ranges, is a block, so those stay one to a line.
+            if not any(_is_mapping_list(x) for x in v.values()):
+                item.fa.set_flow_style()
             seq.append(item)
         return seq
     if isinstance(value, list):
@@ -666,6 +750,10 @@ def _node(value: Any) -> Any:
             m.fa.set_flow_style()
         return m
     return value
+
+
+def _is_mapping_list(v: Any) -> bool:
+    return isinstance(v, list) and bool(v) and all(isinstance(x, dict) for x in v)
 
 
 def _is_block(v: Any) -> bool:
@@ -988,10 +1076,10 @@ def apply(text: str, form) -> Edit:
                 doc.set_pools(value)
                 expect[f.path] = value
                 changed.append(f.key)
-        elif f.kind == "clock":
+        elif f.kind == "week":
             cur = lookup(cfg, f.path)
-            if not _same(_in_order(cur), value) and not (cur is MISSING
-                                                         and value == default_of(f, cfg)):
+            if not _same(_week_in_order(cur), value) and not (cur is MISSING
+                                                              and value == default_of(f, cfg)):
                 put(f.path, value)
                 changed.append(f.key)
         elif f.kind == "looks":
@@ -1144,11 +1232,22 @@ def _every_words(every: Any) -> str:
 
 
 def _clock_words(v: Any) -> str:
-    """A schedule as "07:00 every 5 min · 01:00 every 30 min"."""
+    """A day's ranges as "07:00 every 5 min · 01:00 every 30 min"."""
     if not isinstance(v, list):
         return _words(v)
     return " · ".join(f"{r.get('from', '?')} {_every_words(r.get('every'))}"
                       if isinstance(r, dict) else str(r) for r in v)
+
+
+def _week_words(v: Any) -> str:
+    """A week as "Mon–Fri: 07:00 every 5 min · 23:00 off; Sat–Sun: 09:00
+    every 10 min", or a day's ranges alone when every day has them."""
+    if not isinstance(v, list) or not all(isinstance(g, dict) for g in v):
+        return _words(v)
+    if len(v) == 1 and days_words(v[0].get("days") or []) == "Every day":
+        return _clock_words(v[0].get("ranges"))
+    return "; ".join(f"{days_words(g.get('days') or [])}: {_clock_words(g.get('ranges'))}"
+                     for g in v)
 
 
 def _seconds(v: Any) -> str:
@@ -1180,12 +1279,15 @@ def _with_words(cfg: dict) -> dict:
     led["schedule"] = f"{light.get('from', '?')}–{light.get('to', '?')}" if light else "all day"
     led["looks"] = _look_words(_normal_looks(effective(cfg, "dock.led.looks")))
     dock["led"] = led
-    dock["sync"] = _clock_words(_in_order(effective(cfg, "dock.sync")))
+    sync = dock.get("sync")
+    sync = dict(sync) if isinstance(sync, dict) else {}
+    sync["week"] = _week_words(_week_in_order(effective(cfg, "dock.sync.week")))
+    dock["sync"] = sync
     display = cfg.get("display")
     display = dict(display) if isinstance(display, dict) else {}
     schedule = display.get("schedule")
     schedule = dict(schedule) if isinstance(schedule, dict) else {}
-    schedule["ranges"] = _clock_words(_in_order(effective(cfg, "display.schedule.ranges")))
+    schedule["week"] = _week_words(_week_in_order(effective(cfg, "display.schedule.week")))
     display["schedule"] = schedule
     return {**cfg, "dock": dock, "display": display}
 

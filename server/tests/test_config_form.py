@@ -7,7 +7,7 @@ import yaml
 from werkzeug.datastructures import MultiDict
 
 import config_form as cf
-from schedule import DEFAULT_PAGE_RANGES
+from schedule import DEFAULT_PAGE_WEEK
 from server import check_config, load_settings
 
 EXAMPLE = open(os.path.join(os.path.dirname(__file__), "..", "config.example.yaml")).read()
@@ -25,16 +25,13 @@ def as_posted(text: str, **changes) -> MultiDict:
             for name, pages in v:
                 form.add(f.key + ".name", name)
                 form.add(f.key + ".pages", pages)
-        elif f.kind == "times":
+        elif f.kind == "week":
             form.add(f.key, "1")
-            for at, pool in v:
-                form.add(f.key + ".at", at)
-                form.add(f.key + ".pool", pool)
-        elif f.kind == "clock":
-            form.add(f.key, "1")
-            for start, every in v:
-                form.add(f.key + ".from", start)
-                form.add(f.key + ".every", every)
+            for n, (days, rows) in enumerate(v):
+                form.add(f"{f.key}.{n}.days", days)
+                for start, every in rows:
+                    form.add(f"{f.key}.{n}.from", start)
+                    form.add(f"{f.key}.{n}.every", every)
         elif f.kind == "looks":
             form.add(f.key, "1")
             for trigger, pattern, interval in v:
@@ -135,52 +132,99 @@ def test_the_lights_schedule_left_off_changes_nothing():
     assert e.text == EXAMPLE and e.changed == []
 
 
+ALL_DAYS = "mon,tue,wed,thu,fri,sat,sun"
+
+
+def with_week(text: str, key: str, groups) -> MultiDict:
+    """The form as the page posts it for ``text``, with the week at ``key``
+    as ``groups`` of ``("mon,tue", [(from, minutes), ...])``."""
+    form = as_posted(text)
+    for k in [k for k in list(form) if k.startswith(key + ".")]:
+        form.poplist(k)
+    for n, (days, rows) in enumerate(groups):
+        form.add(f"{key}.{n}.days", days)
+        for start, every in rows:
+            form.add(f"{key}.{n}.from", start)
+            form.add(f"{key}.{n}.every", every)
+    return form
+
+
+def week_edit(key: str, groups, text: str = EXAMPLE) -> cf.Edit:
+    e = cf.apply(text, with_week(text, key, groups))
+    assert e.errors == {}
+    return e
+
+
 def test_the_sync_schedule_is_shown_in_minutes_from_the_earliest_start():
-    assert cf.shown(cf.read(EXAMPLE))["dock.sync"] == [("01:00", "30"), ("07:00", "5")]
+    assert cf.shown(cf.read(EXAMPLE))["dock.sync.week"] == [
+        (ALL_DAYS, [("01:00", "30"), ("07:00", "5")])]
 
 
-def test_a_split_schedule_is_written_one_range_to_a_line_in_seconds():
-    e = edit(dock__sync__from=["01:00", "07:00", "22:00"], dock__sync__every=["30", "10", "0"])
-    assert ('  sync:             # when it takes a reading and syncs, in server.timezone: '
-            'each range runs until\n') in e.text
-    assert ('    - {from: "01:00", every: 1800}\n    - {from: "07:00", every: 600}\n'
-            '    - {from: "22:00", every: 0}\n') in e.text
-    assert cf.read(e.text)["dock"]["sync"] == [{"from": "01:00", "every": 1800},
-                                               {"from": "07:00", "every": 600},
-                                               {"from": "22:00", "every": 0}]
-    assert e.changed == ["dock.sync"]
+def test_a_week_is_written_a_group_to_a_block_and_a_range_to_a_line_in_seconds():
+    e = week_edit("dock.sync.week", [
+        ("mon,tue,wed,thu,fri", [("01:00", "30"), ("07:00", "10"), ("22:00", "0")]),
+        ("sat,sun", [("00:00", "30")])])
+    assert ('    week:           # each day is in one group, and each range runs until the next '
+            'starts that\n') in e.text
+    assert ('      - days: [mon, tue, wed, thu, fri]\n        ranges:\n'
+            '          - {from: "01:00", every: 1800}\n          - {from: "07:00", every: 600}\n'
+            '          - {from: "22:00", every: 0}\n'
+            '      - days: [sat, sun]\n        ranges:\n'
+            '          - {from: "00:00", every: 1800}\n') in e.text
+    assert e.changed == ["dock.sync.week"]
+    check_config(e.text)
 
 
-def test_ranges_in_any_order_are_written_from_the_earliest_start():
-    e = edit(dock__sync__from=["22:00", "07:00"], dock__sync__every=["0", "5"])
-    assert cf.read(e.text)["dock"]["sync"] == [{"from": "07:00", "every": 300},
-                                               {"from": "22:00", "every": 0}]
+def test_groups_days_and_ranges_in_any_order_are_written_monday_and_earliest_first():
+    e = week_edit("dock.sync.week", [("sun,sat", [("22:00", "0"), ("07:00", "5")]),
+                                     ("fri,thu,wed,tue,mon", [("00:00", "5")])])
+    assert cf.read(e.text)["dock"]["sync"]["week"] == [
+        {"days": ["mon", "tue", "wed", "thu", "fri"], "ranges": [{"from": "00:00", "every": 300}]},
+        {"days": ["sat", "sun"], "ranges": [{"from": "07:00", "every": 300},
+                                            {"from": "22:00", "every": 0}]}]
 
 
 def test_a_schedule_without_a_block_is_written_where_the_dock_block_is():
-    text = EXAMPLE.replace('  sync:             # when it takes a reading and syncs, in '
-                           'server.timezone: each range runs until\n'
-                           '                    # the next starts, slots on the wall clock '
-                           '(:00, :05 ...); every: 0 is off\n'
-                           '    - {from: "01:00", every: 1800}\n    - {from: "07:00", every: 300}\n',
-                           "")
+    text = EXAMPLE.replace(EXAMPLE[EXAMPLE.index("  sync:             # when it takes a reading"):
+                                   EXAMPLE.index("  pm:\n")], "")
     assert "sync" not in cf.read(text)["dock"]
     assert edit(text).changed == []
-    e = edit(text, dock__sync__from=["00:00"], dock__sync__every=["10"])
-    assert cf.read(e.text)["dock"]["sync"] == [{"from": "00:00", "every": 600}]
+    e = week_edit("dock.sync.week", [(ALL_DAYS, [("00:00", "10")])], text)
+    assert cf.read(e.text)["dock"]["sync"] == {
+        "week": [{"days": ALL_DAYS.split(","), "ranges": [{"from": "00:00", "every": 600}]}]}
 
 
-@pytest.mark.parametrize("starts, everies, words", [
-    (["07:00", "25:00"], ["5", "5"], "25:00: not a time."),
-    (["07:00"], ["1.5"], "From 07:00: enter a whole number of minutes."),
-    (["07:00"], ["-5"], "From 07:00: enter 0 to 1440 minutes."),
-    (["07:00", "7:00"], ["5", "10"], "Two time ranges start at 07:00."),
-    ([], [], "Keep at least one time range."),
-    ([f"{h:02d}:00" for h in range(9)], ["5"] * 9, "At most 8 time ranges."),
+ROWS = [("07:00", "5")]
+
+
+@pytest.mark.parametrize("groups, words", [
+    ([(ALL_DAYS, [("07:00", "5"), ("25:00", "5")])], "25:00: not a time."),
+    ([(ALL_DAYS, [("07:00", "1.5")])], "From 07:00: enter a whole number of minutes."),
+    ([(ALL_DAYS, [("07:00", "-5")])], "From 07:00: enter 0 to 1440 minutes."),
+    ([(ALL_DAYS, [("07:00", "5"), ("7:00", "10")])], "Two time ranges start at 07:00."),
+    ([(ALL_DAYS, [])], "Keep at least one time range."),
+    ([(ALL_DAYS, [(f"{h:02d}:00", "5") for h in range(9)])], "At most 8 time ranges."),
+    ([("mon,tue,wed,thu,fri", ROWS), ("sat,sun", [("07:00", "5"), ("07:00", "10")])],
+     "Sat–Sun: Two time ranges start at 07:00."),
+    ([("mon,tue,wed,thu,fri", ROWS), ("fri,sat,sun", ROWS)], "Friday is in two groups."),
+    ([("mon,tue,wed,thu,fri", ROWS)], "Sat–Sun: in no group. Each day needs one."),
+    ([("", ROWS), (ALL_DAYS, ROWS)], "Each group needs at least one day."),
+    ([("funday", ROWS)], "funday: not a day."),
 ])
-def test_a_schedule_the_form_cannot_write_is_refused_at_its_field(starts, everies, words):
-    e = cf.apply(EXAMPLE, as_posted(EXAMPLE, dock__sync__from=starts, dock__sync__every=everies))
-    assert e.errors == {"dock.sync": words} and e.text == EXAMPLE
+def test_a_schedule_the_form_cannot_write_is_refused_at_its_field(groups, words):
+    e = cf.apply(EXAMPLE, with_week(EXAMPLE, "dock.sync.week", groups))
+    assert e.errors == {"dock.sync.week": words} and e.text == EXAMPLE
+
+
+@pytest.mark.parametrize("days, words", [
+    (["mon", "tue", "wed", "thu", "fri", "sat", "sun"], "Every day"),
+    (["mon", "tue", "wed", "thu", "fri"], "Mon–Fri"),
+    (["sat", "sun"], "Sat–Sun"),
+    (["sun", "mon", "wed", "thu", "fri"], "Mon, Wed–Fri, Sun"),
+    (["tue"], "Tue"),
+])
+def test_a_groups_days_are_named_monday_first_with_runs_joined(days, words):
+    assert cf.days_words(days) == words
 
 
 LOOKS_LINES = ('    looks:\n'
@@ -271,15 +315,15 @@ def test_pools_change_come_and_go_and_keep_their_order():
 
 
 def test_the_page_schedule_is_shown_in_minutes_from_the_earliest_start():
-    assert cf.shown(cf.read(EXAMPLE))["display.schedule.ranges"] == [("00:00", "5")]
+    assert cf.shown(cf.read(EXAMPLE))["display.schedule.week"] == [(ALL_DAYS, [("00:00", "5")])]
 
 
-def test_a_split_page_schedule_is_written_under_the_schedule_one_range_to_a_line():
-    e = edit(display__schedule__ranges__from=["00:00", "07:00", "23:00"],
-             display__schedule__ranges__every=["60", "5", "0"])
-    assert ('      - {from: "00:00", every: 3600}\n      - {from: "07:00", every: 300}\n'
-            '      - {from: "23:00", every: 0}\n    reshuffle_hours: 3\n') in e.text
-    assert e.changed == ["display.schedule.ranges"]
+def test_a_page_schedule_is_written_under_the_schedule_a_range_to_a_line():
+    e = week_edit("display.schedule.week", [(ALL_DAYS, [("00:00", "60"), ("07:00", "5"),
+                                                        ("23:00", "0")])])
+    assert ('          - {from: "00:00", every: 3600}\n          - {from: "07:00", every: 300}\n'
+            '          - {from: "23:00", every: 0}\n    reshuffle_hours: 3\n') in e.text
+    assert e.changed == ["display.schedule.week"]
     check_config(e.text)
 
 
@@ -345,7 +389,7 @@ def _with(config: dict, path: tuple, value) -> dict:
 
 
 BASE = {"display": {"pools": {"co2": ["breathe.png"]},
-                    "schedule": {"type": "timeranges", "ranges": DEFAULT_PAGE_RANGES}}}
+                    "schedule": {"type": "timeranges", "week": DEFAULT_PAGE_WEEK}}}
 
 
 @pytest.mark.parametrize("f", [f for f in cf.FIELDS if f.default is not None and f.kind != "window"
@@ -379,13 +423,17 @@ def test_every_field_is_named_once_and_every_condition_names_a_field():
 
 def test_changes_are_in_words_with_each_schedule_on_one_line():
     old = cf.read(EXAMPLE)
-    new = cf.read(edit(server__port="9090", dock__led__schedule="true",
-                       dock__sync__from=["01:00", "07:00", "22:00"],
-                       dock__sync__every=["30", "5", "0"]).text)
+    form = with_week(EXAMPLE, "dock.sync.week", [
+        ("mon,tue,wed,thu,fri", [("01:00", "30"), ("07:00", "5"), ("22:00", "0")]),
+        ("sat,sun", [("00:00", "30")])])
+    form.setlist("server.port", ["9090"])
+    form.setlist("dock.led.schedule", ["true"])
+    new = cf.read(cf.apply(EXAMPLE, form).text)
     assert cf.changes(old, new) == [
         {"name": "Server · Port", "old": "8080", "new": "9090"},
         {"name": "Dock · Sync schedule", "old": "01:00 every 30 min · 07:00 every 5 min",
-         "new": "01:00 every 30 min · 07:00 every 5 min · 22:00 off"},
+         "new": "Mon–Fri: 01:00 every 30 min · 07:00 every 5 min · 22:00 off; "
+                "Sat–Sun: 00:00 every 30 min"},
         {"name": "Dock · Schedule", "old": "all day", "new": "07:00–01:00"},
     ]
 
@@ -434,4 +482,4 @@ def test_the_edit_reads_back_as_pyyaml_reads_it():
 
 def test_a_field_named_by_its_place_on_the_page_has_its_full_name_in_messages():
     assert cf.name_of(("dock", "led", "schedule", "from")) == "Dock · Schedule from"
-    assert cf.name_of(("dock", "sync")) == "Dock · Sync schedule"
+    assert cf.name_of(("dock", "sync", "week")) == "Dock · Sync schedule"

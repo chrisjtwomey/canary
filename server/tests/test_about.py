@@ -65,20 +65,21 @@ def test_a_blank_stamp_is_not_a_version(monkeypatch):
     assert server_version() != "   "
 
 
-def test_it_gives_each_boards_sync_ranges_and_next_slot():
+def test_it_gives_each_boards_sync_week_and_next_slot():
     from datetime import datetime
     from zoneinfo import ZoneInfo
-    from epd_server.timeranges import TimeRanges, parse_hhmm
+    from epd_server.timeranges import TimeRanges, Week, parse_hhmm
     tz = ZoneInfo("Europe/Dublin")
     now = datetime(2026, 6, 15, 12, 3, 10, tzinfo=tz).timestamp()
-    sync = TimeRanges([(parse_hhmm("07:00"), 300), (parse_hhmm("22:00"), 0)], tz)
-
-    head = TimeRanges([(parse_hhmm("00:00"), 1800)], tz)
+    sync = Week.every_day(TimeRanges([(parse_hhmm("07:00"), 300), (parse_hhmm("22:00"), 0)], tz))
+    head = Week.every_day(TimeRanges([(parse_hhmm("00:00"), 1800)], tz))
     answer = About("v1.0.0", now=at(now), syncs={"dock": sync, "head": head}).answer({})
 
-    assert answer["sync"] == {"dock": {"ranges": [{"from": "07:00", "every": 300},
-                                                  {"from": "22:00", "every": 0}],
-                                       "next_s": 110},
-                              "head": {"ranges": [{"from": "00:00", "every": 1800}],
-                                       "next_s": 1610}}
+    days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+    assert answer["sync"] == {
+        "dock": {"week": [{"days": days, "ranges": [{"from": "07:00", "every": 300},
+                                                    {"from": "22:00", "every": 0}]}],
+                 "next_s": 110},
+        "head": {"week": [{"days": days, "ranges": [{"from": "00:00", "every": 1800}]}],
+                 "next_s": 1610}}
     assert About("v1.0.0").answer({})["sync"] is None

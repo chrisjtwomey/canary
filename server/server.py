@@ -24,7 +24,7 @@ from epd_server.config import (ConfigError, CoreConfig, get_prop_by_keys, load_c
 from epd_server.firmware import is_clean_tag
 from epd_server.scheduling import TimeRangesSchedule
 from epd_server.source import CompositeSource, IngestSource
-from epd_server.timeranges import TimeRanges, check_interval
+from epd_server.timeranges import TimeRanges, Week, check_interval
 
 from about import About
 from board_logs import LogsQuery
@@ -37,7 +37,7 @@ from pages.day import DayPage
 from pages.diagnostics import DiagnosticsPage, DiagnosticsTracePage, HealthTracePage
 from pages.dust import DustPage
 from pages.pool import CO2, IAQ, PM25, PRESSURE, TEMP, DeltaPage, TracePage
-from schedule import DEFAULT_DOCK_SYNC, DEFAULT_HEAD_SYNC_S, DEFAULT_PAGE_RANGES
+from schedule import DEFAULT_DOCK_WEEK, DEFAULT_HEAD_SYNC_S, DEFAULT_PAGE_WEEK
 from sources.calibration import CalibrationStore
 from sources.corrections import SeaLevelSource, to_sea_level
 from sources.mock import MockReadingsSource
@@ -52,7 +52,7 @@ log = logging.getLogger("server")
 
 # One page an hour when config.yaml has no display block.
 DEFAULT_DISPLAY = {"pools": {"co2": ["breathe.png"]},
-                   "schedule": {"type": "timeranges", "ranges": DEFAULT_PAGE_RANGES}}
+                   "schedule": {"type": "timeranges", "week": DEFAULT_PAGE_WEEK}}
 
 SOURCE_KINDS = ("mock", "store")
 # The two boards, each with its images in a subdirectory of the firmware
@@ -116,7 +116,7 @@ def follow_own_version(firmware, version: str):
     return dataclasses.replace(firmware, offer_dev_builds=not is_clean_tag(version))
 
 
-def make_silence(syncs: dict[str, TimeRanges]) -> Callable[[str, float], float]:
+def make_silence(syncs: dict[str, Week]) -> Callable[[str, float], float]:
     """How long each board may go without a report before two of its syncs
     are missed: since the second-latest slot of its own schedule. A board
     with no schedule, or no slot in it, is never judged."""
@@ -128,7 +128,7 @@ def make_silence(syncs: dict[str, TimeRanges]) -> Callable[[str, float], float]:
     return silence
 
 
-def make_next_sync(syncs: dict[str, TimeRanges]) -> Callable[[str, float], int | None]:
+def make_next_sync(syncs: dict[str, Week]) -> Callable[[str, float], int | None]:
     """The seconds until a board's next sync slot; None for a board with no
     schedule, or no slot in it."""
     def next_sync(device: str, now: float) -> int | None:
@@ -137,16 +137,16 @@ def make_next_sync(syncs: dict[str, TimeRanges]) -> Callable[[str, float], int |
     return next_sync
 
 
-def make_sensor_poll(syncs: dict[str, TimeRanges]) -> Callable[[float, str | None], int | None]:
+def make_sensor_poll(syncs: dict[str, Week]) -> Callable[[float, str | None], int | None]:
     """The Canary-Next-Sensor-Poll-Seconds each board gets: its own next sync."""
     next_sync = make_next_sync(syncs)
     return lambda now, name: next_sync(name, now) if name else None
 
 
-def make_head_sync(config: dict, tz) -> TimeRanges:
-    """The head's sync schedule from ``head.sync.every``, one range all day:
-    every half hour when config.yaml gives none. 0 is none, since the head
-    also syncs at each page it fetches.
+def make_head_sync(config: dict, tz) -> Week:
+    """The head's sync schedule from ``head.sync.every``, one range all day
+    every day: every half hour when config.yaml gives none. 0 is none, since
+    the head also syncs at each page it fetches.
 
     Raises:
         ConfigError: the block is not ``{every: seconds}``, or the interval
@@ -159,24 +159,29 @@ def make_head_sync(config: dict, tz) -> TimeRanges:
         every = check_interval(block.get("every", DEFAULT_HEAD_SYNC_S), "head.sync.every")
     except ValueError as exc:
         raise ConfigError(str(exc)) from None
-    return TimeRanges([(clock_time(0), every)], tz, "head.sync")
+    return Week.every_day(TimeRanges([(clock_time(0), every)], tz, "head.sync"))
 
 
-def make_dock_sync(config: dict, tz) -> TimeRanges:
-    """The dock's sync schedule from ``dock.sync``: every five minutes, and
-    every half hour from 01:00 to 07:00, when config.yaml gives none.
+def make_dock_sync(config: dict, tz) -> Week:
+    """The dock's sync schedule from ``dock.sync.week``: every five minutes,
+    and every half hour from 01:00 to 07:00, every day, when config.yaml
+    gives none.
 
     Raises:
-        ConfigError: the schedule cannot work, or no range of it syncs, so
-            the dock would take no readings at all.
+        ConfigError: the block is not ``{week: [...]}``, the week cannot
+            work, or no range of it syncs, so the dock would take no
+            readings at all.
     """
-    value = get_prop_by_keys(config, "dock", "sync", default=DEFAULT_DOCK_SYNC)
+    block = get_prop_by_keys(config, "dock", "sync", default={})
+    if not isinstance(block, dict) or set(block) - {"week"}:
+        raise ConfigError("dock.sync must be {week: [...]}: groups of days, each "
+                          "{days: [mon, ...], ranges: [{from, every}, ...]}")
     try:
-        sync = TimeRanges.from_config(value, tz, "dock.sync")
+        sync = Week.from_config(block.get("week", DEFAULT_DOCK_WEEK), tz, "dock.sync.week")
     except ValueError as exc:
         raise ConfigError(str(exc)) from None
-    if sync.seconds_until_next(time.time()) is None:
-        raise ConfigError("dock.sync has no range that syncs, so the dock would take no "
+    if not sync.slots_a_week():
+        raise ConfigError("dock.sync.week has no range that syncs, so the dock would take no "
                           "readings: give one range an interval")
     return sync
 
@@ -196,12 +201,12 @@ class Settings:
     logs_path: str
     logs_days: float
     altitude_m: float
-    dock_sync: TimeRanges
-    head_sync: TimeRanges
+    dock_sync: Week
+    head_sync: Week
     dock: DockSettings
 
     @property
-    def syncs(self) -> dict[str, TimeRanges]:
+    def syncs(self) -> dict[str, Week]:
         """Each board's sync schedule, by the name it states."""
         return {DOCK: self.dock_sync, HEAD: self.head_sync}
 

@@ -149,8 +149,8 @@ The `display` block in `config.yaml` has two parts. `pools` is what can
 show: named lists of images, each read in turn on its own count from a
 random start that moves every `reshuffle_hours`, so a pass is never all of
 one shape. `schedule` is when: `type: timeranges` visits the pools in
-`order` at each slot of its `ranges`, a day of time ranges each with an
-interval (see ARCHITECTURE §3.3). The randomness is seeded from the clock, so a
+`order` at each slot of its `week`, groups of days each with time ranges
+of their own, each range with an interval (see ARCHITECTURE §3.3). The randomness is seeded from the clock, so a
 restart changes nothing. Day rides along as a pool of one, and Diagnostics
 as a pool of its three pages; leave a pool out of `order` to keep it off the
 panel. The weather calendar uses the same block with `type: times` and one
@@ -269,7 +269,7 @@ every five minutes on the wall clock (:00, :05, ...). A fetch that fails
 leaves the last image on the panel and backs off (`back-off step N`).
 
 The dock takes a reading 35 s after boot, once the PM fan has warmed up,
-and then on each of the server's slots (`dock.sync` in `config.yaml`). It
+and then on each of the server's slots (`dock.sync.week` in `config.yaml`). It
 queues a readings document, with a `client` object beside the
 measurements, and the loop posts the queue to the server's
 `/sensor-readings` (`posted 1 reading (200); 0 queued`); the Diagnostics page is

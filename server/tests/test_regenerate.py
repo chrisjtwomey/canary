@@ -47,6 +47,7 @@ def test_the_example_config_schedules_only_pages_the_server_makes(tz):
     core = load_core_config(load_yaml(os.path.join(here, "config.example.yaml")))
     sched = core.server.schedule
     assert isinstance(sched, TimeRangesSchedule)
-    assert sched.ranges.describe() == [{"from": "00:00", "every": 300}]
+    assert sched.week.describe() == [{"days": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"],
+                                      "ranges": [{"from": "00:00", "every": 300}]}]
     assert sched.order == ["co2", "comfort", "dust", "air", "pressure", "day", "diagnostics"]
     assert sched.pages() <= {p.png_filename for p in make_pages(tz, width=1280, height=720)}

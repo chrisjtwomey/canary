@@ -242,8 +242,6 @@ def _look_row(a: Airium, key: str, trigger: str, pattern: str, length: str,
 def _row(a: Airium, f: cf.Field, cells: tuple, images: list[str], locked: bool) -> None:
     if f.kind == "pools":
         _pool_row(a, f.key, *cells, images)
-    elif f.kind == "clock":
-        _clock_row(a, f.key, *cells, locked)
     else:
         _look_row(a, f.key, *cells, locked)
 
@@ -251,15 +249,53 @@ def _row(a: Airium, f: cf.Field, cells: tuple, images: list[str], locked: bool) 
 # What a new row starts as: a look takes its trigger's default once it has one.
 BLANK_ROWS = {"looks": ("", "pulse", "1")}
 # The words on each field's button that adds a row.
-ADD_WORDS = {"pools": "Add a pool", "clock": "Add a time range", "looks": "Add a pattern"}
+ADD_WORDS = {"pools": "Add a pool", "looks": "Add a pattern"}
+
+
+def _week(a: Airium, f: cf.Field, view: View, heading: str, locked: bool) -> None:
+    """A schedule's groups of days, each with its time ranges. config.js
+    shows one group at a time, chosen by its chip, with a toggle for each
+    day; without it every group shows under the name of its days. A
+    group's inputs are named ``<key>.<n>.``, n its place among the groups."""
+    lock = {"disabled": "disabled"} if locked else {}
+    with a.fieldset(klass="week", id=_id(f.key),
+                    **{"data-key": f.key, "data-initial": cf.initial(view.initial[f.key])}):
+        a.legend(klass="name hide" if f.label == heading else "name", _t=f.label)
+        # With the rows locked, the key goes unposted and the file's value stands.
+        a.input(type="hidden", name=f.key, value="1", **lock)
+        a.div(klass="groups", role="group", _t="", **{"aria-label": "Groups of days"})
+        for n, (days, rows) in enumerate(view.values.get(f.key, [])):
+            prefix = f"{f.key}.{n}"
+            chosen = days.split(",")
+            with a.div(klass="group"):
+                a.p(klass="group-name", _t=cf.days_words(chosen))
+                with a.div(klass="days", role="group", **{"aria-label": "Days"}):
+                    for d in cf.DAYS:
+                        a.button(type="button", _t=cf.DAY_SHORT[d][0], **lock,
+                                 **{"data-day": d, "aria-label": cf.DAY_LONG[d],
+                                    "aria-pressed": "true" if d in chosen else "false"})
+                a.input(type="hidden", name=prefix + ".days", value=days, **lock)
+                with a.fieldset(klass="rows clock", **{"data-max": str(MAX_RANGES)}):
+                    with a.div(klass="list"):
+                        for start, every in rows:
+                            _clock_row(a, prefix, start, every, locked)
+                    with a.template():
+                        _clock_row(a, prefix, "", "", locked)
+                    with a.div(klass="foot"):
+                        a.button(type="button", klass="add", _t="Add a time range", **lock)
+        if f.help:
+            a.p(klass="help", _t=f.help)
 
 
 def _rows(a: Airium, f: cf.Field, view: View, images: list[str], heading: str,
           locked: bool = False) -> None:
     """A field of rows. ``locked`` applies to the Dock tab's rows, the only
     ones on a tab that locks."""
+    if f.kind == "week":
+        _week(a, f, view, heading, locked)
+        return
     rows = view.values.get(f.key, [])
-    marks = {"data-max": str(MAX_RANGES)} if f.kind == "clock" else {}
+    marks: dict[str, str] = {}
     if f.kind == "looks":
         marks = {"data-looks": json.dumps({t: [p, f"{n:g}"] for t, p, n in ds.LED_LOOKS},
                                           separators=(",", ":")),
@@ -675,7 +711,7 @@ def _group(a: Airium, g: cf.Group, view: View, images: list[str], locked: bool,
             else _nothing():
         if sheet and g.visual:
             # A dial draws the schedule its group holds.
-            key = next((f.key for f in g.fields if f.kind == "clock"), "")
+            key = next((f.key for f in g.fields if f.kind == "week"), "")
             marks = {"data-schedule": key} if key else {}
             if g.visual == "disk":
                 marks["data-disk"] = json.dumps(_disk_data(view.held, view.disk),

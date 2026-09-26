@@ -111,24 +111,30 @@ board restarts.
 
 "Every five minutes" as a list of wall-clock times would be 288 entries. epd's `display` block has
 `pools` of images and a `schedule` of `type: times` or `type: timeranges`. This device uses
-`timeranges`, and refuses `times`: its `ranges` cover the whole day, up to 8, each from its start until
-the next range's, the last running past midnight to the first; each has an interval, and 0 turns its
-range off, so the page can stay as it is overnight. By default the page changes every 300 seconds all
-day, on :00, :05, … on the wall clock; the weather calendar keeps `times`.
+`timeranges`, and refuses `times`: its `week` puts each day of the week in one group, and each group
+has ranges that cover the whole day, up to 8, each from its start until the next range's, the last
+running past midnight to the first; each has an interval, and 0 turns its range off, so the page can
+stay as it is overnight. A day stands alone: before its first start its own last range runs, not the
+day before's, so a group's dial shows all that happens on its days. By default the page changes every
+300 seconds all day, every day, on :00, :05, … on the wall clock; the weather calendar keeps `times`.
 [CONTRIBUTING.md](../CONTRIBUTING.md) explains the pools. A slot is a local time in a range that is on,
 whose seconds past midnight are a multiple of that range's interval. epd's `TimeRanges` finds the slot
 by stepping through the minutes and asking of each which range it is in, because some clocks change at
-01:00: in spring that hour never happens, and in autumn it happens twice. The Display tab edits the
-ranges beside a dial of the day: a new time range halves the one that starts latest, which runs on
-past midnight to the earliest start, and a range removed gives its hours to the one before.
+01:00: in spring that hour never happens, and in autumn it happens twice. The page's turn through the
+pools is counted over the week, from the slots of the days before, so it runs on from one day into
+the next whatever each holds. The Display tab edits the week beside a dial of the day: a chip for
+each group chooses the one shown, and its day toggles move a day into it, or out of it into a group of
+its own with a copy of its ranges, so each day always has a group. In a group a new time range halves
+the one that starts latest, which runs on past midnight to the earliest start, and a range removed
+gives its hours to the one before.
 
-The dock syncs on ranges of the same shape, `dock.sync` in `config.yaml`: it takes a reading at each
-sync and posts its queue. By default it is every 1800 seconds from 01:00 and every 300 from 07:00, so
+The dock syncs on a week of the same shape, `dock.sync.week` in `config.yaml`: it takes a reading at each
+sync and posts its queue. By default, every day, it is every 1800 seconds from 01:00 and every 300 from 07:00, so
 readings land on :00, :05, … by day and on the hour and half hour by night, and 07:00 is a slot in
 both. Every response tells the dock how long until the next, in `Canary-Next-Sensor-Poll-Seconds`,
 rounded up so it is never early. Without an answer the dock keeps the last gap the server gave between
-two slots. A schedule in which no range syncs is refused, since the dock would take no readings. The
-Dock tab edits it as the Display tab edits the page schedule.
+two slots. A week in which no range syncs is refused, since the dock would take no readings; a day
+with none is allowed. The Dock tab edits it as the Display tab edits the page schedule.
 
 The head syncs every so often all day, `head.sync.every`, every half hour by default and 0 for only
 beside each page it fetches; the Display tab sets it in minutes. Each board is sent its own next slot
@@ -482,3 +488,4 @@ Dated decisions and status behind the text above, oldest first.
 - **2026-09-26**: the looks gained a double and a triple of both the flash and the pulse, as named patterns rather than a count and a pause on every row, so a row stays three fields and each name says what it looks like. A new one needs the dock's firmware and the server both. The row's interval became its length, one cycle of the pattern, which reads the same for all of them: for a triple it is the group and the dark after it.
 - **2026-09-26**: the Storage tab is a spec sheet like the Dock tab. Each store shows its records, its file's size on disk and the date of its oldest record, and the tab opens with a drawing of the server's disk, used and free, with the files' part drawn larger below it, since at a few MB it would not show on a bar hundreds of GB long. The size is the file's on disk rather than an estimate of the download, so the drawing and the line agree and one number stands for each file. The disk is the one the first store's file is on: in a container, the one its folder is mounted from.
 - **2026-09-26**: the Server, Firmware and MQTT tabs became spec sheets too, so every form tab is one: each group under a heading that says what it is for, and each setting a line. A setting that matters only while a switch is on, such as the MQTT broker or the firmware folder, shows only then.
+- **2026-09-26**: the page schedule and the dock's sync became weeks: groups of days, each with its own time ranges, so a weekend or a single day can differ from the rest. Groups rather than a list for each day, since most weeks have two or three shapes and one group of all seven is the old schedule. A day stands alone rather than running on from the day before's last range, so each group's dial shows its days exactly; a night that spans midnight is set on both days. The head's sync stays a plain interval, which is one group of every day inside the server, so every board's schedule is the same kind and `/about` gives each as a week. The boards need no change: the server gives each its next slot.

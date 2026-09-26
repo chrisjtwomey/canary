@@ -73,11 +73,19 @@
     }).filter(function (cells) { return cells.some(Boolean); }));
   }
 
+  // A week as the server gives data-initial: each group's days and rows.
+  function weekValue(box) {
+    return JSON.stringify(all('.group', box).map(function (group) {
+      return [group.querySelector('input[name$=".days"]').value, JSON.parse(rowsValue(group))];
+    }));
+  }
+
   function valueOf(el) {
     if (el.classList.contains('segments')) {
       var on = el.querySelector('input:checked');
       return on ? on.value : '';
     }
+    if (el.classList.contains('week')) return weekValue(el);
     if (el.classList.contains('rows')) return rowsValue(el);
     if (el.type === 'checkbox') return el.checked ? 'true' : 'false';
     if (el.classList.contains('chips')) return chipsValue(el);
@@ -448,7 +456,7 @@
   }
 
   // ── Rows: the pools, a schedule's ranges, the light's looks ──────
-  all('fieldset.rows').forEach(function (box) {
+  function wireRows(box) {
     var list = box.querySelector('.list');
     var blank = box.querySelector('template');
     var add = box.querySelector('.add');
@@ -477,8 +485,129 @@
         if (e.target.classList.contains('pool-name')) poolsChanged();
       });
     }
-  });
+  }
+  all('fieldset.rows').forEach(wireRows);
   all('.field input.chips').forEach(function (i) { if (!i._tags) tags(i); });
+
+  // ── A week: groups of days, each with its time ranges ────────────
+  // One group shows at a time, chosen by its chip. The day toggles move a
+  // day into the group shown, from the group that had it; a day the group
+  // has already leaves it as a group of its own, with a copy of its ranges.
+  // So each day is always in exactly one group. The groups stay in the
+  // order of their first days, and their inputs are numbered in that order.
+  var DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+  var DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  // "Every day", "Mon–Fri", "Mon, Wed–Fri": as config_form.days_words.
+  function daysWords(days) {
+    var picked = DAYS.filter(function (d) { return days.indexOf(d) >= 0; })
+      .map(function (d) { return DAYS.indexOf(d); });
+    if (picked.length === DAYS.length) return 'Every day';
+    var runs = [];
+    picked.forEach(function (d) {
+      var last = runs[runs.length - 1];
+      if (last && last[last.length - 1] === d - 1) last.push(d);
+      else runs.push([d]);
+    });
+    return runs.map(function (r) {
+      return r.length === 1 ? DAY_SHORT[r[0]] : DAY_SHORT[r[0]] + '–' + DAY_SHORT[r[r.length - 1]];
+    }).join(', ');
+  }
+
+  function week(box) {
+    var key = box.getAttribute('data-key');
+    var bar = box.querySelector('.groups');
+    var locked = box.querySelector('input[type=hidden][name="' + key + '"]').disabled;
+    var named = new RegExp('^' + key.replace(/\./g, '\\.') + '\\.\\d+\\.');
+
+    function groups() { return all('.group', box); }
+    function daysOf(group) {
+      var v = group.querySelector('input[name$=".days"]').value;
+      return v ? v.split(',') : [];
+    }
+    function shown() {
+      return groups().filter(function (g) { return !g.hidden; })[0] || groups()[0];
+    }
+
+    function setDays(group, days) {
+      days = DAYS.filter(function (d) { return days.indexOf(d) >= 0; });
+      group.querySelector('input[name$=".days"]').value = days.join(',');
+      group.querySelector('.group-name').textContent = daysWords(days);
+      all('.days button', group).forEach(function (b) {
+        b.setAttribute('aria-pressed', days.indexOf(b.getAttribute('data-day')) >= 0 ? 'true' : 'false');
+      });
+    }
+
+    // In order of their first days, numbered in that order, with a chip each.
+    function arrange(show) {
+      var sorted = groups().sort(function (a, b) {
+        return DAYS.indexOf(daysOf(a)[0]) - DAYS.indexOf(daysOf(b)[0]);
+      });
+      var help = box.querySelector(':scope > .help');
+      sorted.forEach(function (group, n) {
+        box.insertBefore(group, help);
+        var inputs = all('[name]', group).concat(all('template', group).reduce(function (found, t) {
+          return found.concat(all('[name]', t.content));
+        }, []));
+        inputs.forEach(function (el) { el.name = el.name.replace(named, key + '.' + n + '.'); });
+        group.hidden = group !== show;
+      });
+      bar.textContent = '';
+      sorted.forEach(function (group) {
+        var chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'group-chip';
+        chip.textContent = daysWords(daysOf(group));
+        chip.setAttribute('aria-pressed', group === show ? 'true' : 'false');
+        chip.addEventListener('click', function () { arrange(group); redraw(); });
+        bar.appendChild(chip);
+      });
+    }
+
+    // Tells the tab's drawings which group to draw, without marking a change.
+    function redraw() {
+      box.dispatchEvent(new Event('redraw', { bubbles: true }));
+    }
+
+    // A group of its own for ``day``, with a copy of ``group``'s ranges as
+    // they are now: a clone copies what the page was sent, not what was typed.
+    function split(group, day) {
+      var copy = group.cloneNode(true);
+      var from = all('input', group), to = all('input', copy);
+      from.forEach(function (el, i) { to[i].value = el.value; });
+      group.parentNode.insertBefore(copy, group.nextSibling);
+      wireRows(copy.querySelector('fieldset.rows'));
+      wireDays(copy);
+      setDays(copy, [day]);
+      return copy;
+    }
+
+    function wireDays(group) {
+      group.querySelector('.days').addEventListener('click', function (e) {
+        var b = e.target.closest('button');
+        if (!b || b.disabled) return;
+        var day = b.getAttribute('data-day'), mine = daysOf(group), show = group;
+        if (mine.indexOf(day) >= 0) {
+          if (mine.length === 1) return;
+          setDays(group, mine.filter(function (d) { return d !== day; }));
+          show = split(group, day);
+        } else {
+          var owner = groups().filter(function (g) { return daysOf(g).indexOf(day) >= 0; })[0];
+          var rest = daysOf(owner).filter(function (d) { return d !== day; });
+          if (rest.length) setDays(owner, rest);
+          else owner.remove();
+          setDays(group, mine.concat([day]));
+        }
+        arrange(show);
+        box.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    }
+
+    groups().forEach(wireDays);
+    if (locked) all('.days button', box).forEach(function (b) { b.disabled = true; });
+    arrange(groups()[0]);
+  }
+  all('fieldset.week').forEach(week);
 
   // ── A store out to a file, and back in ───────────────────────────
   all('form[id^="import-"]').forEach(function (form) {
@@ -507,7 +636,7 @@
       var disk = document.getElementById('visual-disk');
       if (!disk) return;
       disk.setAttribute('data-disk', JSON.stringify(answer.disk));
-      disk.dispatchEvent(new Event('held', { bubbles: true }));
+      disk.dispatchEvent(new Event('redraw', { bubbles: true }));
     }
 
     function ask(answer) {
