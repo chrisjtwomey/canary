@@ -547,16 +547,21 @@ def _runs(fields: tuple[cf.Field, ...], sheet: bool) -> list[tuple[str, list[cf.
 
 def _group(a: Airium, g: cf.Group, view: View, images: list[str], locked: bool,
            sheet: bool = False) -> None:
-    """A group's heading and fields. On a ``sheet`` a heading such as "CO₂ ·
-    SCD41" takes two lines, the part under the measurement, and the group's
-    drawing, when it has one, comes before its fields."""
-    if g.heading and sheet and " · " in g.heading:
-        title, part = g.heading.split(" · ", 1)
-        with a.h2(klass="group label"):
-            a.span(_t=title)
-            a.span(klass="part", _t=part)
-    elif g.heading:
-        a.h2(klass="group label", _t=g.heading)
+    """A group's heading, the line under it that says what the group is for,
+    and its fields. On a ``sheet`` a heading such as "CO₂ · SCD41" takes two
+    lines, the part under the measurement, the heading and its line keep to
+    their column, and the group's drawing, when it has one, comes before its
+    fields."""
+    with a.div(klass="heading") if sheet else _nothing():
+        if g.heading and sheet and " · " in g.heading:
+            title, part = g.heading.split(" · ", 1)
+            with a.h2(klass="group label"):
+                a.span(_t=title)
+                a.span(klass="part", _t=part)
+        elif g.heading:
+            a.h2(klass="group label", _t=g.heading)
+        if g.heading and g.about:
+            a.p(klass="about", _t=g.about)
     with a.div(klass=f"content visual-{g.visual}" if g.visual else "content") if sheet \
             else _nothing():
         if sheet and g.visual:

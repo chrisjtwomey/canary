@@ -678,8 +678,17 @@ html:not(.js) .panel + .panel {
   margin-top: 18px;
 }
 
-.group + .fields {
+.group + .fields,
+.about + .fields {
   margin-top: 0;
+}
+
+/* What a group is for, under its heading. */
+.settings .about {
+  margin: -6px 0 12px;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--ink-mid);
 }
 
 /* A tab set out as a spec sheet: each group under a rule, its heading in a
@@ -705,6 +714,11 @@ html:not(.js) .panel + .panel {
 .panel.sheet .section .group .part {
   display: block;
   margin-top: 4px;
+}
+
+.panel.sheet .section .about {
+  margin: 8px 0 0;
+  line-height: 1.35;
 }
 
 .panel.sheet .part {

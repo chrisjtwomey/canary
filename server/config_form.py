@@ -84,13 +84,15 @@ class Group:
     names a drawing of the group's values that can also set them: ``dial``,
     the day's syncs, ``slot``, the time before one sync, or ``panel``,
     the image and its drawn area. ``caption`` says what the drawing shows,
-    when the page's own words for it do not."""
+    when the page's own words for it do not. ``about`` is the line under the
+    heading that says what the group is for."""
     heading: str
     fields: tuple[Field, ...]
     store: str = ""
     action: str = ""
     visual: str = ""
     caption: str = ""
+    about: str = ""
 
 
 @dataclass(frozen=True)
@@ -130,17 +132,17 @@ TABS: tuple[Tab, ...] = (
     Tab("server", "Server", (
         Group("", (
             Field("server.port", "Port", "", "int", 8080, minimum=1, maximum=65535),
-            Field("server.regen_lead_seconds", "Pre-render pages", "Before each refresh.", "int", 120,
+            Field("server.regen_lead_seconds", "Pre-render pages", "Before each page change.", "int", 120,
                   unit="seconds", minimum=0),
             Field("debug", "Debug log", "", "bool", False),
         )),
-        Group("Location", (
+        Group("Location", about="Where the device is, for its local time and sea-level pressure", fields=(
             Field("server.timezone", "Time zone", "", "zone", lambda cfg: host_zone()),
-            Field("site.altitude_m", "Altitude", "For sea-level pressure.", "number", 0, unit="m"),
+            Field("site.altitude_m", "Altitude", "", "number", 0, unit="m"),
         )),
     )),
     Tab("display", "Display", (
-        Group("Page schedule", (
+        Group("Page schedule", about="When to change to the next page", fields=(
             Field("display.schedule.ranges", "Page schedule",
                   "Each time range runs until the next one starts; 0 minutes = off.", "clock",
                   DEFAULT_PAGE_RANGES, env=False),
@@ -152,23 +154,23 @@ TABS: tuple[Tab, ...] = (
             Field("display.schedule.seed", "Seed", "", "int", 0, env=False),
         ), visual="dial", caption="Each tick is a page change. Hatching marks a time range "
                                   "that is off. Drag a time range's start to move it."),
-        Group("Sync schedule", (
+        Group("Sync schedule", about="How often to update the server with its display state", fields=(
             Field("head.sync.every", "Every", "The head also syncs at each page. 0 = only then.",
                   "int", DEFAULT_HEAD_SYNC_S, unit="minutes", minimum=0, maximum=24 * 60,
                   scale=60, long="Sync every"),
         )),
-        Group("Pools", (
+        Group("Pools", about="The pages to show, in groups taken in turn", fields=(
             Field("display.pools", "Pools", "Drag to reorder.", "pools", env=False),
         )),
     ), sheet=True),
     Tab("image", "Image", (
-        Group("Size", (
+        Group("Size", about="The size of the image the server draws for the panel", fields=(
             Field("image.width", "Width", "", "int", 1280, unit="px",
                   minimum=1),
             Field("image.height", "Height", "", "int", 720, unit="px",
                   minimum=1),
         ), action="head", visual="panel"),
-        Group("Drawn area", (
+        Group("Drawn area", about="The part of the image the pages are drawn in", fields=(
             Field("image.innerWidth", "Width", "", "int",
                   lambda cfg: effective(cfg, "image.width"), unit="px",
                   minimum=1),
@@ -182,33 +184,33 @@ TABS: tuple[Tab, ...] = (
         ), action="position"),
     ), sheet=True),
     Tab("dock", "Dock", (
-        Group("Sync schedule", (
+        Group("Sync schedule", about="How often to take a reading and update the server with it", fields=(
             Field("dock.sync", "Sync schedule",
                   "Each time range runs until the next one starts; 0 minutes = off.", "clock",
                   DEFAULT_DOCK_SYNC, env=False),
         ), visual="dial", caption="Each tick is a sync and a reading. Hatching marks a time "
                                   "range that is off; the inner line, the light's dark hours. "
                                   "Drag a time range's start to move it."),
-        Group("Before each sync · PMSA003I", (
+        Group("Before each sync · PMSA003I", about="How long the fan runs before each reading", fields=(
             Field("dock.pm.warmup_s", "Fan warm-up", "0 = always on.", "int", ds.PM_WARMUP_S,
                   unit="seconds", minimum=0, maximum=ds.PM_WARMUP_MAX_S),
         ), visual="slot"),
-        Group("CO₂ · SCD41", (
+        Group("CO₂ · SCD41", about="How the CO₂ sensor corrects its readings", fields=(
             Field("dock.scd41.temperature_offset_c", "Temperature offset",
                   "Heat from the dock, taken off the SCD41's reading.", "number",
                   ds.SCD41_OFFSET_C, unit="°C", minimum=0, maximum=ds.SCD41_OFFSET_MAX_C),
             Field("dock.scd41.self_calibration", "Self-calibration",
                   "Takes the lowest reading of each week as fresh air.", "bool", True),
         ), action="recalibrate"),
-        Group("Humidity · SHTC3", (
+        Group("Humidity · SHTC3", about="How the humidity sensor measures", fields=(
             Field("dock.shtc3.low_power", "Low power", "Faster readings, less repeatable.",
                   "bool", False),
         )),
-        Group("Air quality · BME688", (
+        Group("Air quality · BME688", about="How often BSEC samples the air-quality sensor", fields=(
             Field("dock.bsec.sample_s", "Sample", "A change starts IAQ learning again.", "choice",
                   300, choices=(("3", "Every 3 s"), ("300", "Every 5 min"))),
         )),
-        Group("Status light", (
+        Group("Status light", about="How the dock's light shows what it is doing", fields=(
             Field("dock.led.brightness_pct", "Brightness", "0 = off.", "int",
                   ds.LED_BRIGHTNESS_PCT, unit="%", minimum=0, maximum=100),
             Field("dock.led.dark", "Dark hours", "", "window", False, env=False),
@@ -219,35 +221,35 @@ TABS: tuple[Tab, ...] = (
             *(field for state, pattern, interval in ds.LED_LOOKS
               for field in _led_fields(state, pattern, interval)),
         )),
-        Group("Log", (
+        Group("Log", about="How much the dock writes to its log", fields=(
             Field("dock.log.level", "Level", "", "choice", "debug",
                   choices=tuple((level, level.capitalize()) for level in ds.LOG_LEVELS)),
         )),
     ), sheet=True),
     Tab("storage", "Storage", (
-        Group("Sensor readings", (
+        Group("Sensor readings", about="The dock's readings, kept on the server", fields=(
             Field("source.path", "File", "", "text", "sensor-readings.db"),
             Field("source.keep_days", "Delete after", "0 = never.", "number", 0, unit="days",
                   minimum=0),
         ), store="sensor-readings"),
-        Group("Board reports", (
+        Group("Board reports", about="What each board says about itself at each sync", fields=(
             Field("status.path", "File", "", "text", "status.db"),
             Field("status.keep_days", "Delete after", "0 = never.", "number", 7, unit="days",
                   minimum=0),
         ), store="board-reports"),
-        Group("Board logs", (
+        Group("Board logs", about="What each board logs over MQTT", fields=(
             Field("logs.path", "File", "", "text", "board-logs.db"),
             Field("logs.keep_days", "Delete after", "0 = never.", "number", 7, unit="days",
                   minimum=0),
         ), store="board-logs"),
-        Group("Calibration", (
+        Group("Calibration", about="Copies of the air-quality sensor's calibration, for after a restart", fields=(
             Field("calibration.path", "File", "", "text", "calibration.db"),
             Field("calibration.keep_days", "Delete after", "0 = never.", "number", 3, unit="days",
                   minimum=0),
         ), store="calibration"),
     )),
     Tab("firmware", "Firmware", (
-        Group("Updates", (
+        Group("Updates", about="Whether the server offers new firmware to the boards", fields=(
             Field("client.firmware.enabled", "Update boards", "", "bool", False),
             Field("client.firmware.dir", "Folder", "", "text", "firmware"),
         )),

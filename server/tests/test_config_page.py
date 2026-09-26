@@ -788,3 +788,13 @@ def test_only_form_controls_carry_a_data_key(dock_client):
     for el in soup_of(dock_client.get("/web/config")).select("[data-key]"):
         assert el.name in ("input", "select", "textarea", "fieldset") \
             or "segments" in el.get("class", []), el.name
+
+
+def test_each_group_with_a_heading_says_what_it_is_for_under_it(dock_client):
+    soup = soup_of(dock_client.get("/web/config"))
+    headings = soup.select("#settings-form h2.group")
+
+    assert headings and all(h.find_next_sibling("p", class_="about") for h in headings)
+    page = one(soup, "#panel-display .section .heading")
+    assert one(page, ".about").get_text() == "When to change to the next page"
+
