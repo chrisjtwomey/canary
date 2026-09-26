@@ -122,7 +122,7 @@ LED_PATTERN_LABELS = {p: p.replace("_", " ").capitalize() for p in ds.LED_PATTER
 SMOOTHNESS_STOPS = tuple((str(i), f"{n} steps" if n else "Smooth")
                          for i, n in enumerate(ds.LED_SMOOTHNESS_STEPS, 1))
 # What each limit's help says it is for.
-POOR_AIR_HELP = "Sets the light's Poor air quality trigger."
+POOR_AIR_HELP = "Will trigger the status light pattern, if enabled."
 
 
 TABS: tuple[Tab, ...] = (
@@ -196,9 +196,9 @@ TABS: tuple[Tab, ...] = (
                                             "how much dust is poor air", fields=(
             Field("dock.pm.warmup_s", "Fan warm-up", "0 = always on.", "int", ds.PM_WARMUP_S,
                   unit="seconds", minimum=0, maximum=ds.PM_WARMUP_MAX_S),
-            Field("dock.pm.poor_air_ug_m3", "Poor air from", "PM2.5. " + POOR_AIR_HELP, "number",
+            Field("dock.pm.poor_air_ug_m3", "Alert threshold", "PM2.5. " + POOR_AIR_HELP, "number",
                   ds.POOR_AIR_UG_M3, unit="µg/m³", minimum=ds.POOR_AIR_UG_M3_RANGE[0],
-                  maximum=ds.POOR_AIR_UG_M3_RANGE[1], long="Fine dust poor air from"),
+                  maximum=ds.POOR_AIR_UG_M3_RANGE[1], long="Fine dust alert threshold"),
         ), visual="slot"),
         Group("CO₂ · SCD41", about="How the CO₂ sensor corrects its readings", fields=(
             Field("dock.scd41.temperature_offset_c", "Temperature offset",
@@ -206,9 +206,9 @@ TABS: tuple[Tab, ...] = (
                   ds.SCD41_OFFSET_C, unit="°C", minimum=0, maximum=ds.SCD41_OFFSET_MAX_C),
             Field("dock.scd41.self_calibration", "Self-calibration",
                   "Takes the lowest reading of each week as fresh air.", "bool", True),
-            Field("dock.scd41.poor_air_ppm", "Poor air from", POOR_AIR_HELP, "int",
+            Field("dock.scd41.poor_air_ppm", "Alert threshold", POOR_AIR_HELP, "int",
                   ds.POOR_AIR_PPM, unit="ppm", minimum=ds.POOR_AIR_PPM_RANGE[0],
-                  maximum=ds.POOR_AIR_PPM_RANGE[1], long="CO₂ poor air from"),
+                  maximum=ds.POOR_AIR_PPM_RANGE[1], long="CO₂ alert threshold"),
         ), action="recalibrate"),
         Group("Humidity · SHTC3", about="How the humidity sensor measures", fields=(
             Field("dock.shtc3.low_power", "Low power", "Faster readings, less repeatable.",
@@ -218,9 +218,9 @@ TABS: tuple[Tab, ...] = (
                                             "what index is poor air", fields=(
             Field("dock.bsec.sample_s", "Sample", "A change starts IAQ learning again.", "choice",
                   300, choices=(("3", "Every 3 s"), ("300", "Every 5 min"))),
-            Field("dock.bsec.poor_air_iaq", "Poor air from", "IAQ, once BSEC is calibrated. " +
+            Field("dock.bsec.poor_air_iaq", "Alert threshold", "IAQ, once BSEC is calibrated. " +
                   POOR_AIR_HELP, "int", ds.POOR_AIR_IAQ, minimum=ds.POOR_AIR_IAQ_RANGE[0],
-                  maximum=ds.POOR_AIR_IAQ_RANGE[1], long="Air quality poor air from"),
+                  maximum=ds.POOR_AIR_IAQ_RANGE[1], long="Air quality alert threshold"),
         )),
         Group("Status light", about="How the dock's light shows what it is doing", fields=(
             Field("dock.led.brightness_pct", "Brightness", "0 = off.", "int",

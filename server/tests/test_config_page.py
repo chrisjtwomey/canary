@@ -622,7 +622,7 @@ def test_each_poor_air_limit_is_in_its_sensors_section(dock_client, key, heading
     field = one(soup_of(dock_client.get("/web/config")), f'#panel-dock [data-field="{key}"]')
     section = field.find_parent(class_="section")
     assert one(section, "h2").find("span").get_text() == heading
-    assert one(field, ".name").get_text() == "Poor air from"
+    assert one(field, ".name").get_text() == "Alert threshold"
 
 
 def test_the_fine_dust_section_holds_the_fan_and_its_strip(dock_client):

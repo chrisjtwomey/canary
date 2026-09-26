@@ -469,7 +469,7 @@ def test_each_poor_air_limit_is_written_under_its_sensor():
 def test_a_poor_air_limit_out_of_range_is_refused_and_named_by_its_sensor():
     e = cf.apply(EXAMPLE, as_posted(EXAMPLE, dock__scd41__poor_air_ppm="399"))
     assert e.errors == {"dock.scd41.poor_air_ppm": "Must be at least 400."}
-    assert cf.name_of(("dock", "scd41", "poor_air_ppm")) == "Dock · CO₂ poor air from"
+    assert cf.name_of(("dock", "scd41", "poor_air_ppm")) == "Dock · CO₂ alert threshold"
 
 
 def test_a_change_to_the_looks_reads_as_one_line():
