@@ -6,6 +6,13 @@ body.web {
   min-height: 100vh;
 }
 
+/* Keyboard focus in the pages' greys rather than the browser's blue;
+   a control that marks its focus its own way says so later. */
+body.web :focus-visible {
+  outline: 2px solid var(--ink-mid);
+  outline-offset: 2px;
+}
+
 /* ── The menu ────────────────────────────────────────────────── */
 .bar {
   max-width: 1280px;
