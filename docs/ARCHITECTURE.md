@@ -119,7 +119,8 @@ day, on :00, :05, … on the wall clock; the weather calendar keeps `times`.
 whose seconds past midnight are a multiple of that range's interval. epd's `TimeRanges` finds the slot
 by stepping through the minutes and asking of each which range it is in, because some clocks change at
 01:00: in spring that hour never happens, and in autumn it happens twice. The Display tab edits the
-ranges beside a dial of the day: a range splits in two, or gives its hours to the range before.
+ranges beside a dial of the day: a new time range halves the one that starts latest, which runs on
+past midnight to the earliest start, and a range removed gives its hours to the one before.
 
 The dock syncs on ranges of the same shape, `dock.sync` in `config.yaml`: it takes a reading at each
 sync and posts its queue. By default it is every 1800 seconds from 01:00 and every 300 from 07:00, so

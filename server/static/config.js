@@ -306,7 +306,7 @@
 
   // ── A schedule: time ranges round the clock ──────────────────────
   // Each row is a time range from its start to the next row's. Add halves
-  // the longest, the earliest of equals, so the day stays covered; × gives
+  // the time left after the latest start, so the day stays covered; × gives
   // a range's hours to the one before. The rows stay in order of their
   // starts, as the day runs.
   var DAY_MIN = 1440;
@@ -347,30 +347,24 @@
     }
 
     // The add button's new row, last and blank, starts halfway through the
-    // longest range, on a five-minute step, with its interval. When every
-    // range is too short for that, no row is added.
+    // time range that starts latest, which runs on past midnight to the
+    // earliest start, on a five-minute step, with its interval. When that
+    // range is too short for it, no row is added.
     box._added = function (row) {
       var others = rows().filter(function (r) { return r !== row && !isNaN(startOf(r)); })
         .sort(function (a, b) { return startOf(a) - startOf(b); });
-      var longest = null, from = 0, length = 0;
-      others.forEach(function (r, i) {
-        var start = startOf(r);
-        var end = i + 1 < others.length ? startOf(others[i + 1]) : startOf(others[0]) + DAY_MIN;
-        if (end - start > length) {
-          longest = r;
-          from = start;
-          length = end - start;
-        }
-      });
+      var latest = others[others.length - 1];
+      var from = latest ? startOf(latest) : 0;
+      var length = latest ? startOf(others[0]) + DAY_MIN - from : 0;
       var middle = from + Math.round(length / 10) * 5;
-      if (!longest || middle <= from || middle >= from + length) {
+      if (!latest || middle <= from || middle >= from + length) {
         row.remove();
         limits();
         return;
       }
       row.querySelector('input[type=time]').value = hhmm(middle);
       row.querySelector('input[type=number]').value =
-        longest.querySelector('input[type=number]').value;
+        latest.querySelector('input[type=number]').value;
       sort();
       limits();
       box.dispatchEvent(new Event('input', { bubbles: true }));
