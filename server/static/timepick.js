@@ -1,12 +1,12 @@
 /* The Config page's own time picker: an hour and a minute column in the
    pages' ink, opened by the clock button beside each time input. The
-   browser's picker takes its colours from the system. Choosing sets the
-   input and fires input and change on it, as typing does, so the form
-   and the drawings follow. */
+   browser's picker takes its colours from the system. Each choice sets
+   the input and fires input on it, so the form and the drawings follow;
+   closing fires change, once, when anything was chosen. */
 (function () {
   'use strict';
 
-  var open = null;   // {box, input, button} while a picker shows
+  var open = null;   // {box, input, button, changed} while a picker shows
 
   function pad(n) { return (n < 10 ? '0' : '') + n; }
 
@@ -19,7 +19,7 @@
   function set(input, hour, minute) {
     input.value = pad(hour) + ':' + pad(minute);
     input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.dispatchEvent(new Event('change', { bubbles: true }));
+    open.changed = true;
   }
 
   function column(label, count, chosen) {
@@ -51,10 +51,12 @@
 
   function close(refocus) {
     if (!open) return;
-    open.box.remove();
-    open.button.setAttribute('aria-expanded', 'false');
-    if (refocus) open.button.focus();
+    var was = open;
     open = null;
+    was.box.remove();
+    was.button.setAttribute('aria-expanded', 'false');
+    if (was.changed) was.input.dispatchEvent(new Event('change', { bubbles: true }));
+    if (refocus) was.button.focus();
   }
 
   function show(button) {
@@ -112,7 +114,7 @@
       col.scrollTop = b.offsetTop - (col.clientHeight - b.offsetHeight) / 2;
     });
     button.setAttribute('aria-expanded', 'true');
-    open = { box: box, input: input, button: button };
+    open = { box: box, input: input, button: button, changed: false };
     chosenIn(hours).focus({ preventScroll: true });
   }
 

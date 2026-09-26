@@ -340,7 +340,9 @@
     }
 
     function sort() {
-      var sorted = rows().slice().sort(function (a, b) { return startOf(a) - startOf(b); });
+      var now = rows();
+      var sorted = now.slice().sort(function (a, b) { return startOf(a) - startOf(b); });
+      if (sorted.every(function (row, i) { return row === now[i]; })) return;
       var focused = document.activeElement;
       sorted.forEach(function (row) { list.appendChild(row); });
       if (focused && box.contains(focused)) focused.focus();
@@ -369,8 +371,14 @@
       limits();
       box.dispatchEvent(new Event('input', { bubbles: true }));
     };
+    // A start takes its row into order once it is set: when its input
+    // loses focus, or when the picker closes. The browser reports a change
+    // at each digit typed, and a row moved then takes the typing with it.
     list.addEventListener('change', function (e) {
-      if (e.target.type === 'time') sort();
+      if (e.target.type === 'time' && e.target !== document.activeElement) sort();
+    });
+    list.addEventListener('focusout', function (e) {
+      if (e.target.type === 'time') setTimeout(sort, 0);
     });
     box.addEventListener('input', limits);
     limits();
