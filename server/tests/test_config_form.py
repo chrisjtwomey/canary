@@ -228,11 +228,11 @@ def test_a_groups_days_are_named_monday_first_with_runs_joined(days, words):
 
 
 LOOKS_LINES = ('    looks:\n'
-               '      - {trigger: starting, pattern: pulse, length_s: 0.5}\n'
-               '      - {trigger: no_wifi, pattern: flash, length_s: 1}\n'
-               '      - {trigger: post_failed, pattern: flash, length_s: 2}\n'
-               '      - {trigger: sensor_missing, pattern: flash, length_s: 3}\n'
-               '      - {trigger: well, pattern: pulse, length_s: 1}\n')
+               '      - {trigger: booting, pattern: pulse, length_s: 0.5}\n'
+               '      - {trigger: error, pattern: flash, length_s: 1}\n'
+               '      - {trigger: poor_air_quality, pattern: double_flash, length_s: 2}\n'
+               '      - {trigger: calibrating, pattern: swell, length_s: 4}\n'
+               '      - {trigger: running, pattern: pulse, length_s: 1}\n')
 
 
 def looks(text=EXAMPLE, *rows):
@@ -245,21 +245,22 @@ def looks(text=EXAMPLE, *rows):
 
 def test_the_lights_looks_are_a_row_for_each_trigger_in_their_order():
     assert cf.shown(cf.read(EXAMPLE))["dock.led.looks"] == [
-        ("starting", "pulse", "0.5"), ("no_wifi", "flash", "1"), ("post_failed", "flash", "2"),
-        ("sensor_missing", "flash", "3"), ("well", "pulse", "1")]
+        ("booting", "pulse", "0.5"), ("error", "flash", "1"),
+        ("poor_air_quality", "double_flash", "2"), ("calibrating", "swell", "4"),
+        ("running", "pulse", "1")]
 
 
 def test_a_double_or_a_triple_is_written_by_its_name():
-    e = looks(EXAMPLE, ("post_failed", "triple_flash", "1.9"), ("well", "double_pulse", "0.9"))
-    assert ('      - {trigger: post_failed, pattern: triple_flash, length_s: 1.9}\n'
-            '      - {trigger: well, pattern: double_pulse, length_s: 0.9}\n') in e.text
+    e = looks(EXAMPLE, ("poor_air_quality", "triple_flash", "1.9"), ("running", "double_pulse", "0.9"))
+    assert ('      - {trigger: poor_air_quality, pattern: triple_flash, length_s: 1.9}\n'
+            '      - {trigger: running, pattern: double_pulse, length_s: 0.9}\n') in e.text
     check_config(e.text)
 
 
 def test_looks_are_written_one_to_a_line_in_the_triggers_order():
-    e = looks(EXAMPLE, ("well", "solid", "1"), ("no_wifi", "flash", "0.25"))
-    assert ('    looks:\n      - {trigger: no_wifi, pattern: flash, length_s: 0.25}\n'
-            '      - {trigger: well, pattern: solid}\n') in e.text
+    e = looks(EXAMPLE, ("running", "solid", "1"), ("error", "flash", "0.25"))
+    assert ('    looks:\n      - {trigger: error, pattern: flash, length_s: 0.25}\n'
+            '      - {trigger: running, pattern: solid}\n') in e.text
     assert e.errors == {} and e.changed == ["dock.led.looks"]
     check_config(e.text)
 
@@ -271,12 +272,12 @@ def test_no_looks_are_written_as_none():
 
 
 def test_the_interval_of_a_look_that_does_not_repeat_is_not_compared():
-    text = EXAMPLE.replace("{trigger: well, pattern: pulse, length_s: 1}",
-                           "{trigger: well, pattern: solid, length_s: 4}")
+    text = EXAMPLE.replace("{trigger: running, pattern: pulse, length_s: 1}",
+                           "{trigger: running, pattern: solid, length_s: 4}")
     e = edit(text)
     assert e.text == text and e.changed == []
-    e = looks(text, ("well", "off", "not a number"))
-    assert e.errors == {} and '      - {trigger: well, pattern: "off"}\n' in e.text
+    e = looks(text, ("running", "off", "not a number"))
+    assert e.errors == {} and '      - {trigger: running, pattern: "off"}\n' in e.text
     check_config(e.text)
 
 
@@ -284,20 +285,20 @@ def test_looks_without_a_block_are_written_where_the_led_block_is():
     text = EXAMPLE.replace(LOOKS_LINES, "")
     assert "looks" not in cf.read(text)["dock"]["led"]
     assert edit(text).changed == []
-    e = looks(text, ("well", "pulse", "2"))
+    e = looks(text, ("running", "pulse", "2"))
     assert cf.read(e.text)["dock"]["led"]["looks"] == [
-        {"trigger": "well", "pattern": "pulse", "length_s": 2}]
+        {"trigger": "running", "pattern": "pulse", "length_s": 2}]
 
 
 @pytest.mark.parametrize("rows, words", [
     ((("", "pulse", "1"),), "Choose a trigger for each row."),
-    ((("well", "pulse", "1"), ("well", "off", "1")), "Two rows for Well."),
-    ((("no_wifi", "blink", "1"),), "No Wi-Fi: choose a pattern."),
-    ((("no_wifi", "flash", ""),), "No Wi-Fi: enter a length in seconds."),
-    ((("no_wifi", "flash", "0.2"),), "No Wi-Fi: enter 0.25 to 10 seconds for a flash."),
-    ((("no_wifi", "pulse", "11"),), "No Wi-Fi: enter 0.25 to 10 seconds for a pulse."),
-    ((("no_wifi", "triple_flash", "1.1"),),
-     "No Wi-Fi: enter 1.2 to 10 seconds for a triple flash."),
+    ((("running", "pulse", "1"), ("running", "off", "1")), "Two rows for Running."),
+    ((("error", "blink", "1"),), "Error: choose a pattern."),
+    ((("error", "flash", ""),), "Error: enter a length in seconds."),
+    ((("error", "flash", "0.2"),), "Error: enter 0.25 to 10 seconds for a flash."),
+    ((("error", "pulse", "11"),), "Error: enter 0.25 to 10 seconds for a pulse."),
+    ((("error", "triple_flash", "1.1"),),
+     "Error: enter 1.2 to 10 seconds for a triple flash."),
 ])
 def test_looks_the_form_cannot_write_are_refused_at_their_field(rows, words):
     e = looks(EXAMPLE, *rows)
@@ -438,18 +439,51 @@ def test_changes_are_in_words_with_each_schedule_on_one_line():
     ]
 
 
+def test_the_smoothness_is_a_stop_written_as_its_number():
+    assert cf.shown(cf.read(EXAMPLE))["dock.led.smoothness"] == "3"
+    e = edit(dock__led__smoothness="6")
+    assert "    smoothness: 6   # the steps of light in each fade" in e.text
+    assert cf.read(e.text)["dock"]["led"]["smoothness"] == 6
+
+
+def test_a_smoothness_past_the_last_stop_is_refused():
+    e = cf.apply(EXAMPLE, as_posted(EXAMPLE, dock__led__smoothness="7"))
+    assert e.errors["dock.led.smoothness"].startswith("Must be one of 4 steps")
+
+
+def test_a_changed_smoothness_reads_by_its_stops_name():
+    new = cf.read(edit(dock__led__smoothness="6").text)
+    assert cf.changes(cf.read(EXAMPLE), new) == [
+        {"name": "Dock · Smoothness", "old": "16 steps", "new": "Smooth"}]
+
+
+def test_each_poor_air_limit_is_written_under_its_sensor():
+    e = edit(dock__scd41__poor_air_ppm="1200", dock__pm__poor_air_ug_m3="25",
+             dock__bsec__poor_air_iaq="200")
+    dock = cf.read(e.text)["dock"]
+    assert (dock["scd41"]["poor_air_ppm"], dock["pm"]["poor_air_ug_m3"],
+            dock["bsec"]["poor_air_iaq"]) == (1200, 25, 200)
+    check_config(e.text)
+
+
+def test_a_poor_air_limit_out_of_range_is_refused_and_named_by_its_sensor():
+    e = cf.apply(EXAMPLE, as_posted(EXAMPLE, dock__scd41__poor_air_ppm="399"))
+    assert e.errors == {"dock.scd41.poor_air_ppm": "Must be at least 400."}
+    assert cf.name_of(("dock", "scd41", "poor_air_ppm")) == "Dock · CO₂ poor air from"
+
+
 def test_a_change_to_the_looks_reads_as_one_line():
-    new = cf.read(looks(EXAMPLE, ("no_wifi", "flash", "1"), ("well", "solid", "1")).text)
+    new = cf.read(looks(EXAMPLE, ("error", "flash", "1"), ("running", "solid", "1")).text)
     assert cf.changes(cf.read(EXAMPLE), new) == [
         {"name": "Dock · Patterns",
-         "old": "Starting pulse 0.5 s · No Wi-Fi flash 1 s · Post failed flash 2 s · "
-                "Sensor missing flash 3 s · Well pulse 1 s",
-         "new": "No Wi-Fi flash 1 s · Well solid"}]
+         "old": "Booting pulse 0.5 s · Error flash 1 s · Poor air quality double flash 2 s · "
+                "Calibrating swell 4 s · Running pulse 1 s",
+         "new": "Error flash 1 s · Running solid"}]
 
 
 def test_a_changed_double_or_triple_reads_by_its_name():
-    new = cf.read(looks(EXAMPLE, ("well", "triple_pulse", "1.9")).text)
-    assert cf.changes(cf.read(EXAMPLE), new)[0]["new"] == "Well triple pulse 1.9 s"
+    new = cf.read(looks(EXAMPLE, ("running", "triple_pulse", "1.9")).text)
+    assert cf.changes(cf.read(EXAMPLE), new)[0]["new"] == "Running triple pulse 1.9 s"
 
 
 @pytest.mark.parametrize("path, name", [

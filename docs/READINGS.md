@@ -107,7 +107,8 @@ boards; each board's own fields sit in a block named for it, `head` or
     "bsec": { "running": true, "restored": true, "accuracy": 2, "late": 0,
               "saved": 1757443200, "sample_s": 300 },
     "settings": { "version": "5bd4ecec", "refused": [] },
-    "recalibrated": { "id": 1758650400, "ppm": 420, "ok": true, "correction_ppm": -12 }
+    "recalibrated": { "id": 1758650400, "ppm": 420, "ok": true, "correction_ppm": -12 },
+    "light": "running"
   }
 }
 ```
@@ -142,7 +143,9 @@ saved its state this boot (0 for not yet), and the seconds between its
 samples, 3 or 300. `settings` and `recalibrated` (ARCHITECTURE §3.8) are
 the version of the settings it runs and the keys of them it refused, and
 the last recalibration it ran, with the id the server gave it and the
-correction the SCD41 made; an `id` of 0 is none yet.
+correction the SCD41 made; an `id` of 0 is none yet. `light` is what its
+status light shows as it reports: the trigger (ARCHITECTURE §3.5), or
+`updating` or `dark`.
 
 The dock queues every document when it takes the reading, and posts the
 queue oldest first, up to 100 documents at a time as one JSON array. The

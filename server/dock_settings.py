@@ -6,13 +6,13 @@ changes whenever they do, and two things that are not settings: whether the
 light is dark until the next reading, and a recalibration waiting to run.
 
     {"version": "3f2a9c1e",
-     "pm": {"warmup_s": 35},
-     "scd41": {"temperature_offset_c": 4.0, "self_calibration": true},
+     "pm": {"warmup_s": 35, "poor_air_ug_m3": 37.5},
+     "scd41": {"temperature_offset_c": 4.0, "self_calibration": true, "poor_air_ppm": 1500},
      "shtc3": {"low_power": false},
-     "led": {"brightness_pct": 15, "dark": false,
-             "looks": [{"trigger": "starting", "pattern": "pulse", "length_s": 0.5}, ...]},
+     "led": {"brightness_pct": 15, "smoothness": 3, "dark": false,
+             "looks": [{"trigger": "booting", "pattern": "pulse", "length_s": 0.5}, ...]},
      "log": {"level": "debug"},
-     "bsec": {"sample_s": 300},
+     "bsec": {"sample_s": 300, "poor_air_iaq": 150},
      "recalibrate": {"id": 1758650400, "ppm": 420}}
 
 The dock reports what it applied in its client status's ``dock`` block, as
@@ -46,19 +46,24 @@ SCD41_OFFSET_MAX_C = 20.0
 LED_BRIGHTNESS_PCT = 15
 # The light's triggers: the states the dock can be in, highest first. The
 # dock shows the first that holds and has a look, and none of them when none
-# does; its update has a look of its own that no setting changes.
-LED_TRIGGERS = ("starting", "no_wifi", "post_failed", "sensor_missing", "well")
+# does; its update has a look of its own that no setting changes. Error is
+# anything wrong, which the Boards page names; running holds once the dock
+# has booted, so a trigger with no look passes the light to it.
+LED_TRIGGERS = ("booting", "error", "poor_air_quality", "calibrating", "running")
 # The patterns, in the order the Dock tab offers them. A pattern repeats
 # every length_s; a double or a triple is two or three flashes or quick
-# pulses of 0.3 s each, then dark for the rest of the length.
-LED_PATTERNS = ("off", "solid", "pulse", "double_pulse", "triple_pulse",
-                "flash", "double_flash", "triple_flash")
+# pulses of 0.3 s each, then dark for the rest of the length. A blip is a
+# very short flash; a swell fades up over a third of the length, holds, and
+# fades down over the last third; a ramp fades up over the length, then goes
+# dark at once.
+LED_PATTERNS = ("off", "solid", "blip", "pulse", "double_pulse", "triple_pulse",
+                "swell", "ramp", "flash", "double_flash", "triple_flash")
 # The patterns that hold one level, and so have no length.
 LED_STILL = ("off", "solid")
 # Each trigger's look by default, in the triggers' order.
-LED_LOOKS = (("starting", "pulse", 0.5), ("no_wifi", "flash", 1),
-             ("post_failed", "flash", 2), ("sensor_missing", "flash", 3),
-             ("well", "pulse", 1))
+LED_LOOKS = (("booting", "pulse", 0.5), ("error", "flash", 1),
+             ("poor_air_quality", "double_flash", 2), ("calibrating", "swell", 4),
+             ("running", "pulse", 1))
 DEFAULT_LED_LOOKS = [{"trigger": t, "pattern": p, "length_s": n} for t, p, n in LED_LOOKS]
 LED_LENGTH_MIN_S = 0.25
 LED_LENGTH_MAX_S = 10.0
@@ -68,6 +73,16 @@ LED_GROUP_MIN_S = {"double_pulse": 0.9, "triple_pulse": 1.2,
                    "double_flash": 0.9, "triple_flash": 1.2}
 # The length the dock is sent for a pattern that has none.
 LED_STILL_LENGTH_S = 1
+# The steps of light a fade takes at each stop of the smoothness, from 1; 0
+# is none to see. Stop 3 was the only one before there was a choice.
+LED_SMOOTHNESS_STEPS = (4, 8, 16, 32, 64, 0)
+LED_SMOOTHNESS = 3
+# The limits from which the air is poor, for the light's trigger: the pages'
+# bands "Stuffy. Open a window.", "Dusty." and "Polluted.", and the ranges
+# the dock takes.
+POOR_AIR_PPM, POOR_AIR_PPM_RANGE = 1500, (400, 5000)
+POOR_AIR_UG_M3, POOR_AIR_UG_M3_RANGE = 37.5, (1, 500)
+POOR_AIR_IAQ, POOR_AIR_IAQ_RANGE = 150, (1, 500)
 
 
 def led_min_length(pattern: str) -> float:
@@ -101,19 +116,25 @@ class DockSettings:
     log_level: str = "debug"
     bsec_sample_s: int = 300
     led_looks: tuple[tuple[str, str, float], ...] = LED_LOOKS   # (trigger, pattern, length_s)
+    led_smoothness: int = LED_SMOOTHNESS
+    scd41_poor_air_ppm: int = POOR_AIR_PPM
+    pm_poor_air_ug_m3: float = POOR_AIR_UG_M3
+    bsec_poor_air_iaq: int = POOR_AIR_IAQ
 
     def document(self) -> dict:
         """The settings as the dock reads them, without the version."""
         return {
-            "pm": {"warmup_s": self.pm_warmup_s},
+            "pm": {"warmup_s": self.pm_warmup_s, "poor_air_ug_m3": self.pm_poor_air_ug_m3},
             "scd41": {"temperature_offset_c": self.scd41_temperature_offset_c,
-                      "self_calibration": self.scd41_self_calibration},
+                      "self_calibration": self.scd41_self_calibration,
+                      "poor_air_ppm": self.scd41_poor_air_ppm},
             "shtc3": {"low_power": self.shtc3_low_power},
             "led": {"brightness_pct": self.led_brightness_pct,
+                    "smoothness": self.led_smoothness,
                     "looks": [{"trigger": trigger, "pattern": pattern, "length_s": length}
                               for trigger, pattern, length in self.led_looks]},
             "log": {"level": self.log_level},
-            "bsec": {"sample_s": self.bsec_sample_s},
+            "bsec": {"sample_s": self.bsec_sample_s, "poor_air_iaq": self.bsec_poor_air_iaq},
         }
 
     @property
@@ -219,6 +240,10 @@ def load_dock_settings(config: dict) -> DockSettings:
     if level not in LOG_LEVELS:
         raise ConfigError(f"dock.log.level must be one of {', '.join(LOG_LEVELS)}, "
                           f"not {level!r}")
+    dust = _get(config, "pm.poor_air_ug_m3", POOR_AIR_UG_M3)
+    low, high = POOR_AIR_UG_M3_RANGE
+    if isinstance(dust, bool) or not isinstance(dust, (int, float)) or not low <= dust <= high:
+        raise ConfigError(f"dock.pm.poor_air_ug_m3 must be from {low} to {high}, not {dust!r}")
     return DockSettings(
         pm_warmup_s=warmup,
         scd41_temperature_offset_c=round(float(offset), 2),
@@ -229,6 +254,10 @@ def load_dock_settings(config: dict) -> DockSettings:
         log_level=level,
         bsec_sample_s=rate,
         led_looks=_led_looks(config),
+        led_smoothness=_int(config, "led.smoothness", LED_SMOOTHNESS, 1, len(LED_SMOOTHNESS_STEPS)),
+        scd41_poor_air_ppm=_int(config, "scd41.poor_air_ppm", POOR_AIR_PPM, *POOR_AIR_PPM_RANGE),
+        pm_poor_air_ug_m3=round(float(dust), 1),
+        bsec_poor_air_iaq=_int(config, "bsec.poor_air_iaq", POOR_AIR_IAQ, *POOR_AIR_IAQ_RANGE),
     )
 
 
@@ -315,6 +344,12 @@ class BoardSettings:
         last reported. Not offline before its first report."""
         entry = self._entry()
         return bool(entry.get("offline")), entry.get("age_s")
+
+    def light(self) -> str | None:
+        """What the dock's light showed at its last report: a trigger,
+        "updating" or "dark"; None before it has said."""
+        shown = self._dock().get("light")
+        return shown if isinstance(shown, str) and shown else None
 
     def last_recalibration(self) -> dict | None:
         """The dock's report of its last recalibration, or None."""

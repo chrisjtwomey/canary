@@ -41,14 +41,14 @@ class Field:
     of the config that gives it; the form shows it as the field's value.
     ``hint`` is an example of the value, for a field with no default. ``when``
     is another field and a
-    value, as ``source.kind=store``, or values, as ``led.well.pattern=pulse|flash``:
+    value, as ``source.kind=store``, or values, as ``log.level=info|debug``:
     the field shows only while that one holds one of them. ``env`` is false for keys the server reads without looking for an
     environment variable.
     """
     key: str
     label: str
     help: str = ""
-    kind: str = "text"      # text zone int number bool choice time window pools order week looks
+    kind: str = "text"      # text zone int number bool choice stops time window pools order week looks
     default: Any = None
     hint: str = ""
     choices: tuple[tuple[str, str], ...] = ()
@@ -84,7 +84,8 @@ class Group:
     names a drawing of the group's values that can also set them: ``dial``,
     the day's syncs, ``slot``, the time before one sync, ``panel``, the
     image and its drawn area. ``disk``, the space the stores take on the
-    server's disk, only shows. ``caption`` says what the drawing shows, when
+    server's disk, and ``led``, the light playing one of its looks, only
+    show. ``caption`` says what the drawing shows, when
     the page's own words for it do not. ``about`` is the line under the
     heading that says what the group is for."""
     heading: str
@@ -112,10 +113,16 @@ class Tab:
 
 
 # The status light's triggers, as the Dock tab names them, in their order.
-LED_TRIGGER_LABELS = {"starting": "Starting", "no_wifi": "No Wi-Fi", "post_failed": "Post failed",
-                      "sensor_missing": "Sensor missing", "well": "Well"}
+LED_TRIGGER_LABELS = {"booting": "Booting", "error": "Error",
+                      "poor_air_quality": "Poor air quality", "calibrating": "Calibrating",
+                      "running": "Running"}
 # The light's patterns, as the Dock tab names them.
 LED_PATTERN_LABELS = {p: p.replace("_", " ").capitalize() for p in ds.LED_PATTERNS}
+# The smoothness slider's stops, from 1, as it names them.
+SMOOTHNESS_STOPS = tuple((str(i), f"{n} steps" if n else "Smooth")
+                         for i, n in enumerate(ds.LED_SMOOTHNESS_STEPS, 1))
+# What each limit's help says it is for.
+POOR_AIR_HELP = "Sets the light's Poor air quality trigger."
 
 
 TABS: tuple[Tab, ...] = (
@@ -185,9 +192,13 @@ TABS: tuple[Tab, ...] = (
         ), visual="dial", caption="Each tick is a sync and a reading. Hatching marks a time "
                                   "range that is off; the inner line, the light's schedule. "
                                   "Drag a time range's start to move it."),
-        Group("Before each sync · PMSA003I", about="How long the fan runs before each reading", fields=(
+        Group("Fine dust · PMSA003I", about="How long the fan runs before each reading, and "
+                                            "how much dust is poor air", fields=(
             Field("dock.pm.warmup_s", "Fan warm-up", "0 = always on.", "int", ds.PM_WARMUP_S,
                   unit="seconds", minimum=0, maximum=ds.PM_WARMUP_MAX_S),
+            Field("dock.pm.poor_air_ug_m3", "Poor air from", "PM2.5. " + POOR_AIR_HELP, "number",
+                  ds.POOR_AIR_UG_M3, unit="µg/m³", minimum=ds.POOR_AIR_UG_M3_RANGE[0],
+                  maximum=ds.POOR_AIR_UG_M3_RANGE[1], long="Fine dust poor air from"),
         ), visual="slot"),
         Group("CO₂ · SCD41", about="How the CO₂ sensor corrects its readings", fields=(
             Field("dock.scd41.temperature_offset_c", "Temperature offset",
@@ -195,18 +206,27 @@ TABS: tuple[Tab, ...] = (
                   ds.SCD41_OFFSET_C, unit="°C", minimum=0, maximum=ds.SCD41_OFFSET_MAX_C),
             Field("dock.scd41.self_calibration", "Self-calibration",
                   "Takes the lowest reading of each week as fresh air.", "bool", True),
+            Field("dock.scd41.poor_air_ppm", "Poor air from", POOR_AIR_HELP, "int",
+                  ds.POOR_AIR_PPM, unit="ppm", minimum=ds.POOR_AIR_PPM_RANGE[0],
+                  maximum=ds.POOR_AIR_PPM_RANGE[1], long="CO₂ poor air from"),
         ), action="recalibrate"),
         Group("Humidity · SHTC3", about="How the humidity sensor measures", fields=(
             Field("dock.shtc3.low_power", "Low power", "Faster readings, less repeatable.",
                   "bool", False),
         )),
-        Group("Air quality · BME688", about="How often BSEC samples the air-quality sensor", fields=(
+        Group("Air quality · BME688", about="How often BSEC samples the air-quality sensor, and "
+                                            "what index is poor air", fields=(
             Field("dock.bsec.sample_s", "Sample", "A change starts IAQ learning again.", "choice",
                   300, choices=(("3", "Every 3 s"), ("300", "Every 5 min"))),
+            Field("dock.bsec.poor_air_iaq", "Poor air from", "IAQ, once BSEC is calibrated. " +
+                  POOR_AIR_HELP, "int", ds.POOR_AIR_IAQ, minimum=ds.POOR_AIR_IAQ_RANGE[0],
+                  maximum=ds.POOR_AIR_IAQ_RANGE[1], long="Air quality poor air from"),
         )),
         Group("Status light", about="How the dock's light shows what it is doing", fields=(
             Field("dock.led.brightness_pct", "Brightness", "0 = off.", "int",
                   ds.LED_BRIGHTNESS_PCT, unit="%", minimum=0, maximum=100),
+            Field("dock.led.smoothness", "Smoothness", "The steps of light in each fade.",
+                  "stops", ds.LED_SMOOTHNESS, choices=SMOOTHNESS_STOPS),
             Field("dock.led.schedule", "Schedule", "The hours the light is on. Off = all day.",
                   "window", False, env=False),
             Field("dock.led.schedule.from", "From", "", "time", when="dock.led.schedule=true",
@@ -217,7 +237,7 @@ TABS: tuple[Tab, ...] = (
                   "The first row whose trigger is true sets the light. A trigger with no row "
                   "is skipped. Length is one cycle of the pattern.", "looks",
                   ds.DEFAULT_LED_LOOKS, env=False),
-        )),
+        ), visual="led"),
         Group("Log", about="How much the dock writes to its log", fields=(
             Field("dock.log.level", "Level", "", "choice", "debug",
                   choices=tuple((level, level.capitalize()) for level in ds.LOG_LEVELS)),
@@ -689,7 +709,7 @@ def parse(f: Field, raw: Any) -> Any:
                 raise FieldError("Must be a number.")
         _bounds(f, v)
         return v
-    if f.kind == "choice":
+    if f.kind in ("choice", "stops"):
         if raw not in [c for c, _ in f.choices]:
             raise FieldError("Must be one of " + ", ".join(w for _, w in f.choices) + ".")
         return int(raw) if raw.isdigit() else raw
@@ -1306,6 +1326,8 @@ def changes(old: dict, new: dict) -> list[dict[str, str]]:
             after = "none" if after is MISSING else after
         if f is not None and f.scale != 1:
             before, after = (_unit_words(f, v) for v in (before, after))
+        if f is not None and f.kind == "stops":
+            before, after = (dict(f.choices).get(str(v), v) for v in (before, after))
         out.append((order.get(f.key, len(order)) if f else len(order),
                     {"name": name_of(path), "old": _words(before), "new": _words(after)}))
     return [c for _, c in sorted(out, key=lambda x: x[0])]

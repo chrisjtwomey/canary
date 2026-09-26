@@ -43,8 +43,10 @@ def test_a_config_without_a_dock_block_gives_the_defaults():
         pm_warmup_s=35, scd41_temperature_offset_c=4.0, scd41_self_calibration=True,
         shtc3_low_power=False, led_brightness_pct=15, led_schedule=None,
         log_level="debug", bsec_sample_s=300, led_looks=(
-            ("starting", "pulse", 0.5), ("no_wifi", "flash", 1.0), ("post_failed", "flash", 2.0),
-            ("sensor_missing", "flash", 3.0), ("well", "pulse", 1.0)))
+            ("booting", "pulse", 0.5), ("error", "flash", 1.0),
+            ("poor_air_quality", "double_flash", 2.0), ("calibrating", "swell", 4.0),
+            ("running", "pulse", 1.0)),
+        led_smoothness=3, scd41_poor_air_ppm=1500, pm_poor_air_ug_m3=37.5, bsec_poor_air_iaq=150)
 
 
 def test_it_reads_each_key_of_the_dock_block():
@@ -73,6 +75,13 @@ def test_it_reads_each_key_of_the_dock_block():
     ({"led": {"schedule": {"from": "25:00", "to": "01:00"}}}, "dock.led.schedule:"),
     ({"led": {"schedule": {"from": "07:00", "to": "07:00"}}}, "dock.led.schedule"),
     ({"led": {"schedule": True}}, "dock.led.schedule"),
+    ({"led": {"smoothness": 0}}, "dock.led.smoothness"),
+    ({"led": {"smoothness": 7}}, "dock.led.smoothness"),
+    ({"scd41": {"poor_air_ppm": 399}}, "dock.scd41.poor_air_ppm"),
+    ({"scd41": {"poor_air_ppm": 1500.5}}, "dock.scd41.poor_air_ppm"),
+    ({"pm": {"poor_air_ug_m3": 0.5}}, "dock.pm.poor_air_ug_m3"),
+    ({"pm": {"poor_air_ug_m3": "37.5"}}, "dock.pm.poor_air_ug_m3"),
+    ({"bsec": {"poor_air_iaq": 501}}, "dock.bsec.poor_air_iaq"),
 ])
 def test_a_value_out_of_range_is_refused_by_its_key(block, key):
     with pytest.raises(ConfigError, match=f"^{key} "):
@@ -83,22 +92,39 @@ def looks(*given):
     return load_dock_settings({"dock": {"led": {"looks": list(given)}}}).led_looks
 
 
+def test_it_reads_the_smoothness_and_the_poor_air_limits():
+    settings = load_dock_settings({"dock": {
+        "led": {"smoothness": 6}, "scd41": {"poor_air_ppm": 1200},
+        "pm": {"poor_air_ug_m3": 25}, "bsec": {"poor_air_iaq": 200}}})
+    assert (settings.led_smoothness, settings.scd41_poor_air_ppm, settings.pm_poor_air_ug_m3,
+            settings.bsec_poor_air_iaq) == (6, 1200, 25.0, 200)
+    assert settings.document()["led"]["smoothness"] == 6
+    assert settings.document()["pm"]["poor_air_ug_m3"] == 25.0
+
+
+def test_the_old_trigger_names_are_refused():
+    for old in ("starting", "no_wifi", "post_failed", "sensor_missing", "well"):
+        with pytest.raises(ConfigError, match="trigger must be one of"):
+            load_dock_settings({"dock": {"led": {"looks": [
+                {"trigger": old, "pattern": "solid"}]}}})
+
+
 def test_the_looks_are_the_ones_given_in_the_triggers_order():
-    assert looks({"trigger": "well", "pattern": "solid", "length_s": 2},
-                 {"trigger": "no_wifi", "pattern": "flash", "length_s": 0.25}) \
-        == (("no_wifi", "flash", 0.25), ("well", "solid", 2.0))
+    assert looks({"trigger": "running", "pattern": "solid", "length_s": 2},
+                 {"trigger": "error", "pattern": "flash", "length_s": 0.25}) \
+        == (("error", "flash", 0.25), ("running", "solid", 2.0))
 
 
 def test_off_and_solid_need_no_length():
-    assert looks({"trigger": "well", "pattern": "solid"},
-                 {"trigger": "starting", "pattern": "off"}) \
-        == (("starting", "off", 1.0), ("well", "solid", 1.0))
+    assert looks({"trigger": "running", "pattern": "solid"},
+                 {"trigger": "booting", "pattern": "off"}) \
+        == (("booting", "off", 1.0), ("running", "solid", 1.0))
 
 
 def test_a_double_or_a_triple_is_a_look_like_the_rest():
-    assert looks({"trigger": "well", "pattern": "triple_flash", "length_s": 1.9},
-                 {"trigger": "no_wifi", "pattern": "double_pulse", "length_s": 0.9}) \
-        == (("no_wifi", "double_pulse", 0.9), ("well", "triple_flash", 1.9))
+    assert looks({"trigger": "running", "pattern": "triple_flash", "length_s": 1.9},
+                 {"trigger": "error", "pattern": "double_pulse", "length_s": 0.9}) \
+        == (("error", "double_pulse", 0.9), ("running", "triple_flash", 1.9))
 
 
 def test_no_looks_is_a_light_that_shows_nothing_but_an_update():
@@ -106,27 +132,27 @@ def test_no_looks_is_a_light_that_shows_nothing_but_an_update():
 
 
 @pytest.mark.parametrize("value, words", [
-    ({"well": {"pattern": "pulse"}}, "must be a list of looks"),
-    ([["well", "pulse", 1]], "must be a list of looks"),
-    ([{"trigger": "well"}], "each look has trigger, pattern and length_s, not trigger"),
-    ([{"trigger": "well", "pattern": "pulse", "every": 1}], "each look has"),
-    ([{"trigger": "wifi", "pattern": "pulse"}], "trigger must be one of starting, no_wifi, "
-                                                "post_failed, sensor_missing, well, not 'wifi'"),
-    ([{"trigger": "well", "pattern": "off"}, {"trigger": "well", "pattern": "solid"}],
-     "has two looks for well"),
-    ([{"trigger": "well", "pattern": "blink"}], "well's pattern must be one of off, solid, pulse, "
-                                                "double_pulse, triple_pulse, flash, double_flash, "
-                                                "triple_flash, not 'blink'"),
-    ([{"trigger": "well", "pattern": "pulse"}], "well's pulse needs a length_s"),
-    ([{"trigger": "well", "pattern": "pulse", "length_s": 0.2}], "well's length_s must be "
+    ({"running": {"pattern": "pulse"}}, "must be a list of looks"),
+    ([["running", "pulse", 1]], "must be a list of looks"),
+    ([{"trigger": "running"}], "each look has trigger, pattern and length_s, not trigger"),
+    ([{"trigger": "running", "pattern": "pulse", "every": 1}], "each look has"),
+    ([{"trigger": "wifi", "pattern": "pulse"}], "trigger must be one of booting, error, "
+                                                "poor_air_quality, calibrating, running, not 'wifi'"),
+    ([{"trigger": "running", "pattern": "off"}, {"trigger": "running", "pattern": "solid"}],
+     "has two looks for running"),
+    ([{"trigger": "running", "pattern": "wink"}], "running's pattern must be one of off, solid, "
+                                               "blip, pulse, double_pulse, triple_pulse, swell, "
+                                               "ramp, flash, double_flash, triple_flash, not 'wink'"),
+    ([{"trigger": "running", "pattern": "pulse"}], "running's pulse needs a length_s"),
+    ([{"trigger": "running", "pattern": "pulse", "length_s": 0.2}], "running's length_s must be "
                                                                   "from 0.25 to 10 for pulse, "
                                                                   "not 0.2"),
-    ([{"trigger": "well", "pattern": "double_flash", "length_s": 0.8}],
-     "well's length_s must be from 0.9 to 10 for double_flash, not 0.8"),
-    ([{"trigger": "well", "pattern": "triple_pulse", "length_s": 1.1}],
-     "well's length_s must be from 1.2 to 10 for triple_pulse, not 1.1"),
-    ([{"trigger": "well", "pattern": "pulse", "length_s": 11}], "well's length_s"),
-    ([{"trigger": "well", "pattern": "pulse", "length_s": True}], "well's length_s"),
+    ([{"trigger": "running", "pattern": "double_flash", "length_s": 0.8}],
+     "running's length_s must be from 0.9 to 10 for double_flash, not 0.8"),
+    ([{"trigger": "running", "pattern": "triple_pulse", "length_s": 1.1}],
+     "running's length_s must be from 1.2 to 10 for triple_pulse, not 1.1"),
+    ([{"trigger": "running", "pattern": "pulse", "length_s": 11}], "running's length_s"),
+    ([{"trigger": "running", "pattern": "pulse", "length_s": True}], "running's length_s"),
 ])
 def test_looks_that_cannot_work_are_refused_by_their_key(value, words):
     with pytest.raises(ConfigError, match="^dock.led.looks") as caught:
@@ -135,7 +161,7 @@ def test_looks_that_cannot_work_are_refused_by_their_key(value, words):
 
 
 def test_a_look_is_part_of_the_version():
-    assert DockSettings(led_looks=(("well", "off", 1.0),)).version != DockSettings().version
+    assert DockSettings(led_looks=(("running", "off", 1.0),)).version != DockSettings().version
 
 
 def test_the_server_will_not_start_on_a_bad_dock_block():
@@ -165,17 +191,17 @@ def test_the_answer_is_the_settings_and_their_version(requests):
 
     assert answer == {
         "version": DockSettings().version,
-        "pm": {"warmup_s": 35},
-        "scd41": {"temperature_offset_c": 4.0, "self_calibration": True},
+        "pm": {"warmup_s": 35, "poor_air_ug_m3": 37.5},
+        "scd41": {"temperature_offset_c": 4.0, "self_calibration": True, "poor_air_ppm": 1500},
         "shtc3": {"low_power": False},
-        "led": {"brightness_pct": 15, "dark": False, "looks": [
-            {"trigger": "starting", "pattern": "pulse", "length_s": 0.5},
-            {"trigger": "no_wifi", "pattern": "flash", "length_s": 1},
-            {"trigger": "post_failed", "pattern": "flash", "length_s": 2},
-            {"trigger": "sensor_missing", "pattern": "flash", "length_s": 3},
-            {"trigger": "well", "pattern": "pulse", "length_s": 1}]},
+        "led": {"brightness_pct": 15, "smoothness": 3, "dark": False, "looks": [
+            {"trigger": "booting", "pattern": "pulse", "length_s": 0.5},
+            {"trigger": "error", "pattern": "flash", "length_s": 1},
+            {"trigger": "poor_air_quality", "pattern": "double_flash", "length_s": 2},
+            {"trigger": "calibrating", "pattern": "swell", "length_s": 4},
+            {"trigger": "running", "pattern": "pulse", "length_s": 1}]},
         "log": {"level": "debug"},
-        "bsec": {"sample_s": 300},
+        "bsec": {"sample_s": 300, "poor_air_iaq": 150},
     }
 
 
@@ -236,6 +262,13 @@ def test_a_reference_out_of_range_is_refused(ppm, requests):
     with pytest.raises(ValueError, match="^Enter "):
         board(requests=requests).recalibrate(ppm)
     assert board(requests=requests).pending() is None
+
+
+def test_it_says_what_the_docks_light_showed_at_its_last_report(requests):
+    assert board(requests=requests).light() is None
+    assert board(requests=requests, report=report(light="poor_air_quality")).light() \
+        == "poor_air_quality"
+    assert board(requests=requests, report=report(light="")).light() is None
 
 
 @pytest.mark.parametrize("client, applied", [

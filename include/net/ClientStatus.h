@@ -44,6 +44,7 @@ struct ClientStatus {
     uint16_t    recalibratedPpm;
     bool        recalibratedOk;
     int16_t     recalibratedCorrection;   // ppm, when ok
+    const char* light;           // what its status light shows: StatusLed::stateName()
 };
 
 // Encodes the "client" object. Returns the length written, or 0 if the

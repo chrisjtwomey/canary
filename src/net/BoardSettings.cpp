@@ -15,18 +15,24 @@ static const char* const kKeyNames[kSettingKeys] = {
     "log.level",
     "bsec.sample_s",
     "led.looks",
+    "led.smoothness",
+    "scd41.poor_air_ppm",
+    "pm.poor_air_ug_m3",
+    "bsec.poor_air_iaq",
 };
 
 static const char* const kLedTriggerNames[kLedTriggers] = {
-    "starting", "no_wifi", "post_failed", "sensor_missing", "well",
+    "booting", "error", "poor_air_quality", "calibrating", "running",
 };
 static const char* const kLedPatternNames[kLedPatterns] = {
     "off", "solid", "pulse", "flash",
     "double_flash", "triple_flash", "double_pulse", "triple_pulse",
+    "blip", "swell", "ramp",
 };
 // The server's defaults, in StatusLed's numbering.
-static const uint8_t  kLedDefaultPattern[kLedTriggers] = {2, 3, 3, 3, 2};
-static const uint16_t kLedDefaultLengthMs[kLedTriggers] = {500, 1000, 2000, 3000, 1000};
+static const uint8_t  kLedDefaultPattern[kLedTriggers] = {
+    StatusLed::PULSE, StatusLed::FLASH, StatusLed::DOUBLE_FLASH, StatusLed::SWELL, StatusLed::PULSE};
+static const uint16_t kLedDefaultLengthMs[kLedTriggers] = {500, 1000, 2000, 4000, 1000};
 
 // In log_utils.h's order, from LOG_ERROR.
 static const char* const kLevels[] = {"error", "warning", "notice", "info", "debug"};
@@ -44,6 +50,10 @@ BoardSettings defaultBoardSettings() {
         s.ledPattern[t] = kLedDefaultPattern[t];
         s.ledLengthMs[t] = kLedDefaultLengthMs[t];
     }
+    s.ledSmoothness = StatusLed::kDefaultSmoothness;
+    s.scd41PoorPpm = 1500;
+    s.pmPoorUgM3 = 37.5f;
+    s.bsecPoorIaq = 150;
     return s;
 }
 
@@ -89,6 +99,18 @@ bool rateUsable(JsonVariantConst v) {
 }
 bool pctUsable(JsonVariantConst v) {
     return v.is<int>() && v.as<int>() >= 0 && v.as<int>() <= 100;
+}
+bool smoothnessUsable(JsonVariantConst v) {
+    return v.is<int>() && v.as<int>() >= 1 && v.as<int>() <= StatusLed::kSmoothnessStops;
+}
+bool poorPpmUsable(JsonVariantConst v) {
+    return v.is<int>() && v.as<int>() >= kPoorPpmMin && v.as<int>() <= kPoorPpmMax;
+}
+bool poorUgM3Usable(JsonVariantConst v) {
+    return v.is<float>() && v.as<float>() >= kPoorUgM3Min && v.as<float>() <= kPoorUgM3Max;
+}
+bool poorIaqUsable(JsonVariantConst v) {
+    return v.is<int>() && v.as<int>() >= kPoorIaqMin && v.as<int>() <= kPoorIaqMax;
 }
 
 // `name`'s place in `names`, or -1.
@@ -152,6 +174,10 @@ bool parseBoardSettings(const char* json, size_t len, const BoardSettings& curre
     t.take(doc["shtc3"]["low_power"], kShtc3LowPower, s.shtc3LowPower, boolUsable);
     t.take(doc["led"]["brightness_pct"], kLedBrightness, s.ledBrightnessPct, pctUsable);
     t.take(doc["bsec"]["sample_s"], kBsecSampleS, s.bsecSampleS, rateUsable);
+    t.take(doc["led"]["smoothness"], kLedSmoothness, s.ledSmoothness, smoothnessUsable);
+    t.take(doc["scd41"]["poor_air_ppm"], kScd41PoorPpm, s.scd41PoorPpm, poorPpmUsable);
+    t.take(doc["pm"]["poor_air_ug_m3"], kPmPoorUgM3, s.pmPoorUgM3, poorUgM3Usable);
+    t.take(doc["bsec"]["poor_air_iaq"], kBsecPoorIaq, s.bsecPoorIaq, poorIaqUsable);
     JsonVariantConst looks = doc["led"]["looks"];
     if (!looks.isNull() && !takeLedLooks(looks, s)) t.refuse(kLedLooks);
 

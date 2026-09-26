@@ -1,11 +1,12 @@
 /* The drawings on the Config page's sheet tabs, with rough.js for the
    hand-drawn look the pages have: a day of syncs or page changes as a
    dial, the time before one sync as a strip, the image with its drawn
-   area as a panel, and the space the stores take on the disk. The first
-   three are drawn from the settings form's inputs, and dragging one
-   writes the inputs, so the form stays what a save sends. A locked
-   input, such as an offline dock's, cannot be dragged. The position
-   grid sets the drawn area's two alignments the same way. */
+   area as a panel, the space the stores take on the disk, and the status
+   light playing one of its looks. The first three are drawn from the
+   settings form's inputs, and dragging one writes the inputs, so the
+   form stays what a save sends. A locked input, such as an offline
+   dock's, cannot be dragged. The position grid sets the drawn area's two
+   alignments the same way. */
 (function () {
   'use strict';
 
@@ -645,6 +646,148 @@
     });
   };
 
+  // ── The light's preview: one look, played as the dock plays it ───
+  // A dot lit to the level the dock's StatusLed gives the look of the row
+  // last changed or clicked, on the smoothness the slider holds, at full
+  // brightness. The level is perceived light, which the screen shows as it
+  // is, so it takes no gamma. The timings are StatusLed's.
+  var LED_FLASH_MS = 150;
+  var LED_BLIP_MS = 50;
+  var LED_GROUP_STEP_MS = 300;
+  var LED_GROUPS = { double_flash: 2, double_pulse: 2, triple_flash: 3, triple_pulse: 3 };
+  var LED_STEPS = [4, 8, 16, 32, 64, 0];
+
+  function ledSteps() {
+    var el = form.querySelector('input.stops[name="dock.led.smoothness"]');
+    var steps = LED_STEPS[(el ? parseInt(el.value, 10) : 3) - 1];
+    return steps === undefined ? 16 : steps;
+  }
+
+  // As StatusLed's levelDuty: the nearest step, or no step with 0.
+  function onStep(level, steps) {
+    level = Math.max(0, Math.min(1, level));
+    return steps > 1 ? Math.round(level * (steps - 1)) / (steps - 1) : level;
+  }
+
+  function sine(phase, period) { return 0.5 * (1 - Math.cos(2 * Math.PI * phase / period)); }
+
+  // The light of `pattern`, 0 to 1, at `phase` ms into a cycle of `length`.
+  function ledLevel(pattern, phase, length, steps) {
+    var group = LED_GROUPS[pattern];
+    if (group) {
+      if (phase >= group * LED_GROUP_STEP_MS) return 0;
+      var step = phase % LED_GROUP_STEP_MS;
+      if (/flash$/.test(pattern)) return step < LED_FLASH_MS ? 1 : 0;
+      return onStep(sine(step, LED_GROUP_STEP_MS), steps);
+    }
+    var third = Math.floor(length / 3);
+    switch (pattern) {
+      case 'solid': return 1;
+      case 'pulse': return onStep(sine(phase, length), steps);
+      case 'flash': return phase < Math.min(LED_FLASH_MS, length / 2) ? 1 : 0;
+      case 'blip': return phase < Math.min(LED_BLIP_MS, length / 2) ? 1 : 0;
+      case 'swell':
+        if (phase < third) return onStep(sine(phase, 2 * third), steps);
+        if (phase < length - third) return 1;
+        return onStep(sine(phase - (length - 2 * third), 2 * third), steps);
+      case 'ramp': return onStep(phase / length, steps);
+      default: return 0;
+    }
+  }
+
+  // The light's brightness, 0 to 100; the default while the field is empty.
+  function ledBrightness() {
+    var el = input('dock.led.brightness_pct');
+    var pct = el ? parseInt(el.value || el.getAttribute('data-default') || '', 10) : NaN;
+    return isNaN(pct) ? 15 : Math.max(0, Math.min(100, pct));
+  }
+
+  // The dot's lit area grows with the brightness, from 6 px across to its
+  // full 30, and 0 is dark.
+  var LED_DOT_MIN_PX = 6;
+  var LED_DOT_MAX_PX = 30;
+
+  function LedPreview(box) {
+    var looks = form.querySelector('fieldset.looks');
+    var dot = box.querySelector('.dot');
+    var words = box.querySelector('.led-look');
+    // The row a person picked; until then the dot follows the dock's light.
+    var picked = null, playing = '', startedMs = 0;
+
+    function rows() {
+      return looks ? Array.prototype.slice.call(looks.querySelectorAll('.list > .row')) : [];
+    }
+    function rowFor(trigger) {
+      return rows().filter(function (r) {
+        return r.querySelector('select[name$=".trigger"]').value === trigger;
+      })[0] || null;
+    }
+    function mark(r) {
+      rows().forEach(function (other) { other.classList.toggle('previewing', other === r); });
+    }
+
+    if (looks) {
+      ['focusin', 'input', 'change', 'click'].forEach(function (type) {
+        looks.addEventListener(type, function (e) {
+          var r = e.target.closest && e.target.closest('.list > .row');
+          if (r) picked = r;
+        });
+      });
+    }
+
+    // What the dot plays: the picked row; else the row of the trigger the
+    // dock last reported, "dark" or "updating" for those two; else Running's
+    // row, or the first.
+    function current() {
+      if (picked && picked.isConnected) return { row: picked };
+      var light = box.getAttribute('data-light');
+      if (light === 'dark' || light === 'updating') return { state: light, now: true };
+      var r = light && rowFor(light);
+      if (r) return { row: r, now: true };
+      return { row: rowFor('running') || rows()[0] || null };
+    }
+
+    function frame(now) {
+      requestAnimationFrame(frame);
+      if (!box.offsetParent) return;   // its tab is closed
+      var c = current(), r = c.row, level = 0, text = 'No pattern', look = '';
+      mark(r || null);
+      if (c.state === 'dark') {
+        text = 'Off';
+      } else if (c.state === 'updating') {
+        // An update's pulse, as it starts: once a second at a quarter of the light.
+        text = 'Updating';
+        look = 'updating';
+        level = 0.25 * onStep(sine((now - startedMs) % 1000, 1000), ledSteps());
+      } else if (r) {
+        var trigger = r.querySelector('select[name$=".trigger"]');
+        var pattern = r.querySelector('select[name$=".pattern"]');
+        var still = pattern.value === 'off' || pattern.value === 'solid';
+        var length = Math.round(parseFloat(r.querySelector('input[name$=".length_s"]').value) * 1000);
+        look = pattern.value + '/' + length;
+        var parts = [trigger.options[trigger.selectedIndex].text,
+                     pattern.options[pattern.selectedIndex].text];
+        if (!still && length > 0) parts.push((length / 1000) + ' s');
+        text = parts.join(' · ');
+        if (still) level = ledLevel(pattern.value, 0, 1, 0);
+        else if (length > 0) level = ledLevel(pattern.value, (now - startedMs) % length, length, ledSteps());
+      }
+      // A new look starts from the beginning of its cycle, as on the dock.
+      if (look !== playing) {
+        playing = look;
+        startedMs = now;
+      }
+      if (c.now) text = 'Now: ' + text;
+      var pct = ledBrightness();
+      if (!pct) level = 0;
+      var size = LED_DOT_MIN_PX + (LED_DOT_MAX_PX - LED_DOT_MIN_PX) * Math.sqrt(pct / 100);
+      dot.style.setProperty('--level', level.toFixed(3));
+      dot.style.setProperty('--size', size.toFixed(1) + 'px');
+      if (words.textContent !== text) words.textContent = text;
+    }
+    requestAnimationFrame(frame);
+  }
+
   // ── The position grid ────────────────────────────────────────────
   var grids = Array.prototype.slice.call(form.querySelectorAll('.grid3'));
   grids.forEach(function (grid) {
@@ -675,6 +818,8 @@
     if (kind === 'panel') drawings.push(new Panel(canvas));
     if (kind === 'disk') drawings.push(new Disk(canvas));
   });
+  var ledPreview = document.querySelector('[data-visual="led"]');
+  if (ledPreview) LedPreview(ledPreview);
   if (!drawings.length && !grids.length) return;
 
   function redraw() {

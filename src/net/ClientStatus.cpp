@@ -39,7 +39,8 @@ static int dockJson(const ClientStatus& s, char* buf, size_t len, int n) {
         ",\"bsec\":{\"running\":%s,\"restored\":%s,\"accuracy\":%u,\"late\":%lu,\"saved\":%lu"
         ",\"sample_s\":%u}"
         ",\"settings\":{\"version\":\"%s\",\"refused\":%s}"
-        ",\"recalibrated\":{\"id\":%lu,\"ppm\":%u,\"ok\":%s,\"correction_ppm\":%d}}",
+        ",\"recalibrated\":{\"id\":%lu,\"ppm\":%u,\"ok\":%s,\"correction_ppm\":%d}"
+        ",\"light\":\"%s\"}",
         b(s.mockSensors), b(s.shtc3), b(s.scd41), b(s.pm), b(s.bme688), (unsigned)s.fanWarmupS,
         (unsigned long)s.backlogHeld, (unsigned long)s.backlogCapacity,
         s.backlogStore ? s.backlogStore : "",
@@ -47,7 +48,7 @@ static int dockJson(const ClientStatus& s, char* buf, size_t len, int n) {
         (unsigned long)s.bsecLateCalls, (unsigned long)s.bsecSavedEpoch, (unsigned)s.bsecSampleS,
         s.settingsVersion ? s.settingsVersion : "", refused,
         (unsigned long)s.recalibratedId, (unsigned)s.recalibratedPpm, b(s.recalibratedOk),
-        (int)s.recalibratedCorrection);
+        (int)s.recalibratedCorrection, s.light ? s.light : "");
 }
 
 size_t clientStatusJson(const ClientStatus& s, char* buf, size_t len) {

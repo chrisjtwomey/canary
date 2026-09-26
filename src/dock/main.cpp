@@ -35,6 +35,7 @@
 #include "version.h"
 
 #include "dock/FanWindow.h"
+#include "dock/LightTriggers.h"
 #include "dock/PostTimer.h"
 #include "dock/StatusLed.h"
 #include "net/Backlog.h"
@@ -332,6 +333,13 @@ static StatusLed statusLed;
 static volatile bool running = false;
 // Set by a post the server would not take, and by having nowhere to post.
 static volatile bool postFailed = false;
+// Set while readings wait in the queue that should have gone.
+static volatile bool backlogged = false;
+// Keys of the server's settings the dock could not use, a bit each.
+static volatile uint32_t settingsRefused = 0;
+// From the latest reading: the air over a limit, a sensor calibrating.
+static volatile bool poorAirNow = false;
+static volatile bool calibratingNow = false;
 // Set while a new image is written, with how much of it, in thousandths.
 static volatile bool     updating = false;
 static volatile uint16_t updatePermille = 0;
@@ -340,18 +348,20 @@ static_assert(kLedTriggers == StatusLed::kLooks, "a look for each state but UPDA
 static_assert(kLedPatterns == StatusLed::kPatterns, "BoardSettings numbers the patterns as StatusLed");
 static_assert(kLedNoLook == StatusLed::NONE, "BoardSettings marks no look as StatusLed does");
 
-// The states that hold. While starting, the others are not known yet, and
-// WELL holds only when no other does.
+// The states that hold. While booting, the others are not known yet; once
+// booted, RUNNING always holds, so a state with no look passes the light to it.
 static uint8_t ledStates() {
     if (updating) return StatusLed::flag(StatusLed::UPDATING);
-    if (!running) return StatusLed::flag(StatusLed::STARTING);
-    uint8_t holding = 0;
-    if (WiFi.status() != WL_CONNECTED) holding |= StatusLed::flag(StatusLed::NO_WIFI);
-    if (postFailed) holding |= StatusLed::flag(StatusLed::POST_FAILED);
+    if (!running) return StatusLed::flag(StatusLed::BOOTING);
+    uint8_t holding = StatusLed::flag(StatusLed::RUNNING);
     const bool sensed = sensors.shtc3Present() && sensors.scd41Present() &&
                         sensors.pmPresent() && sensors.bme688Present();
-    if (!sensed) holding |= StatusLed::flag(StatusLed::SENSOR_MISSING);
-    return holding ? holding : StatusLed::flag(StatusLed::WELL);
+    if (WiFi.status() != WL_CONNECTED || postFailed || backlogged || settingsRefused || !sensed) {
+        holding |= StatusLed::flag(StatusLed::ERROR);
+    }
+    if (poorAirNow) holding |= StatusLed::flag(StatusLed::POOR_AIR);
+    if (calibratingNow) holding |= StatusLed::flag(StatusLed::CALIBRATING);
+    return holding;
 }
 
 // The fast pulse's shortest step lasts about 11 ms, so a 5 ms tick keeps
@@ -386,7 +396,6 @@ static void startLed() {
 
 // What the dock runs: the defaults, then the copy in NVS, then each answer.
 static BoardSettings boardSettings = defaultBoardSettings();
-static uint32_t      settingsRefused = 0;
 // Until the next reading, from the last answer; not kept across a restart.
 static bool          ledDark = false;
 
@@ -435,6 +444,18 @@ static void saveRecalibrated() {
 
 // Each setting where it takes effect. Unchanged ones cost nothing, so this
 // runs on every answer.
+// The latest reading, which the light's air and calibration triggers are
+// judged from, and whether a recalibration waits for the SCD41.
+static Readings latestReading = {};
+static bool     scd41Recalibrating = false;
+
+static void judgeReading() {
+    const AirLimits limits = {boardSettings.scd41PoorPpm, boardSettings.pmPoorUgM3,
+                              boardSettings.bsecPoorIaq};
+    poorAirNow = poorAir(latestReading, limits);
+    calibratingNow = calibrating(latestReading, scd41Recalibrating);
+}
+
 static void applySettings() {
     fanWindow.setLeadMs((uint32_t)boardSettings.pmWarmupS * 1000);
     sensors.setScd41Options(boardSettings.scd41OffsetC, boardSettings.scd41SelfCalibration);
@@ -444,8 +465,10 @@ static void applySettings() {
         statusLed.look((StatusLed::State)t, (StatusLed::Pattern)boardSettings.ledPattern[t],
                        boardSettings.ledLengthMs[t]);
     }
+    statusLed.smoothness(boardSettings.ledSmoothness);
     setBsecSampleS(boardSettings.bsecSampleS);
     setLogLevel(boardSettings.logLevel);
+    judgeReading();
 }
 
 static void logSensorChanges();
@@ -456,6 +479,8 @@ static void runRecalibration(uint32_t id, uint16_t ppm) {
         case SensorSuite::Recalibration::NotReady:
             logf(LOG_INFO, "[scd41] recalibration to %u ppm waits for 3 minutes of measuring",
                  (unsigned)ppm);
+            scd41Recalibrating = true;
+            judgeReading();
             return;
         case SensorSuite::Recalibration::Done:
             recalibrated = {id, ppm, true, correction};
@@ -467,6 +492,8 @@ static void runRecalibration(uint32_t id, uint16_t ppm) {
             logf(LOG_ERROR, "[scd41] recalibration to %u ppm failed", (unsigned)ppm);
             break;
     }
+    scd41Recalibrating = false;
+    judgeReading();
     saveRecalibrated();
     logSensorChanges();
 }
@@ -670,6 +697,7 @@ static ClientStatus clientStatus(uint32_t nowMs) {
     s.recalibratedPpm = recalibrated.ppm;
     s.recalibratedOk = recalibrated.ok;
     s.recalibratedCorrection = recalibrated.correction;
+    s.light = StatusLed::stateName(statusLed.state());
     return s;
 }
 
@@ -867,8 +895,14 @@ static void sampleWhenDue(uint32_t nowMs) {
     Readings r = sampleSensors(nowMs);
     postTimer.taken(nowMs);
     prewarmed = false;
+    latestReading = r;
+    judgeReading();
     queueReading(r, nowMs);
 }
+
+// Readings that wait this many in the queue should have gone: one waits only
+// until the next pass of the loop posts it.
+static const uint32_t kBackloggedAt = 3;
 
 void setup() {
     Serial.begin(115200);
@@ -936,5 +970,6 @@ void loop() {
     driveFan(nowMs);
     sampleWhenDue(nowMs);
     sendQueued();
+    backlogged = queue->count() >= kBackloggedAt;
     delay(10);
 }

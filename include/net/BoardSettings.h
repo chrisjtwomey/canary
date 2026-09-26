@@ -5,7 +5,7 @@
 // The status light's triggers that have a look, in StatusLed::State's order,
 // and its patterns, in StatusLed::Pattern's.
 static const uint8_t kLedTriggers = 5;
-static const uint8_t kLedPatterns = 8;
+static const uint8_t kLedPatterns = 11;
 // The pattern of a trigger the server gives no look: StatusLed::NONE.
 static const uint8_t kLedNoLook = 0xFF;
 
@@ -22,6 +22,11 @@ struct BoardSettings {
     uint16_t bsecSampleS;        // IBsec::kLpSampleS or kUlpSampleS
     uint8_t  ledPattern[kLedTriggers];   // kLedNoLook for a trigger with none
     uint16_t ledLengthMs[kLedTriggers];  // one cycle of the pattern
+    uint8_t  ledSmoothness;      // a stop of StatusLed's, 1 to 6
+    // The limits over which the air is poor, for the light's trigger.
+    uint16_t scd41PoorPpm;
+    float    pmPoorUgM3;         // PM2.5
+    uint16_t bsecPoorIaq;
 };
 
 // The server's defaults, which the dock runs until the server has said anything.
@@ -37,6 +42,10 @@ enum SettingKey : uint8_t {
     kLogLevel,
     kBsecSampleS,
     kLedLooks,
+    kLedSmoothness,
+    kScd41PoorPpm,
+    kPmPoorUgM3,
+    kBsecPoorIaq,
     kSettingKeys,
 };
 
@@ -69,3 +78,9 @@ static const uint16_t kPmWarmupMaxS = 600;
 static const float    kScd41OffsetMaxC = 20.0f;
 static const uint16_t kRecalibrateMinPpm = 400;
 static const uint16_t kRecalibrateMaxPpm = 2000;
+static const uint16_t kPoorPpmMin = 400;
+static const uint16_t kPoorPpmMax = 5000;
+static const float    kPoorUgM3Min = 1.0f;
+static const float    kPoorUgM3Max = 500.0f;
+static const uint16_t kPoorIaqMin = 1;
+static const uint16_t kPoorIaqMax = 500;

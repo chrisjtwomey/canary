@@ -56,7 +56,7 @@ void test_the_dock_sends_the_common_fields_and_its_own_block() {
     TEST_ASSERT_NULL(strstr(buf, "\"head\""));
     TEST_ASSERT_NULL(strstr(buf, "\"fetch\""));
     TEST_ASSERT_NULL(strstr(buf, "\"panel_temp_c\""));
-    TEST_ASSERT_EQUAL_STRING("}}}", buf + n - 3);
+    TEST_ASSERT_EQUAL_STRING(",\"light\":\"\"}}", buf + n - 13);
 }
 
 void test_a_start_reason_is_named_in_esp_idfs_order() {
@@ -212,7 +212,15 @@ void test_the_dock_says_which_settings_it_runs_and_its_last_recalibration() {
     TEST_ASSERT_NOT_NULL(strstr(buf, ",\"settings\":{\"version\":\"3f2a9c1e\""
                                      ",\"refused\":[\"pm.warmup_s\",\"log.level\"]}"));
     TEST_ASSERT_NOT_NULL(strstr(buf, ",\"recalibrated\":{\"id\":1758650400,\"ppm\":420"
-                                     ",\"ok\":true,\"correction_ppm\":-12}}}"));
+                                     ",\"ok\":true,\"correction_ppm\":-12},"));
+}
+
+void test_the_dock_says_what_its_light_shows() {
+    ClientStatus s = status();
+    s.light = "poor_air_quality";
+    char buf[1024];
+    clientStatusJson(s, buf, sizeof(buf));
+    TEST_ASSERT_NOT_NULL(strstr(buf, ",\"light\":\"poor_air_quality\"}}"));
 }
 
 void test_the_dock_client_object_fits_its_buffer_with_every_key_refused() {
@@ -222,6 +230,7 @@ void test_the_dock_client_object_fits_its_buffer_with_every_key_refused() {
     s.settingsVersion = "3f2a9c1e";
     s.settingsRefused = (1u << kSettingKeys) - 1;
     s.recalibratedId = 4294967295u; s.recalibratedPpm = 2000; s.recalibratedCorrection = -32768;
+    s.light = "poor_air_quality";
     char buf[1536];   // the dock's clientJson
     TEST_ASSERT_TRUE(clientStatusJson(s, buf, sizeof(buf)) > 0);
 }
@@ -232,6 +241,7 @@ int main(int, char**) {
     RUN_TEST(test_the_dock_sends_the_common_fields_and_its_own_block);
     RUN_TEST(test_the_head_sends_no_settings);
     RUN_TEST(test_the_dock_says_which_settings_it_runs_and_its_last_recalibration);
+    RUN_TEST(test_the_dock_says_what_its_light_shows);
     RUN_TEST(test_the_dock_client_object_fits_its_buffer_with_every_key_refused);
     RUN_TEST(test_a_start_reason_is_named_in_esp_idfs_order);
     RUN_TEST(test_a_board_whose_chip_gave_no_temperature_leaves_it_out);

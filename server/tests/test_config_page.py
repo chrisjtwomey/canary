@@ -601,47 +601,103 @@ def look_rows(box) -> list[tuple[str, str, str]]:
              attr(one(r, "input[type=number]"), "value")) for r in box.select(".list > .row")]
 
 
+def test_the_smoothness_is_a_slider_of_six_stops_named_beside_it(dock_client):
+    field = one(soup_of(dock_client.get("/web/config")), '[data-field="dock.led.smoothness"]')
+    slider = one(field, "input.stops")
+
+    assert (attr(slider, "type"), attr(slider, "min"), attr(slider, "max"), attr(slider, "step"),
+            attr(slider, "value")) == ("range", "1", "6", "1", "3")
+    assert json.loads(attr(slider, "data-words")) == [
+        "4 steps", "8 steps", "16 steps", "32 steps", "64 steps", "Smooth"]
+    assert one(field, ".stop-words").get_text() == "16 steps"
+    assert attr(slider, "aria-valuetext") == "16 steps"
+
+
+@pytest.mark.parametrize("key, heading", [
+    ("dock.scd41.poor_air_ppm", "CO₂"),
+    ("dock.pm.poor_air_ug_m3", "Fine dust"),
+    ("dock.bsec.poor_air_iaq", "Air quality"),
+])
+def test_each_poor_air_limit_is_in_its_sensors_section(dock_client, key, heading):
+    field = one(soup_of(dock_client.get("/web/config")), f'#panel-dock [data-field="{key}"]')
+    section = field.find_parent(class_="section")
+    assert one(section, "h2").find("span").get_text() == heading
+    assert one(field, ".name").get_text() == "Poor air from"
+
+
+def test_the_fine_dust_section_holds_the_fan_and_its_strip(dock_client):
+    panel = one(soup_of(dock_client.get("/web/config")), "#panel-dock")
+    section = one(panel, '[data-field="dock.pm.warmup_s"]').find_parent(class_="section")
+    assert [sp.get_text() for sp in one(section, "h2").find_all("span")] == [
+        "Fine dust", "PMSA003I"]
+    assert section.select_one("canvas[data-visual=slot]") is not None
+
+
+def test_the_status_light_has_a_preview_that_plays_one_look(dock_client):
+    panel = one(soup_of(dock_client.get("/web/config")), "#panel-dock")
+    preview = one(panel, "#visual-led")
+    section = preview.find_parent(class_="section")
+
+    assert one(section, "h2").get_text() == "Status light"
+    assert attr(preview, "data-visual") == "led"
+    assert preview.select_one(".dot") and preview.select_one(".led-look")
+    assert one(section, ".visual .caption").get_text().startswith("What the light showed at the dock")
+
+
+@pytest.mark.parametrize("dock_report", [{"client": {"dock": {"light": "poor_air_quality"}}}])
+def test_the_preview_starts_on_what_the_light_showed_at_the_last_sync(dock_client):
+    preview = one(soup_of(dock_client.get("/web/config")), "#visual-led")
+    assert attr(preview, "data-light") == "poor_air_quality"
+    assert dock_client.get("/web/config/live").json["light"] == "poor_air_quality"
+
+
+@pytest.mark.parametrize("dock_report", [{"client": {"dock": {"light": "error"}}}])
+@pytest.mark.parametrize("dock_offline", [True])
+def test_an_offline_docks_last_light_is_not_played_as_now(dock_client):
+    assert not one(soup_of(dock_client.get("/web/config")), "#visual-led").has_attr("data-light")
+
+
 def test_the_light_has_a_row_for_each_look(dock_client):
     box = one(soup_of(dock_client.get("/web/config")), "#panel-dock fieldset.rows.looks")
 
     assert attr(box, "data-key") == "dock.led.looks"
-    assert look_rows(box) == [("starting", "pulse", "0.5"), ("no_wifi", "flash", "1"),
-                              ("post_failed", "flash", "2"), ("sensor_missing", "flash", "3"),
-                              ("well", "pulse", "1")]
+    assert look_rows(box) == [("booting", "pulse", "0.5"), ("error", "flash", "1"),
+                              ("poor_air_quality", "double_flash", "2"),
+                              ("calibrating", "swell", "4"), ("running", "pulse", "1")]
     assert [o.get_text() for o in box.select('.list > .row:first-child select[name$=".trigger"] '
                                              'option')] \
-        == ["Starting", "No Wi-Fi", "Post failed", "Sensor missing", "Well"]
+        == ["Booting", "Error", "Poor air quality", "Calibrating", "Running"]
     assert [o.get_text() for o in box.select('.list > .row:first-child select[name$=".pattern"] '
                                              'option')] \
-        == ["Off", "Solid", "Pulse", "Double pulse", "Triple pulse", "Flash", "Double flash",
-            "Triple flash"]
+        == ["Off", "Solid", "Blip", "Pulse", "Double pulse", "Triple pulse", "Swell", "Ramp",
+            "Flash", "Double flash", "Triple flash"]
     assert box.select(".list .length.idle") == []
     assert [s.get_text() for s in box.select(".heads span")] == ["Trigger", "Pattern", "Length"]
     assert json.loads(attr(box, "data-min"))["triple_flash"] == "1.2"
     assert one(box, ".add").get_text() == "Add a pattern"
-    assert json.loads(attr(box, "data-looks"))["no_wifi"] == ["flash", "1"]
+    assert json.loads(attr(box, "data-looks"))["error"] == ["flash", "1"]
 
 
 def test_a_look_that_holds_one_level_hides_its_length(dock_client, path):
     with open(path, "a") as f:
-        f.write("dock:\n  led:\n    looks:\n      - {trigger: well, pattern: solid}\n")
+        f.write("dock:\n  led:\n    looks:\n      - {trigger: running, pattern: solid}\n")
     box = one(soup_of(dock_client.get("/web/config")), "#panel-dock fieldset.rows.looks")
 
-    assert look_rows(box) == [("well", "solid", "1")]
+    assert look_rows(box) == [("running", "solid", "1")]
     assert len(box.select(".list .length.idle")) == 1
 
 
 def test_changed_looks_are_saved_under_the_light(dock_client, path):
     data = posted(soup_of(dock_client.get("/web/config")))
-    data["dock.led.looks.trigger"] = ["well", "no_wifi"]
+    data["dock.led.looks.trigger"] = ["running", "error"]
     data["dock.led.looks.pattern"] = ["solid", "flash"]
     data["dock.led.looks.length_s"] = ["1", "0.5"]
 
     dock_client.post("/web/config", data={**data, "action": "save"})
 
     saved = open(path).read()
-    assert ("    looks:\n      - {trigger: no_wifi, pattern: flash, length_s: 0.5}\n"
-            "      - {trigger: well, pattern: solid}\n") in saved
+    assert ("    looks:\n      - {trigger: error, pattern: flash, length_s: 0.5}\n"
+            "      - {trigger: running, pattern: solid}\n") in saved
     check_config(saved)
 
 

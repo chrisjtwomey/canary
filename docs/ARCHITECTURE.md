@@ -162,31 +162,39 @@ Three things forced it, all in [hardware/bom.md](../hardware/bom.md):
 Nothing else leaves the head: its only connections are the two wires soldered to its power pads, which meet the
 dock at the pogo connector.
 
-### 3.5 One LED says whether the dock is well
+### 3.5 One LED says what the dock needs
 
 The dock drives a yellow LED on IO6, behind a clear tile in the shell's front face. It shows the first of these
-states that holds and has a look in the server's `dock.led.looks`: a pattern, and the length of one cycle of it
-before it repeats. A state the list leaves out passes the light to the next one that holds, and with none the LED
-is dark. While `setup()` runs only Starting holds, since the others are not known yet, and Well holds
-only when no other state does.
+triggers that holds and has a look in the server's `dock.led.looks`: a pattern, and the length of one cycle of it
+before it repeats. A trigger the list leaves out passes the light to the next one that holds, and with none the
+LED is dark. While `setup()` runs only Booting holds, since the others are not known yet; once it has booted,
+Running always holds, last.
 
-| State | When | Look by default |
+| Trigger | When | Look by default |
 |---|---|---|
 | Updating | Writing a new image. | Pulsing faster and brighter as it is written: from 60 a minute at a quarter of the light to 240 at full light. Not set by the server. |
-| Starting | `setup()` is connecting, or starting the sensors. | Pulse every 0.5 s. |
-| No Wi-Fi | Started, and off the network. | Flash every 1 s. |
-| Post failed | The last post did not reach the server, or the server would not take it. | Flash every 2 s. |
-| Sensor missing | A sensor does not answer. | Flash every 3 s. |
-| Well | Reading, and the server is taking its posts. | Pulse every 1 s. |
+| Booting | `setup()` is connecting, or starting the sensors. | Pulse every 0.5 s. |
+| Error | Anything wrong: off the network, a post the server did not get or would not take, readings waiting in the queue, a sensor that does not answer, or a setting the dock refused. The Boards page says which. | Flash every 1 s. |
+| Poor air quality | The latest reading has CO₂, PM2.5 or, once BSEC is calibrated, IAQ at or over its limit. Each limit is a setting in its sensor's section of the Dock tab: 1500 ppm, 37.5 µg/m³ and 150 by default, the pages' bands for stuffy, dusty and polluted air. | Double flash every 2 s. |
+| Calibrating | BSEC's IAQ accuracy is below 2, which Bosch calls unreliable, or a recalibration waits for the SCD41 to have measured for 3 minutes. | Swell every 4 s. |
+| Running | Booted. | Pulse every 1 s. |
 
-The slow pulse is the heartbeat: a dock that has died goes dark, which a solid working state would hide. A pulse
-is sixteen equal steps of light, spaced in time along a sine; a flash is 150 ms of full light at the start of each
-cycle. A double or a triple is two or three quick pulses or flashes of 300 ms each, then dark for the rest of the
-length, which is at least one of those steps longer than the group, so the gap always shows.
+The slow pulse is the heartbeat: a dock that has died goes dark, which a solid running light would hide.
+Temperature and humidity raise no trigger: what is comfortable depends on the home, and a humid climate would keep
+the light on. A flash is 150 ms of full light at the start of each cycle, and a blip 50 ms. A pulse rises and
+falls along a sine; a swell rises over the first third of its length, holds, and falls over the last; a ramp
+rises over its length and goes dark at once. A double or a triple is two or three quick pulses or flashes of
+300 ms each, then dark for the rest of the length, which is at least one of those steps longer than the group, so
+the gap always shows. A fade moves in equal steps of perceived light: `dock.led.smoothness` picks 4, 8, 16, 32 or
+64 of them, or none to see, and 16 is the default. At a low brightness the dimmest steps can share a duty.
 
-`StatusLed` turns the time into an LEDC duty and holds no hardware, so the pattern is tested on the host.
-Brightness is perceived brightness, mapped through gamma 2.2 onto a 14-bit channel at 1 kHz. A task of its own
-drives the pin, because `setup()` blocks for as long as the network takes and the starting pulse runs through it.
+`StatusLed` turns the time into an LEDC duty and holds no hardware, so the pattern is tested on the host, and so
+is `LightTriggers`, which judges the air and calibration triggers from a reading. The Dock tab plays a look on a dot,
+with the same timings and steps in `sheet.js`, so it can be seen before it is saved: what the light showed at the
+dock's last sync, which the dock reports as `light` (READINGS.md), until a row is changed or clicked. The dot's
+area follows the brightness, and at 0 it stays dark. Brightness is perceived
+brightness, mapped through gamma 2.2 onto a 14-bit channel at 1 kHz. A task of its own drives the pin, because
+`setup()` blocks for as long as the network takes and the booting pulse runs through it.
 
 ### 3.6 The headers carry canary's name, not the library's
 
@@ -270,7 +278,8 @@ panel, which works only in black and white; the Inkplate library makes every ele
 
 The `dock` block of `config.yaml`, the Dock tab on `/web/config`, sets what the dock does between readings: the
 fan's warm-up, the SCD41's temperature offset and self-calibration, the SHTC3's low-power mode, BSEC's sample
-rate, the LED's brightness, its schedule and its looks, and the dock's log level. The dock asks `GET /board-settings` at the
+rate, the limits of poor air for the CO₂, fine dust and air-quality sensors, the LED's brightness, smoothness,
+schedule and looks, and the dock's log level. The dock asks `GET /board-settings` at the
 pre-warm before each slot, applies what has changed, and keeps the answer in NVS, so it starts on the same settings
 after a power cut. The answer carries a version, a hash of the settings, and the dock reports the version it runs,
 and any key it refused, in its `client` object; the Dock tab says whether the dock has taken the saved settings.
@@ -490,3 +499,4 @@ Dated decisions and status behind the text above, oldest first.
 - **2026-09-26**: the Server, Firmware and MQTT tabs became spec sheets too, so every form tab is one: each group under a heading that says what it is for, and each setting a line. A setting that matters only while a switch is on, such as the MQTT broker or the firmware folder, shows only then.
 - **2026-09-26**: the page schedule and the dock's sync became weeks: groups of days, each with its own time ranges, so a weekend or a single day can differ from the rest. Groups rather than a list for each day, since most weeks have two or three shapes and one group of all seven is the old schedule. A day stands alone rather than running on from the day before's last range, so each group's dial shows its days exactly; a night that spans midnight is set on both days. The head's sync stays a plain interval, which is one group of every day inside the server, so every board's schedule is the same kind and `/about` gives each as a week. The boards need no change: the server gives each its next slot.
 - **2026-09-26**: the menu's Three days and Changes became History and Trend: where a measurement has been and where it is going. The names say what each page shows rather than its span, and History matches Board history in the Boards row.
+- **2026-09-26**: the light's triggers became what the dock needs from you: Booting, Error, Poor air quality, Calibrating and Running. Error takes in every fault, from the network to a refused setting, because any of them needs attention and the Boards page says which. Poor air quality judges CO₂, PM2.5 and IAQ against limits in each sensor's section, not temperature or humidity, whose comfort depends on the home. Running holds whenever the dock has booted, so a trigger without a look passes the light on rather than leaving it dark. The patterns gained a blip, a swell and a ramp, and fades a smoothness of 4 to 64 steps or none, a slider in stops; 16 steps is what the light always had.

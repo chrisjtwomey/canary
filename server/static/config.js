@@ -120,6 +120,17 @@
     }
     whens();
     markDefaults();
+    stopWords();
+  }
+
+  // Each slider's name for the stop it is on, beside it and read out.
+  function stopWords() {
+    all('input.stops').forEach(function (el) {
+      var word = JSON.parse(el.getAttribute('data-words'))[parseInt(el.value, 10) - 1] || '';
+      var shown = el.parentNode.querySelector('.stop-words');
+      if (shown) shown.textContent = word;
+      el.setAttribute('aria-valuetext', word);
+    });
   }
 
   function setValue(el, value) {
@@ -924,6 +935,8 @@
         dockState = document.getElementById('dock-state');
         var line = document.getElementById('recalibrate-state');
         if (line) line.textContent = s.recalibration;
+        var preview = document.getElementById('visual-led');
+        if (preview && s.light && !s.offline) preview.setAttribute('data-light', s.light);
         if (s.offline !== locked && untouched()) {
           leaving = true;
           location.reload();

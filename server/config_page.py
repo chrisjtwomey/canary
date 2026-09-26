@@ -62,6 +62,8 @@ VISUAL_CAPTIONS = {
     "slot": "The time before one sync. "
             "Drag the fan band's left edge; past the start, the fan never stops.",
     "disk": "The lower bar is the files' part of the disk, drawn larger.",
+    "led": "What the light showed at the dock's last sync, until you change or click a "
+           "pattern. Its size follows Brightness.",
 }
 
 # What a check or a save that changed nothing says, as a dialog's heading,
@@ -131,6 +133,7 @@ class DockState:
     age_s: int | None = None        # since its last sync
     expired: dict | None = None     # a recalibration that lapsed before the dock ran it
     next_sync: str = ""             # the local time of its next slot, HH:MM
+    light: str | None = None        # what its light showed at its last report
 
 
 def head_panel(entry: dict | None) -> dict | None:
@@ -149,7 +152,7 @@ def dock_state(dock: ds.BoardSettings) -> DockState:
     offline, age = dock.offline()
     return DockState(applied, refused, dock.pending(), dock.last_recalibration(),
                      offline=offline, age_s=age, expired=dock.expired(),
-                     next_sync=dock.next_sync())
+                     next_sync=dock.next_sync(), light=dock.light())
 
 
 def file_view(text: str) -> View:
@@ -344,6 +347,16 @@ def _control(a: Airium, f: cf.Field, view: View, env: str | None, locked: bool) 
                         a.input(type="radio", name=f.key, value=choice, **lock,
                                 **({"checked": "checked"} if choice == chosen else {}))
                         a.span(_t=words)
+        elif f.kind == "stops":
+            # A slider that moves in the field's stops, with the chosen one's
+            # name beside it; config.js keeps the name in step.
+            chosen = env if env is not None else value
+            words = dict(f.choices)
+            a.input(type="range", klass="stops", min="1", max=str(len(f.choices)), step="1",
+                    value=chosen, **own,
+                    **{"data-words": json.dumps([w for _, w in f.choices], ensure_ascii=False),
+                       "aria-valuetext": words.get(str(chosen), "")})
+            a.span(klass="unit stop-words", _t=words.get(str(chosen), ""), **{"aria-hidden": "true"})
         elif f.kind in ("bool", "window"):
             on = (env or "").strip().lower() in ("1", "true", "yes", "on") if env is not None \
                 else value == "true"
@@ -717,9 +730,18 @@ def _group(a: Airium, g: cf.Group, view: View, images: list[str], locked: bool,
                 marks["data-disk"] = json.dumps(_disk_data(view.held, view.disk),
                                                 separators=(",", ":"))
             with a.div(klass="visual"):
-                a.canvas(id="-".join(["visual", g.visual, *key.split(".")]) if key
-                         else f"visual-{g.visual}",
-                         **{"data-visual": g.visual, "aria-hidden": "true"}, **marks)
+                if g.visual == "led":
+                    # A dot sheet.js lights as the dock would, and the look it plays:
+                    # what the light showed at the dock's last report, until a row is picked.
+                    light = view.dock.light if view.dock and not view.dock.offline else None
+                    with a.div(klass="led-preview", id="visual-led", **{"data-visual": "led"},
+                               **({"data-light": light} if light else {})):
+                        a.span(klass="dot", **{"aria-hidden": "true"})
+                        a.span(klass="led-look", _t="", **{"aria-live": "polite"})
+                else:
+                    a.canvas(id="-".join(["visual", g.visual, *key.split(".")]) if key
+                             else f"visual-{g.visual}",
+                             **{"data-visual": g.visual, "aria-hidden": "true"}, **marks)
                 a.p(klass="caption", _t=g.caption or VISUAL_CAPTIONS[g.visual])
         with a.div(klass="fields"):
             if stored:
@@ -934,7 +956,7 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
         a = Html()
         _settings_line(a, state)
         return jsonify(state=str(a), recalibration=_recalibration_words(state),
-                       offline=state.offline)
+                       offline=state.offline, light=state.light)
 
     @bp.route("/export/<name>", methods=["GET"])
     def export(name: str):
