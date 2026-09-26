@@ -14,7 +14,7 @@ from epd_server import __version__ as library_version
 from epd_server.config import FirmwareSettings
 from epd_server.firmware import FirmwareStore
 
-from schedule import ClockSchedule
+from epd_server.timeranges import TimeRanges
 
 
 class About:
@@ -26,16 +26,17 @@ class About:
             offer to each board: the newest that can work with ``version``.
             Without them the answer says there is none.
         now: the clock, for tests.
-        dock_sync: the dock's sync schedule, when the server keeps one.
+        syncs: each board's sync schedule, by its short name, when the
+            server keeps them.
     """
 
     def __init__(self, version: str, firmware: FirmwareSettings | None = None,
                  now: Callable[[], float] = time.time,
-                 dock_sync: ClockSchedule | None = None):
+                 syncs: dict[str, TimeRanges] | None = None):
         self.version = version
         self.firmware = firmware
         self.now = now
-        self.dock_sync = dock_sync
+        self.syncs = syncs or {}
         self.stores = ({p: FirmwareStore(firmware.dir_for(p)) for p in firmware.names()}
                        if firmware and firmware.enabled else {})
 
@@ -53,10 +54,10 @@ class About:
 
     def _sync(self, now: float) -> dict | None:
         """Each board's ranges and the seconds to its next slot."""
-        if self.dock_sync is None:
+        if not self.syncs:
             return None
-        return {"dock": {"ranges": self.dock_sync.describe(),
-                         "next_s": self.dock_sync.seconds_until_next(now)}}
+        return {board: {"ranges": sync.describe(), "next_s": sync.seconds_until_next(now)}
+                for board, sync in self.syncs.items()}
 
     def _firmware(self) -> dict | None:
         """Each product's offer, None where the server holds nothing its

@@ -32,6 +32,7 @@ from datetime import datetime
 from typing import Any, Callable
 
 from airium import Airium
+from epd_server.timeranges import MAX_RANGES
 from flask import Blueprint, Response, abort, jsonify, redirect, request
 from markupsafe import Markup
 
@@ -40,7 +41,6 @@ import dock_settings as ds
 from html_doc import Html
 from pages.base import EnvPage
 from metrics import age_span
-from schedule import MAX_RANGES
 from transfer import Corrupt, Overlap, Transfer
 from web import menu_bar, page_head
 
@@ -53,8 +53,8 @@ TAB_NAMES = [t.name for t in cf.TABS] + [YAML_TAB]
 
 # What each drawing on a sheet shows, and how to change it by dragging.
 VISUAL_CAPTIONS = {
-    "dial": "Each tick is a sync. Hatching marks a range that is off; the inner line, "
-            "the light's dark hours. Drag a range's start to move it.",
+    "dial": "Each tick is a sync. Hatching marks a time range that is off. "
+            "Drag a time range's start to move it.",
     "panel": "The image, with the drawn area hatched. "
              "Drag the round handle to resize it; click a dot to move it.",
     "slot": "The time before one sync. "
@@ -178,39 +178,48 @@ def _pool_row(a: Airium, key: str, name: str, pages: str, images: list[str]) -> 
         a.button(type="button", klass="remove", _t="×", **{"aria-label": "Remove this pool"})
 
 
-def _time_row(a: Airium, key: str, at: str, pool: str, names: list[str]) -> None:
-    with a.div(klass="row"):
-        a.input(type="time", step="1", name=key + ".at", value=at,
-                **{"aria-label": "Wake time"})
-        with a.select(name=key + ".pool", **{"aria-label": "Pool"}):
-            for n in names + ([pool] if pool and pool not in names else []):
-                a.option(value=n, _t=n, **({"selected": "selected"} if n == pool else {}))
-        a.button(type="button", klass="remove", _t="×", **{"aria-label": "Remove this time"})
+# A clock face in the ink of the button it is on.
+CLOCK_ICON = Markup('<svg viewBox="0 0 16 16" aria-hidden="true">'
+                    '<circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" '
+                    'stroke-width="1.5"/><path d="M8 4.5V8l2.25 1.5" fill="none" '
+                    'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" '
+                    'stroke-linejoin="round"/></svg>')
+
+
+def _time_input(a: Airium, **attrs) -> None:
+    """A time input, and the button that opens the page's own picker
+    (timepick.js): the browser's takes its colours from the system."""
+    lock = {"disabled": "disabled"} if "disabled" in attrs else {}
+    with a.span(klass="time"):
+        a.input(type="time", **attrs)
+        a.button(type="button", klass="pick", _t=CLOCK_ICON,
+                 **{"aria-label": "Choose a time", "aria-expanded": "false"}, **lock)
 
 
 def _clock_row(a: Airium, key: str, start: str, every: str, locked: bool) -> None:
     lock = {"disabled": "disabled"} if locked else {}
     with a.div(klass="row"):
-        a.input(type="time", name=key + ".from", value=start, **{"aria-label": "From"}, **lock)
+        _time_input(a, name=key + ".from", value=start, **{"aria-label": "From"}, **lock)
         with a.span(klass="every"):
             a.input(type="number", name=key + ".every", value=every, min="0",
                     max=str(24 * 60), step="1", inputmode="numeric",
                     **{"aria-label": "Every, in minutes"}, **lock)
             a.span(klass="unit", _t="min")
-        a.button(type="button", klass="split", _t="Split",
-                 **{"aria-label": "Split this range in two"}, **lock)
         a.button(type="button", klass="remove", _t="×",
-                 **{"aria-label": "Remove this range; the one before takes its hours"}, **lock)
+                 **{"aria-label": "Remove this time range; the one before takes its hours"},
+                 **lock)
 
 
 def _row(a: Airium, f: cf.Field, first: str, second: str, images: list[str],
-         names: list[str], locked: bool) -> None:
+         locked: bool) -> None:
     if f.kind == "pools":
         _pool_row(a, f.key, first, second, images)
-    elif f.kind == "clock":
-        _clock_row(a, f.key, first, second, locked)
     else:
-        _time_row(a, f.key, first, second, names)
+        _clock_row(a, f.key, first, second, locked)
+
+
+# The words on each field's button that adds a row.
+ADD_WORDS = {"pools": "Add a pool", "clock": "Add a time range"}
 
 
 def _rows(a: Airium, f: cf.Field, view: View, images: list[str], heading: str,
@@ -218,7 +227,6 @@ def _rows(a: Airium, f: cf.Field, view: View, images: list[str], heading: str,
     """A field of rows. ``locked`` applies to a schedule's ranges, the only
     rows on a tab that locks."""
     rows = view.values.get(f.key, [])
-    names = _pool_names(view)
     marks = {"data-max": str(MAX_RANGES)} if f.kind == "clock" else {}
     with a.fieldset(klass=f"rows {f.kind}", id=_id(f.key),
                     **{"data-key": f.key, "data-initial": cf.initial(view.initial[f.key])},
@@ -228,13 +236,13 @@ def _rows(a: Airium, f: cf.Field, view: View, images: list[str], heading: str,
         a.input(type="hidden", name=f.key, value="1", **({"disabled": "disabled"} if locked else {}))
         with a.div(klass="list"):
             for first, second in rows:
-                _row(a, f, first, second, images, names, locked)
+                _row(a, f, first, second, images, locked)
         with a.template():
-            _row(a, f, "", "", images, names, locked)
+            _row(a, f, "", "", images, locked)
         with a.div(klass="foot"):
-            if f.kind != "clock":
-                a.button(type="button", klass="add",
-                         _t="Add a pool" if f.kind == "pools" else "Add a time")
+            if f.kind in ADD_WORDS:
+                a.button(type="button", klass="add", _t=ADD_WORDS[f.kind],
+                         **({"disabled": "disabled"} if locked else {}))
             if f.help:
                 a.p(klass="help", _t=f.help)
 
@@ -276,9 +284,7 @@ def _control(a: Airium, f: cf.Field, view: View, env: str | None, locked: bool) 
                     attrs["min"] = f"{f.minimum:g}"
                 if f.maximum is not None:
                     attrs["max"] = f"{f.maximum:g}"
-            elif f.kind == "time":
-                attrs.update(type="time")
-            else:
+            elif f.kind != "time":
                 attrs.update(type="text", spellcheck="false", autocomplete="off")
                 if f.kind == "zone":
                     attrs["list"] = "zones"
@@ -286,7 +292,10 @@ def _control(a: Airium, f: cf.Field, view: View, env: str | None, locked: bool) 
                     attrs.update(klass="chips",
                                  **{"data-options": " ".join(_pool_names(view)),
                                     "data-options-from": "display.pools"})
-            a.input(**own, **attrs)
+            if f.kind == "time":
+                _time_input(a, **own, **attrs)
+            else:
+                a.input(**own, **attrs)
             if f.unit:
                 a.span(klass="unit", _t=f.unit)
 
@@ -551,10 +560,14 @@ def _group(a: Airium, g: cf.Group, view: View, images: list[str], locked: bool,
     with a.div(klass=f"content visual-{g.visual}" if g.visual else "content") if sheet \
             else _nothing():
         if sheet and g.visual:
+            # A dial draws the schedule its group holds.
+            key = next((f.key for f in g.fields if f.kind == "clock"), "")
             with a.div(klass="visual"):
-                a.canvas(id=f"visual-{g.visual}", **{"data-visual": g.visual,
-                                                      "aria-hidden": "true"})
-                a.p(klass="caption", _t=VISUAL_CAPTIONS[g.visual])
+                a.canvas(id="-".join(["visual", g.visual, *key.split(".")]) if key
+                         else f"visual-{g.visual}",
+                         **{"data-visual": g.visual, "aria-hidden": "true"},
+                         **({"data-schedule": key} if key else {}))
+                a.p(klass="caption", _t=g.caption or VISUAL_CAPTIONS[g.visual])
         with a.div(klass="fields"):
             for when, fields in _runs(g.fields, sheet):
                 boxed = when and len(fields) > 1
@@ -690,6 +703,7 @@ def config_html(pages: list[EnvPage], view: View, writable: bool,
                     a.option(value=zone)
             a.script(src="rough.iife.min.js")
             a.script(src="config.js")
+            a.script(src="timepick.js")
             a.script(src="sheet.js")
             a.script(src="ago.js")
     return str(a)

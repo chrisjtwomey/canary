@@ -1,10 +1,10 @@
 /* The drawings on the Config page's sheet tabs, with rough.js for the
-   hand-drawn look the pages have: the day's syncs as a dial, the time
-   before one sync as a strip, and the image with its drawn area as a
-   panel. Each is drawn from the settings form's inputs, and dragging one
-   writes the inputs, so the form stays what a save sends. A locked input,
-   such as an offline dock's, cannot be dragged. The position grid sets the
-   drawn area's two alignments the same way. */
+   hand-drawn look the pages have: a day of syncs or page changes as a
+   dial, the time before one sync as a strip, and the image with its
+   drawn area as a panel. Each is drawn from the settings form's inputs,
+   and dragging one writes the inputs, so the form stays what a save
+   sends. A locked input, such as an offline dock's, cannot be dragged.
+   The position grid sets the drawn area's two alignments the same way. */
 (function () {
   'use strict';
 
@@ -71,13 +71,18 @@
     el.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
+  // The dock's schedule, which the strip draws the time before a sync of,
+  // and the light's dark hours, which only the dock's dial draws.
   var SYNC = 'dock.sync';
+  var DARK = { 'dock.sync': 'dock.led.dark' };
+  // What a dial's count is of, for one and for more; a sync by default.
+  var COUNTS = { 'display.schedule.ranges': ['page a day', 'pages a day'] };
 
-  // The dock's sync ranges from the form's rows, in order of their starts:
+  // A schedule's ranges from the form's rows, in order of their starts:
   // each {start, every, row}, the interval in seconds, 0 for off.
-  function ranges() {
+  function ranges(key) {
     var out = [];
-    form.querySelectorAll('fieldset[data-key="' + SYNC + '"] .list > .row').forEach(function (row) {
+    form.querySelectorAll('fieldset[data-key="' + key + '"] .list > .row').forEach(function (row) {
       var start = minutesOf(row.querySelector('input[type=time]').value);
       var every = parseInt(row.querySelector('input[type=number]').value, 10) * 60;
       if (!isNaN(start)) out.push({ start: start, every: every >= 0 ? every : 0, row: row });
@@ -93,13 +98,13 @@
     return at;
   }
 
-  function schedule() {
-    var list = ranges();
-    var from = minutesOf((input('dock.led.dark.from') || {}).value);
-    var to = minutesOf((input('dock.led.dark.to') || {}).value);
+  function schedule(key) {
+    var dark = DARK[key];
+    var from = dark ? minutesOf((input(dark + '.from') || {}).value) : NaN;
+    var to = dark ? minutesOf((input(dark + '.to') || {}).value) : NaN;
     return {
-      ranges: list,
-      dark: on('dock.led.dark') && !isNaN(from) && !isNaN(to) && from !== to,
+      ranges: ranges(key),
+      dark: !!dark && on(dark) && !isNaN(from) && !isNaN(to) && from !== to,
       from: from,
       to: to
     };
@@ -153,12 +158,13 @@
     ctx.restore();
   }
 
-  // ── The dial: the day's syncs ────────────────────────────────────
+  // ── The dial: a day of syncs or page changes ─────────────────────
   // Midnight at the top, the day running clockwise. Each tick is a sync; a
   // hatched band is a range that is off. A handle at each range's start drags
   // it round. The line inside is the light's dark hours.
   function Dial(canvas) {
     this.canvas = canvas;
+    this.key = canvas.getAttribute('data-schedule') || SYNC;
     this.drag = null;
     var self = this;
     canvas.addEventListener('pointerdown', function (e) { self.down(e); });
@@ -179,8 +185,8 @@
     var p = prepare(this.canvas);
     if (!p.w) return;
     var g = this.geometry(), cx = g.cx, cy = g.cy, R = g.R;
-    var s = schedule();
-    var fixed = locked(SYNC + '.from');
+    var s = schedule(this.key);
+    var fixed = locked(this.key + '.from');
     var ink = fixed ? G[4] : G[1];
 
     s.ranges.forEach(function (r, i) {
@@ -230,7 +236,8 @@
            { size: 13, italic: true, color: G[3] });
     });
     text(p.ctx, String(readings.length), cx, cy - 8, { size: 30, weight: 600, color: ink });
-    text(p.ctx, readings.length === 1 ? 'sync a day' : 'syncs a day', cx, cy + 16,
+    var count = COUNTS[this.key] || ['sync a day', 'syncs a day'];
+    text(p.ctx, count[readings.length === 1 ? 0 : 1], cx, cy + 16,
          { size: 13, italic: true, color: G[3] });
 
     if (!fixed && s.ranges.length > 1) {
@@ -252,8 +259,8 @@
   };
 
   Dial.prototype.down = function (e) {
-    var s = schedule();
-    if (s.ranges.length < 2 || locked(SYNC + '.from')) return;
+    var s = schedule(this.key);
+    if (s.ranges.length < 2 || locked(this.key + '.from')) return;
     var r = this.canvas.getBoundingClientRect(), g = this.geometry();
     var x = e.clientX - r.left, y = e.clientY - r.top;
     for (var i = 0; i < s.ranges.length; i++) {
@@ -271,7 +278,7 @@
   // A start moves up to its neighbours' and no further, so the ranges keep their order.
   Dial.prototype.move = function (e) {
     if (!this.drag) return;
-    var el = this.drag, list = ranges();
+    var el = this.drag, list = ranges(this.key);
     var i = list.findIndex(function (r) { return r.row.contains(el); });
     if (i < 0) return;
     var prev = list[(i - 1 + list.length) % list.length].start;
@@ -301,7 +308,7 @@
 
   Strip.prototype.geometry = function () {
     var r = this.canvas.getBoundingClientRect();
-    var span = shortest(schedule());
+    var span = shortest(schedule(SYNC));
     var left = 14, right = r.width - 14;
     return {
       left: left, right: right, span: span,

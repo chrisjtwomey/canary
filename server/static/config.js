@@ -304,10 +304,11 @@
     render();
   }
 
-  // ── A schedule: ranges round the clock ───────────────────────────
-  // Each row is a range from its start to the next row's. Split halves a
-  // range; × gives its hours to the range before. The rows stay in order of
-  // their starts, as the day runs.
+  // ── A schedule: time ranges round the clock ──────────────────────
+  // Each row is a time range from its start to the next row's. Add halves
+  // the longest, the earliest of equals, so the day stays covered; × gives
+  // a range's hours to the one before. The rows stay in order of their
+  // starts, as the day runs.
   var DAY_MIN = 1440;
 
   function minutesOf(hhmm) {
@@ -322,8 +323,10 @@
 
   function clock(box) {
     var list = box.querySelector('.list');
-    var blank = box.querySelector('template');
+    var add = box.querySelector('.add');
     var max = parseInt(box.getAttribute('data-max'), 10) || 8;
+    // Rendered disabled while the dock is offline, and kept so.
+    var locked = !!add && add.disabled;
 
     function rows() { return all('.list > .row', box); }
     function startOf(row) { return minutesOf(row.querySelector('input[type=time]').value); }
@@ -331,9 +334,9 @@
     function limits() {
       var n = rows().length;
       rows().forEach(function (row) {
-        row.querySelector('.split').disabled = n >= max;
-        row.querySelector('.remove').disabled = n <= 1;
+        row.querySelector('.remove').disabled = locked || n <= 1;
       });
+      if (add) add.disabled = locked || n >= max;
     }
 
     function sort() {
@@ -343,28 +346,35 @@
       if (focused && box.contains(focused)) focused.focus();
     }
 
-    list.addEventListener('click', function (e) {
-      var split = e.target.closest('.split');
-      if (!split || split.disabled) return;
-      var row = split.closest('.row');
-      var start = startOf(row);
-      if (isNaN(start)) return;
-      var later = rows().map(startOf).filter(function (m) { return m > start; });
-      var end = later.length ? Math.min.apply(null, later)
-                             : Math.min.apply(null, rows().map(startOf)) + DAY_MIN;
-      // Halfway, on a five-minute step; a range too short for that stays whole.
-      var middle = start + Math.round((end - start) / 10) * 5;
-      if (middle <= start || middle >= end) return;
-      var half = blank.content.firstElementChild.cloneNode(true);
-      half.querySelector('input[type=time]').value = hhmm(middle);
-      half.querySelector('input[type=number]').value =
-        row.querySelector('input[type=number]').value;
-      row.after(half);
+    // The add button's new row, last and blank, starts halfway through the
+    // longest range, on a five-minute step, with its interval. When every
+    // range is too short for that, no row is added.
+    box._added = function (row) {
+      var others = rows().filter(function (r) { return r !== row && !isNaN(startOf(r)); })
+        .sort(function (a, b) { return startOf(a) - startOf(b); });
+      var longest = null, from = 0, length = 0;
+      others.forEach(function (r, i) {
+        var start = startOf(r);
+        var end = i + 1 < others.length ? startOf(others[i + 1]) : startOf(others[0]) + DAY_MIN;
+        if (end - start > length) {
+          longest = r;
+          from = start;
+          length = end - start;
+        }
+      });
+      var middle = from + Math.round(length / 10) * 5;
+      if (!longest || middle <= from || middle >= from + length) {
+        row.remove();
+        limits();
+        return;
+      }
+      row.querySelector('input[type=time]').value = hhmm(middle);
+      row.querySelector('input[type=number]').value =
+        longest.querySelector('input[type=number]').value;
       sort();
       limits();
-      half.querySelector('input[type=time]').focus();
       box.dispatchEvent(new Event('input', { bubbles: true }));
-    });
+    };
     list.addEventListener('change', function (e) {
       if (e.target.type === 'time') sort();
     });
@@ -373,18 +383,10 @@
   }
 
   function poolsChanged() {
-    var pools = poolNames();
-    all('.times select[name]').forEach(function (sel) {
-      var current = sel.value;
-      var choices = pools.slice();
-      if (current && choices.indexOf(current) < 0) choices.push(current);
-      sel.textContent = '';
-      choices.forEach(function (n) { sel.add(new Option(n, n, false, n === current)); });
-    });
     all('input[data-options-from]').forEach(function (i) { if (i._tags) i._tags.render(); });
   }
 
-  // ── Rows: the pools, the wake times, and a schedule's ranges ─────
+  // ── Rows: the pools, and a schedule's ranges ────────────────────
   all('fieldset.rows').forEach(function (box) {
     var list = box.querySelector('.list');
     var blank = box.querySelector('template');
@@ -394,7 +396,7 @@
       var row = blank.content.firstElementChild.cloneNode(true);
       list.appendChild(row);
       all('input.chips', row).forEach(tags);
-      if (box.classList.contains('times')) poolsChanged();
+      if (box._added) box._added(row);
       row.querySelector('input, select').focus();
       edited();
     });

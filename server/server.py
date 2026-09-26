@@ -14,7 +14,7 @@ import os
 import sys
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, time as clock_time
 from typing import Callable
 
 import yaml
@@ -22,7 +22,9 @@ from epd_server import DisplayServer, LogStore, ReadingsStore, align_process_tim
 from epd_server.config import (ConfigError, CoreConfig, get_prop_by_keys, load_core_config,
                                load_yaml)
 from epd_server.firmware import is_clean_tag
+from epd_server.scheduling import TimeRangesSchedule
 from epd_server.source import CompositeSource, IngestSource
+from epd_server.timeranges import TimeRanges, check_interval
 
 from about import About
 from board_logs import LogsQuery
@@ -35,7 +37,7 @@ from pages.day import DayPage
 from pages.diagnostics import DiagnosticsPage, DiagnosticsTracePage, HealthTracePage
 from pages.dust import DustPage
 from pages.pool import CO2, IAQ, PM25, PRESSURE, TEMP, DeltaPage, TracePage
-from schedule import DEFAULT_DOCK_SYNC, ClockSchedule
+from schedule import DEFAULT_DOCK_SYNC, DEFAULT_HEAD_SYNC_S, DEFAULT_PAGE_RANGES
 from sources.calibration import CalibrationStore
 from sources.corrections import SeaLevelSource, to_sea_level
 from sources.mock import MockReadingsSource
@@ -50,7 +52,7 @@ log = logging.getLogger("server")
 
 # One page an hour when config.yaml has no display block.
 DEFAULT_DISPLAY = {"pools": {"co2": ["breathe.png"]},
-                   "schedule": {"type": "interval", "every": 3600}}
+                   "schedule": {"type": "timeranges", "ranges": DEFAULT_PAGE_RANGES}}
 
 SOURCE_KINDS = ("mock", "store")
 # The two boards, each with its images in a subdirectory of the firmware
@@ -58,8 +60,7 @@ SOURCE_KINDS = ("mock", "store")
 FIRMWARE_PRODUCTS = ("canary-head", "canary-dock")
 # The history windows the pages ask for, as history_24h and history_72h.
 HISTORY_HOURS = (24, 72)
-# The head reports on its own clock, kReportIntervalMs in src/main.cpp.
-HEAD_REPORT_EVERY_S = 60
+HEAD = "canary-head"
 
 
 def make_pages(tz, **geometry) -> list:
@@ -115,27 +116,53 @@ def follow_own_version(firmware, version: str):
     return dataclasses.replace(firmware, offer_dev_builds=not is_clean_tag(version))
 
 
-def make_silence(dock_sync: ClockSchedule) -> Callable[[str, float], float]:
+def make_silence(syncs: dict[str, TimeRanges]) -> Callable[[str, float], float]:
     """How long each board may go without a report before two of its syncs
-    are missed: the dock's since the second-latest slot, the head's two of
-    its intervals."""
+    are missed: since the second-latest slot of its own schedule. A board
+    with no schedule, or no slot in it, is never judged."""
     def silence(device: str, now: float) -> float:
-        if device != DOCK:
-            return 2 * HEAD_REPORT_EVERY_S
-        latest = dock_sync.slot_before(now)
-        before = dock_sync.slot_before(latest - 1) if latest is not None else None
+        sync = syncs.get(device)
+        latest = sync.slot_before(now) if sync else None
+        before = sync.slot_before(latest - 1) if latest is not None else None
         return now - before if before is not None else float("inf")
     return silence
 
 
-def make_next_sync(dock_sync: ClockSchedule) -> Callable[[str, float], int | None]:
-    """The seconds until the dock's next sync slot; the head has none."""
+def make_next_sync(syncs: dict[str, TimeRanges]) -> Callable[[str, float], int | None]:
+    """The seconds until a board's next sync slot; None for a board with no
+    schedule, or no slot in it."""
     def next_sync(device: str, now: float) -> int | None:
-        return dock_sync.seconds_until_next(now) if device == DOCK else None
+        sync = syncs.get(device)
+        return sync.seconds_until_next(now) if sync else None
     return next_sync
 
 
-def make_dock_sync(config: dict, tz) -> ClockSchedule:
+def make_sensor_poll(syncs: dict[str, TimeRanges]) -> Callable[[float, str | None], int | None]:
+    """The Canary-Next-Sensor-Poll-Seconds each board gets: its own next sync."""
+    next_sync = make_next_sync(syncs)
+    return lambda now, name: next_sync(name, now) if name else None
+
+
+def make_head_sync(config: dict, tz) -> TimeRanges:
+    """The head's sync schedule from ``head.sync.every``, one range all day:
+    every half hour when config.yaml gives none. 0 is none, since the head
+    also syncs at each page it fetches.
+
+    Raises:
+        ConfigError: the block is not ``{every: seconds}``, or the interval
+            is not 0 or a whole number of minutes up to a day.
+    """
+    block = get_prop_by_keys(config, "head", "sync", default={})
+    if not isinstance(block, dict) or set(block) - {"every"}:
+        raise ConfigError(f"head.sync must be {{every: seconds}}, 0 for none, not {block!r}")
+    try:
+        every = check_interval(block.get("every", DEFAULT_HEAD_SYNC_S), "head.sync.every")
+    except ValueError as exc:
+        raise ConfigError(str(exc)) from None
+    return TimeRanges([(clock_time(0), every)], tz, "head.sync")
+
+
+def make_dock_sync(config: dict, tz) -> TimeRanges:
     """The dock's sync schedule from ``dock.sync``: every five minutes, and
     every half hour from 01:00 to 07:00, when config.yaml gives none.
 
@@ -145,7 +172,7 @@ def make_dock_sync(config: dict, tz) -> ClockSchedule:
     """
     value = get_prop_by_keys(config, "dock", "sync", default=DEFAULT_DOCK_SYNC)
     try:
-        sync = ClockSchedule.from_config(value, tz, "dock.sync")
+        sync = TimeRanges.from_config(value, tz, "dock.sync")
     except ValueError as exc:
         raise ConfigError(str(exc)) from None
     if sync.seconds_until_next(time.time()) is None:
@@ -169,8 +196,14 @@ class Settings:
     logs_path: str
     logs_days: float
     altitude_m: float
-    dock_sync: ClockSchedule
+    dock_sync: TimeRanges
+    head_sync: TimeRanges
     dock: DockSettings
+
+    @property
+    def syncs(self) -> dict[str, TimeRanges]:
+        """Each board's sync schedule, by the name it states."""
+        return {DOCK: self.dock_sync, HEAD: self.head_sync}
 
 
 def load_settings(config: dict) -> Settings:
@@ -188,6 +221,9 @@ def load_settings(config: dict) -> Settings:
     kind = get_prop_by_keys(config, "source", "kind", default="mock")
     if kind not in SOURCE_KINDS:
         raise ConfigError(f"source.kind {kind!r} is not one of {', '.join(SOURCE_KINDS)}")
+    if not isinstance(core.server.schedule, TimeRangesSchedule):
+        raise ConfigError("display.schedule.type must be timeranges: canary changes the page "
+                          "on ranges round the clock")
     served = {p.png_filename for p in make_pages(core.server.timezone, **core.image.page_kwargs())}
     unknown = sorted(core.server.schedule.pages() - served)
     if unknown:
@@ -210,6 +246,7 @@ def load_settings(config: dict) -> Settings:
         logs_days=float(get_prop_by_keys(config, "logs", "keep_days", default=7)),
         altitude_m=float(get_prop_by_keys(config, "site", "altitude_m", default=0)),
         dock_sync=make_dock_sync(config, core.server.timezone),
+        head_sync=make_head_sync(config, core.server.timezone),
         dock=load_dock_settings(config),
     )
 
@@ -287,8 +324,8 @@ def main():
 
     status_store = ReadingsStore(os.path.join(cwd, settings.status_path))
     reports = DeviceReports(store=status_store, keep_days=settings.status_days,
-                            silence=make_silence(settings.dock_sync),
-                            next_sync=make_next_sync(settings.dock_sync))
+                            silence=make_silence(settings.syncs),
+                            next_sync=make_next_sync(settings.syncs))
     log.info("board reports in %s, %d held", status_store.path, status_store.count())
     store = None
     if settings.kind == "store":
@@ -299,7 +336,8 @@ def main():
                                    keep_days=settings.calibration_days)
     ingest = ReadingsIngest(reports, store, settings.keep_days)
     dock_sync = settings.dock_sync
-    about = About(version, core.firmware, dock_sync=dock_sync)
+    about = About(version, core.firmware,
+                  syncs={"dock": settings.dock_sync, "head": settings.head_sync})
     pages = make_pages(tz, **core.image.page_kwargs())
     between = make_between(settings.seed, clock, store)
     history = HistoryQuery(make_history(between, settings.altitude_m), tz, now=clock)
@@ -329,7 +367,7 @@ def main():
             header_prefix="Canary",
             server_version=about.version,
             version_gate=True,
-            sensor_poll=dock_sync.seconds_until_next,
+            sensor_poll=make_sensor_poll(settings.syncs),
             on_refused=reports.refused,
         )
     except ValueError as exc:

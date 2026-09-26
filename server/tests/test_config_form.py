@@ -7,7 +7,8 @@ import yaml
 from werkzeug.datastructures import MultiDict
 
 import config_form as cf
-from server import load_settings
+from schedule import DEFAULT_PAGE_RANGES
+from server import check_config, load_settings
 
 EXAMPLE = open(os.path.join(os.path.dirname(__file__), "..", "config.example.yaml")).read()
 
@@ -167,9 +168,9 @@ def test_a_schedule_without_a_block_is_written_where_the_dock_block_is():
     (["07:00", "25:00"], ["5", "5"], "25:00: not a time."),
     (["07:00"], ["1.5"], "From 07:00: enter a whole number of minutes."),
     (["07:00"], ["-5"], "From 07:00: enter 0 to 1440 minutes."),
-    (["07:00", "7:00"], ["5", "10"], "Two ranges start at 07:00."),
-    ([], [], "Keep at least one range."),
-    ([f"{h:02d}:00" for h in range(9)], ["5"] * 9, "At most 8 ranges."),
+    (["07:00", "7:00"], ["5", "10"], "Two time ranges start at 07:00."),
+    ([], [], "Keep at least one time range."),
+    ([f"{h:02d}:00" for h in range(9)], ["5"] * 9, "At most 8 time ranges."),
 ])
 def test_a_schedule_the_form_cannot_write_is_refused_at_its_field(starts, everies, words):
     e = cf.apply(EXAMPLE, as_posted(EXAMPLE, dock__sync__from=starts, dock__sync__every=everies))
@@ -183,18 +184,27 @@ def test_pools_change_come_and_go_and_keep_their_order():
         "comfort": ["comfort.png"], "co2": ["breathe.png", "co2-trace.png"], "extra": ["day.png"]}
     assert list(cf.read(e.text)["display"]["pools"]) == ["comfort", "co2", "extra"]
     assert "    co2: [breathe.png, co2-trace.png]" in e.text
-    assert "  schedule:\n    type: interval" in e.text
+    assert "  schedule:\n    type: timeranges" in e.text
 
 
-def test_a_times_schedule_quotes_its_times_and_drops_the_interval():
-    e = edit(display__schedule__type="times",
-             display__schedule__times__at=["19:30", "07:00:00"],
-             display__schedule__times__pool=["co2", "day"])
-    sched = cf.read(e.text)["display"]["schedule"]
-    assert sched == {"type": "times", "reshuffle_hours": 3, "19:30:00": "co2", "07:00:00": "day"}
-    back = edit(e.text, display__schedule__type="interval", display__schedule__every="600")
-    assert cf.read(back.text)["display"]["schedule"] == {"type": "interval", "reshuffle_hours": 3,
-                                                         "every": 600}
+def test_the_page_schedule_is_shown_in_minutes_from_the_earliest_start():
+    assert cf.shown(cf.read(EXAMPLE))["display.schedule.ranges"] == [("00:00", "5")]
+
+
+def test_a_split_page_schedule_is_written_under_the_schedule_one_range_to_a_line():
+    e = edit(display__schedule__ranges__from=["00:00", "07:00", "23:00"],
+             display__schedule__ranges__every=["60", "5", "0"])
+    assert ('      - {from: "00:00", every: 3600}\n      - {from: "07:00", every: 300}\n'
+            '      - {from: "23:00", every: 0}\n    reshuffle_hours: 3\n') in e.text
+    assert e.changed == ["display.schedule.ranges"]
+    check_config(e.text)
+
+
+def test_the_heads_sync_is_shown_in_minutes_and_written_in_seconds():
+    assert cf.shown(cf.read(EXAMPLE))["head.sync.every"] == "30"
+    e = edit(head__sync__every="10")
+    assert "    every: 600      # seconds" in e.text and e.changed == ["head.sync.every"]
+    check_config(e.text)
 
 
 def test_a_field_an_environment_variable_sets_is_left_alone(monkeypatch):
@@ -235,8 +245,10 @@ def _settings(config: dict):
     s = load_settings(config)
     schedule = s.core.server.schedule
     server = dataclasses.replace(s.core.server, schedule=None)
-    return (dataclasses.replace(s, core=dataclasses.replace(s.core, server=server), dock_sync=None),
-            type(schedule).__name__, vars(getattr(schedule, "pools")), s.dock_sync.describe())
+    return (dataclasses.replace(s, core=dataclasses.replace(s.core, server=server),
+                                dock_sync=None, head_sync=None),
+            type(schedule).__name__, vars(getattr(schedule, "pools")),
+            s.dock_sync.describe(), s.head_sync.describe())
 
 
 def _with(config: dict, path: tuple, value) -> dict:
@@ -250,7 +262,7 @@ def _with(config: dict, path: tuple, value) -> dict:
 
 
 BASE = {"display": {"pools": {"co2": ["breathe.png"]},
-                    "schedule": {"type": "interval", "every": 300}}}
+                    "schedule": {"type": "timeranges", "ranges": DEFAULT_PAGE_RANGES}}}
 
 
 @pytest.mark.parametrize("f", [f for f in cf.FIELDS if f.default is not None and f.kind != "window"

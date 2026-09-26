@@ -18,10 +18,12 @@ from tests.html import attr, one
 GOOD = "server:\n  timezone: Europe/Dublin\nsource:\n  kind: mock\n"
 EDITED = "server:\n  timezone: Europe/Dublin\nsource:\n  kind: mock\n  seed: 9\n"
 UNKNOWN_PAGE = ("display:\n  pools:\n    co2: [radon.png]\n"
-                "  schedule:\n    type: interval\n    every: 600\n")
+                "  schedule:\n    type: timeranges\n    ranges:\n"
+                "      - {from: \"00:00\", every: 600}\n")
 WITH_DISPLAY = ("server:\n  port: 8080   # the port\n"
                 "display:\n  pools:\n    co2: [breathe.png, co2-trace.png]\n"
-                "  schedule:\n    type: interval\n    every: 300\n")
+                "  schedule:\n    type: timeranges\n    ranges:\n"
+                "      - {from: \"00:00\", every: 300}\n")
 
 
 @pytest.fixture
@@ -265,7 +267,7 @@ def test_text_from_the_file_is_escaped(client, path):
     soup = soup_of(rsp)
     assert one(soup, "textarea[name=text]").get_text() == text + "bad: ["
     assert [attr(s, "src") for s in soup.find_all("script")] == [
-        "rough.iife.min.js", "config.js", "sheet.js", "ago.js"]
+        "rough.iife.min.js", "config.js", "timepick.js", "sheet.js", "ago.js"]
 
 
 def test_a_posted_tab_name_is_one_of_the_tabs(client, path):
@@ -403,11 +405,11 @@ def dock_offline():
 @pytest.fixture
 def dock(tmp_path, dock_report, dock_offline):
     from dock_settings import BoardSettings, DockSettings
-    from schedule import ClockSchedule, parse_hhmm
+    from epd_server.timeranges import TimeRanges, parse_hhmm
     from sources.calibration import CalibrationStore
     from tests.conftest import AT, TZ
     store = CalibrationStore(tmp_path / "calibration.db")
-    yield BoardSettings(DockSettings(), ClockSchedule([(parse_hhmm("00:00"), 300)], TZ), store,
+    yield BoardSettings(DockSettings(), TimeRanges([(parse_hhmm("00:00"), 300)], TZ), store,
                         lambda device: ({"doc": dock_report, "age_s": 3600,
                                          "offline": dock_offline} if dock_report else None),
                         now=lambda: AT)
@@ -614,6 +616,51 @@ def test_the_dark_hours_share_a_box_that_shows_with_them(dock_client):
         "dock.led.dark.from", "dock.led.dark.to"]
 
 
+def test_each_time_input_has_a_button_for_the_pages_own_picker(dock_client):
+    soup = soup_of(dock_client.get("/web/config"))
+    times = soup.select('#settings-form input[type="time"]')
+
+    assert times and all(t.parent.name == "span" and "time" in t.parent["class"] for t in times)
+    assert all(attr(t.find_next_sibling("button"), "aria-label") == "Choose a time"
+               for t in times)
+    assert {attr(t, "name") for t in times} >= {"display.schedule.ranges.from", "dock.sync.from",
+                                                "dock.led.dark.from", "dock.led.dark.to"}
+    template = one(soup, 'fieldset[data-key="dock.sync"] template')
+    assert template.select_one(".time .pick") is not None
+
+
+def test_the_display_tab_holds_the_heads_sync_as_one_interval(dock_client):
+    panel = one(soup_of(dock_client.get("/web/config")), "#panel-display")
+    every = one(panel, '[data-field="head.sync.every"] input')
+
+    assert attr(every, "value") == "30"
+    assert one(panel, '[data-field="head.sync.every"] .unit').get_text() == "minutes"
+
+
+def test_the_page_schedule_is_a_row_for_each_range_beside_a_dial(dock_client, path, restarts):
+    write(path, WITH_DISPLAY)
+    soup = soup_of(dock_client.get("/web/config"))
+    panel = one(soup, "#panel-display")
+    box = one(panel, "fieldset.rows.clock")
+
+    assert attr(box, "data-key") == "display.schedule.ranges"
+    assert [attr(r.select_one("input[type=time]"), "value") for r in box.select(".list > .row")] \
+        == ["00:00"]
+    assert attr(one(panel, "canvas[data-visual=dial]"), "data-schedule") == \
+        "display.schedule.ranges"
+    assert one(panel, ".visual .caption").get_text().startswith("Each tick is a page change.")
+
+    data = posted(soup)
+    data["display.schedule.ranges.from"] = ["00:00", "23:00"]
+    data["display.schedule.ranges.every"] = ["60", "0"]
+    dock_client.post("/web/config", data={**data, "action": "save"})
+
+    text = open(path).read()
+    assert ('    ranges:\n      - {from: "00:00", every: 3600}\n'
+            '      - {from: "23:00", every: 0}\n') in text
+    check_config(text)
+
+
 def test_the_sync_schedule_is_a_row_for_each_range(dock_client):
     box = one(soup_of(dock_client.get("/web/config")), '#panel-dock fieldset.rows.clock')
 
@@ -621,7 +668,7 @@ def test_the_sync_schedule_is_a_row_for_each_range(dock_client):
     assert [(attr(r.select_one('input[type=time]'), "value"),
              attr(r.select_one('input[type=number]'), "value")) for r in box.select(".list > .row")] \
         == [("01:00", "30"), ("07:00", "5")]
-    assert box.select_one(".add") is None and len(box.select(".list .split")) == 2
+    assert one(box, ".add").get_text() == "Add a time range" and box.select(".split") == []
 
 
 def test_a_split_schedule_is_saved_under_dock_one_range_to_a_line(dock_client, path, restarts):
@@ -644,8 +691,11 @@ def test_an_offline_dock_locks_its_schedule_and_another_tab_leaves_it(dock_clien
     with open(path, "a") as f:
         f.write('dock:\n  sync:\n    - {from: "00:00", every: 600}\n')
     soup = soup_of(dock_client.get("/web/config"))
-    box = one(soup, 'fieldset.rows.clock')
+    box = one(soup, '#panel-dock fieldset.rows.clock')
     assert all(el.has_attr("disabled") for el in box.select("input, button"))
+    assert all(b.has_attr("disabled") for b in box.select(".time .pick"))
+    head = one(soup, '#panel-display fieldset.rows.clock')
+    assert not any(el.has_attr("disabled") for el in head.select("input, button"))
 
     data = {k: v for k, v in posted(soup, source__seed="9").items() if not k.startswith("dock.")}
     dock_client.post("/web/config", data={**data, "action": "save"})
@@ -731,3 +781,10 @@ def test_before_any_recalibration_the_row_says_how_to_do_one(dock_client):
     words = one(soup_of(dock_client.get("/web/config")), "#recalibrate-state").get_text()
 
     assert words.startswith("Keep the dock in air of a known CO₂ level for 3 minutes")
+
+
+def test_only_form_controls_carry_a_data_key(dock_client):
+    """config.js reads the value of everything with one: anything else stops its scripts."""
+    for el in soup_of(dock_client.get("/web/config")).select("[data-key]"):
+        assert el.name in ("input", "select", "textarea", "fieldset") \
+            or "segments" in el.get("class", []), el.name

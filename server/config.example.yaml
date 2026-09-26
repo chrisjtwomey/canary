@@ -21,8 +21,10 @@ display:
     day: [day.png]
     diagnostics: [diagnostics.png, diagnostics-trace.png, health-trace.png]
   schedule:
-    type: interval
-    every: 300
+    type: timeranges
+    ranges:         # when the page changes, in server.timezone: each range runs until the next
+                    # starts, slots on the wall clock (:00, :05 ...); every: 0 is off
+      - {from: "00:00", every: 300}
     reshuffle_hours: 3
 
 image:
@@ -42,6 +44,10 @@ status:             # what each board says about itself, kept as readings are
 calibration:        # sensor state the dock backs up whenever BSEC saves a copy
   # path: calibration.db  # relative to this file
   keep_days: 3      # each copy is kept this long; the board asks for one after a restart
+
+head:               # the board with the panel
+  sync:             # when it sends its state and takes any update, beside each page it fetches
+    every: 1800     # seconds, on the wall clock from midnight; 0 for only beside each page
 
 dock:               # what the dock does between readings; it takes a change before its next one
   sync:             # when it takes a reading and syncs, in server.timezone: each range runs until

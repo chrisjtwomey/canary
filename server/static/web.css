@@ -1074,6 +1074,114 @@ form:empty {
   font-variant-numeric: tabular-nums;
 }
 
+/* A time input with the page's own picker, whose button sits inside the
+   input's right edge in place of the browser's. */
+.time {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 100%;
+  max-width: 7.5em;
+}
+
+.settings .time input[type="time"] {
+  padding-right: 32px;
+}
+
+html.js .settings input[type="time"]::-webkit-calendar-picker-indicator {
+  display: none;
+}
+
+.time .pick {
+  position: absolute;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--ink-soft);
+  background: none;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.time .pick svg {
+  width: 16px;
+  height: 16px;
+}
+
+.time .pick:hover:not(:disabled),
+.time .pick[aria-expanded="true"] {
+  color: var(--ink);
+}
+
+.time .pick:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+html:not(.js) .time .pick {
+  display: none;
+}
+
+/* The picker: an hour column and a minute column, the chosen one in ink. */
+.timepick {
+  position: absolute;
+  z-index: 20;
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 12%);
+}
+
+.timepick .col {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  max-height: 16em;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-mid) transparent;
+}
+
+.timepick button {
+  flex: none;
+  width: 3em;
+  padding: 0.3em 0;
+  font: inherit;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.timepick button:hover {
+  background: var(--ink-faint);
+}
+
+.timepick button[aria-selected="true"] {
+  color: var(--paper);
+  background: var(--ink);
+}
+
+.timepick button:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+
+.timepick button[aria-selected="true"]:focus-visible {
+  outline-color: var(--ink-mid);
+}
+
 .settings input::placeholder {
   font-style: italic;
   color: var(--g5);
@@ -1212,7 +1320,7 @@ form:empty {
   color: var(--ink);
 }
 
-/* ── Rows: the pools, and the wake times ── */
+/* ── Rows: the pools, and a schedule's ranges ── */
 fieldset.rows {
   min-width: 0;
   margin: 0;
@@ -1252,13 +1360,9 @@ fieldset.rows legend.hide {
   border-bottom: 1px solid var(--ink-faint);
 }
 
-.times .row {
-  grid-template-columns: 9em minmax(0, 14em) auto;
-}
-
-/* A schedule's ranges: the start, the interval, and the two actions. */
+/* A schedule's time ranges: the start, the interval, and ×. */
 .clock .row {
-  grid-template-columns: 8em auto auto auto;
+  grid-template-columns: 8em auto auto;
   justify-content: start;
 }
 
@@ -1273,25 +1377,8 @@ fieldset.rows legend.hide {
   width: 5.5em;
 }
 
-.rows .split {
-  padding: 0.1em 0.8em;
-  font: inherit;
-  font-size: 15px;
-  font-style: italic;
-  color: var(--ink-soft);
-  background: var(--paper);
-  border: 1.5px dashed var(--ink-mid);
-  border-radius: 1em;
-  cursor: pointer;
-}
-
-.rows .split:hover:not(:disabled) {
-  color: var(--ink);
-  border-color: var(--ink);
-}
-
-.rows .split:disabled,
-.rows .remove:disabled {
+.rows .remove:disabled,
+.rows .add:disabled {
   opacity: 0.35;
   cursor: default;
 }
@@ -1363,13 +1450,12 @@ fieldset.rows legend.hide {
   content: "+ ";
 }
 
-.rows .add:hover {
+.rows .add:hover:not(:disabled) {
   color: var(--ink);
   border-color: var(--ink);
 }
 
 html:not(.js) .rows .add,
-html:not(.js) .rows .split,
 html:not(.js) .rows .remove {
   display: none;
 }
@@ -1640,8 +1726,7 @@ html.js #note {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .rows .row,
-  .times .row {
+  .rows .row {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 

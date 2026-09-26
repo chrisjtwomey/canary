@@ -147,15 +147,17 @@ the value stood, and a sentence on what such a change usually means.
 The `display` block in `config.yaml` has two parts. `pools` is what can
 show: named lists of images, each read in turn on its own count from a
 random start that moves every `reshuffle_hours`, so a pass is never all of
-one shape. `schedule` is when: `type: interval` visits the pools in `order`
-every `every` seconds. The randomness is seeded from the clock, so a
+one shape. `schedule` is when: `type: timeranges` visits the pools in
+`order` at each slot of its `ranges`, a day of time ranges each with an
+interval (see ARCHITECTURE §3.3). The randomness is seeded from the clock, so a
 restart changes nothing. Day rides along as a pool of one, and Diagnostics
 as a pool of its three pages; leave a pool out of `order` to keep it off the
 panel. The weather calendar uses the same block with `type: times` and one
 image per pool.
 
-To review pages on the panel quickly, set `every: 20` in `config.yaml`
-and restart the server; the board follows whatever it is told.
+To review pages on the panel quickly, give the page schedule one range of
+`every: 60` in `config.yaml` and restart the server; the board follows
+whatever it is told.
 
 `site.altitude_m` in `config.yaml` reduces the pressure to sea level, as
 forecasts quote it. The reading as measured stays under

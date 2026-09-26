@@ -30,7 +30,7 @@ from typing import Any, Callable
 
 from epd_server.config import ConfigError, get_prop_by_keys
 
-from schedule import ClockSchedule, in_window, parse_hhmm
+from epd_server.timeranges import TimeRanges, in_window, parse_hhmm
 
 DOCK = "canary-dock"
 
@@ -217,7 +217,7 @@ class BoardSettings:
         now: the clock, for tests.
     """
 
-    def __init__(self, settings: DockSettings, sync: ClockSchedule, requests,
+    def __init__(self, settings: DockSettings, sync: TimeRanges, requests,
                  reported: Callable[[str], dict | None],
                  now: Callable[[], float] = time.time):
         self.settings = settings

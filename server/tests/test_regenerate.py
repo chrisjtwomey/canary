@@ -42,10 +42,11 @@ def test_regenerate_writes_eight_grey_pngs_for_every_page(tmp_path, source, tz):
 def test_the_example_config_schedules_only_pages_the_server_makes(tz):
     import os
     from epd_server.config import load_core_config, load_yaml
-    from epd_server.scheduling import IntervalSchedule
+    from epd_server.scheduling import TimeRangesSchedule
     here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     core = load_core_config(load_yaml(os.path.join(here, "config.example.yaml")))
     sched = core.server.schedule
-    assert isinstance(sched, IntervalSchedule) and sched.every == 300
+    assert isinstance(sched, TimeRangesSchedule)
+    assert sched.ranges.describe() == [{"from": "00:00", "every": 300}]
     assert sched.order == ["co2", "comfort", "dust", "air", "pressure", "day", "diagnostics"]
     assert sched.pages() <= {p.png_filename for p in make_pages(tz, width=1280, height=720)}

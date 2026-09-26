@@ -26,14 +26,11 @@ from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 from ruamel.yaml.tokens import CommentToken
 
 import dock_settings as ds
-from schedule import DEFAULT_DOCK_SYNC, MAX_RANGES
+from epd_server.timeranges import MAX_RANGES
+from schedule import DEFAULT_DOCK_SYNC, DEFAULT_HEAD_SYNC_S, DEFAULT_PAGE_RANGES
 
 # A key the file does not have.
 MISSING: Any = object()
-
-# The display.schedule keys that are not wake times.
-SCHEDULE_KEYS = ("type", "reshuffle_hours", "seed", "every", "order")
-INTERVAL_KEYS = ("display.schedule.every", "display.schedule.order")
 
 
 @dataclass(frozen=True)
@@ -51,7 +48,7 @@ class Field:
     key: str
     label: str
     help: str = ""
-    kind: str = "text"      # text zone int number bool choice time window pools order times clock
+    kind: str = "text"      # text zone int number bool choice time window pools order clock
     default: Any = None
     hint: str = ""
     choices: tuple[tuple[str, str], ...] = ()
@@ -86,12 +83,14 @@ class Group:
     alignments together; or ``head``, the size the head reports. ``visual``
     names a drawing of the group's values that can also set them: ``dial``,
     the day's syncs, ``slot``, the time before one sync, or ``panel``,
-    the image and its drawn area."""
+    the image and its drawn area. ``caption`` says what the drawing shows,
+    when the page's own words for it do not."""
     heading: str
     fields: tuple[Field, ...]
     store: str = ""
     action: str = ""
     visual: str = ""
+    caption: str = ""
 
 
 @dataclass(frozen=True)
@@ -141,25 +140,27 @@ TABS: tuple[Tab, ...] = (
         )),
     )),
     Tab("display", "Display", (
-        Group("Pools", (
-            Field("display.pools", "Pools", "Drag to reorder.", "pools", env=False),
-        )),
-        Group("Schedule", (
-            Field("display.schedule.type", "Change page", "", "choice",
-                  choices=(("interval", "Interval"), ("times", "Set times")),
-                  env=False),
-            Field("display.schedule.every", "Every", "300 → :00, :05, :10 …", "int",
-                  unit="seconds", minimum=1, when="display.schedule.type=interval", env=False),
+        Group("Page schedule", (
+            Field("display.schedule.ranges", "Page schedule",
+                  "Each time range runs until the next one starts; 0 minutes = off.", "clock",
+                  DEFAULT_PAGE_RANGES, env=False),
             Field("display.schedule.order", "Order", "", "order", lambda cfg: pool_names(cfg),
-                  when="display.schedule.type=interval", env=False),
+                  env=False),
             Field("display.schedule.reshuffle_hours", "Reshuffle",
                   "Changes where each pool starts.", "number", 3, unit="hours", minimum=0,
                   env=False),
             Field("display.schedule.seed", "Seed", "", "int", 0, env=False),
-            Field("display.schedule.times", "Times", "", "times",
-                  when="display.schedule.type=times", env=False),
+        ), visual="dial", caption="Each tick is a page change. Hatching marks a time range "
+                                  "that is off. Drag a time range's start to move it."),
+        Group("Sync schedule", (
+            Field("head.sync.every", "Every", "The head also syncs at each page. 0 = only then.",
+                  "int", DEFAULT_HEAD_SYNC_S, unit="minutes", minimum=0, maximum=24 * 60,
+                  scale=60, long="Sync every"),
         )),
-    )),
+        Group("Pools", (
+            Field("display.pools", "Pools", "Drag to reorder.", "pools", env=False),
+        )),
+    ), sheet=True),
     Tab("image", "Image", (
         Group("Size", (
             Field("image.width", "Width", "", "int", 1280, unit="px",
@@ -183,9 +184,11 @@ TABS: tuple[Tab, ...] = (
     Tab("dock", "Dock", (
         Group("Sync schedule", (
             Field("dock.sync", "Sync schedule",
-                  "Each range runs until the next one starts. 0 minutes = off.", "clock",
+                  "Each time range runs until the next one starts; 0 minutes = off.", "clock",
                   DEFAULT_DOCK_SYNC, env=False),
-        ), visual="dial"),
+        ), visual="dial", caption="Each tick is a sync and a reading. Hatching marks a time "
+                                  "range that is off; the inner line, the light's dark hours. "
+                                  "Drag a time range's start to move it."),
         Group("Before each sync · PMSA003I", (
             Field("dock.pm.warmup_s", "Fan warm-up", "0 = always on.", "int", ds.PM_WARMUP_S,
                   unit="seconds", minimum=0, maximum=ds.PM_WARMUP_MAX_S),
@@ -302,14 +305,6 @@ def lookup(cfg: Any, path: Iterable) -> Any:
     return node
 
 
-def time_rows(cfg: dict) -> list[tuple[str, str]]:
-    """The schedule's wake times and the pool at each."""
-    sched = lookup(cfg, ("display", "schedule"))
-    if not isinstance(sched, dict):
-        return []
-    return [(str(t), str(n)) for t, n in sched.items() if t not in SCHEDULE_KEYS]
-
-
 def host_zone() -> str:
     """The zone the server runs in when config.yaml names none."""
     tz = datetime.now().astimezone().tzinfo
@@ -362,7 +357,7 @@ def _pool_rows(v: Any) -> list[tuple[str, str]]:
 
 
 # The fields that are rows of inputs rather than one.
-ROWS = ("pools", "times", "clock")
+ROWS = ("pools", "clock")
 # The window the light's dark hours start from when they are turned on.
 DARK_KEY = "dock.led.dark"
 DARK_PATH = ("dock", "led", "dark")
@@ -390,15 +385,13 @@ def _clock_rows(v: Any) -> list[tuple[str, str]]:
 
 def shown(cfg: dict) -> dict[str, Any]:
     """Each field's value as its input shows it: a string, or rows for the
-    pools, the wake times and a schedule's ranges."""
+    pools and a schedule's ranges."""
     out: dict[str, Any] = {}
     dark = _dark_block(cfg)
     for f in FIELDS:
         v = lookup(cfg, f.path)
         if f.kind == "pools":
             out[f.key] = _pool_rows(v)
-        elif f.kind == "times":
-            out[f.key] = time_rows(cfg)
         elif f.kind == "clock":
             out[f.key] = _clock_rows(_in_order(default_of(f, cfg) if v is MISSING else v))
         elif f.kind == "window":
@@ -435,8 +428,6 @@ def submitted(form) -> dict[str, Any]:
             continue
         if f.kind == "pools":
             out[f.key] = list(zip(form.getlist(f.key + ".name"), form.getlist(f.key + ".pages")))
-        elif f.kind == "times":
-            out[f.key] = list(zip(form.getlist(f.key + ".at"), form.getlist(f.key + ".pool")))
         elif f.kind == "clock":
             out[f.key] = list(zip(form.getlist(f.key + ".from"), form.getlist(f.key + ".every")))
         else:
@@ -486,26 +477,6 @@ def _parse_pools(rows) -> dict[str, list[str]]:
     return pools
 
 
-def _parse_times(rows) -> list[tuple[str, str]]:
-    out: dict[str, str] = {}
-    for at, pool in rows:
-        at, pool = at.strip(), pool.strip()
-        if not at and not pool:
-            continue
-        if not at:
-            raise FieldError(f"{pool} has no time.")
-        m = _HHMMSS.fullmatch(at)
-        if not m or int(m[1]) > 23 or int(m[2]) > 59 or int(m[3] or 0) > 59:
-            raise FieldError(f"{at}: not a time.")
-        at = f"{int(m[1]):02d}:{m[2]}:{m[3] or '00'}"
-        if not pool:
-            raise FieldError(f"{at}: no pool.")
-        if at in out:
-            raise FieldError(f"Duplicate time: {at}.")
-        out[at] = pool
-    return list(out.items())
-
-
 def _in_order(ranges: Any) -> Any:
     """A schedule's ranges from the earliest start, as the form writes them;
     anything else as it is."""
@@ -523,7 +494,7 @@ def _parse_clock(rows) -> list[dict]:
             continue
         m = _HHMM.fullmatch(at)
         if not m or int(m[1]) > 23 or int(m[2]) > 59:
-            raise FieldError(f"{at or 'A range'}: not a time.")
+            raise FieldError(f"{at or 'A time range'}: not a time.")
         at = f"{int(m[1]):02d}:{m[2]}"
         try:
             minutes = int(every)
@@ -532,12 +503,12 @@ def _parse_clock(rows) -> list[dict]:
         if not 0 <= minutes <= 24 * 60:
             raise FieldError(f"From {at}: enter 0 to {24 * 60} minutes.")
         if at in ranges:
-            raise FieldError(f"Two ranges start at {at}.")
+            raise FieldError(f"Two time ranges start at {at}.")
         ranges[at] = minutes * 60
     if not ranges:
-        raise FieldError("Keep at least one range.")
+        raise FieldError("Keep at least one time range.")
     if len(ranges) > MAX_RANGES:
-        raise FieldError(f"At most {MAX_RANGES} ranges.")
+        raise FieldError(f"At most {MAX_RANGES} time ranges.")
     return [{"from": at, "every": ranges[at]} for at in sorted(ranges)]
 
 
@@ -546,8 +517,6 @@ def parse(f: Field, raw: Any) -> Any:
     so the server uses its default."""
     if f.kind == "pools":
         return _parse_pools(raw)
-    if f.kind == "times":
-        return _parse_times(raw)
     if f.kind == "clock":
         return _parse_clock(raw)
     raw = str(raw).strip()
@@ -885,16 +854,6 @@ class Doc:
             em, ek = _end(pm, next(reversed(pm)))
             _set_after(em, ek, _after(em, ek) + moved)
 
-    def set_times(self, rows: list[tuple[str, str]]) -> None:
-        wanted = dict(rows)
-        for at, pool in rows:
-            if self.get(("display", "schedule", at)) != pool:
-                self.set(("display", "schedule", at), pool)
-        sm = self.get(("display", "schedule"))
-        if isinstance(sm, CommentedMap):
-            for k in [k for k in sm if k not in SCHEDULE_KEYS and str(k) not in wanted]:
-                self.remove(("display", "schedule", k))
-
 
 # ── Applying a form ─────────────────────────────────────────────────
 
@@ -941,8 +900,6 @@ def apply(text: str, form) -> Edit:
     doc = Doc(text)
     changed: list[str] = []
     expect: dict[tuple, Any] = {}
-    times: list[tuple[str, str]] | None = None
-    kind = values.get("display.schedule.type", lookup(cfg, ("display", "schedule", "type")))
 
     def put(path, value) -> None:
         doc.set(path, value)
@@ -966,19 +923,12 @@ def apply(text: str, form) -> Edit:
                 doc.set_pools(value)
                 expect[f.path] = value
                 changed.append(f.key)
-        elif f.kind == "times":
-            if kind == "times" and dict(time_rows(cfg)) != dict(value):
-                doc.set_times(value)
-                times = value
-                changed.append(f.key)
         elif f.kind == "clock":
             cur = lookup(cfg, f.path)
             if not _same(_in_order(cur), value) and not (cur is MISSING
                                                          and value == default_of(f, cfg)):
                 put(f.path, value)
                 changed.append(f.key)
-        elif kind == "times" and f.key in INTERVAL_KEYS:
-            continue
         else:
             cur = lookup(cfg, f.path)
             if value is None:
@@ -991,13 +941,6 @@ def apply(text: str, form) -> Edit:
 
     if errors:
         return Edit(text, errors, [])
-    if kind == "times":
-        for key in INTERVAL_KEYS:
-            take(key)
-    elif time_rows(cfg):
-        doc.set_times([])
-        times = []
-        changed.append("display.schedule.times")
 
     if DARK_KEY in values:
         changed += _apply_dark(cfg, values, put)
@@ -1005,7 +948,7 @@ def apply(text: str, form) -> Edit:
     if not changed:
         return Edit(text, {}, [])
     new_text = doc.text()
-    _check_reads_back(cfg, new_text, changed, expect, times)
+    _check_reads_back(cfg, new_text, changed, expect)
     return Edit(new_text, {}, changed)
 
 
@@ -1052,14 +995,11 @@ def _reads_as(got: Any, value: Any) -> bool:
     return _same(got, value)
 
 
-def _check_reads_back(cfg: dict, text: str, changed: list[str], expect: dict,
-                      times: list[tuple[str, str]] | None) -> None:
+def _check_reads_back(cfg: dict, text: str, changed: list[str], expect: dict) -> None:
     """Refuse an edit that PyYAML would not read as the form gave it, or
     that touched a key the form did not change."""
     new = read(text)
     allowed = [tuple(k.split(".")) for k in changed]
-    if "display.schedule.times" in changed or "display.schedule.type" in changed:
-        allowed.append(("display", "schedule"))
     for path in _changed_paths(cfg, new):
         if not any(path[:len(p)] == p or p[:len(path)] == path for p in allowed):
             raise FormError(f"This edit also changes {name_of(path)}. Edit it in the YAML tab.")
@@ -1067,16 +1007,12 @@ def _check_reads_back(cfg: dict, text: str, changed: list[str], expect: dict,
         if not _reads_as(lookup(new, path), value):
             raise FormError(f"The form cannot save {name_of(path)} as entered. "
                             f"Edit it in the YAML tab.")
-    if times is not None and dict(time_rows(new)) != dict(times):
-        raise FormError("The form cannot save these wake times. Edit them in the YAML tab.")
 
 
 # ── Words for the page ──────────────────────────────────────────────
 
 def field_at(path: tuple) -> Field | None:
     """The field that holds ``path``, or holds the mapping it is in."""
-    if path[:2] == ("display", "schedule") and len(path) > 2 and path[2] not in SCHEDULE_KEYS:
-        return BY_KEY["display.schedule.times"]
     best = None
     for f in FIELDS:
         if path[:len(f.path)] == f.path and (best is None or len(f.path) > len(best.path)):
@@ -1106,7 +1042,7 @@ def name_of(path: tuple) -> str:
     group = next(g for g in tab.groups if f in g.fields)
     name = f.long or f.label
     shared = sum((o.long or o.label) == name for o in tab.fields) > 1
-    rest = path[2:] if f.kind == "times" and path != f.path else path[len(f.path):]
+    rest = path[len(f.path):]
     return " · ".join([tab.title, *([group.heading] if shared else []), name, *rest])
 
 
@@ -1145,8 +1081,8 @@ def _clock_words(v: Any) -> str:
 
 
 def _with_words(cfg: dict) -> dict:
-    """``cfg`` with the schedule and the dark hours each one setting in words,
-    so a change to either reads as one line."""
+    """``cfg`` with the dock's sync schedule, the page schedule and the dark
+    hours each one setting in words, so a change to any reads as one line."""
     dock = cfg.get("dock")
     dock = dict(dock) if isinstance(dock, dict) else {}
     led = dock.get("led")
@@ -1155,7 +1091,13 @@ def _with_words(cfg: dict) -> dict:
     led["dark"] = f"{dark.get('from', '?')}–{dark.get('to', '?')}" if dark else "off"
     dock["led"] = led
     dock["sync"] = _clock_words(_in_order(effective(cfg, "dock.sync")))
-    return {**cfg, "dock": dock}
+    display = cfg.get("display")
+    display = dict(display) if isinstance(display, dict) else {}
+    schedule = display.get("schedule")
+    schedule = dict(schedule) if isinstance(schedule, dict) else {}
+    schedule["ranges"] = _clock_words(_in_order(effective(cfg, "display.schedule.ranges")))
+    display["schedule"] = schedule
+    return {**cfg, "dock": dock, "display": display}
 
 
 def changes(old: dict, new: dict) -> list[dict[str, str]]:
@@ -1167,7 +1109,7 @@ def changes(old: dict, new: dict) -> list[dict[str, str]]:
     for path in _changed_paths(old, new):
         f = field_at(path)
         before, after = a.get(path, MISSING), b.get(path, MISSING)
-        if f is not None and f.kind in ("pools", "times"):
+        if f is not None and f.kind == "pools":
             before = "none" if before is MISSING else before
             after = "none" if after is MISSING else after
         if f is not None and f.scale != 1:
