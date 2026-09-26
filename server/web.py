@@ -65,17 +65,17 @@ def label(page: EnvPage) -> str:
 
 
 # The two groups that list the same measurements: one row, with a switch.
-SPANS = (("trace", "Three days"), ("delta", "Changes"))
+SPANS = (("trace", "History"), ("delta", "Trend"))
 
 
 def menu(pages: Iterable[EnvPage]) -> list[tuple[str, list[EnvPage]]]:
     """The pages under the headings the menu shows, each group in the server's order."""
-    groups: dict[str, list[EnvPage]] = {"Now": [], "Three days": [], "Changes": [], "Boards": []}
+    groups: dict[str, list[EnvPage]] = {"Now": [], "History": [], "Trend": [], "Boards": []}
     for page in pages:
         if isinstance(page, TracePage):
-            groups["Three days"].append(page)
+            groups["History"].append(page)
         elif isinstance(page, DeltaPage):
-            groups["Changes"].append(page)
+            groups["Trend"].append(page)
         elif isinstance(page, (DiagnosticsPage, DiagnosticsTracePage, HealthTracePage)):
             groups["Boards"].append(page)
         else:

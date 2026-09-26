@@ -45,7 +45,7 @@ class TestBrowse:
         linked = [attr(a, "data-page") for a in soup.select("nav a[data-page]")]
         assert sorted(linked) == sorted(p.name for p in pages)
         assert [h.get_text() for h in soup.select("nav .heading")] == \
-            ["Now", "Three days", "Changes", "Boards"]
+            ["Now", "History", "Trend", "Boards"]
         assert attr(one(soup, ".bar a.explore-link"), "href") == "explore"
 
     def test_the_stage_starts_on_the_first_page_at_the_panel_size(self, client, pages):
