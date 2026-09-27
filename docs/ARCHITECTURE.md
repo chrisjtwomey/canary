@@ -402,7 +402,10 @@ SCD41's periodic mode has ready; read a PM frame, retrying once on a bad
 checksum, and only after the fan's 30 s warm-up.
 
 The waits are real, so the clock is injected (`IClock`): `ArduinoClock` on the
-device, a fake the tests drive. A sample costs ~150 ms of wall clock, nearly
+device, a fake the tests drive. `ArduinoClock` waits until the millisecond
+clock has moved on, not for one `::delay()`: while the chip light-sleeps a
+delay can return up to 51 ms early, and a read before a conversion ends
+fails. A sample costs ~150 ms of wall clock, nearly
 all of it the BME688 heater, once a minute, and `::delay()` yields on
 ESP32, so WiFi keeps running. If that ever becomes a problem the interfaces
 already return false-when-not-ready, so `sample()` can become a state machine
