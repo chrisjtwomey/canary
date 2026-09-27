@@ -1,13 +1,16 @@
-// The head's loop.
+// The head's program.
 //
-// The Inkplate and nothing else: it fetches the page the server names,
-// draws it, and waits the seconds the server sends before fetching again.
-// Mains powered through the dock, so nothing sleeps. Once a minute it posts
-// its own state — network, memory, panel, fetch counts — to the server's
-// /sensor-readings, where the dock's readings also go; the head carries no
-// sensors, so its document holds the client object and nothing else. A
-// failed fetch leaves the last image on the panel and backs off before the
-// next try.
+// The Inkplate and nothing else: it fetches the page the server names, draws
+// it, and deep-sleeps until the server says to come back. E-paper keeps its
+// image without power, so the head wakes only for the next page, or for its
+// next sync when that comes first. Every wake posts the head's own state —
+// network, memory, panel, fetch counts — to the server's /sensor-readings,
+// where the dock's readings also go; the head carries no sensors, so its
+// document holds the client object and nothing else. A failed fetch leaves
+// the last image on the panel and backs off before the next try.
+//
+// A freshly written image stays awake until a page proves it, since the
+// bootloader takes back an image that is not confirmed.
 //
 // Two things replace the page with a notice the firmware draws itself: a
 // server whose version this display cannot work with, and a server that has
@@ -27,6 +30,7 @@
 #include "ota.h"
 #include "sd_config.h"
 #include "settings.h"
+#include "sleep_utils.h"
 #include "wake.h"
 #include "time_utils.h"
 #include "user_agent.h"
@@ -37,10 +41,10 @@
 #include "head/AfterFetch.h"
 #include "head/Notice.h"
 #include "head/Splash.h"
+#include "head/WakePlan.h"
 #include "net/Backlog.h"        // postResult: what an HTTP status means for the sender
 #include "net/ClientStatus.h"
 #include "net/ResetReason.h"
-#include "net/RefreshTimer.h"
 #include "net/Url.h"
 
 // The settings this image was built with, from src/defaults.cpp. epd declares
@@ -50,17 +54,14 @@ ClientConfig builtInSettings();
 static InkplateBoard inkplateBoard;
 
 static const uint8_t  kRotation = 0;             // landscape, as the board comes: the USB-C port on the right
-static const uint32_t kReportIntervalMs = 60000;
 // Buffer size when the server sends no Content-Length. An eight-grey
 // 1280x720 PNG is under 200 KB.
 static const int32_t  kDownloadFallbackBytes = 512 * 1024;
-
-// The fallback interval is a compiled-in constant, so it can be read before
-// setup() resolves the rest of the config against the board's own store.
-static RefreshTimer refresh(builtInSettings().defaultRefreshSeconds);
+// A shorter wait is spent awake: a wake costs a boot, Wi-Fi and NTP.
+static const uint32_t kShortestSleepS = 10;
+static const uint32_t kWifiRetryS = 30;
 
 static ClientConfig config;          // this board's own server URL and wifi
-static char     nextURL[256];        // from Canary-Next-URL; empty means the server URL
 // True until this boot proves a freshly written image works.
 static bool     onTrial = false;
 static int      trialFailures = 0;
@@ -71,14 +72,22 @@ static const int kTrialFailureLimit = 3;
 // Fetches the server has not answered, in a row. The back-off makes three of
 // them about 26 minutes, long enough that a blip never replaces the page.
 static const int kUnreachableAfter = 3;
-static int      unanswered = 0;
-// When the last page arrived, in RFC 3339, for the unreachable notice.
-static char     lastPageAt[32] = "";
+
+// What outlasts deep sleep. A real start clears it, so the head then
+// fetches a page at once and counts from zero.
+static RTC_DATA_ATTR WakePlan plan;
+static RTC_DATA_ATTR char     nextURL[256];      // from Canary-Next-URL; empty means the server URL
+static RTC_DATA_ATTR int      unanswered;
+static RTC_DATA_ATTR char     lastPageAt[32];    // when the last page arrived, in RFC 3339, for the unreachable notice
+static RTC_DATA_ATTR uint32_t fetchOk;
+static RTC_DATA_ATTR uint32_t fetchFailed;
+// The last real start, which a wake from deep sleep is not: when, in UTC
+// seconds by the server's clock (0 until it has answered), and why.
+static RTC_DATA_ATTR uint32_t startedAt;
+static RTC_DATA_ATTR int      startReason;
+
 static const char kReadingsPath[] = "/sensor-readings";
 static char     readingsURL[300];    // the server's /sensor-readings; empty disables posting
-static uint32_t lastReportMs = 0;
-static uint32_t fetchOk = 0;
-static uint32_t fetchFailed = 0;
 // Room for a next URL of up to 256 characters.
 static char     clientJson[768];
 static char     body[768 + 96];
@@ -90,12 +99,23 @@ static uint32_t epochNow() {
     return (uint32_t)epdBoard().rtcGetEpoch();
 }
 
-// Mains power and no schedule to keep, so there is nothing to do but wait
-// for the network to come back.
-static void connectNetworkForever() {
+// Deep sleep until `at`, in UTC seconds, which the RTC holds. The ESP32's
+// own timer stands behind the RTC's alarm, a little later, so a missed alarm
+// costs a late page rather than a head that never wakes.
+static void sleepUntil(uint32_t at) {
+    const uint32_t seconds = secondsUntil(at, epochNow());
+    enableWakeOnTimer(seconds + seconds / 20 + 60);
+    logf(LOG_INFO, "sleeping %u s", seconds);
+    sleep((time_t)at);
+}
+
+// A freshly written image waits awake for the network, since proving itself
+// is all it may do. Any other wake sleeps between tries.
+static void connectNetworkOrSleep() {
     while (connectNetwork(config) != ESP_OK) {
-        log(LOG_ERROR, "wifi connect timeout; trying again in 30 s");
-        delay(30000);
+        logf(LOG_ERROR, "wifi connect timeout; trying again in %u s", kWifiRetryS);
+        if (!onTrial) sleepUntil(epochNow() + kWifiRetryS);
+        delay(kWifiRetryS * 1000);
     }
 }
 
@@ -110,8 +130,8 @@ static void abandonTrialAfterRepeatedFailures(const char* why) {
 // Count the failure, arm the next try, and give up on an image on trial.
 static void failedFetch(const char* why) {
     ++fetchFailed;
-    uint32_t wait = refresh.failed(millis(), computeBackoffSeconds);
-    logf(LOG_ERROR, "%s (back-off step %d): next try in %u s", why, refresh.step(), wait);
+    uint32_t wait = pageFailed(plan, epochNow(), computeBackoffSeconds);
+    logf(LOG_ERROR, "%s (back-off step %d): next try in %u s", why, plan.step, wait);
     abandonTrialAfterRepeatedFailures(why);
 }
 
@@ -147,7 +167,8 @@ static void fetchSucceeded() {
     ++fetchOk;
     trialFailures = 0;
     unanswered = 0;
-    refresh.succeeded(millis(), fetched->response.nextRefreshSeconds);
+    pageFetched(plan, epochNow(), fetched->response.nextRefreshSeconds,
+                config.defaultRefreshSeconds);
     logf(LOG_INFO, "next refresh in %u s",
          fetched->response.nextRefreshSeconds ? fetched->response.nextRefreshSeconds
                                               : config.defaultRefreshSeconds);
@@ -161,16 +182,17 @@ static void fetchSucceeded() {
     }
 }
 
-static void takeOffer() {
-    beginUpdateProgress(fetched->response.firmwareVersion);
+static void takeOffer(const PageResponse& rsp) {
+    beginUpdateProgress(rsp.firmwareVersion);
     // Mains power, so no battery to wait for.
-    takeOfferedUpdate(fetched->response, clientUserAgent(epdBoard().deviceName()), 100, 0,
-                      showUpdateProgress);
+    takeOfferedUpdate(rsp, clientUserAgent(epdBoard().deviceName()), 100, 0, showUpdateProgress);
     endUpdateProgress();
 }
 
+static void takeFetchedOffer() { takeOffer(fetched->response); }
+
 static const AfterFetchSteps kAfterFetch = {drawFetchedPage, drawVersionNotice,
-                                            fetchSucceeded, takeOffer};
+                                            fetchSucceeded, takeFetchedOffer};
 
 static void fetchAndDraw() {
     if (WiFi.status() != WL_CONNECTED) {
@@ -178,8 +200,7 @@ static void fetchAndDraw() {
         configureWiFi(config.wifiSSID, config.wifiPass, config.wifiRetries);
     }
 
-    // One try each time round: the loop comes back on its own, and there is
-    // no sleep to get right.
+    // One try each wake: a failure backs off to a later one.
     const char* errMsg = nullptr;
     PageFetch page = {};
     page.length = kDownloadFallbackBytes;
@@ -209,7 +230,8 @@ static void fetchAndDraw() {
     if (!drawn) failedFetch(drawError);
 }
 
-static ClientStatus clientStatus(uint32_t nowMs) {
+static ClientStatus clientStatus() {
+    const uint32_t now = epochNow();
     strncpy(ipText, WiFi.localIP().toString().c_str(), sizeof(ipText) - 1);
     ClientStatus s = {};
     s.role = ClientStatus::HEAD;
@@ -217,8 +239,8 @@ static ClientStatus clientStatus(uint32_t nowMs) {
     s.version = CLIENT_VERSION;
     s.ip = ipText;
     s.rssi = WiFi.RSSI();
-    s.uptimeS = nowMs / 1000;
-    s.reset = resetReasonName(esp_reset_reason());
+    s.uptimeS = startedAt ? now - startedAt : millis() / 1000;
+    s.reset = resetReasonName(startReason);
     s.heapFree = ESP.getFreeHeap();
     s.heapSize = ESP.getHeapSize();
     s.psramFree = ESP.getFreePsram();
@@ -228,49 +250,71 @@ static ClientStatus clientStatus(uint32_t nowMs) {
     s.height = epdBoard().getHeight();
     s.rotation = kRotation;
     s.nextUrl = nextURL[0] ? nextURL : config.serverURL;
-    s.nextInS = refresh.secondsUntilDue(nowMs);
-    s.backoffStep = refresh.step();
+    s.nextInS = secondsUntil(plan.pageAt, now);
+    s.backoffStep = plan.step;
     s.fetchOk = fetchOk;
     s.fetchFailed = fetchFailed;
     return s;
 }
 
-// The head's own state, with no readings round it. Nothing is held for a
-// retry: the next minute's report says the same things, fresher.
-static void postStatus(uint32_t nowMs) {
+// The head's own state, with no readings round it, and what the server
+// answers: the next sync, and any update on offer. Nothing is held for a
+// retry: the next wake's report says the same things, fresher.
+static PageResponse postStatus() {
+    PageResponse rsp = {};
     char doc[64];
     snprintf(doc, sizeof(doc), "{\"ts\":%lu,\"device\":\"%s\"}", (unsigned long)epochNow(), CLIENT_NAME);
-    if (!clientStatusJson(clientStatus(nowMs), clientJson, sizeof(clientJson)) ||
+    if (!clientStatusJson(clientStatus(), clientJson, sizeof(clientJson)) ||
         !withClientStatus(doc, clientJson, body, sizeof(body))) {
         log(LOG_WARNING, "status document too large to post");
-        return;
+        return rsp;
     }
     log(LOG_DEBUG, body);
-    if (!readingsURL[0]) return;
-    int code = postJson(readingsURL, clientUserAgent(epdBoard().deviceName()), body);
+    if (!readingsURL[0]) return rsp;
+    int code = postJson(readingsURL, clientUserAgent(epdBoard().deviceName()), body, &rsp);
     switch (postResult(code)) {
         case POSTED:    logf(LOG_INFO, "posted status (%d)", code); break;
         case REFUSED:   logf(LOG_ERROR, "the server refused the status (%d)", code); break;
         case TRY_LATER: logf(LOG_ERROR, "posting status failed (%d)", code); break;
     }
+    return rsp;
+}
+
+// The page when it is due, then the head's state, which is its sync. A wake
+// that fetched a page has dealt with the update on offer already.
+static void wake() {
+    const bool page = pageDue(plan, epochNow());
+    if (page) fetchAndDraw();
+
+    const PageResponse rsp = postStatus();
+    synced(plan, epochNow(), rsp.nextSensorPollSeconds);
+    if (!startedAt && rsp.serverEpoch) startedAt = rsp.serverEpoch - millis() / 1000;
+    if (!page) takeOffer(rsp);
 }
 
 void setup() {
     epdBegin(inkplateBoard);
     startBoard(kRotation);
 
-    logf(LOG_NOTICE, "##### %s boot #####", epdBoard().deviceName());
-    logf(LOG_NOTICE, "Client version: %s", CLIENT_VERSION);
-    logf(LOG_INFO, "User-Agent: %s", clientUserAgent(epdBoard().deviceName()));
+    const bool woke = esp_reset_reason() == ESP_RST_DEEPSLEEP;
+    if (woke) {
+        logf(LOG_NOTICE, "##### %s wake #####", epdBoard().deviceName());
+    } else {
+        startReason = esp_reset_reason();
+        logf(LOG_NOTICE, "##### %s boot #####", epdBoard().deviceName());
+        logf(LOG_NOTICE, "Client version: %s", CLIENT_VERSION);
+        logf(LOG_INFO, "User-Agent: %s", clientUserAgent(epdBoard().deviceName()));
+    }
+    logWakeReason();   // also clears the RTC alarm, which would wake the next sleep at once
 
     onTrial = otaTrialPending();
     if (onTrial) logf(LOG_NOTICE, "trial boot of %s", CLIENT_VERSION);
     // A wake from deep sleep keeps the page it went to sleep on.
-    if (esp_reset_reason() != ESP_RST_DEEPSLEEP) showSplash();
+    if (!woke) showSplash();
     config = loadConfig(builtInSettings());
     applySdConfig(&config);
 
-    connectNetworkForever();
+    connectNetworkOrSleep();
     if (urlOrigin(config.serverURL, readingsURL, sizeof(readingsURL) - sizeof(kReadingsPath))) {
         strcat(readingsURL, kReadingsPath);
         logf(LOG_INFO, "posting status to %s", readingsURL);
@@ -280,15 +324,14 @@ void setup() {
 }
 
 void loop() {
+    const uint32_t now = epochNow();
+    if (wakeDue(plan, now)) {
+        wake();
+        return;
+    }
+    if (!onTrial && secondsUntil(nextWake(plan), now) >= kShortestSleepS) sleepUntil(nextWake(plan));
+
     events();   // ezTime: periodic NTP re-sync
     keepMQTTConnected();
-    uint32_t nowMs = millis();
-
-    if (refresh.due(nowMs)) fetchAndDraw();
-
-    if (nowMs - lastReportMs >= kReportIntervalMs) {
-        lastReportMs = nowMs;
-        postStatus(nowMs);
-    }
     delay(10);
 }

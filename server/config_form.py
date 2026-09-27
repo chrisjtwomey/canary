@@ -156,8 +156,8 @@ TABS: tuple[Tab, ...] = (
         ), visual="dial", caption="Each tick is a page change. Hatching marks a time range "
                                   "that is off. Drag a time range's start to move it."),
         Group("Sync schedule", about="How often to update the server with its display state", fields=(
-            Field("head.sync.every", "Every", "The head also syncs at each page. 0 = only then.",
-                  "int", DEFAULT_HEAD_SYNC_S, unit="minutes", minimum=0, maximum=24 * 60,
+            Field("head.sync.every", "Every",
+                  "Not including automatic syncs during page refreshes. 0 = only then.", "int", DEFAULT_HEAD_SYNC_S, unit="minutes", minimum=0, maximum=24 * 60,
                   scale=60, long="Sync every"),
         )),
         Group("Pools", about="The pages to show, in groups taken in turn", fields=(

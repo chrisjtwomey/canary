@@ -26,10 +26,11 @@ Three of those change the design. The panel is one config line.
 
 ## 3. Four differences in the design
 
-### 3.1 The firmware runs awake loops, not `run_app()`
+### 3.1 Each board runs its own program, not `run_app()`
 
-`run_app()` is epd's deep-sleep state machine. Keeping an ESP32 awake is not
-a tweak to it; it is a different program, and each board has its own.
+`run_app()` is epd's deep-sleep state machine for a board that only draws
+pages. Each board here does more, so each has its own program: the dock stays
+awake, and the head sleeps on a plan of its own.
 
 The dock, `src/dock/main.cpp`, is the one the sensors need:
 
@@ -66,16 +67,26 @@ Until the first response it queues readings with their uptime and stamps them
 when the time arrives, so a dock that boots while the server is down keeps
 what it measured, correctly timed.
 
-The head, `src/main.cpp`, stays awake only because it is mains powered and
-has no reason to sleep:
+The head, `src/main.cpp`, deep-sleeps between wakes. E-paper keeps its image
+without power, so a head awake between pages would only make heat:
 
 ```
-setup:  board.begin(); wifi; ntp
-loop:   when the refresh header ends      GET the named page → draw; a failed fetch keeps the old image and backs off
-        every 60 s                         POST /sensor-readings     the head's own status and nothing else
+each wake:  board.begin(); wifi; ntp
+            page due     GET the named page → draw; a failed fetch keeps the old image and backs off
+            every wake   POST /sensor-readings   the head's own status, which is its sync; the answer names the next
+            then         deep sleep until the next page or the next sync, whichever is first
 ```
 
-Both loops compose epd's WiFi, time, download, `postJson` and back-off
+The RTC's alarm wakes it, and the ESP32's timer stands behind the alarm a
+little later, so a missed alarm makes a late page rather than a head that
+never wakes. What must outlast the sleep, the wake plan, the next URL and the
+counts, is in RTC memory, which a real start clears. Two things keep the head
+awake: a wait under 10 seconds, which costs less than a wake, and a freshly
+written image, which the bootloader takes back unless a page proves it. The
+head reports its uptime and reset reason from its last real start, so a wake
+is not a restart on the Diagnostics page.
+
+Both programs compose epd's WiFi, time, download, `postJson` and back-off
 helpers and the logger; the head adds the image helpers and `IBoard`, the
 dock needs no board at all. The kit stays a library, not a framework: it
 does not need to know what a sensor is.
@@ -139,7 +150,7 @@ with none is allowed. The Dock tab edits it as the Display tab edits the page sc
 The head syncs every so often all day, `head.sync.every`, every half hour by default and 0 for only
 beside each page it fetches; the Display tab sets it in minutes. Each board is sent its own next slot
 in `Canary-Next-Sensor-Poll-Seconds`, by the name it states in `Canary-Device`. The head posts its
-state every minute and does not act on the header.
+state at every wake, and wakes for a sync that comes before its next page.
 
 ### 3.4 The device is a head and a dock
 
@@ -335,9 +346,9 @@ include/sensors/  src/sensors/
   IBsec.h  BsecRunner  BsecLibrary              BSEC, in a task of its own
   SensorValidation                              the bench routine's checks
   mock/                                         EnvModel, LaggedValue and the four mocks
-include/net/  src/net/         Backlog, BoardSettings, Calibration, ClientStatus, RefreshTimer, ServerClock, Stamp, Url
+include/net/  src/net/         Backlog, BoardSettings, Calibration, ClientStatus, ServerClock, Stamp, Url
 include/dock/                  StatusLed (§3.5), FanWindow and PostTimer: when the fan runs and the next reading falls
-include/head/  src/notice.cpp  what the head does after a fetch, and the notices it draws (§3.7)
+include/head/  src/notice.cpp  when the head wakes (§3.1), what it does after a fetch, and the notices it draws (§3.7)
 src/splash.cpp                 the splash screen, and the update's progress bar under it (§3.7)
 include/head/notices/          the notices, rendered by scripts/notices.py from server/pages/notice.py
 include/head/splash.png        the splash screen, rendered by scripts/notices.py from server/pages/splash.py
@@ -500,3 +511,4 @@ Dated decisions and status behind the text above, oldest first.
 - **2026-09-26**: the page schedule and the dock's sync became weeks: groups of days, each with its own time ranges, so a weekend or a single day can differ from the rest. Groups rather than a list for each day, since most weeks have two or three shapes and one group of all seven is the old schedule. A day stands alone rather than running on from the day before's last range, so each group's dial shows its days exactly; a night that spans midnight is set on both days. The head's sync stays a plain interval, which is one group of every day inside the server, so every board's schedule is the same kind and `/about` gives each as a week. The boards need no change: the server gives each its next slot.
 - **2026-09-26**: the menu's Three days and Changes became History and Trend: where a measurement has been and where it is going. The names say what each page shows rather than its span, and History matches Board history in the Boards row.
 - **2026-09-26**: the light's triggers became what the dock needs from you: Booting, Error, Poor air quality, Calibrating and Running. Error takes in every fault, from the network to a refused setting, because any of them needs attention and the Boards page says which. Poor air quality judges CO₂, PM2.5 and IAQ against limits in each sensor's section, not temperature or humidity, whose comfort depends on the home. Running holds whenever the dock has booted, so a trigger without a look passes the light on rather than leaving it dark. The patterns gained a blip, a swell and a ramp, and fades a smoothness of 4 to 64 steps or none, a slider in stops; 16 steps is what the light always had.
+- **2026-09-27**: the head deep-sleeps between wakes instead of staying awake (§3.1). E-paper holds its image without power, so the awake head made heat and drew power for nothing. It wakes for the next page, and for its next sync when that comes first, and posts its state at every wake, so a sync beside a page needs no wake of its own. The RTC's alarm wakes it because its crystal keeps the page slots; the ESP32's timer, a little later, is there only so that a missed alarm cannot leave the head asleep for good. A freshly written image stays awake until a page confirms it: a wake from deep sleep passes through the bootloader, which takes back an image not yet confirmed. On the live head a wake costs about 7 seconds, 12 with a page, so about 55 minutes awake a day at five-minute pages; the SD card check, NTP and the one-second Wi-Fi poll are most of what could still go.

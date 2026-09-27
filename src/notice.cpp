@@ -27,8 +27,9 @@ static const int16_t kFactY = 720 - 100;
 static const int16_t kFooterY = 720 - 52;
 static const uint16_t kInkSoft = 2;   // the pages' --ink-soft, in 3-bit greys
 
-// What the panel holds when it is a notice; empty when it is a page.
-static char shown[128] = "";
+// What the panel holds when it is a notice; empty when it is a page. It
+// outlasts deep sleep, as the panel does.
+static RTC_DATA_ATTR char shown[128];
 
 static void draw(const uint8_t* png, const uint8_t* end, const char* fact) {
     IBoard& board = epdBoard();

@@ -7,7 +7,7 @@ shape as [inkplate10-weather-cal](https://github.com/chrisjtwomey/inkplate10-wea
 
 ```
 platformio.ini            one environment per board; lib_deps symlink://../epd/firmware
-src/main.cpp              the head: the awake loop over sensors, readings and the page loop
+src/main.cpp              the head: fetches and draws the page, and deep-sleeps between wakes
 src/dock/                 the dock: the TinyS3 that reads the sensors
 src/defaults.example.cpp  copy to defaults.cpp: WiFi, server URL, MQTT logging
 server/
