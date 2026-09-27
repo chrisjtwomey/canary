@@ -1,8 +1,9 @@
 // The dock's loop.
 //
-// A TinyS3 with the four sensors on their own regulator. Mains powered, so
-// nothing sleeps: it connects once, and on each of the server's slots takes a
-// reading and queues it, with its own status beside it. It reads the sensors
+// A TinyS3 with the four sensors on their own regulator. Mains powered and
+// always online: it connects once, and on each of the server's slots takes a
+// reading and queues it, with its own status beside it. Between passes of its
+// loop, once a second, it light-sleeps with Wi-Fi kept. It reads the sensors
 // at no other time. Before each slot it gets ready for it: it asks the server
 // for its settings and applies any change, runs a recalibration the server
 // asks for, and starts again a sensor that gave nothing at the last slot, so
@@ -22,6 +23,8 @@
 #include <Preferences.h>
 #include <WiFi.h>
 #include <Wire.h>
+#include <driver/ledc.h>
+#include <esp_pm.h>
 #include <ezTime.h>
 
 #include "log_utils.h"
@@ -304,9 +307,14 @@ static const bool kMockSensors = false;
 static const uint32_t kFirstIntervalMs = 300000;
 
 // Wi-Fi needs 80 MHz, and below it the APB clock follows the processor,
-// which would move the LED's PWM frequency and the serial baud rate. So 80
-// is both the floor and the choice: the bench board ran warm at 240.
+// which would move the serial baud rate. So 80 is both the floor and the
+// choice: the bench board ran warm at 240. Power management holds it there
+// between light sleeps.
 static const uint32_t kCpuMhz = 80;
+
+// Once a second is soon enough for everything the loop does: the fan's margin
+// covers a slot reached a second late. Between passes the chip light-sleeps.
+static const uint32_t kLoopMs = 1000;
 
 // The fan settles in 30 s (Pmsa003iDriver::kWarmupMs), Plantower's figure;
 // the margin covers a slot the loop reaches a little late. Each reading
@@ -324,9 +332,11 @@ static PostTimer postTimer(kFirstIntervalMs);
 
 static SensorSuite sensors(wallClock, shtc3Impl, scd41Impl, pmImpl, bmeImpl);
 
-// One of the ESP32-S3's eight LEDC channels. Nothing else on this board uses
-// one, so the first will do.
-static const uint8_t kLedChannel = 0;
+// One of the ESP32-S3's eight LEDC channels, and a timer. Nothing else on
+// this board uses either, so the first will do.
+static const ledc_mode_t    kLedMode = LEDC_LOW_SPEED_MODE;
+static const ledc_channel_t kLedChannel = LEDC_CHANNEL_0;
+static const ledc_timer_t   kLedTimer = LEDC_TIMER_0;
 static StatusLed statusLed;
 
 // Set once setup() has connected and started the sensors.
@@ -364,9 +374,9 @@ static uint8_t ledStates() {
     return holding;
 }
 
-// The fast pulse's shortest step lasts about 11 ms, so a 5 ms tick keeps
-// every step of every pattern.
-static const uint32_t kLedTickMs = 5;
+// The longest the LED task waits for the pattern's next step, so a change of
+// state shows within it.
+static const uint32_t kLedWaitMaxMs = 250;
 static const uint32_t kLedStackBytes = 2048;
 
 // A task of its own, because setup() blocks for as long as the network takes
@@ -380,14 +390,37 @@ static void ledTask(void*) {
         const uint16_t duty = statusLed.dutyAt(nowMs);
         if (duty != written) {
             written = duty;
-            ledcWrite(kLedPin, duty);
+            ledc_set_duty(kLedMode, kLedChannel, duty);
+            ledc_update_duty(kLedMode, kLedChannel);
         }
-        vTaskDelay(pdMS_TO_TICKS(kLedTickMs));
+        vTaskDelay(pdMS_TO_TICKS(statusLed.msUntilChange(nowMs, kLedWaitMaxMs)));
     }
 }
 
+// The IDF's driver rather than Arduino's ledcAttachChannel(), which leaves the
+// channel no output in light sleep. RC_FAST keeps running there, and the
+// channel keeps its PWM.
 static void startLed() {
-    ledcAttachChannel(kLedPin, StatusLed::kFrequencyHz, StatusLed::kResolutionBits, kLedChannel);
+    const ledc_timer_config_t timer = {
+        .speed_mode = kLedMode,
+        .duty_resolution = (ledc_timer_bit_t)StatusLed::kResolutionBits,
+        .timer_num = kLedTimer,
+        .freq_hz = StatusLed::kFrequencyHz,
+        .clk_cfg = LEDC_USE_RC_FAST_CLK,
+    };
+    const ledc_channel_config_t channel = {
+        .gpio_num = kLedPin,
+        .speed_mode = kLedMode,
+        .channel = kLedChannel,
+        .intr_type = LEDC_INTR_DISABLE,
+        .timer_sel = kLedTimer,
+        .duty = 0,
+        .hpoint = 0,
+        .sleep_mode = LEDC_SLEEP_MODE_KEEP_ALIVE,
+    };
+    if (ledc_timer_config(&timer) != ESP_OK || ledc_channel_config(&channel) != ESP_OK) {
+        log(LOG_ERROR, "status LED: LEDC setup failed");
+    }
     // Core 0: the loop and the BSEC task both run on core 1.
     xTaskCreatePinnedToCore(ledTask, "led", kLedStackBytes, nullptr, 1, nullptr, 0);
 }
@@ -914,6 +947,13 @@ void setup() {
     } else {
         logf(LOG_WARNING, "processor stays at %u MHz", (unsigned)getCpuFrequencyMhz());
     }
+    const esp_pm_config_t pm = {(int)kCpuMhz, (int)kCpuMhz, true};
+    const esp_err_t pmErr = esp_pm_configure(&pm);
+    if (pmErr == ESP_OK) {
+        log(LOG_INFO, "light sleep on");
+    } else {
+        logf(LOG_WARNING, "light sleep off: %s", esp_err_to_name(pmErr));
+    }
 
     startLed();
     onTrial = otaTrialPending();
@@ -971,5 +1011,5 @@ void loop() {
     sampleWhenDue(nowMs);
     sendQueued();
     backlogged = queue->count() >= kBackloggedAt;
-    delay(10);
+    delay(kLoopMs);
 }

@@ -30,13 +30,15 @@ Three of those change the design. The panel is one config line.
 
 `run_app()` is epd's deep-sleep state machine for a board that only draws
 pages. Each board here does more, so each has its own program: the dock stays
-awake, and the display sleeps on a plan of its own.
+online and light-sleeps between passes of its loop, and the display
+deep-sleeps on a plan of its own.
 
 The dock, `src/dock/main.cpp`, is the one the sensors need:
 
 ```
-setup:  80 MHz; wifi; the settings from NVS; I2C; BSEC; sensors.begin(); the first reading 35 s on
-loop:   until known   GET /about           every 30 s, for the server's time
+setup:  80 MHz; light sleep on; wifi; the settings from NVS; I2C; BSEC; sensors.begin(); the first reading 35 s on
+loop:   once a second, light-sleeping between passes
+        until known   GET /about           every 30 s, for the server's time
         before a slot GET /board-settings  the settings, applied (§3.8); a recalibration; a stopped sensor started again
         each slot     queue a reading      a fresh sample, PM included, with the dock's own status, into PSRAM
         every pass    POST /sensor-readings       the oldest 100 in the queue as one batch, once the time is known
@@ -47,8 +49,13 @@ LED:    a FreeRTOS task of its own, so the starting pattern runs while setup() b
 ```
 
 The dock runs at 80 MHz rather than 240. Wi-Fi needs 80, and below it the
-APB clock follows the processor, which would move the LED's PWM frequency
-and the serial baud rate. So 80 is both the floor and the choice.
+APB clock follows the processor, which would move the serial baud rate. So
+80 is both the floor and the choice. Power management holds it there, and
+light-sleeps the chip whenever every task waits: between passes of the loop,
+the Wi-Fi driver wakes it for the access point's beacons, the BSEC task for
+its samples and the LED task for each step of the pattern (§3.5). The LED's
+PWM runs through the sleep on the RC_FAST clock. The chip stays awake while
+its USB port is connected to a host.
 
 The PM module's fan runs for the 35 seconds before each reading and stops
 after it: 12% of the time at five-minute slots, 2% overnight. It is the
@@ -205,7 +212,9 @@ with the same timings and steps in `sheet.js`, so it can be seen before it is sa
 dock's last sync, which the dock reports as `light` (READINGS.md), until a row is changed or clicked. The dot's
 area follows the brightness, and at 0 it stays dark. Brightness is perceived
 brightness, mapped through gamma 2.2 onto a 14-bit channel at 1 kHz. A task of its own drives the pin, because
-`setup()` blocks for as long as the network takes and the booting pulse runs through it.
+`setup()` blocks for as long as the network takes and the booting pulse runs through it. It waits until the
+pattern's next step, and at most 250 ms so a new state shows soon, rather than looking every 5 ms, which would
+keep the chip out of light sleep.
 
 ### 3.6 The headers carry canary's name, not the library's
 
@@ -335,7 +344,7 @@ schedule.
 platformio.ini                 envs: esp32 (the display), dock (the TinyS3), dock-mock (-DUSE_MOCK_SENSORS), dock-validate, native, sim
 partitions.csv
 src/main.cpp                   the display: fetch, draw, post its own state
-src/dock/main.cpp              the dock: the awake loop from §3.1
+src/dock/main.cpp              the dock: the loop from §3.1
 src/defaults.example.cpp       copy to defaults.cpp: WiFi, server URL, MQTT logging
 include/sensors/  src/sensors/
   Readings.h  ReadingsJson.cpp                  what the sensors return, and the wire format in READINGS.md
@@ -515,3 +524,4 @@ Dated decisions and status behind the text above, oldest first.
 - **2026-09-27**: the display deep-sleeps between wakes instead of staying awake (§3.1). E-paper holds its image without power, so the awake display made heat and drew power for nothing. It wakes for the next page, and for its next sync when that comes first, and posts its state at every wake, so a sync beside a page needs no wake of its own. The RTC's alarm wakes it because its crystal keeps the page slots; the ESP32's timer, a little later, is there only so that a missed alarm cannot leave the display asleep for good. A freshly written image stays awake until a page confirms it: a wake from deep sleep passes through the bootloader, which takes back an image not yet confirmed. On the live display a wake costs about 7 seconds, 12 with a page, so about 55 minutes awake a day at five-minute pages; the SD card check, NTP and the one-second Wi-Fi poll are most of what could still go.
 - **2026-09-27**: the head became the display, in the product and in the code: the board name `canary-display`, its firmware folder, its block in the client object, and its sync as `display.sync`, beside the page schedule it goes with. A user knows what a display is; "head" was the enclosure's word. epd's `display` block refuses keys it does not know, so canary takes `sync` out before epd reads the block rather than widen epd for one project's key. A board on the old name is offered no firmware under the new one, so the display is flashed once over USB, and the reports and logs under `canary-head` stay until they expire.
 - **2026-09-27**: the dock builds in a PlatformIO folder of its own: `~/.platformio-canary-dock` locally and in CI, `/platformio/dock` in the builder. Automatic light sleep needs power management and tickless idle, which the core's precompiled IDF libraries leave out, so pioarduino compiles them again for the dock. It writes them into a package that every build in the folder shares, and the display then fails to build there. `scripts/dock_core.py` stops a dock build in `~/.platformio`. A separate dock project with its own `core_dir` was not taken: `PLATFORMIO_CORE_DIR` overrides `core_dir`, and the builder image sets it for every build.
+- **2026-09-27**: the dock light-sleeps between passes of its loop (§3.1), with Wi-Fi kept: automatic light sleep at 80 MHz, the loop once a second rather than every 10 ms, and the LED task waiting for the pattern's next step rather than looking every 5 ms. On mains power the reasons are heat and power: awake, the dock drew about 71 mA at 5 V between readings, with the BME688 1.3 mm from the TinyS3. It stays online rather than deep-sleeping, which would lose the PSRAM queue and BSEC's settling. Its LED runs on the IDF's LEDC driver, because Arduino's leaves the channel no output in light sleep.

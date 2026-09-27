@@ -368,6 +368,80 @@ void test_progress_past_the_end_is_the_end() {
     TEST_ASSERT_EQUAL_UINT16(led.peakDuty(), led.dutyAt(125));
 }
 
+// The duty changes, with their times, that `led` shows over `spanMs`: looked
+// at every tick, or waiting each time until the next change.
+struct Change {
+    uint32_t atMs;
+    uint16_t duty;
+};
+static const uint32_t kCapMs = 250;
+
+static int changesByTick(const StatusLed& led, uint32_t spanMs, Change* out, int max) {
+    int n = 0;
+    uint16_t last = 0xFFFF;
+    for (uint32_t t = 0; t < spanMs && n < max; t += StatusLed::kTickMs) {
+        const uint16_t duty = led.dutyAt(t);
+        if (duty != last) out[n++] = {t, last = duty};
+    }
+    return n;
+}
+
+static int changesByWaiting(const StatusLed& led, uint32_t spanMs, Change* out, int max) {
+    int n = 0;
+    uint16_t last = 0xFFFF;
+    for (uint32_t t = 0; t < spanMs && n < max; t += led.msUntilChange(t, kCapMs)) {
+        const uint16_t duty = led.dutyAt(t);
+        if (duty != last) out[n++] = {t, last = duty};
+    }
+    return n;
+}
+
+void test_waiting_for_the_next_change_shows_every_step_a_tick_would() {
+    for (uint8_t p = StatusLed::OFF; p < StatusLed::kPatterns; ++p) {
+        for (uint8_t stop = 1; stop <= StatusLed::kSmoothnessStops; ++stop) {
+            StatusLed led;
+            led.smoothness(stop);
+            led.look(StatusLed::RUNNING, (StatusLed::Pattern)p, 1200);
+            led.state(StatusLed::RUNNING, 0);
+            Change byTick[800], byWaiting[800];
+            const int n = changesByTick(led, 3000, byTick, 800);
+            TEST_ASSERT_EQUAL_INT(n, changesByWaiting(led, 3000, byWaiting, 800));
+            for (int i = 0; i < n; ++i) {
+                TEST_ASSERT_EQUAL_UINT32(byTick[i].atMs, byWaiting[i].atMs);
+                TEST_ASSERT_EQUAL_UINT16(byTick[i].duty, byWaiting[i].duty);
+            }
+        }
+    }
+}
+
+void test_an_update_waits_for_its_next_step_too() {
+    StatusLed led;
+    led.state(StatusLed::UPDATING, 0);
+    led.progress(500);
+    Change byTick[400], byWaiting[400];
+    const int n = changesByTick(led, 2000, byTick, 400);
+    TEST_ASSERT_EQUAL_INT(n, changesByWaiting(led, 2000, byWaiting, 400));
+    for (int i = 0; i < n; ++i) TEST_ASSERT_EQUAL_UINT32(byTick[i].atMs, byWaiting[i].atMs);
+}
+
+void test_a_light_that_holds_waits_the_whole_cap() {
+    StatusLed led;
+    led.look(StatusLed::RUNNING, StatusLed::SOLID, 1000);
+    led.state(StatusLed::RUNNING, 0);
+    TEST_ASSERT_EQUAL_UINT32(kCapMs, led.msUntilChange(0, kCapMs));
+    led.state(StatusLed::DARK, 0);
+    TEST_ASSERT_EQUAL_UINT32(kCapMs, led.msUntilChange(40, kCapMs));
+}
+
+void test_a_flash_waits_through_its_dark_part_up_to_the_cap() {
+    StatusLed led;
+    led.look(StatusLed::RUNNING, StatusLed::FLASH, 1000);
+    led.state(StatusLed::RUNNING, 0);
+    TEST_ASSERT_EQUAL_UINT32(150, led.msUntilChange(0, kCapMs));    // lit until 150
+    TEST_ASSERT_EQUAL_UINT32(kCapMs, led.msUntilChange(150, kCapMs));
+    TEST_ASSERT_EQUAL_UINT32(100, led.msUntilChange(900, kCapMs));  // lit again at 1000
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_it_starts_in_the_booting_state);
@@ -405,5 +479,9 @@ int main(int, char**) {
     RUN_TEST(test_a_look_given_back_takes_the_light_again);
     RUN_TEST(test_an_update_brightens_and_quickens_as_the_image_is_written);
     RUN_TEST(test_progress_past_the_end_is_the_end);
+    RUN_TEST(test_waiting_for_the_next_change_shows_every_step_a_tick_would);
+    RUN_TEST(test_an_update_waits_for_its_next_step_too);
+    RUN_TEST(test_a_light_that_holds_waits_the_whole_cap);
+    RUN_TEST(test_a_flash_waits_through_its_dark_part_up_to_the_cap);
     return UNITY_END();
 }

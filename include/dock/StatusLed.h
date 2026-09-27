@@ -21,6 +21,10 @@ public:
     static const uint8_t  kResolutionBits = 14;
     static const uint16_t kMaxDuty = (1u << kResolutionBits) - 1;
     static const uint32_t kFrequencyHz = 1000;
+    // How often the duty is looked at. At the default smoothness the fast
+    // pulse's shortest step lasts about 11 ms, so 5 ms catches every step;
+    // the finer stops skip some of theirs.
+    static const uint32_t kTickMs = 5;
 
     // The steps of light a fade takes at each stop of the smoothness, from 1:
     // 4, 8, 16, 32, 64, then 0, for no steps to see.
@@ -198,6 +202,16 @@ public:
             }
             default: return 0;
         }
+    }
+
+    // How long after `nowMs` the duty first differs, looked at a tick at a
+    // time, up to `capMs`: how long the caller can wait and miss no step.
+    uint32_t msUntilChange(uint32_t nowMs, uint32_t capMs) const {
+        const uint16_t duty = dutyAt(nowMs);
+        for (uint32_t ms = kTickMs; ms < capMs; ms += kTickMs) {
+            if (dutyAt(nowMs + ms) != duty) return ms;
+        }
+        return capMs;
     }
 
     // The full light, which is also the flash, the blip and the solid light.

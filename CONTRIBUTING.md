@@ -328,7 +328,7 @@ datasheets describe. The BME688's compensation is Bosch's own C API, in
 
 ### 5. Validating the wiring
 
-A separate image that runs the bench routine instead of the dock's awake loop.
+A separate image that runs the bench routine instead of the dock's loop.
 Use it when the hardware is new or has been re-wired, and to take a current
 capture: it has no network and no server, so what the log shows is the
 sensors and nothing else.
@@ -418,6 +418,9 @@ again. It writes them into a package that every build in the PlatformIO
 folder shares, and the display then fails to build there.
 `scripts/dock_core.py` stops a dock build in `~/.platformio` before that
 happens.
+
+The dock does not light-sleep while its USB port is connected to a host, so
+measure its current with the port's data lines disconnected.
 
 The first build in the folder takes about 6 minutes, and the folder grows to
 about 7 GB. Later builds take about 20 seconds.
