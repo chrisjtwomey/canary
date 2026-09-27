@@ -10,7 +10,7 @@ struct ClientStatus {
     enum class Role : uint8_t { Display, Dock };
     static constexpr int16_t kNoTemp = INT16_MIN;
     Role        role;
-    const char* board;
+    const char* board;           // the hardware: "Inkplate5V2" or "TinyS3"
     const char* version;
     const char* ip;
     int         rssi;            // dBm

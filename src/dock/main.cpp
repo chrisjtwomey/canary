@@ -669,7 +669,7 @@ static ClientStatus clientStatus(uint32_t nowMs) {
     strncpy(ipText, WiFi.localIP().toString().c_str(), sizeof(ipText) - 1);
     ClientStatus s = {};
     s.role = ClientStatus::Role::Dock;
-    s.board = CLIENT_NAME;
+    s.board = "TinyS3";
     s.version = CLIENT_VERSION;
     s.ip = ipText;
     s.rssi = WiFi.RSSI();

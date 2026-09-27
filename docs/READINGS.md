@@ -96,7 +96,7 @@ boards; each board's own fields sit in a block named for it, `display` or
 }
 
 "client": {
-  "board": "canary-dock", "version": "v0.1.0-dev", "ip": "192.168.1.42", "rssi": -61,
+  "board": "TinyS3", "version": "v0.1.0-dev", "ip": "192.168.1.42", "rssi": -61,
   "uptime_s": 8040, "reset": "software", "chip_temp_c": 41,
   "heap_free": 120000, "heap_size": 327680, "psram_free": 4000000, "psram_size": 4194304,
   "dock": {
@@ -117,12 +117,13 @@ boards; each board's own fields sit in a block named for it, `display` or
 is left out when the chip gives none. Only the dock sends it: the display's
 classic ESP32 reads a fixed 53 °C. `reset` is why the board last
 started, as ESP-IDF's `esp_reset_reason()` names it: `power_on`, `software`
-(a restart the firmware asked for, as after an update), `deep_sleep` (a
-wake), `external`, `usb`, `jtag` or `sdio` are expected; `panic`,
-`cpu_lockup`, `int_watchdog`, `task_watchdog`, `watchdog`, `brownout`,
-`power_glitch` and `efuse` are faults; `unknown` is anything else.
-Diagnostics counts a fault apart from the other restarts, and a wake from
-deep sleep as no restart.
+(a restart the firmware asked for, as after an update), `external`, `usb`,
+`jtag` or `sdio` are expected; `panic`, `cpu_lockup`, `int_watchdog`,
+`task_watchdog`, `watchdog`, `brownout`, `power_glitch` and `efuse` are
+faults; `unknown` is anything else. A wake from deep sleep is not a start:
+the display, which sleeps between wakes, sends the `reset` and `uptime_s` of
+its last real start. Diagnostics counts a fault apart from the other
+restarts.
 
 In `display`, `panel_temp_c` is the e-paper power controller's sensor, which
 reads the board, not the air, and `fetch` is the page loop's state.
