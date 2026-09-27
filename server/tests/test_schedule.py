@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 import pytest
 from epd_server.config import ConfigError
 
-from server import load_settings, make_dock_sync, make_head_sync
+from server import load_settings, make_dock_sync, make_display_sync
 
 DUBLIN = ZoneInfo("Europe/Dublin")
 POOLS = {"co2": ["breathe.png"]}
@@ -52,28 +52,28 @@ def test_a_dock_sync_that_cannot_work_is_refused_by_its_key(block, words):
 
 
 def test_config_without_a_head_schedule_syncs_the_head_every_half_hour_all_day():
-    assert make_head_sync({}, DUBLIN).describe() == every_day({"from": "00:00", "every": 1800})
+    assert make_display_sync({}, DUBLIN).describe() == every_day({"from": "00:00", "every": 1800})
 
 
-def test_the_head_syncs_every_so_often_all_day():
-    sync = make_head_sync({"head": {"sync": {"every": 600}}}, DUBLIN)
+def test_the_display_syncs_every_so_often_all_day():
+    sync = make_display_sync({"display": {"sync": {"every": 600}}}, DUBLIN)
     assert sync.describe() == every_day({"from": "00:00", "every": 600})
 
 
 def test_a_head_that_syncs_only_beside_its_pages_has_no_slots():
-    off = make_head_sync({"head": {"sync": {"every": 0}}}, DUBLIN)
+    off = make_display_sync({"display": {"sync": {"every": 0}}}, DUBLIN)
     assert off.seconds_until_next(1_781_000_000) is None
 
 
 @pytest.mark.parametrize("block, words", [
-    ({"every": 45}, "^head.sync.every must be 0, for off, or a whole number of minutes"),
-    ({"every": "1800"}, "^head.sync.every must be"),
-    ([{"from": "00:00", "every": 1800}], "^head.sync must be {every: seconds}"),
-    ({"every": 1800, "from": "07:00"}, "^head.sync must be {every: seconds}"),
+    ({"every": 45}, "^display.sync.every must be 0, for off, or a whole number of minutes"),
+    ({"every": "1800"}, "^display.sync.every must be"),
+    ([{"from": "00:00", "every": 1800}], "^display.sync must be {every: seconds}"),
+    ({"every": 1800, "from": "07:00"}, "^display.sync must be {every: seconds}"),
 ])
-def test_a_head_sync_that_cannot_work_is_refused_by_its_key(block, words):
+def test_a_display_sync_that_cannot_work_is_refused_by_its_key(block, words):
     with pytest.raises(ConfigError, match=words):
-        make_head_sync({"head": {"sync": block}}, DUBLIN)
+        make_display_sync({"display": {"sync": block}}, DUBLIN)
 
 
 def test_the_page_changes_on_a_week_of_time_ranges():

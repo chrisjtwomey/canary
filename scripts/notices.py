@@ -1,5 +1,5 @@
-"""Render the head's notices into include/head/notices/, and its splash screen
-into include/head/.
+"""Render the display's notices into include/display/notices/, and its splash screen
+into include/display/.
 
 Run from the repository root with the server's environment, which has the
 renderer and its browser:
@@ -20,8 +20,8 @@ sys.path.insert(0, os.path.join(ROOT, "server"))
 from pages.notice import notices  # noqa: E402
 from pages.splash import SplashPage  # noqa: E402
 
-OUT = os.path.join(ROOT, "include", "head", "notices")
-SPLASH_OUT = os.path.join(ROOT, "include", "head")
+OUT = os.path.join(ROOT, "include", "display", "notices")
+SPLASH_OUT = os.path.join(ROOT, "include", "display")
 LOGO = os.path.join(ROOT, "hardware", "canary-logo-screen.svg")
 
 

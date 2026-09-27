@@ -800,10 +800,10 @@ def test_each_time_input_has_a_button_for_the_pages_own_picker(dock_client):
 
 def test_the_display_tab_holds_the_heads_sync_as_one_interval(dock_client):
     panel = one(soup_of(dock_client.get("/web/config")), "#panel-display")
-    every = one(panel, '[data-field="head.sync.every"] input')
+    every = one(panel, '[data-field="display.sync.every"] input')
 
     assert attr(every, "value") == "30"
-    assert one(panel, '[data-field="head.sync.every"] .unit').get_text() == "minutes"
+    assert one(panel, '[data-field="display.sync.every"] .unit').get_text() == "minutes"
 
 
 def test_the_page_schedule_is_a_week_of_groups_beside_a_dial(dock_client, path, restarts):
@@ -887,8 +887,8 @@ def test_an_offline_dock_locks_its_schedule_and_another_tab_leaves_it(dock_clien
     looks = one(soup, '#panel-dock fieldset.rows.looks')
     assert all(el.has_attr("disabled") for el in looks.select("input, select, button"))
     assert all(b.has_attr("disabled") for b in box.select(".time .pick"))
-    head = one(soup, '#panel-display fieldset.week')
-    assert not any(el.has_attr("disabled") for el in head.select("input, button"))
+    display = one(soup, '#panel-display fieldset.week')
+    assert not any(el.has_attr("disabled") for el in display.select("input, button"))
 
     data = {k: v for k, v in posted(soup, source__seed="9").items() if not k.startswith("dock.")}
     dock_client.post("/web/config", data={**data, "action": "save"})
@@ -909,12 +909,12 @@ def test_a_dock_on_the_saved_settings_is_synchronized(dock_client, dock_report, 
 
 # ── The Image tab ───────────────────────────────────────────────────
 
-def image_client(path, tz, head):
+def image_client(path, tz, display):
     app = Flask(__name__)
     app.register_blueprint(config_blueprint(
         make_pages(tz, width=1280, height=720), path, check_config, lambda: None,
-        boards=lambda device: {"doc": {"client": {"board": head.get("board"), "head": head}}}
-        if device == "canary-head" else None))
+        boards=lambda device: {"doc": {"client": {"board": display.get("board"), "display": display}}}
+        if device == "canary-display" else None))
     return app.test_client()
 
 
@@ -930,15 +930,15 @@ def test_the_position_grid_stands_for_both_alignments(client):
         assert "by-position" in one(panel, f'[data-field="{key}"]')["class"]
 
 
-@pytest.mark.parametrize("head, words, klass", [
+@pytest.mark.parametrize("display, words, klass", [
     ({"board": "Inkplate5V2", "width": 1280, "height": 720},
-     "The head reports 1280 × 720 px, Inkplate5V2.", "help"),
+     "The display reports 1280 × 720 px, Inkplate5V2.", "help"),
     ({"board": "Inkplate10", "width": 1200, "height": 825},
-     "Not the head's size: it reports 1200 × 825 px, Inkplate10. Set Width and Height to match.",
+     "Not the display's size: it reports 1200 × 825 px, Inkplate10. Set Width and Height to match.",
      "error"),
 ])
-def test_the_size_line_says_what_the_head_reports(path, tz, head, words, klass):
-    line = one(soup_of(image_client(path, tz, head).get("/web/config")), "#head-size")
+def test_the_size_line_says_what_the_display_reports(path, tz, display, words, klass):
+    line = one(soup_of(image_client(path, tz, display).get("/web/config")), "#display-size")
 
     assert line.get_text() == words and klass in line["class"]
 
@@ -946,7 +946,7 @@ def test_the_size_line_says_what_the_head_reports(path, tz, head, words, klass):
 def test_no_size_line_before_the_head_reports(path, tz):
     soup = soup_of(image_client(path, tz, {"board": "Inkplate5V2"}).get("/web/config"))
 
-    assert soup.select_one("#head-size") is None
+    assert soup.select_one("#display-size") is None
 
 
 

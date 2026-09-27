@@ -82,7 +82,7 @@ class TestStamp:
     def test_a_page_of_readings_changes_with_the_newest_reading(self):
         source = self.Source(DeviceReports(now=lambda: float(AT)), {"ts": AT - 60})
         before = data_stamp(("latest", "history_24h", "status"), source)
-        source.reports.accept({"ts": AT, "device": "canary-head", "client": {"board": "x"}})
+        source.reports.accept({"ts": AT, "device": "canary-display", "client": {"board": "x"}})
         assert data_stamp(("latest", "history_24h", "status"), source) == before == str(AT - 60)
 
         source.latest = {"ts": AT}
@@ -92,12 +92,12 @@ class TestStamp:
         clock = [float(AT)]
         reports = DeviceReports(now=lambda: clock[0], silence=lambda device, now: 120)
         source = self.Source(reports)
-        reports.accept({"ts": AT, "device": "canary-head", "client": {"board": "x"}})
+        reports.accept({"ts": AT, "device": "canary-display", "client": {"board": "x"}})
         seen = [data_stamp(("status",), source)]
 
         clock[0] += 60
         seen.append(data_stamp(("status",), source))
-        reports.accept({"ts": AT + 60, "device": "canary-head", "client": {"board": "x"}})
+        reports.accept({"ts": AT + 60, "device": "canary-display", "client": {"board": "x"}})
         seen.append(data_stamp(("status",), source))
         reports.refused("canary-dock", "v0.1.0")
         seen.append(data_stamp(("status",), source))

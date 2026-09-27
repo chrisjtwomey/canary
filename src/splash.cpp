@@ -1,19 +1,19 @@
-#include "head/Splash.h"
+#include "display/Splash.h"
 
 #include <Arduino.h>
 
 #include "epd.h"
-#include "head/Notice.h"
-#include "head/ProgressBar.h"
-#include "head/fonts/FrauncesDetail.h"
-#include "head/fonts/FrauncesDetailItalic.h"
+#include "display/Notice.h"
+#include "display/ProgressBar.h"
+#include "display/fonts/FrauncesDetail.h"
+#include "display/fonts/FrauncesDetailItalic.h"
 #include "log_utils.h"
 #include "version.h"
 
 // The splash screen the server's pipeline rendered in black and white
 // (scripts/notices.py), held in the firmware (board_build.embed_files).
-extern const uint8_t splashPng[] asm("_binary_include_head_splash_png_start");
-extern const uint8_t splashPngEnd[] asm("_binary_include_head_splash_png_end");
+extern const uint8_t splashPng[] asm("_binary_include_display_splash_png_start");
+extern const uint8_t splashPngEnd[] asm("_binary_include_display_splash_png_end");
 
 // The bar on the Inkplate 5's 1280 x 720, centred under the logo. The page
 // sets the logo 60cqw wide in the middle of the panel (styles.css), so its
@@ -29,7 +29,7 @@ static const int16_t kFillX = kBarX + kLine + kGap;
 static const int16_t kFillY = kBarY + kLine + kGap;
 static const int16_t kFillW = kBarW - 2 * (kLine + kGap);
 static const int16_t kFillH = kBarH - 2 * (kLine + kGap);
-// The baselines of the lines the head writes, in the pages' face at the size
+// The baselines of the lines the display writes, in the pages' face at the size
 // of their detail text: the update's line under the bar, and the start's
 // version where the bar would be.
 static const int16_t kLineY = 622;

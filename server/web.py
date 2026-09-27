@@ -12,7 +12,7 @@
     GET /history?metric=co2&span=<seconds>
                          the explorer's chart, as a spec charts.js draws
 
-A page is built at the panel's size, as the head gets it; the browse page
+A page is built at the panel's size, as the display gets it; the browse page
 scales it to fit.
 """
 from __future__ import annotations
@@ -126,7 +126,7 @@ def data_stamp(requires: Iterable[str], source: DataSource) -> str:
 
 
 def page_head(a: Airium, title: str, refresh: str = "") -> None:
-    """The head every /web/ page has; ``refresh`` is a meta refresh's content."""
+    """The display every /web/ page has; ``refresh`` is a meta refresh's content."""
     with a.head():
         a.meta(charset="utf-8")
         a.meta(name="viewport", content="width=device-width, initial-scale=1")

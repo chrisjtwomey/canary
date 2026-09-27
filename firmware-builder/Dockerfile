@@ -1,4 +1,4 @@
-# Builds the head's and the dock's firmware of the commit this image was
+# Builds the display's and the dock's firmware of the commit this image was
 # built from, into the directory the server offers images from. See
 # CONTRIBUTING.md, Releases, and the firmware-builder service in
 # docker-compose.yml.

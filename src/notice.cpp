@@ -1,10 +1,10 @@
-#include "head/Notice.h"
+#include "display/Notice.h"
 
 #include <Arduino.h>
 #include <WiFi.h>
 
 #include "epd.h"
-#include "head/fonts/FrauncesDetail.h"
+#include "display/fonts/FrauncesDetail.h"
 #include "log_utils.h"
 #include "version.h"
 
@@ -13,12 +13,12 @@
 // page. The layout leaves its bottom free, and the two facts only known at
 // run time go there in the pages' own face, at the size of their detail text.
 // The symbols are the files' paths from the project root.
-extern const uint8_t noticeUnreachable[] asm("_binary_include_head_notices_notice_unreachable_png_start");
-extern const uint8_t noticeUnreachableEnd[] asm("_binary_include_head_notices_notice_unreachable_png_end");
-extern const uint8_t noticeVersion[] asm("_binary_include_head_notices_notice_version_png_start");
-extern const uint8_t noticeVersionEnd[] asm("_binary_include_head_notices_notice_version_png_end");
-extern const uint8_t noticeNoFirmware[] asm("_binary_include_head_notices_notice_no_firmware_png_start");
-extern const uint8_t noticeNoFirmwareEnd[] asm("_binary_include_head_notices_notice_no_firmware_png_end");
+extern const uint8_t noticeUnreachable[] asm("_binary_include_display_notices_notice_unreachable_png_start");
+extern const uint8_t noticeUnreachableEnd[] asm("_binary_include_display_notices_notice_unreachable_png_end");
+extern const uint8_t noticeVersion[] asm("_binary_include_display_notices_notice_version_png_start");
+extern const uint8_t noticeVersionEnd[] asm("_binary_include_display_notices_notice_version_png_end");
+extern const uint8_t noticeNoFirmware[] asm("_binary_include_display_notices_notice_no_firmware_png_start");
+extern const uint8_t noticeNoFirmwareEnd[] asm("_binary_include_display_notices_notice_no_firmware_png_end");
 
 // Where the run-time lines go, on the Inkplate 5's 1280 x 720. The margin is
 // the page's 6cqw; the lines sit in the 20cqh the notice leaves free.

@@ -37,7 +37,7 @@ from pages.day import DayPage
 from pages.diagnostics import DiagnosticsPage, DiagnosticsTracePage, HealthTracePage
 from pages.dust import DustPage
 from pages.pool import CO2, IAQ, PM25, PRESSURE, TEMP, DeltaPage, TracePage
-from schedule import DEFAULT_DOCK_WEEK, DEFAULT_HEAD_SYNC_S, DEFAULT_PAGE_WEEK
+from schedule import DEFAULT_DISPLAY_SYNC_S, DEFAULT_DOCK_WEEK, DEFAULT_PAGE_WEEK
 from sources.calibration import CalibrationStore
 from sources.corrections import SeaLevelSource, to_sea_level
 from sources.mock import MockReadingsSource
@@ -57,10 +57,10 @@ DEFAULT_DISPLAY = {"pools": {"co2": ["breathe.png"]},
 SOURCE_KINDS = ("mock", "store")
 # The two boards, each with its images in a subdirectory of the firmware
 # directory named after it.
-FIRMWARE_PRODUCTS = ("canary-head", "canary-dock")
+FIRMWARE_PRODUCTS = ("canary-display", "canary-dock")
 # The history windows the pages ask for, as history_24h and history_72h.
 HISTORY_HOURS = (24, 72)
-HEAD = "canary-head"
+DISPLAY = "canary-display"
 
 
 def make_pages(tz, **geometry) -> list:
@@ -143,23 +143,23 @@ def make_sensor_poll(syncs: dict[str, Week]) -> Callable[[float, str | None], in
     return lambda now, name: next_sync(name, now) if name else None
 
 
-def make_head_sync(config: dict, tz) -> Week:
-    """The head's sync schedule from ``head.sync.every``, one range all day
-    every day: every half hour when config.yaml gives none. 0 is none, since
-    the head also syncs at each page it fetches.
+def make_display_sync(config: dict, tz) -> Week:
+    """The display's sync schedule from ``display.sync.every``, one range all
+    day every day: every half hour when config.yaml gives none. 0 is none,
+    since the display also syncs at each page it fetches.
 
     Raises:
         ConfigError: the block is not ``{every: seconds}``, or the interval
             is not 0 or a whole number of minutes up to a day.
     """
-    block = get_prop_by_keys(config, "head", "sync", default={})
+    block = get_prop_by_keys(config, "display", "sync", default={})
     if not isinstance(block, dict) or set(block) - {"every"}:
-        raise ConfigError(f"head.sync must be {{every: seconds}}, 0 for none, not {block!r}")
+        raise ConfigError(f"display.sync must be {{every: seconds}}, 0 for none, not {block!r}")
     try:
-        every = check_interval(block.get("every", DEFAULT_HEAD_SYNC_S), "head.sync.every")
+        every = check_interval(block.get("every", DEFAULT_DISPLAY_SYNC_S), "display.sync.every")
     except ValueError as exc:
         raise ConfigError(str(exc)) from None
-    return Week.every_day(TimeRanges([(clock_time(0), every)], tz, "head.sync"))
+    return Week.every_day(TimeRanges([(clock_time(0), every)], tz, "display.sync"))
 
 
 def make_dock_sync(config: dict, tz) -> Week:
@@ -202,13 +202,22 @@ class Settings:
     logs_days: float
     altitude_m: float
     dock_sync: Week
-    head_sync: Week
+    display_sync: Week
     dock: DockSettings
 
     @property
     def syncs(self) -> dict[str, Week]:
         """Each board's sync schedule, by the name it states."""
-        return {DOCK: self.dock_sync, HEAD: self.head_sync}
+        return {DOCK: self.dock_sync, DISPLAY: self.display_sync}
+
+
+def epd_config(config: dict) -> dict:
+    """``config`` as epd reads it: without ``display.sync``, which is canary's
+    own and which epd's display block would refuse."""
+    display = config.get("display")
+    if not isinstance(display, dict) or "sync" not in display:
+        return config
+    return {**config, "display": {k: v for k, v in display.items() if k != "sync"}}
 
 
 def load_settings(config: dict) -> Settings:
@@ -218,8 +227,8 @@ def load_settings(config: dict) -> Settings:
         ConfigError, KeyError, ValueError: the first problem, with a message
             for the person editing the file.
     """
-    core = load_core_config(config, default_display=DEFAULT_DISPLAY,
-                            default_firmware_product="canary-head",
+    core = load_core_config(epd_config(config), default_display=DEFAULT_DISPLAY,
+                            default_firmware_product="canary-display",
                             default_mqtt_prefix="mqtt/canary",
                             base_dir=cwd,
                             default_width=1280, default_height=720)
@@ -251,7 +260,7 @@ def load_settings(config: dict) -> Settings:
         logs_days=float(get_prop_by_keys(config, "logs", "keep_days", default=7)),
         altitude_m=float(get_prop_by_keys(config, "site", "altitude_m", default=0)),
         dock_sync=make_dock_sync(config, core.server.timezone),
-        head_sync=make_head_sync(config, core.server.timezone),
+        display_sync=make_display_sync(config, core.server.timezone),
         dock=load_dock_settings(config),
     )
 
@@ -342,7 +351,7 @@ def main():
     ingest = ReadingsIngest(reports, store, settings.keep_days)
     dock_sync = settings.dock_sync
     about = About(version, core.firmware,
-                  syncs={"dock": settings.dock_sync, "head": settings.head_sync})
+                  syncs={"dock": settings.dock_sync, "display": settings.display_sync})
     pages = make_pages(tz, **core.image.page_kwargs())
     between = make_between(settings.seed, clock, store)
     history = HistoryQuery(make_history(between, settings.altitude_m), tz, now=clock)

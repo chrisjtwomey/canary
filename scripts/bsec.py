@@ -11,7 +11,7 @@ import os
 Import("env")  # noqa: F821 - injected by PlatformIO
 
 root = os.path.join(env.subst("$PROJECT_LIBDEPS_DIR"), env.subst("$PIOENV"), "bsec2")  # noqa: F821
-# Bosch ships one binary per core. The head is an ESP32, the dock an ESP32-S3.
+# Bosch ships one binary per core. The display is an ESP32, the dock an ESP32-S3.
 mcu = env.BoardConfig().get("build.mcu")  # noqa: F821
 binary = os.path.join(root, "src", mcu)
 if not os.path.isdir(binary):

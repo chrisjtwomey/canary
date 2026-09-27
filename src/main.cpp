@@ -1,11 +1,11 @@
-// The head's program.
+// The display's program.
 //
 // The Inkplate and nothing else: it fetches the page the server names, draws
 // it, and deep-sleeps until the server says to come back. E-paper keeps its
-// image without power, so the head wakes only for the next page, or for its
-// next sync when that comes first. Every wake posts the head's own state —
+// image without power, so the display wakes only for the next page, or for its
+// next sync when that comes first. Every wake posts the display's own state —
 // network, memory, panel, fetch counts — to the server's /sensor-readings,
-// where the dock's readings also go; the head carries no sensors, so its
+// where the dock's readings also go; the display carries no sensors, so its
 // document holds the client object and nothing else. A failed fetch leaves
 // the last image on the panel and backs off before the next try.
 //
@@ -38,10 +38,10 @@
 
 #include "version_compat.h"
 
-#include "head/AfterFetch.h"
-#include "head/Notice.h"
-#include "head/Splash.h"
-#include "head/WakePlan.h"
+#include "display/AfterFetch.h"
+#include "display/Notice.h"
+#include "display/Splash.h"
+#include "display/WakePlan.h"
 #include "net/Backlog.h"        // postResult: what an HTTP status means for the sender
 #include "net/ClientStatus.h"
 #include "net/ResetReason.h"
@@ -73,7 +73,7 @@ static const int kTrialFailureLimit = 3;
 // them about 26 minutes, long enough that a blip never replaces the page.
 static const int kUnreachableAfter = 3;
 
-// What outlasts deep sleep. A real start clears it, so the head then
+// What outlasts deep sleep. A real start clears it, so the display then
 // fetches a page at once and counts from zero.
 static RTC_DATA_ATTR WakePlan plan;
 static RTC_DATA_ATTR char     nextURL[256];      // from Canary-Next-URL; empty means the server URL
@@ -101,7 +101,7 @@ static uint32_t epochNow() {
 
 // Deep sleep until `at`, in UTC seconds, which the RTC holds. The ESP32's
 // own timer stands behind the RTC's alarm, a little later, so a missed alarm
-// costs a late page rather than a head that never wakes.
+// costs a late page rather than a display that never wakes.
 static void sleepUntil(uint32_t at) {
     const uint32_t seconds = secondsUntil(at, epochNow());
     enableWakeOnTimer(seconds + seconds / 20 + 60);
@@ -234,7 +234,7 @@ static ClientStatus clientStatus() {
     const uint32_t now = epochNow();
     strncpy(ipText, WiFi.localIP().toString().c_str(), sizeof(ipText) - 1);
     ClientStatus s = {};
-    s.role = ClientStatus::HEAD;
+    s.role = ClientStatus::Role::Display;
     s.board = epdBoard().deviceName();
     s.version = CLIENT_VERSION;
     s.ip = ipText;
@@ -257,7 +257,7 @@ static ClientStatus clientStatus() {
     return s;
 }
 
-// The head's own state, with no readings round it, and what the server
+// The display's own state, with no readings round it, and what the server
 // answers: the next sync, and any update on offer. Nothing is held for a
 // retry: the next wake's report says the same things, fresher.
 static PageResponse postStatus() {
@@ -280,7 +280,7 @@ static PageResponse postStatus() {
     return rsp;
 }
 
-// The page when it is due, then the head's state, which is its sync. A wake
+// The page when it is due, then the display's state, which is its sync. A wake
 // that fetched a page has dealt with the update on offer already.
 static void wake() {
     const bool page = pageDue(plan, epochNow());

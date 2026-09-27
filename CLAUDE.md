@@ -6,6 +6,7 @@
 
 - A thin consumer of [epd](https://github.com/chrisjtwomey/epd): the firmware (`src/`, `include/`) builds with `-DARDUINO_INKPLATE5V2` against epd's two libraries, and the server (`server/`) is its data sources, a page list and `DisplayServer(...).run()`. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has the layout.
 - epd must be checked out beside this repo.
+- The two boards are **the display** (the Inkplate) and **the dock** (the TinyS3), in code, docs and anything a person reads. Never "the head".
 
 ## Docs
 

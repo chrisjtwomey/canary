@@ -2,7 +2,7 @@
 from PIL import Image
 
 from epd_server import grey_levels, regenerate
-from server import make_pages
+from server import epd_config, make_pages
 
 
 class FakeRenderer:
@@ -44,7 +44,7 @@ def test_the_example_config_schedules_only_pages_the_server_makes(tz):
     from epd_server.config import load_core_config, load_yaml
     from epd_server.scheduling import TimeRangesSchedule
     here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    core = load_core_config(load_yaml(os.path.join(here, "config.example.yaml")))
+    core = load_core_config(epd_config(load_yaml(os.path.join(here, "config.example.yaml"))))
     sched = core.server.schedule
     assert isinstance(sched, TimeRangesSchedule)
     assert sched.week.describe() == [{"days": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"],

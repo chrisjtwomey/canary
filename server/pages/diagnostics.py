@@ -29,11 +29,11 @@ SENSORS = (
 )
 
 # The boards in the order the pages show them; anything else follows.
-BOARD_ORDER = ("canary-head", "canary-dock")
+BOARD_ORDER = ("canary-display", "canary-dock")
 
 
 def board_key(device: str) -> str:
-    """The short name the page keys ids on: ``canary-head`` -> ``head``."""
+    """The short name the page keys ids on: ``canary-display`` -> ``display``."""
     return device.rsplit("-", 1)[-1] if device else "board"
 
 
@@ -60,7 +60,7 @@ def restarts(history: list[dict]) -> tuple[int, int]:
 
 def queue_of(c: dict) -> dict | None:
     """The board's queue, ``{"held", "capacity", "store"}``, or None for a
-    board that queues nothing: the head reports an empty store."""
+    board that queues nothing: the display reports an empty store."""
     backlog = (c.get("dock") or {}).get("backlog")
     if not isinstance(backlog, dict) or not backlog.get("store"):
         return None
@@ -152,8 +152,8 @@ class DiagnosticsPage(EnvPage):
 
             if isinstance(c.get("dock"), dict):
                 self._sensors(a, k, c["dock"], valid, entry.get("next_sync_s"))
-            elif isinstance(c.get("head"), dict):
-                self._panel(a, k, c["head"], entry.get("age_s") or 0)
+            elif isinstance(c.get("display"), dict):
+                self._panel(a, k, c["display"], entry.get("age_s") or 0)
 
     @staticmethod
     def _memory(a: Airium, k: str, c: dict) -> None:
@@ -212,10 +212,10 @@ class DiagnosticsPage(EnvPage):
                         kv(a, "accuracy", word, id=f"{k}-bsec", sub=True)
 
     @staticmethod
-    def _panel(a: Airium, k: str, head: dict, age_s: int) -> None:
-        """The head's panel and its fetches. ``age_s``: how old the report
+    def _panel(a: Airium, k: str, display: dict, age_s: int) -> None:
+        """The display's panel and its fetches. ``age_s``: how old the report
         is, taken off the time it gave to the next fetch."""
-        fetch = head.get("fetch") or {}
+        fetch = display.get("fetch") or {}
         with a.div(klass="card"):
             a.div(klass="label", _t="Panel")
             with a.div(klass="kv"):
@@ -227,7 +227,7 @@ class DiagnosticsPage(EnvPage):
                    id=f"{k}-fetches")
                 step = fetch.get("backoff_step", 0)
                 kv(a, "back-off", f"step {step}" if step else "none")
-                temp = head.get("panel_temp_c")
+                temp = display.get("panel_temp_c")
                 kv(a, "temperature", f"{temp} °C" if temp is not None else "—", id=f"{k}-panel-temp")
 
     def charts(self, **data) -> list[dict]:
@@ -310,7 +310,7 @@ TRACES = (
 
 # Which board is the dark line when both are on a chart: the dock, which is
 # the only one on the queue chart.
-TRACE_ORDER = ("canary-dock", "canary-head")
+TRACE_ORDER = ("canary-dock", "canary-display")
 
 
 class DiagnosticsTracePage(EnvPage):

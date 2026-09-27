@@ -1,5 +1,5 @@
-"""The splash screen the head holds in its firmware: the logo alone, in black
-and white, which the head's partial updates need."""
+"""The splash screen the display holds in its firmware: the logo alone, in black
+and white, which the display's partial updates need."""
 import os
 
 from bs4 import BeautifulSoup
@@ -40,7 +40,7 @@ def test_the_splash_is_black_and_white_with_no_dither():
 def test_the_splash_is_rendered_and_built_into_the_head():
     with open(os.path.join(ROOT, "platformio.ini")) as f:
         ini = f.read()
-    path = "include/head/splash.png"
+    path = "include/display/splash.png"
     assert os.path.isfile(os.path.join(ROOT, path)), f"{path}: run scripts/notices.py"
     assert path in ini, f"{path} is not in board_build.embed_files"
 

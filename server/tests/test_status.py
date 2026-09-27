@@ -24,10 +24,10 @@ def test_accept_keeps_the_newest_and_counts():
 def test_each_board_keeps_its_own_newest_report():
     reports = DeviceReports(now=lambda: 1000.0)
     reports.accept({"ts": 10, "device": "canary-dock", "co2_ppm": 700})
-    reports.accept({"ts": 11, "device": "canary-head", "client": {"ip": "192.168.1.9"}})
+    reports.accept({"ts": 11, "device": "canary-display", "client": {"ip": "192.168.1.9"}})
     assert reports.device("canary-dock")["doc"]["co2_ppm"] == 700
-    assert reports.device("canary-head")["doc"]["client"]["ip"] == "192.168.1.9"
-    assert reports.devices() == ["canary-head", "canary-dock"]
+    assert reports.device("canary-display")["doc"]["client"]["ip"] == "192.168.1.9"
+    assert reports.devices() == ["canary-display", "canary-dock"]
     assert reports.device("canary-shed") is None
 
 
@@ -35,13 +35,13 @@ def test_reports_are_kept_in_the_store_and_pruned(tmp_path):
     clock = [10 * 86400.0]
     store = ReadingsStore(tmp_path / "status.db")
     reports = DeviceReports(now=lambda: clock[0], store=store, keep_days=1)
-    reports.accept({"ts": 8 * 86400, "device": "canary-head", "client": {"rssi": -60}})
-    reports.accept({"ts": 10 * 86400, "device": "canary-head", "client": {"rssi": -55}})
+    reports.accept({"ts": 8 * 86400, "device": "canary-display", "client": {"rssi": -60}})
+    reports.accept({"ts": 10 * 86400, "device": "canary-display", "client": {"rssi": -55}})
     reports.accept({"ts": 10 * 86400, "device": "canary-dock", "co2_ppm": 700,
                     "client": {"rssi": -70}})
     # The one from two days ago is past keep_days; each board's newest stays.
     assert store.count() == 2
-    assert store.latest("canary-head")["client"] == {"rssi": -55}
+    assert store.latest("canary-display")["client"] == {"rssi": -55}
     # Measurements stay out of the report: they have a store of their own.
     assert store.latest("canary-dock") == {"ts": 10 * 86400, "device": "canary-dock",
                                            "client": {"rssi": -70}}
@@ -54,20 +54,20 @@ def test_a_restart_brings_back_each_boards_newest_report(tmp_path):
     before = DeviceReports(now=lambda: 2000.0, store=store)
     before.accept({"ts": 1000, "device": "canary-dock", "client": {"rssi": -70}})
     before.accept({"ts": 1600, "device": "canary-dock", "client": {"rssi": -65}})
-    before.accept({"ts": 1500, "device": "canary-head", "client": {"rssi": -60}})
+    before.accept({"ts": 1500, "device": "canary-display", "client": {"rssi": -60}})
 
     after = DeviceReports(now=lambda: 2000.0, store=store)
-    assert after.devices() == ["canary-dock", "canary-head"]
+    assert after.devices() == ["canary-dock", "canary-display"]
     assert after.device("canary-dock") == {"doc": {"ts": 1600, "device": "canary-dock",
                                                     "client": {"rssi": -65}}, "age_s": 400}
-    assert after.device("canary-head")["age_s"] == 500
+    assert after.device("canary-display")["age_s"] == 500
     assert after.count == 3
 
 
 def test_a_restart_brings_back_nothing_the_store_has_pruned(tmp_path):
     store = ReadingsStore(tmp_path / "status.db")
     DeviceReports(now=lambda: 100.0, store=store).accept(
-        {"ts": 100, "device": "canary-head", "client": {}})
+        {"ts": 100, "device": "canary-display", "client": {}})
     after = DeviceReports(now=lambda: 3 * 86400.0, store=store, keep_days=1)
     assert after.devices() == [] and after.latest is None
 
@@ -146,11 +146,11 @@ def test_status_history_groups_the_stored_reports_by_board(tmp_path):
     store = ReadingsStore(tmp_path / "status.db")
     reports = DeviceReports(now=lambda: clock[0], store=store)
     for i in range(3):
-        reports.accept({"ts": int(clock[0]) - 3600 * i, "device": "canary-head", "client": {"rssi": -60 - i}})
-    reports.accept({"ts": int(clock[0]) - 30 * 3600, "device": "canary-head", "client": {"rssi": -90}})
+        reports.accept({"ts": int(clock[0]) - 3600 * i, "device": "canary-display", "client": {"rssi": -60 - i}})
+    reports.accept({"ts": int(clock[0]) - 30 * 3600, "device": "canary-display", "client": {"rssi": -90}})
     reports.accept({"ts": int(clock[0]), "device": "canary-dock", "client": {"rssi": -70}})
     history = StatusSource(reports).datasets()["status_history_24h"]()
-    assert [d["client"]["rssi"] for d in history["canary-head"]] == [-62, -61, -60]   # oldest first, yesterday's out
+    assert [d["client"]["rssi"] for d in history["canary-display"]] == [-62, -61, -60]   # oldest first, yesterday's out
     assert [d["client"]["rssi"] for d in history["canary-dock"]] == [-70]
     assert StatusSource(DeviceReports()).datasets()["status_history_24h"]() == {}
 
@@ -159,9 +159,9 @@ def test_a_board_with_sync_slots_says_when_its_next_is():
     reports = DeviceReports(now=lambda: 1000.0,
                             next_sync=lambda device, now: 120 if device == "canary-dock" else None)
     reports.accept({"ts": 1, "device": "canary-dock", "client": {"rssi": -60}})
-    reports.accept({"ts": 1, "device": "canary-head", "client": {"rssi": -60}})
+    reports.accept({"ts": 1, "device": "canary-display", "client": {"rssi": -60}})
     assert reports.device("canary-dock")["next_sync_s"] == 120
-    assert "next_sync_s" not in reports.device("canary-head")
+    assert "next_sync_s" not in reports.device("canary-display")
 
 
 def test_a_refused_board_is_known_before_any_report_is_taken():

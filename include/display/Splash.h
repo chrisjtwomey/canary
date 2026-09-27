@@ -1,6 +1,6 @@
 #pragma once
 
-// The logo, which the head draws itself: from its firmware, so it needs no
+// The logo, which the display draws itself: from its firmware, so it needs no
 // network. It is drawn in black and white, which partial updates need.
 
 // Draw the logo with this firmware's version under it. It stays until a page

@@ -30,7 +30,7 @@ Three of those change the design. The panel is one config line.
 
 `run_app()` is epd's deep-sleep state machine for a board that only draws
 pages. Each board here does more, so each has its own program: the dock stays
-awake, and the head sleeps on a plan of its own.
+awake, and the display sleeps on a plan of its own.
 
 The dock, `src/dock/main.cpp`, is the one the sensors need:
 
@@ -67,27 +67,27 @@ Until the first response it queues readings with their uptime and stamps them
 when the time arrives, so a dock that boots while the server is down keeps
 what it measured, correctly timed.
 
-The head, `src/main.cpp`, deep-sleeps between wakes. E-paper keeps its image
-without power, so a head awake between pages would only make heat:
+The display, `src/main.cpp`, deep-sleeps between wakes. E-paper keeps its image
+without power, so a display awake between pages would only make heat:
 
 ```
 each wake:  board.begin(); wifi; ntp
             page due     GET the named page → draw; a failed fetch keeps the old image and backs off
-            every wake   POST /sensor-readings   the head's own status, which is its sync; the answer names the next
+            every wake   POST /sensor-readings   the display's own status, which is its sync; the answer names the next
             then         deep sleep until the next page or the next sync, whichever is first
 ```
 
 The RTC's alarm wakes it, and the ESP32's timer stands behind the alarm a
-little later, so a missed alarm makes a late page rather than a head that
+little later, so a missed alarm makes a late page rather than a display that
 never wakes. What must outlast the sleep, the wake plan, the next URL and the
-counts, is in RTC memory, which a real start clears. Two things keep the head
+counts, is in RTC memory, which a real start clears. Two things keep the display
 awake: a wait under 10 seconds, which costs less than a wake, and a freshly
 written image, which the bootloader takes back unless a page proves it. The
-head reports its uptime and reset reason from its last real start, so a wake
+display reports its uptime and reset reason from its last real start, so a wake
 is not a restart on the Diagnostics page.
 
 Both programs compose epd's WiFi, time, download, `postJson` and back-off
-helpers and the logger; the head adds the image helpers and `IBoard`, the
+helpers and the logger; the display adds the image helpers and `IBoard`, the
 dock needs no board at all. The kit stays a library, not a framework: it
 does not need to know what a sensor is.
 
@@ -147,19 +147,19 @@ rounded up so it is never early. Without an answer the dock keeps the last gap t
 two slots. A week in which no range syncs is refused, since the dock would take no readings; a day
 with none is allowed. The Dock tab edits it as the Display tab edits the page schedule.
 
-The head syncs every so often all day, `head.sync.every`, every half hour by default and 0 for only
+The display syncs every so often all day, `display.sync.every`, every half hour by default and 0 for only
 beside each page it fetches; the Display tab sets it in minutes. Each board is sent its own next slot
-in `Canary-Next-Sensor-Poll-Seconds`, by the name it states in `Canary-Device`. The head posts its
+in `Canary-Next-Sensor-Poll-Seconds`, by the name it states in `Canary-Device`. The display posts its
 state at every wake, and wakes for a sync that comes before its next page.
 
-### 3.4 The device is a head and a dock
+### 3.4 The device is a display and a dock
 
 The panel and the sensors are two boards, in two halves of one enclosure:
 
-- **Head**: the Inkplate 5 Gen2 and nothing else. Its I²C bus carries only its own expander, RTC and panel PMIC,
+- **Display**: the Inkplate 5 Gen2 and nothing else. Its I²C bus carries only its own expander, RTC and panel PMIC,
   and its regulator carries only itself.
 - **Dock**: an ESP32-S3 (TinyS3), the four sensors on a regulator of their own, and the USB-C socket that powers
-  both halves. A magnetic pogo connector carries 5 V and ground up to the head, which sits in the dock's cradle.
+  both halves. A magnetic pogo connector carries 5 V and ground up to the display, which sits in the dock's cradle.
 
 Three things forced it, all in [hardware/bom.md](../hardware/bom.md):
 
@@ -170,7 +170,7 @@ Three things forced it, all in [hardware/bom.md](../hardware/bom.md):
 - **Heat and quiet.** The SCD41 wants a supply free of Wi-Fi bursts, and the dock's own regulator would reach
   thermal shutdown carrying the chain.
 
-Nothing else leaves the head: its only connections are the two wires soldered to its power pads, which meet the
+Nothing else leaves the display: its only connections are the two wires soldered to its power pads, which meet the
 dock at the pogo connector.
 
 ### 3.5 One LED says what the dock needs
@@ -218,7 +218,7 @@ mismatch is silent, so both come from this repository.
 |---|---|---|
 | Board to server | `Canary-Device`, `Canary-Device-Version` | which board, and what it runs |
 | Server to board | `Canary-Server-Version`, `Canary-Server-Epoch-Seconds` | on every response |
-| Server to head | `Canary-Next-Display-Refresh-Seconds`, `Canary-Next-URL` | when to fetch, and what |
+| Server to display | `Canary-Next-Display-Refresh-Seconds`, `Canary-Next-URL` | when to fetch, and what |
 | Server to dock | `Canary-Next-Sensor-Poll-Seconds` | on every response: when to take the next reading |
 | Server to board | `Canary-Server-Firmware-Version`, `Canary-Server-Firmware-URL` | only when an update applies |
 
@@ -236,7 +236,7 @@ so they reach the same answer about each other. A version that cannot be read, s
 refusing it would silently stop every development build.
 
 The server's own version is the one the boards follow. It holds each board's images in a folder of its own,
-`firmware/canary-head/` and `firmware/canary-dock/`, keeps every one, and offers each board the newest image of its
+`firmware/canary-display/` and `firmware/canary-dock/`, keeps every one, and offers each board the newest image of its
 product that can work with the server's version, newer or older than what the board runs; among builds past one
 tag, the one furthest past it. So a mismatch clears itself once the board takes the offer. The offer goes on any
 response to the board, a refusal included. The firmware-builder beside the server builds the firmware of its own
@@ -248,42 +248,42 @@ downgrade, and the posts the server refused from it, even from a board it has ne
 - **The dock** gets 409 from `/sensor-readings` and leaves the batch in its queue rather than dropping it, since the
   readings are sound and only the pairing is wrong. The refused post puts the LED into its trouble pattern, and the
   same response offers the image that fixes it.
-- **The head** still gets its pages, since the server never refuses a fetch. It draws a notice in place of the page
+- **The display** still gets its pages, since the server never refuses a fetch. It draws a notice in place of the page
   and then takes any update on offer exactly as it would after a page. The order is fixed in
-  `include/head/AfterFetch.h` and tested: the update is what clears the notice, and the dock's wall covers the
-  head's USB-C socket. When the server offers no image the head will take, the notice says so and asks for one:
-  firmware for the server's version, or a server of the head's.
+  `include/display/AfterFetch.h` and tested: the update is what clears the notice, and the dock's wall covers the
+  display's USB-C socket. When the server offers no image the display will take, the notice says so and asks for one:
+  firmware for the server's version, or a server of the display's.
 
 The dock takes an offer from the answer to a batch of readings, and only once its queue is empty, since the restart
 empties it. The exception is a 409: the server will not drain that queue until the dock runs another version, so
 the dock takes the image and loses the readings. While the image is written the LED pulses faster and brighter with
 the bytes written, from the working pulse at a quarter of the light to four pulses a second at full light. The new
-image boots on trial, as the head's does: the first batch the server takes confirms it, and three failures in a row
+image boots on trial, as the display's does: the first batch the server takes confirms it, and three failures in a row
 roll it back, after which the dock refuses that version.
 
-The head draws another notice when three fetches in a row go unanswered, about 26 minutes with the back-off, so a
+The display draws another notice when three fetches in a row go unanswered, about 26 minutes with the back-off, so a
 blip never replaces the page. It says when the last page arrived. The notices come from the firmware, not the
 server, so they work when the server is what is wrong, and each is drawn once rather than on every retry, since
 every draw is a full refresh of the panel.
 
 They are pages. `server/pages/notice.py` sets each one like the others, a spaced-capitals label, an italic verdict
 and a line of detail, and `scripts/notices.py` renders them through the same pipeline, browser and quantiser as
-every page the server serves. The head holds the three PNGs in its firmware and draws them with the call that draws a
+every page the server serves. The display holds the three PNGs in its firmware and draws them with the call that draws a
 fetched page, so a notice is pixel for pixel what the server would have rendered. They are rendered again only when
 their wording or design changes, so the firmware build needs no browser.
 
-The layout leaves its bottom free for the two facts the head only knows at run time: when the last page arrived, or
-the server's version, and then the board's own name, version and address. The head writes those in the pages' face
+The layout leaves its bottom free for the two facts the display only knows at run time: when the last page arrived, or
+the server's version, and then the board's own name, version and address. The display writes those in the pages' face
 at the size of their detail text, from a one-bit font `scripts/gfxfont.py` makes out of the server's font file.
 
-The head holds one more screen, the splash screen: the logo alone, from `hardware/canary-logo-screen.svg`, rendered
-by `scripts/notices.py` like the notices, but in black and white. The head draws it at every start but a wake from
+The display holds one more screen, the splash screen: the logo alone, from `hardware/canary-logo-screen.svg`, rendered
+by `scripts/notices.py` like the notices, but in black and white. The display draws it at every start but a wake from
 deep sleep, before it joins the network, with its firmware version under the logo, and it stays until the first
-page or notice replaces it. While the head
+page or notice replaces it. While the display
 writes an update, it draws the logo again with a progress bar under it, and under that "Installing firmware" and the
 version, in the pages' italic from a second one-bit font. The bar fills in ten steps, each a partial update of the
 panel, which works only in black and white; the Inkplate library makes every eleventh partial update a full refresh
-(`include/head/ProgressBar.h`).
+(`include/display/ProgressBar.h`).
 
 ### 3.8 The server holds the dock's settings
 
@@ -332,9 +332,9 @@ schedule.
 ## 5. Shape of the repo
 
 ```
-platformio.ini                 envs: esp32 (the head), dock (the TinyS3), dock-mock (-DUSE_MOCK_SENSORS), dock-validate, native, sim
+platformio.ini                 envs: esp32 (the display), dock (the TinyS3), dock-mock (-DUSE_MOCK_SENSORS), dock-validate, native, sim
 partitions.csv
-src/main.cpp                   the head: fetch, draw, post its own state
+src/main.cpp                   the display: fetch, draw, post its own state
 src/dock/main.cpp              the dock: the awake loop from §3.1
 src/defaults.example.cpp       copy to defaults.cpp: WiFi, server URL, MQTT logging
 include/sensors/  src/sensors/
@@ -348,11 +348,12 @@ include/sensors/  src/sensors/
   mock/                                         EnvModel, LaggedValue and the four mocks
 include/net/  src/net/         Backlog, BoardSettings, Calibration, ClientStatus, ServerClock, Stamp, Url
 include/dock/                  StatusLed (§3.5), FanWindow and PostTimer: when the fan runs and the next reading falls
-include/head/  src/notice.cpp  when the head wakes (§3.1), what it does after a fetch, and the notices it draws (§3.7)
+include/display/               when the display wakes (§3.1), what it does after a fetch, and the notices it draws (§3.7)
+src/notice.cpp                 the notices, with the facts only the display knows at run time (§3.7)
 src/splash.cpp                 the splash screen, and the update's progress bar under it (§3.7)
-include/head/notices/          the notices, rendered by scripts/notices.py from server/pages/notice.py
-include/head/splash.png        the splash screen, rendered by scripts/notices.py from server/pages/splash.py
-include/head/fonts/            the pages' face as one-bit fonts, from scripts/gfxfont.py, for the lines the head writes
+include/display/notices/       the notices, rendered by scripts/notices.py from server/pages/notice.py
+include/display/splash.png     the splash screen, rendered by scripts/notices.py from server/pages/splash.py
+include/display/fonts/         the pages' face as one-bit fonts, from scripts/gfxfont.py, for the lines the display writes
 src/sim/main.cpp               the sensor loop as a host binary
 src/validate/main.cpp          the bench routine
 lib/bme68x/                    Bosch's BME68x API
@@ -487,11 +488,11 @@ Dated decisions and status behind the text above, oldest first.
 - **2026-09-04**: the build settled three of the four questions. Readings go by HTTP POST: one route in `DisplayServer`, testable with Flask's test client, and an MQTT republish can follow on the server when Home Assistant enters the picture, with no change to the firmware. The firmware sits at the repo root, like the weather calendar's. The PM fan runs all the time.
 - **2026-09-09**: the four drivers landed behind `II2cBus`, with host tests. The SCD41 board is the Adafruit 5190. The mocks were not corrected against logs of the real parts; that needs a log of each part.
 - **2026-09-12**: `ReadingsStore` and `IngestSource` are in epd from 0.5.0, and `source.kind: store` serves them to the pages. BSEC runs for the BME688's IAQ index.
-- **2026-09-15**: the device became a head and a dock (§3.4). One bus and one 500 mA rail could not carry both the panel and the sensor chain; each half now has its own.
+- **2026-09-15**: the device became a display and a dock (§3.4). One bus and one 500 mA rail could not carry both the panel and the sensor chain; each half now has its own.
 - **2026-09-19**: every reading goes into the dock's queue when it is taken, and the loop posts the queue in batches of 100 (§3.2). This replaced a live post with a held copy on failure, which sent at most five held readings after each live one and stripped their `client` object. Held readings keep it: the server has stored every report since the trace pages, so a held one fills the outage in on them. The calibration block moved to its own route, because it is current state rather than part of a reading. Repeats are handled by the store's device-and-`ts` key, not by an idempotency key on the request: the one-at-a-time fallback resends documents in a differently shaped request, which a request key would store twice.
 - **2026-09-19**: the dock takes its readings on the server's slots, every five minutes and every half hour from 01:00 to 07:00 (§3.3), and its time from the server rather than NTP (§3.1). Overnight, fine readings are rarely needed. The server sends the seconds to the next slot rather than an interval, so a restart at 03:07 rejoins at 03:30 and readings land on tidy times. The time is a custom header rather than HTTP's `Date` because plain epoch seconds cost the TinyS3 no parsing. The fan now follows the next slot instead of the last post, and the reading is sampled fresh at the slot: at 228 readings a day that is about 809 fan hours and 83,000 starts a year, against 5,110 hours and 526,000 starts for the 60 s cadence before it. Plantower's 30 s warm-up stands, and `pm_warmup_s` lets the stored readings judge it.
-- **2026-09-19**: the dock's queue moved from the Sensors card to the Memory card, as a count against its capacity with a meter, since it is memory. The diagnostics trace page draws one chart per measure with both boards on it, the dock dark and the head light on one scale: free memory tallest, the queue, then the signal, which barely moves once the dock is placed. A page of changes since the last report was considered in its place and dropped. The queue's axis fits the day's highest, no lower than 10, because it is empty almost always and then climbs through an outage.
-- **2026-09-19**: the dock updates over the air like the head, and every board is offered the newest image of its product that works with the server's version, rather than the newest file (§3.7). The boards follow the server rather than work out which end is newer, so the server's version is the one dial. That needs the older images, so neither `build-firmware.sh` nor the server removes any. An accidental server downgrade therefore downgrades the boards within a request each: each update restarts the dock and empties its queue, BSEC may refuse state an older library did not write, and later features go until it is fixed. The Diagnostics page shows each downgrade and each refused post so such a day is visible. The dock takes an update only with its queue empty, except under a 409, when the queue cannot drain until it does.
+- **2026-09-19**: the dock's queue moved from the Sensors card to the Memory card, as a count against its capacity with a meter, since it is memory. The diagnostics trace page draws one chart per measure with both boards on it, the dock dark and the display light on one scale: free memory tallest, the queue, then the signal, which barely moves once the dock is placed. A page of changes since the last report was considered in its place and dropped. The queue's axis fits the day's highest, no lower than 10, because it is empty almost always and then climbs through an outage.
+- **2026-09-19**: the dock updates over the air like the display, and every board is offered the newest image of its product that works with the server's version, rather than the newest file (§3.7). The boards follow the server rather than work out which end is newer, so the server's version is the one dial. That needs the older images, so neither `build-firmware.sh` nor the server removes any. An accidental server downgrade therefore downgrades the boards within a request each: each update restarts the dock and empties its queue, BSEC may refuse state an older library did not write, and later features go until it is fixed. The Diagnostics page shows each downgrade and each refused post so such a day is visible. The dock takes an update only with its queue empty, except under a 409, when the queue cannot drain until it does.
 - **2026-09-23**: the firmware-builder image carries the firmware's sources at its commit and builds them where it runs, instead of polling GitHub for releases and building their tags (§3.7). Every push to `main` publishes both images as `latest`, so a server and its builder on `latest` move the boards with every push, and a pair pinned to a release keeps them there. Whether a server offers development builds follows its own version rather than a setting: a server past a tag is itself a development deployment. `scripts/build-firmware.sh` and the builder's release watcher went with this, and with them the check that a tag was signed: an image now comes from CI building a pushed commit.
 - **2026-09-19**: each dock document carries a `health` object beside `client` (READINGS.md): sensor restarts, the checksum failures the drivers used to drop without counting, the BME688's gas and heater flags, and the SCD41's serial, self-calibration and offset from its start. The bus jam of 2026-09-15 showed as missing sensors only once it was bad; damaged answers come first, so they are counted. Nothing here costs extra bus traffic but two SCD41 reads at each of its starts. The server keeps the object with the rest of each report, and a `health-trace` page draws the day: restarts and damaged answers as running totals, since the dock's own counts begin again at each of its restarts, and the heater as a flag, all in steps; the SCD41's settings and its few damaged answers go on one line above them.
 - **2026-09-22**: the server shows its pages in a browser at `/web/`, and an explorer at `/web/explore` draws one measurement over any window from `GET /history`. A page is built from the readings when it is asked for, on a copy of the page object, so the PNGs and the browser never share a document. The explorer reuses the trace chart and its Python, so a window in the browser is drawn as the panel draws three days. There is no login: the view shows what the PNGs show, on the same port. `GET /readings` and `GET /status` answer with the stored readings and the boards' reports as JSON (READINGS.md), so a board can be diagnosed without reading a page.
@@ -501,14 +502,15 @@ Dated decisions and status behind the text above, oldest first.
 - **2026-09-22**: the Storage tab downloads each store as a file and takes one back. The file is one JSON document a line, in the shape the board posted, and not the SQLite file: a store keeps a document under its board and its time and ignores a second with that key, so a file goes into another store of the same kind and adds only what is missing. An import writes the whole file or none of it, so a corrupt line leaves nothing behind, and when the store already holds some of them it writes nothing until the person says to put the file over them. The size beside Download is taken from the first lines and how many documents are held, so drawing the page costs the same whatever the store holds. An upload weighs at most 64 MB.
 - **2026-09-22**: the menu gives each group a row of its own, with the headings in a column beside the pages. Three days and Changes name the same five measurements, so they share one row and the heading is a switch between them; a hidden radio holds the choice, which keeps the switch working without JavaScript. On the browse page, `browse.js` moves the shown page to the same measurement over the other span, and flips the switch when a page from the other span is opened.
 - **2026-09-23**: the dock takes its settings from the server (§3.8) rather than from constants in its firmware, so changing how it runs needs no build. It asks at each pre-warm rather than reading them off the answer to a batch, because the pre-warm is when a setting can take effect before the slot, and a failed request costs nothing: the dock keeps what it runs. The pre-warm is a moment of its own, the fan's lead before each slot, since a fan kept on never starts. BSEC's sample rate is a setting too, 5 minutes by default: the dock's first run, which looked like a start from nothing, reached accuracy 3 about 5.5 hours in at 3 s, so a change costs hours of learning rather than days. A recalibration is a request with an id rather than a setting, so saving the config again never repeats one.
-- **2026-09-25**: the dock's `posts` schedule became `dock.sync`, ranges round the clock (§3.3). A sync is an exchange both ways, the dock's readings up and its settings and any update down, which "post" undersold. A schedule always covers the day: it starts as one range, a range is made by splitting one, and there are at most 8, so there is never a gap or an overlap to explain. A range may run past midnight, and an interval of 0 is off. The head gets a sync schedule of the same shape next, and its refreshes after that, so the Dock and Head tabs edit all three with one editor. A board is offline after two missed syncs, fixed in the code, since what is abnormal is the product's call and not the user's. The LED's dark hours moved from the old quiet window to `dock.led.dark` as a stopgap until the status light is redone.
+- **2026-09-25**: the dock's `posts` schedule became `dock.sync`, ranges round the clock (§3.3). A sync is an exchange both ways, the dock's readings up and its settings and any update down, which "post" undersold. A schedule always covers the day: it starts as one range, a range is made by splitting one, and there are at most 8, so there is never a gap or an overlap to explain. A range may run past midnight, and an interval of 0 is off. The display gets a sync schedule of the same shape next, and its refreshes after that, so the Dock and Display tabs edit all three with one editor. A board is offline after two missed syncs, fixed in the code, since what is abnormal is the product's call and not the user's. The LED's dark hours moved from the old quiet window to `dock.led.dark` as a stopgap until the status light is redone.
 - **2026-09-25**: the LED's looks became a list, `dock.led.looks`, a row on the Dock tab for each trigger, with its pattern and interval (§3.5). A trigger without a row passes the light to the next state that holds rather than going dark: taking a row out says that state is not worth showing, not that the problems behind it are not. Only the dock knows which states hold at once, so the dock does the passing on. The order stays the triggers' own and a row's place means nothing, so the tab keeps the rows in that order.
 - **2026-09-25**: the LED's dark hours became its schedule, `dock.led.schedule`, the hours it is on, so each schedule on the tabs says when something happens rather than when it does not. Without one the light is on all day.
-- **2026-09-26**: the page schedule became ranges round the clock and the head's sync a plain interval, the other way round from before. What changes through the day is when the page should change, with none at night, while a sync only has to happen often enough. epd's `display.schedule` gained `type: timeranges`, which replaced `interval`, since one range all day does what `interval` did, and the ranges moved into epd as `TimeRanges`, since the page schedule is epd's; canary imports it for the dock's sync. A slot is a whole minute, so the page cannot change faster than once a minute.
+- **2026-09-26**: the page schedule became ranges round the clock and the display's sync a plain interval, the other way round from before. What changes through the day is when the page should change, with none at night, while a sync only has to happen often enough. epd's `display.schedule` gained `type: timeranges`, which replaced `interval`, since one range all day does what `interval` did, and the ranges moved into epd as `TimeRanges`, since the page schedule is epd's; canary imports it for the dock's sync. A slot is a whole minute, so the page cannot change faster than once a minute.
 - **2026-09-26**: the looks gained a double and a triple of both the flash and the pulse, as named patterns rather than a count and a pause on every row, so a row stays three fields and each name says what it looks like. A new one needs the dock's firmware and the server both. The row's interval became its length, one cycle of the pattern, which reads the same for all of them: for a triple it is the group and the dark after it.
 - **2026-09-26**: the Storage tab is a spec sheet like the Dock tab. Each store shows its records, its file's size on disk and the date of its oldest record, and the tab opens with a drawing of the server's disk, used and free, with the files' part drawn larger below it, since at a few MB it would not show on a bar hundreds of GB long. The size is the file's on disk rather than an estimate of the download, so the drawing and the line agree and one number stands for each file. The disk is the one the first store's file is on: in a container, the one its folder is mounted from.
 - **2026-09-26**: the Server, Firmware and MQTT tabs became spec sheets too, so every form tab is one: each group under a heading that says what it is for, and each setting a line. A setting that matters only while a switch is on, such as the MQTT broker or the firmware folder, shows only then.
-- **2026-09-26**: the page schedule and the dock's sync became weeks: groups of days, each with its own time ranges, so a weekend or a single day can differ from the rest. Groups rather than a list for each day, since most weeks have two or three shapes and one group of all seven is the old schedule. A day stands alone rather than running on from the day before's last range, so each group's dial shows its days exactly; a night that spans midnight is set on both days. The head's sync stays a plain interval, which is one group of every day inside the server, so every board's schedule is the same kind and `/about` gives each as a week. The boards need no change: the server gives each its next slot.
+- **2026-09-26**: the page schedule and the dock's sync became weeks: groups of days, each with its own time ranges, so a weekend or a single day can differ from the rest. Groups rather than a list for each day, since most weeks have two or three shapes and one group of all seven is the old schedule. A day stands alone rather than running on from the day before's last range, so each group's dial shows its days exactly; a night that spans midnight is set on both days. The display's sync stays a plain interval, which is one group of every day inside the server, so every board's schedule is the same kind and `/about` gives each as a week. The boards need no change: the server gives each its next slot.
 - **2026-09-26**: the menu's Three days and Changes became History and Trend: where a measurement has been and where it is going. The names say what each page shows rather than its span, and History matches Board history in the Boards row.
 - **2026-09-26**: the light's triggers became what the dock needs from you: Booting, Error, Poor air quality, Calibrating and Running. Error takes in every fault, from the network to a refused setting, because any of them needs attention and the Boards page says which. Poor air quality judges CO₂, PM2.5 and IAQ against limits in each sensor's section, not temperature or humidity, whose comfort depends on the home. Running holds whenever the dock has booted, so a trigger without a look passes the light on rather than leaving it dark. The patterns gained a blip, a swell and a ramp, and fades a smoothness of 4 to 64 steps or none, a slider in stops; 16 steps is what the light always had.
-- **2026-09-27**: the head deep-sleeps between wakes instead of staying awake (§3.1). E-paper holds its image without power, so the awake head made heat and drew power for nothing. It wakes for the next page, and for its next sync when that comes first, and posts its state at every wake, so a sync beside a page needs no wake of its own. The RTC's alarm wakes it because its crystal keeps the page slots; the ESP32's timer, a little later, is there only so that a missed alarm cannot leave the head asleep for good. A freshly written image stays awake until a page confirms it: a wake from deep sleep passes through the bootloader, which takes back an image not yet confirmed. On the live head a wake costs about 7 seconds, 12 with a page, so about 55 minutes awake a day at five-minute pages; the SD card check, NTP and the one-second Wi-Fi poll are most of what could still go.
+- **2026-09-27**: the display deep-sleeps between wakes instead of staying awake (§3.1). E-paper holds its image without power, so the awake display made heat and drew power for nothing. It wakes for the next page, and for its next sync when that comes first, and posts its state at every wake, so a sync beside a page needs no wake of its own. The RTC's alarm wakes it because its crystal keeps the page slots; the ESP32's timer, a little later, is there only so that a missed alarm cannot leave the display asleep for good. A freshly written image stays awake until a page confirms it: a wake from deep sleep passes through the bootloader, which takes back an image not yet confirmed. On the live display a wake costs about 7 seconds, 12 with a page, so about 55 minutes awake a day at five-minute pages; the SD card check, NTP and the one-second Wi-Fi poll are most of what could still go.
+- **2026-09-27**: the head became the display, in the product and in the code: the board name `canary-display`, its firmware folder, its block in the client object, and its sync as `display.sync`, beside the page schedule it goes with. A user knows what a display is; "head" was the enclosure's word. epd's `display` block refuses keys it does not know, so canary takes `sync` out before epd reads the block rather than widen epd for one project's key. A board on the old name is offered no firmware under the new one, so the display is flashed once over USB, and the reports and logs under `canary-head` stay until they expire.

@@ -300,7 +300,7 @@ def sensor_absent(status: dict | None, sensor: str) -> bool:
     """True when the newest report with a ``client.dock.sensors`` block says
     ``sensor`` is not running.
 
-    Only the dock sends that block, and the head's reports are often newer,
+    Only the dock sends that block, and the display's reports are often newer,
     so the newest report of any board will not do. No such report, or one
     that does not name the sensor, counts as present, so a page keeps saying
     it is warming up until the board says otherwise.

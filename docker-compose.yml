@@ -14,7 +14,7 @@ services:
       # the container runs as uid 1000 and could not write to a directory the
       # host owns.
       - canary-data:/app/data
-      # Firmware images, from firmware-builder: canary-head/ and canary-dock/,
+      # Firmware images, from firmware-builder: canary-display/ and canary-dock/,
       # each of <version>.bin. Create the directory before the first start,
       # or Docker makes it as root and neither can write to it. The server
       # only reads it.

@@ -6,11 +6,11 @@ server:
   timezone: Europe/Dublin
   regen_lead_seconds: 60
 
-# What the client shows, and when. Each pool is a list of images read in
+# What the display shows, and when. Each pool is a list of images read in
 # turn on its own count, from a random start that moves every
 # `reshuffle_hours`, so one pass is never all traces or all deltas. The
-# schedule visits the pools in `order` (default: as listed) every `every`
-# seconds on the wall clock (:00, :05, :10 ...).
+# schedule visits the pools in `order` (default: as listed) at each slot of
+# its week.
 display:
   pools:
     co2: [breathe.png, co2-trace.png, co2-delta.png]
@@ -29,6 +29,8 @@ display:
         ranges:
           - {from: "00:00", every: 300}
     reshuffle_hours: 3
+  sync:             # when the display sends its state and takes any update, beside each page it fetches
+    every: 1800     # seconds, on the wall clock from midnight; 0 for only beside each page
 
 image:
   width: 1280
@@ -47,10 +49,6 @@ status:             # what each board says about itself, kept as readings are
 calibration:        # sensor state the dock backs up whenever BSEC saves a copy
   # path: calibration.db  # relative to this file
   keep_days: 3      # each copy is kept this long; the board asks for one after a restart
-
-head:               # the board with the panel
-  sync:             # when it sends its state and takes any update, beside each page it fetches
-    every: 1800     # seconds, on the wall clock from midnight; 0 for only beside each page
 
 dock:               # what the dock does between readings; it takes a change before its next one
   sync:             # when it takes a reading and syncs, in server.timezone
@@ -99,7 +97,7 @@ site:
 client:             # what the board runs, not what this server does
   firmware:         # server-driven updates; the board flashes itself
     enabled: false
-    dir: firmware   # canary-head/ and canary-dock/, each of <version>.bin; every board is
+    dir: firmware   # canary-display/ and canary-dock/, each of <version>.bin; every board is
                     # offered the newest its product has that works with this server's version
 
 mqtt:               # each board logs to <prefix>/<board>; the Logs view shows them

@@ -2,7 +2,7 @@
 // each step it gains, and never more than ten of those.
 #include <unity.h>
 
-#include "head/ProgressBar.h"
+#include "display/ProgressBar.h"
 
 static const int kTotal = 1200000;
 

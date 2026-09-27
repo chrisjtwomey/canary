@@ -180,8 +180,8 @@ canvas {
   margin-top: 2cqh;
 }
 
-/* A notice the head holds in its firmware. Set like the waiting page, but
-   lifted, so the two lines the head writes at run time sit under it. */
+/* A notice the display holds in its firmware. Set like the waiting page, but
+   lifted, so the two lines the display writes at run time sit under it. */
 .page-notice {
   display: flex;
   flex-direction: column;
@@ -200,7 +200,7 @@ canvas {
   margin-top: 2cqh;
 }
 
-/* The head's splash screen. The head draws its update progress bar under the
+/* The display's splash screen. The display draws its update progress bar under the
    logo, placed from these sizes (src/splash.cpp). */
 .page-splash {
   display: flex;

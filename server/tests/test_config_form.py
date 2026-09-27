@@ -77,7 +77,7 @@ def test_an_empty_field_takes_its_key_out_and_the_lines_after_it_stay():
     e = edit(server__regen_lead_seconds="")
     assert removed_and_added(EXAMPLE, e.text) == (
         ["  regen_lead_seconds: 60"], [])
-    assert "\n\n# What the client shows, and when." in e.text
+    assert "\n\n# What the display shows, and when." in e.text
 
 
 def test_a_new_key_goes_after_its_blocks_comments_and_before_the_blank_line():
@@ -328,10 +328,10 @@ def test_a_page_schedule_is_written_under_the_schedule_a_range_to_a_line():
     check_config(e.text)
 
 
-def test_the_heads_sync_is_shown_in_minutes_and_written_in_seconds():
-    assert cf.shown(cf.read(EXAMPLE))["head.sync.every"] == "30"
-    e = edit(head__sync__every="10")
-    assert "    every: 600      # seconds" in e.text and e.changed == ["head.sync.every"]
+def test_the_displays_sync_is_shown_in_minutes_and_written_in_seconds():
+    assert cf.shown(cf.read(EXAMPLE))["display.sync.every"] == "30"
+    e = edit(display__sync__every="10")
+    assert "    every: 600      # seconds" in e.text and e.changed == ["display.sync.every"]
     check_config(e.text)
 
 
@@ -374,9 +374,9 @@ def _settings(config: dict):
     schedule = s.core.server.schedule
     server = dataclasses.replace(s.core.server, schedule=None)
     return (dataclasses.replace(s, core=dataclasses.replace(s.core, server=server),
-                                dock_sync=None, head_sync=None),
+                                dock_sync=None, display_sync=None),
             type(schedule).__name__, vars(getattr(schedule, "pools")),
-            s.dock_sync.describe(), s.head_sync.describe())
+            s.dock_sync.describe(), s.display_sync.describe())
 
 
 def _with(config: dict, path: tuple, value) -> dict:

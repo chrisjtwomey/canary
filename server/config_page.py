@@ -117,7 +117,7 @@ class View:
     disk: tuple[int, int] | None = None     # the stores' disk: total and free bytes
     report: Report = field(default_factory=Report)
     dock: DockState | None = None
-    head: dict | None = None        # the head's panel as it reports it: width, height, board
+    display: dict | None = None     # the display's panel as it reports it: width, height, board
     changes: list[dict] = field(default_factory=list)   # what a check found a save would change
 
 
@@ -136,11 +136,11 @@ class DockState:
     light: str | None = None        # what its light showed at its last report
 
 
-def head_panel(entry: dict | None) -> dict | None:
-    """The head's panel from its newest report: width, height and board, or
+def display_panel(entry: dict | None) -> dict | None:
+    """The display's panel from its newest report: width, height and board, or
     None before it has said."""
     client = ((entry or {}).get("doc") or {}).get("client") or {}
-    panel = client.get("head") or {}
+    panel = client.get("display") or {}
     width, height = panel.get("width"), panel.get("height")
     if not isinstance(width, int) or not isinstance(height, int) or width <= 0 or height <= 0:
         return None
@@ -667,23 +667,23 @@ def _position(a: Airium, g: cf.Group, view: View, locked: bool) -> None:
                                     "aria-pressed": "true" if (xv, yv) == (x, y) else "false"})
 
 
-def _head_size(a: Airium, view: View) -> None:
-    """The size the head reports, against the saved one."""
-    head = view.head
-    if not head:
+def _display_size(a: Airium, view: View) -> None:
+    """The size the display reports, against the saved one."""
+    display = view.display
+    if not display:
         return
-    said = f"{head['width']} × {head['height']} px"
-    if head.get("board"):
-        said += f", {head['board']}"
+    said = f"{display['width']} × {display['height']} px"
+    if display.get("board"):
+        said += f", {display['board']}"
     try:
         saved = (int(view.initial["image.width"]), int(view.initial["image.height"]))
     except (KeyError, ValueError):
         saved = None
-    if saved == (head["width"], head["height"]):
-        a.p(klass="help head-size", id="head-size", _t=f"The head reports {said}.")
+    if saved == (display["width"], display["height"]):
+        a.p(klass="help display-size", id="display-size", _t=f"The display reports {said}.")
     else:
-        a.p(klass="error head-size", id="head-size",
-            _t=f"Not the head's size: it reports {said}. Set Width and Height to match.")
+        a.p(klass="error display-size", id="display-size",
+            _t=f"Not the display's size: it reports {said}. Set Width and Height to match.")
 
 
 def _runs(fields: tuple[cf.Field, ...], sheet: bool) -> list[tuple[str, list[cf.Field]]]:
@@ -754,8 +754,8 @@ def _group(a: Airium, g: cf.Group, view: View, images: list[str], locked: bool,
                                by_position=g.action == "position" and f.kind == "choice")
             if g.action == "position":
                 _position(a, g, view, locked)
-            if g.action == "head":
-                _head_size(a, view)
+            if g.action == "display":
+                _display_size(a, view)
             if g.action == "recalibrate" and view.dock is not None:
                 _recalibrate(a, view.dock, view.report, sheet)
 
@@ -919,7 +919,7 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
         dock: the dock's settings, for what the Dock tab says of them and
             for its recalibration.
         boards: what the server knows of a board, as DeviceReports.device
-            gives it, for the size the head reports.
+            gives it, for the size the display reports.
     """
     bp = Blueprint("config", __name__, url_prefix="/web/config")
     stores = stores or {}
@@ -944,7 +944,7 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
         if dock is not None and view.dock is None:
             view.dock = dock_state(dock)
         if boards is not None:
-            view.head = head_panel(boards("canary-head"))
+            view.display = display_panel(boards("canary-display"))
         return config_html(pages, view, writable(), bak()), status
 
     @bp.route("/live", methods=["GET"])

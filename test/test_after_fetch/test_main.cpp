@@ -1,9 +1,9 @@
-// What the head does once the server has answered: the page or the version
+// What the display does once the server has answered: the page or the version
 // notice, and in either case the update on offer.
 #include <unity.h>
 #include <string>
 
-#include "head/AfterFetch.h"
+#include "display/AfterFetch.h"
 
 static std::string calls;
 static bool drawWorks = true;

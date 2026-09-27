@@ -21,7 +21,7 @@
 }
 
 /* One board: its name across the top, then its four cards in a row, each
-   as wide as its longest row: the fourth is the head's Panel, with page names. */
+   as wide as its longest row: the fourth is the display's Panel, with page names. */
 .page-diagnostics .board {
   display: grid;
   grid-template-columns: 1fr 0.84fr 0.96fr 1.24fr;

@@ -1,6 +1,6 @@
 """Turn a TrueType font into an Adafruit GFX font header.
 
-The head draws its notices itself, for when it cannot show a page, and this
+The display draws its notices itself, for when it cannot show a page, and this
 lets it write in the same face as the pages the server renders. A GFX font is
 one bit deep: the glyphs are rendered by FreeType's monochrome rasteriser,
 the way Adafruit's own fontconvert renders them, not thresholded from
@@ -11,7 +11,7 @@ that sets it. Tracking bakes letter-spacing into each glyph's advance, since
 GFX text has none of its own.
 
     python scripts/gfxfont.py server/static/fonts/Fraunces.ttf 26 \\
-        --name FrauncesDetail --weight 400 --soft 40 > include/head/fonts/FrauncesDetail.h
+        --name FrauncesDetail --weight 400 --soft 40 > include/display/fonts/FrauncesDetail.h
 
 Needs Pillow; server/.venv has it.
 """

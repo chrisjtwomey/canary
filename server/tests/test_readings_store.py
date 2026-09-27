@@ -23,12 +23,12 @@ def store(tmp_path):
 
 
 def test_a_document_with_no_measurements_is_not_a_reading(store):
-    """The head posts its own state and no readings."""
+    """The display posts its own state and no readings."""
     reports = DeviceReports(now=lambda: float(AT))
     ingest = ReadingsIngest(reports, store)
-    ingest.accept([{"ts": AT, "device": "canary-head", "client": {"rssi": -55}}])
+    ingest.accept([{"ts": AT, "device": "canary-display", "client": {"rssi": -55}}])
     assert store.count() == 0
-    assert reports.device("canary-head")["doc"]["client"] == {"rssi": -55}
+    assert reports.device("canary-display")["doc"]["client"] == {"rssi": -55}
 
 
 def test_measurements_leave_out_what_describes_the_board():

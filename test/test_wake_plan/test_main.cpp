@@ -1,10 +1,10 @@
-// The head's wake timing: a page at once after a real start, then on the
+// The display's wake timing: a page at once after a real start, then on the
 // server's wait, backing off across failures, and a sync between pages when
 // the server names one.
 #include <unity.h>
 #include <cstdint>
 
-#include "head/WakePlan.h"
+#include "display/WakePlan.h"
 
 static const uint32_t kNow = 1790000000;   // UTC seconds, in 2026
 

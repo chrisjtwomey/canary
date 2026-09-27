@@ -1,12 +1,12 @@
-"""The splash screen the head holds in its firmware: the logo, alone.
+"""The splash screen the display holds in its firmware: the logo, alone.
 
-The head writes its own lines under the logo: its version when it starts,
+The display writes its own lines under the logo: its version when it starts,
 other than from deep sleep, and a progress bar and the version it installs
 while it writes an update. The bar fills by partial updates, which the panel
 does only in black and white, so this page is rendered in two levels with no
 dither.
 
-``scripts/notices.py`` renders it into ``include/head/`` with the notices.
+``scripts/notices.py`` renders it into ``include/display/`` with the notices.
 """
 from __future__ import annotations
 

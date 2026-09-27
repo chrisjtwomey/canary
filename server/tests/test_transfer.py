@@ -21,7 +21,7 @@ def readings(db):
     store = ReadingsStore(db)
     store.add_many([{"device": "dock", "ts": AT + 60, "co2": 700},
                     {"device": "dock", "ts": AT, "co2": 650},
-                    {"device": "head", "ts": AT + 30, "client": {"ip": "10.0.0.9"}}])
+                    {"device": "display", "ts": AT + 30, "client": {"ip": "10.0.0.9"}}])
     store.close()
     return Transfer("sensor-readings", db)
 
@@ -159,7 +159,7 @@ def test_blank_lines_are_not_documents(readings, db):
 
 def test_a_file_bigger_than_one_batch_goes_in_whole(readings, db, monkeypatch):
     monkeypatch.setattr("transfer.ROWS_AT_A_TIME", 10)
-    many = [{"device": "head", "ts": AT + 1000 + i, "co2": 700} for i in range(25)]
+    many = [{"device": "display", "ts": AT + 1000 + i, "co2": 700} for i in range(25)]
     assert took(readings, many) == {"added": 25, "held": 0, "total": 25}
     assert ReadingsStore(db).count() == 28
 

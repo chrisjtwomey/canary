@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the head's and the dock's firmware of the commit this image was built
+# Build the display's and the dock's firmware of the commit this image was built
 # from, into the directory the server offers images from, then wait. The
 # server beside it offers each board the newest image that works with its own
 # version, so a redeploy moves the server and the boards together.
@@ -52,6 +52,6 @@ build() {  # <product> <environment>
     log "$product $version: $(wc -c < "$out" | tr -d ' ') bytes"
 }
 
-build canary-head esp32
+build canary-display esp32
 build canary-dock dock
 idle

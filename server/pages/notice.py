@@ -1,13 +1,13 @@
-"""The notices the head draws itself, rendered here so they look like pages.
+"""The notices the display draws itself, rendered here so they look like pages.
 
-A notice replaces the page when the head cannot show one: the server is not
+A notice replaces the page when the display cannot show one: the server is not
 answering, or it and the display run versions that cannot work together,
 with or without an image on the server that would bring them back together.
-The head holds each as a PNG in its firmware, drawn by the same call that
+The display holds each as a PNG in its firmware, drawn by the same call that
 draws a fetched page, and writes the facts it only knows at run time on the
 lines the layout leaves free at the bottom.
 
-``scripts/notices.py`` renders them into ``include/head/notices/``. They are
+``scripts/notices.py`` renders them into ``include/display/notices/``. They are
 rendered again only when their wording or design changes, so the firmware
 build needs no browser.
 """

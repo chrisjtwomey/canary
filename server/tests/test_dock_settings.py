@@ -205,7 +205,7 @@ def test_the_answer_is_the_settings_and_their_version(requests):
     }
 
 
-@pytest.mark.parametrize("args", [{}, {"device": "canary-head"}])
+@pytest.mark.parametrize("args", [{}, {"device": "canary-display"}])
 def test_only_the_dock_has_settings(args, requests):
     with pytest.raises(ValueError):
         board(requests=requests).answer(args)
@@ -310,35 +310,35 @@ def test_a_range_that_is_off_lengthens_the_silence_the_dock_may_keep():
 
 def test_each_board_has_its_own_next_sync_and_an_unknown_one_none():
     from server import make_next_sync
-    head = TimeRanges([(parse_hhmm("00:00"), 1800)], TZ, "head.sync")
+    display = TimeRanges([(parse_hhmm("00:00"), 1800)], TZ, "display.sync")
     now = at(12, 3)
-    syncs = {"canary-dock": SYNC, "canary-head": head}
+    syncs = {"canary-dock": SYNC, "canary-display": display}
     assert make_next_sync(syncs)("canary-dock", now) == 2 * 60
-    assert make_next_sync(syncs)("canary-head", now) == 27 * 60
+    assert make_next_sync(syncs)("canary-display", now) == 27 * 60
     assert make_next_sync(syncs)("weather-cal", now) is None
 
 
 def test_each_board_is_sent_its_own_next_sync_and_an_unnamed_one_none():
     from server import make_sensor_poll
-    head = TimeRanges([(parse_hhmm("00:00"), 1800)], TZ, "head.sync")
-    poll = make_sensor_poll({"canary-dock": SYNC, "canary-head": head})
+    display = TimeRanges([(parse_hhmm("00:00"), 1800)], TZ, "display.sync")
+    poll = make_sensor_poll({"canary-dock": SYNC, "canary-display": display})
     assert poll(at(12, 3), "canary-dock") == 2 * 60
-    assert poll(at(12, 3), "canary-head") == 27 * 60
+    assert poll(at(12, 3), "canary-display") == 27 * 60
     assert poll(at(12, 3), None) is None
 
 
 def test_the_head_is_offline_after_two_of_its_own_syncs():
     from server import make_silence
-    head = TimeRanges([(parse_hhmm("00:00"), 1800)], TZ, "head.sync")
-    # Slots 12:00 and 11:30: at 12:10 the head may have been silent since 11:30.
-    assert make_silence({"canary-head": head})("canary-head", at(12, 10)) == 40 * 60
+    display = TimeRanges([(parse_hhmm("00:00"), 1800)], TZ, "display.sync")
+    # Slots 12:00 and 11:30: at 12:10 the display may have been silent since 11:30.
+    assert make_silence({"canary-display": display})("canary-display", at(12, 10)) == 40 * 60
 
 
 def test_a_board_with_no_slot_is_never_judged():
     from server import make_silence
-    off = TimeRanges([(parse_hhmm("00:00"), 0)], TZ, "head.sync")
-    assert make_silence({"canary-head": off})("canary-head", at(12, 10)) == float("inf")
-    assert make_silence({})("canary-head", at(12, 10)) == float("inf")
+    off = TimeRanges([(parse_hhmm("00:00"), 0)], TZ, "display.sync")
+    assert make_silence({"canary-display": off})("canary-display", at(12, 10)) == float("inf")
+    assert make_silence({})("canary-display", at(12, 10)) == float("inf")
 
 
 def test_a_recalibration_past_the_hour_and_not_run_has_expired(requests):

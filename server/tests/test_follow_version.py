@@ -12,6 +12,6 @@ from server import follow_own_version
     ("dev", True),
 ])
 def test_development_builds_follow_the_servers_own_version(version, offered):
-    firmware = FirmwareSettings(enabled=True, dir="firmware", product="canary-head",
+    firmware = FirmwareSettings(enabled=True, dir="firmware", product="canary-display",
                                 offer_dev_builds=not offered)
     assert follow_own_version(firmware, version).offer_dev_builds is offered

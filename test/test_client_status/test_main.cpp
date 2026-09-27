@@ -10,7 +10,7 @@
 #include "net/Url.h"
 
 // Every field set, so each test shows which of them a role sends.
-static ClientStatus status(ClientStatus::Role role = ClientStatus::DOCK) {
+static ClientStatus status(ClientStatus::Role role = ClientStatus::Role::Dock) {
     ClientStatus s = {};
     s.role = role;
     s.board = "Inkplate5V2"; s.version = "v0.1.0"; s.ip = "192.168.1.42";
@@ -32,20 +32,20 @@ void tearDown() {}
 
 void test_the_head_sends_the_common_fields_and_its_own_block() {
     char buf[768];
-    size_t n = clientStatusJson(status(ClientStatus::HEAD), buf, sizeof(buf));
+    size_t n = clientStatusJson(status(ClientStatus::Role::Display), buf, sizeof(buf));
     TEST_ASSERT_EQUAL_UINT(strlen(buf), n);
     TEST_ASSERT_EQUAL_STRING(
         "{\"board\":\"Inkplate5V2\",\"version\":\"v0.1.0\",\"ip\":\"192.168.1.42\",\"rssi\":-61"
         ",\"uptime_s\":8040,\"reset\":\"power_on\",\"heap_free\":120000,\"heap_size\":327680"
         ",\"psram_free\":4000000,\"psram_size\":4194304,\"chip_temp_c\":41"
-        ",\"head\":{\"panel_temp_c\":27,\"width\":1280,\"height\":720,\"rotation\":0"
+        ",\"display\":{\"panel_temp_c\":27,\"width\":1280,\"height\":720,\"rotation\":0"
         ",\"fetch\":{\"next_url\":\"http://h:8080/day.png\",\"next_in_s\":120,\"backoff_step\":0"
         ",\"ok\":12,\"failed\":1}}}", buf);
 }
 
 void test_the_dock_sends_the_common_fields_and_its_own_block() {
     char buf[1024];
-    size_t n = clientStatusJson(status(ClientStatus::DOCK), buf, sizeof(buf));
+    size_t n = clientStatusJson(status(ClientStatus::Role::Dock), buf, sizeof(buf));
     TEST_ASSERT_EQUAL_UINT(strlen(buf), n);
     TEST_ASSERT_NOT_NULL(strstr(buf, "\"psram_size\":4194304,\"chip_temp_c\":41"
         ",\"dock\":{\"mock_sensors\":true,\"sensors\":{\"shtc3\":true,\"scd41\":true,\"pmsa003i\":false,\"bme688\":true}"
@@ -53,7 +53,7 @@ void test_the_dock_sends_the_common_fields_and_its_own_block() {
         ",\"bsec\":{\"running\":true,\"restored\":true,\"accuracy\":2"
         ",\"late\":3,\"saved\":1757443200,\"sample_s\":300}"
         ",\"settings\":{\"version\":\"\",\"refused\":[]}"));
-    TEST_ASSERT_NULL(strstr(buf, "\"head\""));
+    TEST_ASSERT_NULL(strstr(buf, "\"display\""));
     TEST_ASSERT_NULL(strstr(buf, "\"fetch\""));
     TEST_ASSERT_NULL(strstr(buf, "\"panel_temp_c\""));
     TEST_ASSERT_EQUAL_STRING(",\"light\":\"\"}}", buf + n - 13);
@@ -73,11 +73,11 @@ void test_a_start_reason_is_named_in_esp_idfs_order() {
 }
 
 void test_a_board_whose_chip_gave_no_temperature_leaves_it_out() {
-    ClientStatus s = status(ClientStatus::HEAD);
+    ClientStatus s = status(ClientStatus::Role::Display);
     s.chipTempC = ClientStatus::kNoTemp;
     char buf[768];
     clientStatusJson(s, buf, sizeof(buf));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "\"psram_size\":4194304,\"head\":"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "\"psram_size\":4194304,\"display\":"));
 }
 
 void test_a_status_with_no_chip_temperature_set_has_none() {
@@ -97,12 +97,12 @@ void test_the_head_client_object_fits_its_buffer_at_its_longest() {
     char url[256];
     memset(url, 'u', sizeof(url) - 1);
     url[sizeof(url) - 1] = '\0';
-    ClientStatus s = status(ClientStatus::HEAD);
+    ClientStatus s = status(ClientStatus::Role::Display);
     s.board = "Inkplate5V2"; s.version = "v0.4.1-123-g0123abc-dirty";
     s.ip = "192.168.100.200"; s.reset = "task_watchdog"; s.nextUrl = url; s.chipTempC = -32767;
     s.uptimeS = 4294967295u; s.nextInS = 4294967295u;
     s.fetchOk = 4294967295u; s.fetchFailed = 4294967295u;
-    char buf[768];   // the head's clientJson
+    char buf[768];   // the display's clientJson
     TEST_ASSERT_TRUE(clientStatusJson(s, buf, sizeof(buf)) > 0);
 }
 
@@ -195,7 +195,7 @@ void test_health_that_does_not_fit_writes_nothing() {
 
 void test_the_head_sends_no_settings() {
     char buf[1024];
-    clientStatusJson(status(ClientStatus::HEAD), buf, sizeof(buf));
+    clientStatusJson(status(ClientStatus::Role::Display), buf, sizeof(buf));
     TEST_ASSERT_NULL(strstr(buf, "\"settings\""));
     TEST_ASSERT_NULL(strstr(buf, "\"recalibrated\""));
 }

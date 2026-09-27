@@ -29,7 +29,7 @@ def measurements(doc: dict) -> dict:
 
 
 def has_measurements(doc: dict) -> bool:
-    """Whether ``doc`` says anything about the room. The head posts its own
+    """Whether ``doc`` says anything about the room. The display posts its own
     state and no readings, and that is not a reading of anything."""
     return any(k not in ("ts", "device") for k in measurements(doc))
 

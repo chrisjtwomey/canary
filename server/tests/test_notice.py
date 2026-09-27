@@ -1,5 +1,5 @@
-"""The notices the head holds in its firmware: set like a page, with the
-bottom left free for what the head writes at run time."""
+"""The notices the display holds in its firmware: set like a page, with the
+bottom left free for what the display writes at run time."""
 from bs4 import BeautifulSoup
 
 from pages.notice import NoticePage, notices
@@ -39,7 +39,7 @@ def test_each_notice_is_rendered_and_built_into_the_head():
     with open(os.path.join(root, "platformio.ini")) as f:
         ini = f.read()
     for page in notices(width=WIDTH, height=HEIGHT):
-        path = f"include/head/notices/{page.name}.png"
+        path = f"include/display/notices/{page.name}.png"
         assert os.path.isfile(os.path.join(root, path)), f"{path}: run scripts/notices.py"
         assert path in ini, f"{path} is not in board_build.embed_files"
 

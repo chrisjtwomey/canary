@@ -20,7 +20,7 @@ ClientConfig builtInSettings() {
     cfg.mqttEnabled = false;
     cfg.mqttBroker = "XXXX";
     cfg.mqttPort = 1883;
-    cfg.mqttClientID = "canary-head";
+    cfg.mqttClientID = "canary-display";
     cfg.mqttPrefix = "mqtt/canary";
     cfg.mqttRetries = 3;
 

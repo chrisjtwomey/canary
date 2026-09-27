@@ -5,9 +5,9 @@
 // What the board says about itself, posted beside the readings as the
 // "client" object. Diagnostics, not measurements. Network, memory and
 // version are common; each board's own fields go in a block named for it,
-// "head" (panel and fetches) or "dock" (sensors, queue, BSEC, settings).
+// "display" (panel and fetches) or "dock" (sensors, queue, BSEC, settings).
 struct ClientStatus {
-    enum Role : uint8_t { HEAD, DOCK };
+    enum class Role : uint8_t { Display, Dock };
     static constexpr int16_t kNoTemp = INT16_MIN;
     Role        role;
     const char* board;

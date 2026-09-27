@@ -27,7 +27,7 @@ def store(tmp_path):
     s = LogStore(str(tmp_path / "board-logs.db"), now=now)
     for n in range(5):
         s.add("canary-dock", f"INFO - reading {n}")
-    s.add("canary-head", "WARNING - fetch took 3 tries")
+    s.add("canary-display", "WARNING - fetch took 3 tries")
     s.add("canary-dock", "ERROR - POST failed")
     return s
 
@@ -46,7 +46,7 @@ def test_the_newest_lines_every_board_and_the_zone(query):
     answer = query.answer({"limit": "3"})
     assert [line["text"] for line in answer["lines"]] == \
         ["INFO - reading 4", "WARNING - fetch took 3 tries", "ERROR - POST failed"]
-    assert answer["boards"] == ["canary-dock", "canary-head"]
+    assert answer["boards"] == ["canary-display", "canary-dock"]
     assert answer["tz"] == "Europe/Dublin"
 
 
@@ -56,7 +56,7 @@ def test_paging_forward_and_back(query):
 
 
 def test_filters(query):
-    assert [line["board"] for line in query.answer({"board": "canary-head"})["lines"]] == ["canary-head"]
+    assert [line["board"] for line in query.answer({"board": "canary-display"})["lines"]] == ["canary-display"]
     assert [line["level"] for line in query.answer({"level": "WARNING"})["lines"]] == ["WARNING", "ERROR"]
     assert [line["text"] for line in query.answer({"q": "POST"})["lines"]] == ["ERROR - POST failed"]
     assert query.answer({"board": "", "level": "", "q": ""})["lines"] == query.answer({})["lines"]

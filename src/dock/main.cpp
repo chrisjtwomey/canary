@@ -12,9 +12,9 @@
 // the oldest hundred of it to the server's /sensor-readings as one batch.
 // BSEC's state goes to /calibration whenever BSEC saves a new copy. The server
 // offers the image its own version calls for on any answer, and the dock takes
-// it once its queue is empty, then keeps it only if it posts. The head fetches
+// it once its queue is empty, then keeps it only if it posts. The display fetches
 // the pages the server renders from the readings and knows nothing about any
-// of this. The status LED under the head's right end shows the dock's state
+// of this. The status LED under the display's right end shows the dock's state
 // in the look the server sets for it: by default a slow pulse while the dock
 // works and a flash while something is wrong. The PM module's fan, the dock's largest load, runs only for the
 // window before each post, unless the settings keep it on.
@@ -668,7 +668,7 @@ static void connectNetworkForever() {
 static ClientStatus clientStatus(uint32_t nowMs) {
     strncpy(ipText, WiFi.localIP().toString().c_str(), sizeof(ipText) - 1);
     ClientStatus s = {};
-    s.role = ClientStatus::DOCK;
+    s.role = ClientStatus::Role::Dock;
     s.board = CLIENT_NAME;
     s.version = CLIENT_VERSION;
     s.ip = ipText;
@@ -924,7 +924,7 @@ void setup() {
     static char mqttTopic[128];
     if (config.mqttEnabled && mqttSettingsAreSet(config.mqttBroker) &&
         boardLogTopic(config.mqttPrefix, CLIENT_NAME, mqttTopic, sizeof(mqttTopic))) {
-        // The head connects as the config's mqttClientID; a second board with the
+        // The display connects as the config's mqttClientID; a second board with the
         // same id would knock it off the broker, so the dock connects as itself.
         configureMQTT(config.mqttBroker, config.mqttPort, mqttTopic, CLIENT_NAME, config.mqttRetries);
     }

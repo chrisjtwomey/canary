@@ -1,14 +1,14 @@
 #pragma once
 #include <cstdint>
 
-// When the head wakes next, and what for, in UTC seconds.
+// When the display wakes next, and what for, in UTC seconds.
 //
-// The head keeps it in RTC memory through deep sleep, so it is a plain struct:
+// The display keeps it in RTC memory through deep sleep, so it is a plain struct:
 // all zeros is a real start, and nothing has to run to set it up. A real start
-// fetches a page at once. Pure, so the head's timing is tested on the host.
+// fetches a page at once. Pure, so the display's timing is tested on the host.
 struct WakePlan {
     uint32_t pageAt;   // the next page; 0 for at once
-    uint32_t syncAt;   // the next sync; 0 for none, when the head syncs beside each page only
+    uint32_t syncAt;   // the next sync; 0 for none, when the display syncs beside each page only
     int      step;     // fetches failed in a row
 };
 
@@ -31,7 +31,7 @@ inline uint32_t pageFailed(WakePlan& p, uint32_t now, uint32_t (*backoffSeconds)
     return wait;
 }
 
-// waitSeconds is the head's next sync, as the server sent it; 0 means none.
+// waitSeconds is the display's next sync, as the server sent it; 0 means none.
 inline void synced(WakePlan& p, uint32_t now, uint32_t waitSeconds) {
     p.syncAt = waitSeconds ? now + waitSeconds : 0;
 }

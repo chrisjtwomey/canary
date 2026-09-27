@@ -7,7 +7,7 @@ shape as [inkplate10-weather-cal](https://github.com/chrisjtwomey/inkplate10-wea
 
 ```
 platformio.ini            one environment per board; lib_deps symlink://../epd/firmware
-src/main.cpp              the head: fetches and draws the page, and deep-sleeps between wakes
+src/main.cpp              the display: fetches and draws the page, and deep-sleeps between wakes
 src/dock/                 the dock: the TinyS3 that reads the sensors
 src/defaults.example.cpp  copy to defaults.cpp: WiFi, server URL, MQTT logging
 server/
@@ -22,8 +22,8 @@ server/
 
 Each board is a PlatformIO environment, and each compiles its own files
 through `build_src_filter`: `esp32` takes everything but `src/dock/`, `dock`
-takes `src/dock/`. No build flag decides what a board runs, so code the head
-does not compile cannot reach the head.
+takes `src/dock/`. No build flag decides what a board runs, so code the display
+does not compile cannot reach the display.
 
 Everything generic — the client firmware, HTTP, scheduling, rendering — is
 epd. If a change is not about this device's sensors or pages, it goes there,
@@ -174,7 +174,7 @@ builds, and an image in the v0.3 line is offered and one in v0.4 is not. To
 watch it happen:
 
 ```sh
-mkdir -p server/firmware/canary-head server/firmware/canary-dock
+mkdir -p server/firmware/canary-display server/firmware/canary-dock
 ```
 
 ```yaml
@@ -190,7 +190,7 @@ its version:
 ```sh
 pio run -e esp32 -t upload && pio run -e dock -t upload
 v=$(git describe --tags --match 'v*' --dirty)
-pio run -e esp32 && cp .pio/build/esp32/firmware.bin server/firmware/canary-head/$v.bin
+pio run -e esp32 && cp .pio/build/esp32/firmware.bin server/firmware/canary-display/$v.bin
 pio run -e dock && cp .pio/build/dock/firmware.bin server/firmware/canary-dock/$v.bin
 ```
 
@@ -200,11 +200,11 @@ tree with uncommitted changes builds `...-dirty`, two builds of one commit
 share one version, and a board already on a version is not offered it
 again.
 
-The head takes the image after its next page, the dock after the next batch
+The display takes the image after its next page, the dock after the next batch
 of readings the server takes with its queue empty; its LED pulses brighter
 and faster as the image is written. The serial log shows the offer, the
 progress, the restart, `trial boot of v0.3.1-52-gcd34ef5`, and `firmware
-v0.3.1-52-gcd34ef5 confirmed` once the head has drawn a page or the server
+v0.3.1-52-gcd34ef5 confirmed` once the display has drawn a page or the server
 has taken the dock's readings.
 
 To watch a bad image roll back, give the trial image a server it cannot
@@ -230,7 +230,7 @@ offers only to boards on a tagged build, and leaves the others alone.
 
 ### 4. On the Inkplate, end to end
 
-Two boards: the head (`esp32`) fetches the pages from the server and draws
+Two boards: the display (`esp32`) fetches the pages from the server and draws
 them; the dock (`dock`) reads the four sensors over I2C and posts them.
 Three things to set up. See [hardware/assembly.md](hardware/assembly.md) for the
 wiring; `pio run -e dock-mock -t upload` builds the dock's firmware with the
@@ -365,7 +365,7 @@ it was taken in. Three things worth knowing when it does not pass:
   7 (hardware/assembly.md).
 - **Nothing sleeps.** The serial port is on the board's own USB, which a deep
   sleep would drop mid-bench, so the board stays up between passes. The first
-  pass waits up to three seconds for the host to open the port; if the head
+  pass waits up to three seconds for the host to open the port; if the display
   of the log is still missing, start the monitor before plugging the board in.
 
 ## Setup
@@ -440,9 +440,9 @@ the release's version tags (`0.3.0` and `0.3` for `v0.3.0`).
 No image carries firmware: the firmware links Bosch's BSEC binary, which
 this project does not hand out. The firmware-builder image carries the
 firmware's sources instead, at its commit, and builds them where it runs.
-When it starts, it builds the head's and the dock's firmware of its own
+When it starts, it builds the display's and the dock's firmware of its own
 version into the folder the server offers images from, as
-`canary-head/<version>.bin` and `canary-dock/<version>.bin`, and then waits.
+`canary-display/<version>.bin` and `canary-dock/<version>.bin`, and then waits.
 Images already in the folder stay: a server offers the one its version calls
 for, which may be an older one.
 
@@ -450,7 +450,7 @@ Run the builder beside a server of the same tag. A pair on `latest` moves
 the boards with every push, because a server past a tag offers development
 builds; a pair on `0.3.1` keeps them on that release. The one USB flash a
 board needs, with your own `src/defaults.cpp`, is `pio run -e dock -t upload`
-(`-e esp32` for the head) from a checkout of the version the server runs.
+(`-e esp32` for the display) from a checkout of the version the server runs.
 
 The server image runs `python server.py` with the example config on port
 8080. Mount your own `config.yaml` at `/app/config.yaml`, and volumes at

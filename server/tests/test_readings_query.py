@@ -10,7 +10,7 @@ from tests.conftest import AT
 
 DOCK = {"ts": AT, "device": "canary-dock", "co2_ppm": 812, "valid": {"co2": True},
         "client": {"board": "canary-dock", "sensors": {"scd41": True}}}
-HEAD = {"ts": AT + 30, "device": "canary-head", "client": {"board": "Inkplate5V2", "rssi": -55}}
+DISPLAY = {"ts": AT + 30, "device": "canary-display", "client": {"board": "Inkplate5V2", "rssi": -55}}
 
 
 @pytest.fixture
@@ -36,7 +36,7 @@ def client(store, tz):
 
 
 def test_a_posted_reading_comes_back_as_it_was_stored(client):
-    client.post("/sensor-readings", json=[dict(DOCK, ts=AT - 300, co2_ppm=790), DOCK, HEAD])
+    client.post("/sensor-readings", json=[dict(DOCK, ts=AT - 300, co2_ppm=790), DOCK, DISPLAY])
     answer = client.get("/sensor-readings").get_json()
     assert answer["count"] == 2 and answer["left_out"] == 0
     assert answer["readings"][1] == {k: v for k, v in DOCK.items() if k != "client"}
@@ -65,8 +65,8 @@ def test_a_long_answer_keeps_the_newest(tz):
 
 def test_status_is_each_boards_newest_report(client):
     assert client.get("/status").status_code == 404
-    client.post("/sensor-readings", json=[DOCK, HEAD])
+    client.post("/sensor-readings", json=[DOCK, DISPLAY])
     status = client.get("/status").get_json()
-    assert status["doc"]["device"] == "canary-head"
+    assert status["doc"]["device"] == "canary-display"
     assert status["boards"]["canary-dock"]["doc"]["client"]["sensors"] == {"scd41": True}
-    assert status["boards"]["canary-head"]["age_s"] == 0   # since it arrived, not since its ts
+    assert status["boards"]["canary-display"]["age_s"] == 0   # since it arrived, not since its ts

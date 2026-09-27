@@ -1,7 +1,7 @@
 """What each board says about itself, kept the way readings are kept.
 
 Both boards POST to ``/sensor-readings``: the dock sends measurements with a
-``client`` object and a ``health`` object beside them, the head sends the
+``client`` object and a ``health`` object beside them, the display sends the
 ``client`` object alone. Those are the board's own state — network, memory,
 panel, fetch counts, how its sensors fare — so they go to a store of their
 own, keyed by board and timestamp, and the newest from each board is held in

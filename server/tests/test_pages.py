@@ -284,13 +284,13 @@ DOCK_DOC = {
         },
     },
 }
-HEAD_DOC = {
-    "ts": 1788511200, "device": "canary-head",
+DISPLAY_DOC = {
+    "ts": 1788511200, "device": "canary-display",
     "client": {
         "board": "Inkplate5V2", "version": "v0.1.0-dev", "ip": "192.168.1.43", "rssi": -70,
         "uptime_s": 400, "heap_free": 100000, "heap_size": 327680,
         "psram_free": 4000000, "psram_size": 4194304,
-        "head": {
+        "display": {
             "panel_temp_c": 27, "width": 1280, "height": 720, "rotation": 0,
             "fetch": {"next_url": "http://h:8080/day.png", "next_in_s": 120, "backoff_step": 0,
                       "ok": 12, "failed": 1},
@@ -299,19 +299,19 @@ HEAD_DOC = {
 }
 STATUS = {
     "doc": DOCK_DOC, "age_s": 40, "count": 3,
-    "boards": {"canary-dock": {"doc": DOCK_DOC, "age_s": 40}, "canary-head": {"doc": HEAD_DOC, "age_s": 59}},
+    "boards": {"canary-dock": {"doc": DOCK_DOC, "age_s": 40}, "canary-display": {"doc": DISPLAY_DOC, "age_s": 59}},
 }
 
 
 def status_history(hours=24):
-    """A day of reports from both boards: the head restarted once, the dock's
+    """A day of reports from both boards: the display restarted once, the dock's
     signal sagged, and the dock queued readings through one outage."""
     end = DOCK_DOC["ts"]
-    out = {"canary-head": [], "canary-dock": []}
+    out = {"canary-display": [], "canary-dock": []}
     for i in range(hours * 6):
         ts = end - hours * 3600 + i * 600
         up = (i * 600) if i < 100 else (i - 100) * 600
-        out["canary-head"].append({"ts": ts, "device": "canary-head",
+        out["canary-display"].append({"ts": ts, "device": "canary-display",
                                    "client": {"rssi": -70, "uptime_s": up, "heap_free": 100000}})
         held = 3 * (i - 60) if 60 <= i < 72 else 0
         out["canary-dock"].append({"ts": ts, "device": "canary-dock",
@@ -328,17 +328,17 @@ class TestDiagnostics:
         assert text(soup, ".head .title") == "Boards"
         assert text(soup, ".head .stamp") == "3 reports"
         boards = [b["id"] for b in soup.select(".board")]
-        assert boards == ["board-head", "board-dock"]
-        # the head: client, network, memory, panel and fetch
-        assert text(soup, "#board-head .name") == "head, Inkplate5V2"
-        assert text(soup, "#head-age") == "reported 59 s ago"
-        assert text(soup, "#head-uptime") == "6 min"
-        assert text(soup, "#head-rssi") == "-70 dBm, fair"
-        assert text(soup, "#head-panel-temp") == "27 °C"
-        assert text(soup, "#head-next-page") == "day.png, 1 min"   # 120 s from a report 59 s old
-        assert soup.select_one("#head-next-page [data-in]")["data-in"] == "61"
-        assert text(soup, "#head-fetches") == "12 ok, 1 failed"
-        assert soup.select_one("#head-sensor-scd41") is None
+        assert boards == ["board-display", "board-dock"]
+        # the display: client, network, memory, panel and fetch
+        assert text(soup, "#board-display .name") == "display, Inkplate5V2"
+        assert text(soup, "#display-age") == "reported 59 s ago"
+        assert text(soup, "#display-uptime") == "6 min"
+        assert text(soup, "#display-rssi") == "-70 dBm, fair"
+        assert text(soup, "#display-panel-temp") == "27 °C"
+        assert text(soup, "#display-next-page") == "day.png, 1 min"   # 120 s from a report 59 s old
+        assert soup.select_one("#display-next-page [data-in]")["data-in"] == "61"
+        assert text(soup, "#display-fetches") == "12 ok, 1 failed"
+        assert soup.select_one("#display-sensor-scd41") is None
         # the dock: client, network, memory with its queue, and sensors
         assert text(soup, "#dock-version") == "v0.1.0-dev"
         assert text(soup, "#dock-uptime") == "2 h 14 min"
@@ -349,10 +349,10 @@ class TestDiagnostics:
         assert text(soup, "#dock-sensor-bme688") == "missing"
         assert text(soup, "#dock-bsec") == "medium"
         assert text(soup, "#dock-queue") == "7 of ~1,500, in psram"
-        assert soup.select_one("#head-queue") is None, "the head queues nothing"
+        assert soup.select_one("#display-queue") is None, "the display queues nothing"
         assert soup.select_one("#dock-fetches") is None
-        # the head's charts first, and the dock's queue meter after its memory
-        assert [s["canvas"] for s in specs] == ["#head-rssi-bars", "#head-heap-meter", "#head-psram-meter",
+        # the display's charts first, and the dock's queue meter after its memory
+        assert [s["canvas"] for s in specs] == ["#display-rssi-bars", "#display-heap-meter", "#display-psram-meter",
                                                 "#dock-rssi-bars", "#dock-heap-meter", "#dock-psram-meter",
                                                 "#dock-queue-meter"]
         assert specs[3] == {"kind": "bars", "canvas": "#dock-rssi-bars", "filled": 3, "total": 4}
@@ -370,7 +370,7 @@ class TestDiagnostics:
                          {"status": status})
         assert [card.select_one(".label").get_text() for card in soup.select("#board-dock .card")] == \
             ["Client", "Network", "Memory", "Sensors"]
-        assert [card.select_one(".label").get_text() for card in soup.select("#board-head .card")] == \
+        assert [card.select_one(".label").get_text() for card in soup.select("#board-display .card")] == \
             ["Client", "Network", "Memory", "Panel"]
         client = [k.get_text() for k in soup.select("#board-dock .card")[0].select(".k")]
         assert client == ["version", "up", "chip"]
@@ -378,9 +378,9 @@ class TestDiagnostics:
         assert sensors == ["next sync", "SHTC3", "SCD41", "PMSA003I", "fan", "BME688", "accuracy"]
         assert text(soup, "#dock-fan") == "35 s warm-up"
         assert "sub" in soup.select_one("#dock-fan")["class"]
-        client = [k.get_text() for k in soup.select("#board-head .card")[0].select(".k")]
+        client = [k.get_text() for k in soup.select("#board-display .card")[0].select(".k")]
         assert client == ["version", "up"]
-        panel = [k.get_text() for k in soup.select("#board-head .card")[3].select(".k")]
+        panel = [k.get_text() for k in soup.select("#board-display .card")[3].select(".k")]
         assert panel == ["next page", "fetched", "back-off", "temperature"]
         assert text(soup, "#dock-chip-temp") == "41 °C"
         assert text(soup, "#dock-next-sync") == "3 min"
@@ -403,13 +403,13 @@ class TestDiagnostics:
         assert soup.select_one("#dock-next-sync") is None
 
     def test_a_board_without_psram_shows_no_psram_row(self, tz):
-        client = dict(HEAD_DOC["client"], psram_free=0, psram_size=0)
-        head = dict(HEAD_DOC, client=client)
-        status = dict(STATUS, boards={"canary-head": {"doc": head, "age_s": 5}})
+        client = dict(DISPLAY_DOC["client"], psram_free=0, psram_size=0)
+        display = dict(DISPLAY_DOC, client=client)
+        status = dict(STATUS, boards={"canary-display": {"doc": display, "age_s": 5}})
         soup, specs = render(DiagnosticsPage("diagnostics", tz=tz, width=WIDTH, height=HEIGHT),
                              {"status": status})
-        assert soup.select_one("#head-psram") is None
-        assert [s["canvas"] for s in specs] == ["#head-rssi-bars", "#head-heap-meter"]
+        assert soup.select_one("#display-psram") is None
+        assert [s["canvas"] for s in specs] == ["#display-rssi-bars", "#display-heap-meter"]
 
     def test_a_queue_before_its_capacity_is_known_is_a_count(self, tz):
         client = dict(DOCK_DOC["client"], dock=dict(DOCK_DOC["client"]["dock"],
@@ -430,20 +430,20 @@ class TestDiagnostics:
         assert text(soup, "#dock-refused") == "3 from v0.4.0, 2 h 1 min ago"
 
     def test_a_fetch_the_report_says_is_already_due_is_now(self, tz):
-        status = dict(STATUS, boards={"canary-head": dict(STATUS["boards"]["canary-head"], age_s=300)})
+        status = dict(STATUS, boards={"canary-display": dict(STATUS["boards"]["canary-display"], age_s=300)})
         soup, _ = render(DiagnosticsPage("diagnostics", tz=tz, width=WIDTH, height=HEIGHT),
                          {"status": status})
-        assert text(soup, "#head-next-page") == "day.png, now"
+        assert text(soup, "#display-next-page") == "day.png, now"
 
     def test_a_board_that_has_missed_two_posts_is_marked_offline(self, tz):
         dock = dict(STATUS["boards"]["canary-dock"], age_s=40980, offline=True)
-        head = dict(STATUS["boards"]["canary-head"], offline=False)
-        status = dict(STATUS, boards={"canary-dock": dock, "canary-head": head})
+        display = dict(STATUS["boards"]["canary-display"], offline=False)
+        status = dict(STATUS, boards={"canary-dock": dock, "canary-display": display})
         soup, _ = render(DiagnosticsPage("diagnostics", tz=tz, width=WIDTH, height=HEIGHT),
                          {"status": status})
         assert text(soup, "#dock-offline") == "Offline"
         assert text(soup, "#dock-age") == "reported 11 h 23 min ago"
-        assert soup.select_one("#head-offline") is None
+        assert soup.select_one("#display-offline") is None
 
     def test_each_time_since_a_report_counts_on_in_a_browser(self, tz):
         soup, _ = render(DiagnosticsPage("diagnostics", tz=tz, width=WIDTH, height=HEIGHT),
@@ -494,22 +494,22 @@ class TestDiagnostics:
 class TestDiagnosticsTrace:
     def test_a_fault_is_counted_apart_and_a_wake_from_sleep_is_no_restart(self, tz):
         history = status_history()
-        head = history["canary-head"]
+        display = history["canary-display"]
         # the fixture's one restart, at report 100, was a power-on
-        head[100]["client"] = dict(head[100]["client"], reset="power_on")
+        display[100]["client"] = dict(display[100]["client"], reset="power_on")
         for i, reset in ((110, "panic"), (120, "deep_sleep")):
-            head[i]["client"] = dict(head[i]["client"], uptime_s=60, reset=reset)
+            display[i]["client"] = dict(display[i]["client"], uptime_s=60, reset=reset)
         soup, _ = render(DiagnosticsTracePage("diagnostics-trace", tz=tz, width=WIDTH, height=HEIGHT),
                          {"status": STATUS, "status_history_24h": history})
-        assert text(soup, "#head-stat .detail") == "up 6 min, 2 restarts today, 1 fault"
-        assert text(soup, "#head-stat .detail .fault") == "1 fault"
+        assert text(soup, "#display-stat .detail") == "up 6 min, 2 restarts today, 1 fault"
+        assert text(soup, "#display-stat .detail .fault") == "1 fault"
 
     def test_one_chart_per_measure_with_both_boards_on_it(self, tz):
         page = DiagnosticsTracePage("diagnostics-trace", tz=tz, width=WIDTH, height=HEIGHT)
         assert page.requires == ("status", "status_history_24h")
         soup, specs = render(page, {"status": STATUS, "status_history_24h": status_history()})
         assert text(soup, ".title") == "Boards, last 24 hours"
-        assert text(soup, "#head-stat .detail") == "up 6 min, 1 restart today"
+        assert text(soup, "#display-stat .detail") == "up 6 min, 1 restart today"
         assert text(soup, "#dock-stat .detail") == "up 2 h 14 min, no restarts today"
         assert [el.get_text() for el in soup.select(".chart .label")] == \
             ["free memory, KB", "queue, readings"]
@@ -517,8 +517,8 @@ class TestDiagnosticsTrace:
         heap, queue = specs
         assert all(s["kind"] == "trace" for s in specs)
         assert heap["x"] == {"min": DOCK_DOC["ts"] - 86400, "max": DOCK_DOC["ts"]}
-        # the dock is the dark line, the head the light one, on the same scale
-        assert heap["legend"] == ["dock", "head"] and "y2" not in heap
+        # the dock is the dark line, the display the light one, on the same scale
+        assert heap["legend"] == ["dock", "display"] and "y2" not in heap
         assert heap["points"][0] == [DOCK_DOC["ts"] - 86400, pytest.approx(117.2, abs=0.05)]
         assert heap["points2"][0][1] == pytest.approx(97.7, abs=0.05)
         assert heap["now"] == heap["points"][-1] and heap["now2"] == heap["points2"][-1]
@@ -679,9 +679,9 @@ class TestAbsentSensor:
 
     def test_a_newer_report_without_sensors_does_not_hide_the_dock_s(self):
         dock = absent("scd41")["doc"]
-        head = {"ts": 10, "client": {"board": "Inkplate5V2", "head": {"width": 1280}}}
-        status = {"doc": head, "age_s": 5, "count": 2,
-                  "boards": {"canary-head": {"doc": head}, "canary-dock": {"doc": dock}}}
+        display = {"ts": 10, "client": {"board": "Inkplate5V2", "display": {"width": 1280}}}
+        status = {"doc": display, "age_s": 5, "count": 2,
+                  "boards": {"canary-display": {"doc": display}, "canary-dock": {"doc": dock}}}
 
         assert sensor_absent(status, "scd41")
         assert not sensor_absent(status, "shtc3")

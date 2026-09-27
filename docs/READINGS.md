@@ -80,7 +80,7 @@ the PM fan needs thirty seconds before its counts mean anything.
 Beside the measurements, every posted document carries what the board
 knows about itself. None of it is a measurement of the room; the
 Diagnostics page shows it. Network, memory and version are common to both
-boards; each board's own fields sit in a block named for it, `head` or
+boards; each board's own fields sit in a block named for it, `display` or
 `dock`, and a board sends only its own.
 
 ```json
@@ -88,7 +88,7 @@ boards; each board's own fields sit in a block named for it, `head` or
   "board": "Inkplate5V2", "version": "v0.1.0-dev", "ip": "192.168.1.43", "rssi": -70,
   "uptime_s": 400, "reset": "power_on",
   "heap_free": 100000, "heap_size": 327680, "psram_free": 4000000, "psram_size": 4194304,
-  "head": {
+  "display": {
     "panel_temp_c": 27, "width": 1280, "height": 720, "rotation": 0,
     "fetch": { "next_url": "http://h:8080/day.png", "next_in_s": 120, "backoff_step": 0,
                "ok": 12, "failed": 1 }
@@ -114,7 +114,7 @@ boards; each board's own fields sit in a block named for it, `head` or
 ```
 
 `chip_temp_c` is the chip's own sensor: it reads the chip, not the air, and
-is left out when the chip gives none. Only the dock sends it: the head's
+is left out when the chip gives none. Only the dock sends it: the display's
 classic ESP32 reads a fixed 53 °C. `reset` is why the board last
 started, as ESP-IDF's `esp_reset_reason()` names it: `power_on`, `software`
 (a restart the firmware asked for, as after an update), `deep_sleep` (a
@@ -124,7 +124,7 @@ wake), `external`, `usb`, `jtag` or `sdio` are expected; `panic`,
 Diagnostics counts a fault apart from the other restarts, and a wake from
 deep sleep as no restart.
 
-In `head`, `panel_temp_c` is the e-paper power controller's sensor, which
+In `display`, `panel_temp_c` is the e-paper power controller's sensor, which
 reads the board, not the air, and `fetch` is the page loop's state.
 
 In `dock`, `sensors.*` says which parts are running: a flag goes false when
@@ -149,7 +149,7 @@ status light shows as it reports: the trigger (ARCHITECTURE §3.5), or
 
 The dock queues every document when it takes the reading, and posts the
 queue oldest first, up to 100 documents at a time as one JSON array. The
-head posts its single document as an object. The server takes either at
+display posts its single document as an object. The server takes either at
 `POST /sensor-readings`, writes a batch in one transaction, and answers
 `{"new": 3, "repeated": 0}`. A document is stored by its own device and
 `ts`, and a second copy of the same pair is ignored and counted as
@@ -185,7 +185,7 @@ Diagnostics pages read them, or a 404 before the first:
 ```json
 { "doc": { ... the newest report of any board ... }, "age_s": 12, "count": 40,
   "boards": { "canary-dock": { "doc": { "ts": ..., "client": { ... }, "health": { ... } }, "age_s": 12 },
-              "canary-head": { "doc": { ... }, "age_s": 48 } } }
+              "canary-display": { "doc": { ... }, "age_s": 48 } } }
 ```
 
 `age_s` is the seconds since the report arrived.

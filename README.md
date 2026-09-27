@@ -5,7 +5,7 @@ An indoor air-quality display: CO₂, particulates, VOC and temperature on a
 
 The dock checks the four sensors every minute and takes a reading on the
 server's slots, every five minutes and every half hour overnight. It posts
-the readings to the server, and the head shows the pages the server renders
+the readings to the server, and the display shows the pages the server renders
 from them in turn. A simulated room stands in for the sensors on the host
 and on a board with nothing attached.
 
@@ -37,7 +37,7 @@ epd must be checked out beside this repo.
 
 ```sh
 pio test -e native     # host tests: room model, mocks, drivers
-pio run -e esp32       # the head: fetches and draws the pages
+pio run -e esp32       # the display: fetches and draws the pages
 pio run -e dock        # the dock: the sensor drivers; -e dock-mock uses the simulated room
 ```
 
@@ -62,7 +62,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the pages and the render loop.
 `pio run -e dock -t upload` then `pio device monitor` shows the dock print
 one readings document a minute; `-e dock-mock` does the same with the
 simulated room in place of the sensors. `pio run -e esp32 -t upload` shows
-the head fetch a page every five minutes. [CONTRIBUTING.md](CONTRIBUTING.md)
+the display fetch a page every five minutes. [CONTRIBUTING.md](CONTRIBUTING.md)
 has the setup.
 
 ## The mocks

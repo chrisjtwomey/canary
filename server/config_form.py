@@ -27,7 +27,7 @@ from ruamel.yaml.tokens import CommentToken
 
 import dock_settings as ds
 from epd_server.timeranges import DAYS, MAX_RANGES
-from schedule import DEFAULT_DOCK_WEEK, DEFAULT_HEAD_SYNC_S, DEFAULT_PAGE_WEEK
+from schedule import DEFAULT_DISPLAY_SYNC_S, DEFAULT_DOCK_WEEK, DEFAULT_PAGE_WEEK
 
 # A key the file does not have.
 MISSING: Any = object()
@@ -80,7 +80,7 @@ class Group:
     """``store`` names the store this group's file holds, for the export row.
     ``action`` names a row after the fields: ``recalibrate``, which acts at
     once rather than saving; ``position``, a grid that sets the group's two
-    alignments together; or ``head``, the size the head reports. ``visual``
+    alignments together; or ``display``, the size the display reports. ``visual``
     names a drawing of the group's values that can also set them: ``dial``,
     the day's syncs, ``slot``, the time before one sync, ``panel``, the
     image and its drawn area. ``disk``, the space the stores take on the
@@ -156,8 +156,9 @@ TABS: tuple[Tab, ...] = (
         ), visual="dial", caption="Each tick is a page change. Hatching marks a time range "
                                   "that is off. Drag a time range's start to move it."),
         Group("Sync schedule", about="How often to update the server with its display state", fields=(
-            Field("head.sync.every", "Every",
-                  "Not including automatic syncs during page refreshes. 0 = only then.", "int", DEFAULT_HEAD_SYNC_S, unit="minutes", minimum=0, maximum=24 * 60,
+            Field("display.sync.every", "Every",
+                  "Not including automatic syncs during page refreshes. 0 = only then.", "int",
+                  DEFAULT_DISPLAY_SYNC_S, unit="minutes", minimum=0, maximum=24 * 60,
                   scale=60, long="Sync every"),
         )),
         Group("Pools", about="The pages to show, in groups taken in turn", fields=(
@@ -170,7 +171,7 @@ TABS: tuple[Tab, ...] = (
                   minimum=1),
             Field("image.height", "Height", "", "int", 720, unit="px",
                   minimum=1),
-        ), action="head", visual="panel"),
+        ), action="display", visual="panel"),
         Group("Drawn area", about="The part of the image the pages are drawn in", fields=(
             Field("image.innerWidth", "Width", "", "int",
                   lambda cfg: effective(cfg, "image.width"), unit="px",
