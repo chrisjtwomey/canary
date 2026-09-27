@@ -1,4 +1,4 @@
-# The splices up to the head, across the magnetic connector.
+# The splices up to the display, across the magnetic connector.
 connectors:
   SPL_V:
     style: simple
@@ -22,7 +22,7 @@ cables:
     gauge: 28 AWG
     wirecount: 4
     colors: [BK, BK, RD, RD]
-  W_HEAD:
+  W_DISPLAY:
     gauge: 28 AWG
     wirecount: 4
     colors: [BK, BK, RD, RD]
@@ -31,5 +31,5 @@ connections:
     - W_POGO: [1-4]
     - POGO: [1-4]
   - - POGO: [1-4]
-    - W_HEAD: [1-4]
+    - W_DISPLAY: [1-4]
     - INKPLATE: [GND, GND, VIN, VIN]

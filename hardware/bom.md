@@ -45,7 +45,7 @@ supply — is ordinary stock.
 
 | Part | What else would do |
 |---|---|
-| Inkplate 5 Gen2 | No drop-in. Any panel changes the head tray, the window and the frames. The firmware needs an `IBoard` for it. |
+| Inkplate 5 Gen2 | No drop-in. Any panel changes the display tray, the window and the frames. The firmware needs an `IBoard` for it. |
 | TinyS3 | Any ESP32-S3 board with PSRAM and USB-C. The ProS3 was considered and rejected: its second regulator would have put the SCD41 back on the processor's rail. A different board changes the cradle and the pin table. |
 | SCD41 | Any Sensirion SCD4x breakout, or the SCD40 for a cheaper part with wider tolerance. Soldered sell an SCD43 rather than an SCD41: the chip is a drop-in and more accurate, but their board's holes and sockets are in different places, so the chassis would have to change. |
 | PMSA003I | The Plantower PMS5003 is the same sensor with a UART instead of the breakout's I²C, so it needs a serial port and a driver of its own. The Sensirion SPS30 is the higher-grade alternative. |
@@ -55,7 +55,7 @@ supply — is ordinary stock.
 | Magnetic pogo pair | Any 8-pin pair of the same outline and pitch. The tray, the plinth and the key shape are modelled to this one. |
 | LEGO tile | Any clear 8 mm disc, or a drop of clear resin, sanded on the front. |
 
-## Inkplate 5 Gen2 — the head
+## Inkplate 5 Gen2 — the display
 
 Sources: [product page](https://soldered.com/products/inkplate-5-gen2) ·
 [docs](https://docs.soldered.com/inkplate/5v2/overview/) ·
@@ -404,9 +404,9 @@ mid-mount receptacle in a notch between two ears, and its pads are a row along t
 on top, nine underneath. Only two pads are used, V and the wide end pad, taken as ground —
 [assembly.md](assembly.md) says to check that with a meter.
 
-**8-pin magnetic pogo pair.** The head-to-dock junction. Four contacts carry power and four stay empty; the pins
-are 0.5 mm, about 1 A each *(measured)*. The magnets hold the head down, and the contact block's own outline
-keys it, so a head turned end for end will not close.
+**8-pin magnetic pogo pair.** The display-to-dock junction. Four contacts carry power and four stay empty; the pins
+are 0.5 mm, about 1 A each *(measured)*. The magnets hold the display down, and the contact block's own outline
+keys it, so a display turned end for end will not close.
 
 **Status LED and its window.** A 3 mm diffused yellow LED through a 1 kΩ resistor, behind a clear LEGO 1×1 round
 tile pressed into the shell's front face.
@@ -428,14 +428,14 @@ stranded wire, twisted and soldered into two splices under heat-shrink.
 | **Total** | **~215 mA** | **~470 mA** |
 
 The dock is fed 5 V over USB-C. The TinyS3 takes it on its 5V pin, the AMS1117 turns it into the sensors'
-3.3 V, and two pogo contacts carry it up to the head's VIN pads. [assembly.md](assembly.md) has the circuit
+3.3 V, and two pogo contacts carry it up to the display's VIN pads. [assembly.md](assembly.md) has the circuit
 and every joint.
 
 ### One ground return
 
 The chain returns through a single conductor, cable 1's GND. At worst the whole chain returns under 300 mA — the
 PM fan about 100 mA, an SCD41 burst about 200 mA — through 28 AWG, which is a few millivolts of shift. That is
-below anything I²C notices. The AMS1117's own GND wire carries only the regulator's few mA, and the head's
+below anything I²C notices. The AMS1117's own GND wire carries only the regulator's few mA, and the display's
 ground crosses the pogo pair on its own two contacts.
 
 ### 5 V on the Inkplate's VIN pads
@@ -443,9 +443,9 @@ ground crosses the pogo pair on its own two contacts.
 This is Soldered's own answer for this circuit
 ([forum thread 1934](https://community.soldered.com/t/externally-powering-the-inkplate-5v2-with-5v/1934)). The
 5 V reaches the charger's output through the source-select transistor; Soldered say that is harmless. The
-board's own USB-C is blocked by the dock's side wall while the head is docked.
+board's own USB-C is blocked by the dock's side wall while the display is docked.
 
-### Why the sensors do not hang off the head
+### Why the sensors do not hang off the display
 
 Every sensor runs at 3.3 V on an ordinary Qwiic cable, so for bring-up the whole chain can hang off any 3.3 V
 I²C host, the Inkplate's own easyC socket included, with nothing to change on any board. What that arrangement
@@ -462,7 +462,7 @@ Sources: [NXP UM10204](https://www.nxp.com/docs/en/user-guide/UM10204.pdf) ·
 
 ### Connectors
 
-easyC, Qwiic and STEMMA QT are all **JST SH 1.0 mm 4-pin, same order: black GND, red 3V3, blue SDA, yellow SCL**. A stock cable chains a Soldered board to an Adafruit board. Every sensor board here has two connectors in parallel (pass-through); the Inkplate has one. Cable 28 AWG; SparkFun's conservative cable limit **226 mA**, JST contact rating 1 A. The 226 mA is a bundled, long-run derating for 28 AWG — a single short conductor in free air is good to ~1 A, which is also the contact limit. [assembly.md](assembly.md)'s cable 1 carries the whole chain's ground return, up to ~470 mA at peak, on that basis; it is the most heavily loaded Qwiic conductor in the build and the reason the head's ground crosses the pogo pair on its own contacts. STEMMA (non-QT, JST PH 2 mm) is a different thing.
+easyC, Qwiic and STEMMA QT are all **JST SH 1.0 mm 4-pin, same order: black GND, red 3V3, blue SDA, yellow SCL**. A stock cable chains a Soldered board to an Adafruit board. Every sensor board here has two connectors in parallel (pass-through); the Inkplate has one. Cable 28 AWG; SparkFun's conservative cable limit **226 mA**, JST contact rating 1 A. The 226 mA is a bundled, long-run derating for 28 AWG — a single short conductor in free air is good to ~1 A, which is also the contact limit. [assembly.md](assembly.md)'s cable 1 carries the whole chain's ground return, up to ~470 mA at peak, on that basis; it is the most heavily loaded Qwiic conductor in the build and the reason the display's ground crosses the pogo pair on its own contacts. STEMMA (non-QT, JST PH 2 mm) is a different thing.
 
 ### Addresses
 

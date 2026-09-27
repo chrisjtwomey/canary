@@ -1,11 +1,11 @@
-"""The CANARY logo as SVG outlines: for the enclosure, and for the head's panel.
+"""The CANARY logo as SVG outlines: for the enclosure, and for the display's panel.
 
 From the drawn logo (canary-source.jpeg) to canary-logo.svg, which
 enclosure.py imports: the logo as one white piece glued into the dock's pill
 recess. It is drawn for a flat print on a 0.2 mm nozzle: every line at least
 --line wide, every gap at least --gap, the letters spaced --spacing further
 apart. A second file, canary-logo-screen.svg, is the drawing with none of
-that, for the head's splash screen (server/pages/splash.py).
+that, for the display's splash screen (server/pages/splash.py).
 
     python3 -m venv .venv && .venv/bin/pip install pillow numpy scipy scikit-image potracer
     .venv/bin/python hardware/logo/trace.py --height 8 --pill 35 9.6

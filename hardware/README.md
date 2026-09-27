@@ -1,8 +1,8 @@
 # Hardware
 
-CANARY is two boards in one desk enclosure. The **head** is an Inkplate 5 Gen2, a 5.2" e-paper panel tilted 20°
+CANARY is two boards in one desk enclosure. The **display** is an Inkplate 5 Gen2, a 5.2" e-paper panel tilted 20°
 back, which shows the pages the server renders. The **dock** is a TinyS3 carrying four sensors — CO₂,
-particulates, temperature and humidity, and a gas index — that reads the room and posts it. The head stands in
+particulates, temperature and humidity, and a gas index — that reads the room and posts it. The display stands in
 the dock, and an 8-pin magnetic connector carries 5 V up to it: the only wire between the two halves.
 
 ![The finished device](images/device.png)
@@ -20,7 +20,7 @@ On the desk it is 150.7 × 87.3 × 89.8 mm. One USB-C cable powers both halves.
 |---|---|
 | `stl/`, `step/`, `3mf/` | The five printed parts, in print orientation (STEP is upright in each part's own frame). |
 | `canary-logo.svg` | The logo's outline, in millimetres, imported by the script. |
-| `canary-logo-screen.svg` | The logo as drawn, without the changes for printing: the head's splash screen. |
+| `canary-logo-screen.svg` | The logo as drawn, without the changes for printing: the display's splash screen. |
 | `images/` | Views of the model and the wiring drawings, used by the guides. |
 | `wiring/` | The circuit as text, one file per run of wire, for [WireViz](https://github.com/wireviz/WireViz). `render.sh` draws them into `images/`. |
 | `logo/` | The source picture and the script that traced it. |

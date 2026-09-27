@@ -85,20 +85,20 @@ def bb_mm(b):
     return [round(v * 10, 2) for v in (mn.x, mn.y, mn.z, mx.x, mx.y, mx.z)]
 
 # ---------------------------------------------------------------------------------------------
-# Head (display housing): thin tray + flat back cover. Inkplate as its STEP model has it -> USB-C on the RIGHT.
-# Head frame: X 0..130.59 = PCB left->right seen from the front, Y up (0..75.23), Z toward the viewer,
+# Display housing: thin tray + flat back cover. Inkplate as its STEP model has it -> USB-C on the RIGHT.
+# Display frame: X 0..130.59 = PCB left->right seen from the front, Y up (0..75.23), Z toward the viewer,
 # panel front at Z = 0.  Z levels: bezel front +2.4 . panel 0 . PCB back -2.45 . standoff tops -9.67 .
 # cover -9.67..-11.67 (the cover rests on the Inkplate's four SMT standoffs).
 # ---------------------------------------------------------------------------------------------
-HEAD_R, HEAD_CAV_R, HEAD_R_FRONT = 5.0, 3.0, 1.2   # plan corner radius (outer / cavity), round on the bezel's front edge
+DISPLAY_R, DISPLAY_CAV_R, DISPLAY_R_FRONT = 5.0, 3.0, 1.2   # plan corner radius (outer / cavity), round on the bezel's front edge
 #   (the bezel round is limited by the 2 mm wall and the 2.4 mm lip: 1.3 mm would break through at the cavity corner)
-HEAD_ZF, HEAD_ZBACK = 2.4, -11.67
-HEAD_X0, HEAD_X1, HEAD_Y0, HEAD_Y1 = -2.0, 132.6, -1.0, 76.2       # cavity
-HEAD_LWALL, HEAD_RWALL, HEAD_WALL = 2.0, 7.3, 2.0                  # thick RIGHT wall (USB-C side) for a symmetric bezel
+DISPLAY_ZF, DISPLAY_ZBACK = 2.4, -11.67
+DISPLAY_X0, DISPLAY_X1, DISPLAY_Y0, DISPLAY_Y1 = -2.0, 132.6, -1.0, 76.2       # cavity
+DISPLAY_LWALL, DISPLAY_RWALL, DISPLAY_WALL = 2.0, 7.3, 2.0                  # thick RIGHT wall (USB-C side) for a symmetric bezel
 # --- how the cover holds the tray. The cover goes in from the back in a straight line, so only something that
 #   engages after it is in can stop it coming out again: two tongues and two screws. Every tray feature here is a
 #   cut in a wall, so the Inkplate still passes.
-HEAD_STEP, HEAD_STEP_PLAY = 1.0, 0.15   # a step 1 mm into the walls' inner rear edge and 1 mm deep: the seat for the
+DISPLAY_STEP, DISPLAY_STEP_PLAY = 1.0, 0.15   # a step 1 mm into the walls' inner rear edge and 1 mm deep: the seat for the
 #   cover's edge, whose outer millimetre is that much larger. It locates the cover and hides the gap; it holds nothing.
 TONGUE_Y = ((14.0, 26.0), (49.2, 61.2)) # two tongues on the cover's left edge, on its inner face, 0.8 into slots
 TONGUE_T, TONGUE_IN = 0.9, 0.8          #   in the thin wall. The step stops short of each slot, so 1 mm of wall stays
@@ -106,35 +106,35 @@ TONGUE_T, TONGUE_IN = 0.9, 0.8          #   in the thin wall. The step stops sho
 EAR_X1, EAR_Y = 138.7, 9.2              # two ears on the cover's right corners, the full 2 mm thick, in pockets in the
 EAR_SCREW = ((135.8, 3.4), (135.8, 71.83))   # thick wall that leave a 1 mm skirt outside. An M3 x 6 through each
 INSERT_R, INSERT_DEPTH = 2.0, 6.0       #   goes into a heat-set insert in the wall, in line with the standoff screws.
-#   The ears seat level with the standoff tops. The bezel lip stands HEAD_STEP_PLAY clear of the panel, and the
+#   The ears seat level with the standoff tops. The bezel lip stands DISPLAY_STEP_PLAY clear of the panel, and the
 #   tongues and the cover's edge have the same play, so a wall that prints that much short or long still cannot
 #   make the ear screws press the lip on to the glass.
 
-def head_ear(i, grow, z0, z1):
-    """Ear i (0 bottom, 1 top) grown by `grow`: a block at the cover's right corner, rounded to follow the head's."""
-    lo, hi = HEAD_Y0 - HEAD_STEP + 0.2, HEAD_Y1 + HEAD_STEP - 0.2      # the cover's own edge, 0.2 inside the step
+def display_ear(i, grow, z0, z1):
+    """Ear i (0 bottom, 1 top) grown by `grow`: a block at the cover's right corner, rounded to follow the display's."""
+    lo, hi = DISPLAY_Y0 - DISPLAY_STEP + 0.2, DISPLAY_Y1 + DISPLAY_STEP - 0.2      # the cover's own edge, 0.2 inside the step
     y0, y1 = ((lo, EAR_Y), (hi - (EAR_Y - lo), hi))[i]
-    e = box(HEAD_X1 - 1.0, EAR_X1 + grow, y0 - grow, y1 + grow, z0, z1)
-    lim = HEAD_X1 + HEAD_RWALL - EAR_X1 - grow            # what is left of the wall outside the ear
-    return inter(e, rrect_h(HEAD_X0, HEAD_X1 + HEAD_RWALL - lim, HEAD_Y0 - HEAD_WALL + lim, HEAD_Y1 + HEAD_WALL - lim,
-                            z0, z1, HEAD_R - lim))
+    e = box(DISPLAY_X1 - 1.0, EAR_X1 + grow, y0 - grow, y1 + grow, z0, z1)
+    lim = DISPLAY_X1 + DISPLAY_RWALL - EAR_X1 - grow            # what is left of the wall outside the ear
+    return inter(e, rrect_h(DISPLAY_X0, DISPLAY_X1 + DISPLAY_RWALL - lim, DISPLAY_Y0 - DISPLAY_WALL + lim, DISPLAY_Y1 + DISPLAY_WALL - lim,
+                            z0, z1, DISPLAY_R - lim))
 # There are no bosses of any kind inside the cavity, and there must never be. The Inkplate is 130.59 x 75.23 in a
 # 134.6 x 77.2 cavity - 2 mm a side in X, because SW2 and the wake switch stand 0.85 mm past the board's left and
 # right edges, and 1 mm top and bottom - and it goes in from the back, so its own footprint sweeps the whole
 # cavity on the way to its seat. Anything standing in there, however far behind the board it ends up, is something
 # the board has to pass through first. Four boss towers for the cover and two blocks for the dock screws were
 # exactly that, and the first print could not be assembled (Sept 2026). The cover now screws to the Inkplate's own
-# four M3 SMT standoffs, and the head is held down by the pogo connector's magnets rather than by screws.
-# --- head-to-dock junction: an 8-pin magnetic pogo pair, mating along the head's Y as the head sits down ---
+# four M3 SMT standoffs, and the display is held down by the pogo connector's magnets rather than by screws.
+# --- display-to-dock junction: an 8-pin magnetic pogo pair, mating along the display's Y as the display sits down ---
 #   Both halves are panel-mount parts with a LIP, and that lip is how they are fixed: each goes in from inside its
 #   own shell, the lip lands on a face and is glued to it, and only what has to make contact stands out. So the
-#   male lives almost entirely inside the head - its nose fills the 2 mm bottom wall and stands PG_PROUD out of the
+#   male lives almost entirely inside the display - its nose fills the 2 mm bottom wall and stands PG_PROUD out of the
 #   underside, the lip and the solder tails are in the cavity - and the female almost entirely inside a plinth in
 #   the dock. Nothing hangs in the gap between the two any more.
-#   Centred on the head, and so on the device: the thick wall puts the head's centre 5.3 right of the board's, and
-#   head_matrix() moves the head that far left to sit centred on the dock. The head's two wires come from the VIN
-#   and GND pads on the top edge (see the head wiring), 70 mm from the connector.
-POGO_X = (HEAD_X0 - HEAD_LWALL + HEAD_X1 + HEAD_RWALL) / 2   # 67.95 in the head, 62.65 in the dock
+#   Centred on the display, and so on the device: the thick wall puts the display's centre 5.3 right of the board's, and
+#   display_matrix() moves the display that far left to sit centred on the dock. The display's two wires come from the VIN
+#   and GND pads on the top edge (see the display wiring), 70 mm from the connector.
+POGO_X = (DISPLAY_X0 - DISPLAY_LWALL + DISPLAY_X1 + DISPLAY_RWALL) / 2   # 67.95 in the display, 62.65 in the dock
 POGO_Z = -6.00
 #   Z is boxed in: the male's 8.00 lip and the female's 11.00 lip both sit BELOW the PCB's bottom edge where the
 #   whole 0..-9.67 depth is free, but the male's 7.00 back band is at Y 0..1.4, alongside the board, and has to
@@ -150,7 +150,7 @@ PG_BOSS, PG_FIT = 1.00, 0.145                               # boss height; the m
 PG_POCKET = PG_BOSS + 0.15                                  # grown by PG_FIT all round (10.21 against 9.92)
 PG_MAG_C, PG_MAG_R, PG_MAG_T = 8.65, 2.50, 1.20
 
-PG_YM = HEAD_Y0 - HEAD_WALL - PG_PROUD                      # the mating plane, -3.30: where the two faces meet
+PG_YM = DISPLAY_Y0 - DISPLAY_WALL - PG_PROUD                      # the mating plane, -3.30: where the two faces meet
 M_Y0 = PG_YM                                                # male nose face
 M_Y1 = M_Y0 + PG_M_NOSE                                     # -1.00, the cavity floor: the lip lands here
 M_Y2 = M_Y1 + PG_M_LIP_T                                    #  0.00
@@ -165,7 +165,7 @@ PG_PLINTH_TOP = PG_YM - 0.15                                # the plinth's rim, 
 PG_PLINTH_WALL = 2.20
 
 PG_TAILS = {'GND': (3.45, -1.15), 'GND2': (1.15, -1.15), 'VBUS': (-1.15, -1.15), 'VBUS2': (-3.45, -1.15)}
-#   (dx, dz) in the head: dz -1.15 is the row nearer the back cover. The dock carries only power over the junction,
+#   (dx, dz) in the display: dz -1.15 is the row nearer the back cover. The dock carries only power over the junction,
 #   each net on two adjacent contacts of that row (a 0.5 mm pin is good for about 1 A, and the Inkplate's power-on spike is 1.66 A):
 #   GND on the two nearest the USB-C end, VBUS on the other two (so that in the dock GND runs in front of VBUS, on the
 #   side its splice is). The row nearer the board stays empty.
@@ -201,7 +201,7 @@ def pg_contacts(y0, y1, r, ways=None):
     return out
 
 def pg_male_bodies(as_bought=False):
-    """The male, in place in the head. as_bought: all eight ways, and the plungers standing free in the pocket."""
+    """The male, in place in the display. as_bought: all eight ways, and the plungers standing free in the pocket."""
     ways = PG_WAYS if as_bought else PG_TAILS.values()
     b = pg_stad(PG_M_L, PG_M_W, M_Y0, M_Y1)                                  # nose, through the bottom wall
     union(b, pg_stad(PG_M_LIP_L, PG_M_LIP_W, M_Y1, M_Y2))                    # lip, landing on the cavity floor, glued
@@ -237,31 +237,31 @@ def pg_female_bodies(as_bought=False):
     tails = pg_contacts(F_Y4, F_Y3 + 0.01, 0.35, ways)                       # O0.70 x 1.40, down into the plinth
     return b, mags, pads, tails
 
-def build_pogo_head(headc):
+def build_pogo_display(displayc):
     b, mags, pins, tails = pg_male_bodies()
-    return add_bodies(headc, 'Pogo male (head)', [('pogo male body', b, 'housing'), ('pogo male magnets', mags, 'silver'),
+    return add_bodies(displayc, 'Pogo male (display)', [('pogo male body', b, 'housing'), ('pogo male magnets', mags, 'silver'),
                                                   ('pogo male pins', pins, 'gold'), ('pogo male tails', tails, 'silver')])
 
 ESP32_VENT = (36.6, 56.6, 46.4, 72.4)   # back-cover grille: X span, then the Y band. Slots run ALONG X -
 #   everything else about this object is horizontal (the shadow gap, the PM's vent strip), and one band spanning
 #   low to high vents better than two: air enters at the bottom rows and leaves at the top ones.
-#   The ESP32-WROVER sits at X 37.6..55.6, Y 43.4..75.4, and it is the only real heat source in the head: eight rows
+#   The ESP32-WROVER sits at X 37.6..55.6, Y 43.4..75.4, and it is the only real heat source in the display: eight rows
 #   over it, from Y 46.4, with the top row 3.6 under the cover's edge. The CR2032 holder (X 8.6..24.6) makes no heat
 #   and stays unvented.
 
 def rrect_h(x0, x1, y0, y1, z0, z1, r):
-    """Rounded-rectangle prism in the head frame (corner centres inset by r)."""
+    """Rounded-rectangle prism in the display frame (corner centres inset by r)."""
     b = box(x0 + r, x1 - r, y0, y1, z0, z1)
     union(b, box(x0, x1, y0 + r, y1 - r, z0, z1))
     for (cx, cy) in [(x0 + r, y0 + r), (x1 - r, y0 + r), (x0 + r, y1 - r), (x1 - r, y1 - r)]:
         union(b, cyl_z(cx, cy, z0, z1, r))
     return b
 
-def head_outline(clear, z0, z1):
-    """The head's outer envelope, grown by `clear` - the dock uses it for the cradle pocket and the shell cutout,
-    so the rounded corners of the head and of its opening match."""
-    return rrect_h(HEAD_X0 - HEAD_LWALL - clear, HEAD_X1 + HEAD_RWALL + clear,
-                   HEAD_Y0 - HEAD_WALL - clear, HEAD_Y1 + HEAD_WALL + clear, z0, z1, HEAD_R + clear)
+def display_outline(clear, z0, z1):
+    """The display's outer envelope, grown by `clear` - the dock uses it for the cradle pocket and the shell cutout,
+    so the rounded corners of the display and of its opening match."""
+    return rrect_h(DISPLAY_X0 - DISPLAY_LWALL - clear, DISPLAY_X1 + DISPLAY_RWALL + clear,
+                   DISPLAY_Y0 - DISPLAY_WALL - clear, DISPLAY_Y1 + DISPLAY_WALL + clear, z0, z1, DISPLAY_R + clear)
 
 def slots_y(body, X_from, X_to, Ylo, Yhi, Z0, Z1, pitch=3.4, w=2.2, skip=()):
     x = X_from
@@ -293,22 +293,22 @@ def slots_x_round(body, X0, X1, Y_from, Y_to, Z0, Z1, pitch=3.4, w=2.2):
         y0 += pitch
     return body
 
-def build_head_tray(headc):
+def build_display_tray(displayc):
     """Front shell: bezel + 4 walls, 14.1 mm deep, printed face-down."""
-    X0, X1, Y0, Y1 = HEAD_X0, HEAD_X1, HEAD_Y0, HEAD_Y1
-    ZF, ZLIP, ZBACK = HEAD_ZF, HEAD_STEP_PLAY, HEAD_ZBACK
-    t = rrect_h(X0 - HEAD_LWALL, X1 + HEAD_RWALL, Y0 - HEAD_WALL, Y1 + HEAD_WALL, ZBACK, ZF, HEAD_R)
-    cut(t, rrect_h(X0, X1, Y0, Y1, ZBACK - 1, ZLIP, HEAD_CAV_R))
-    step = rrect_h(X0 - HEAD_STEP, X1 + HEAD_STEP, Y0 - HEAD_STEP, Y1 + HEAD_STEP,
-                   ZBACK - 1, ZBACK + HEAD_STEP, HEAD_CAV_R + HEAD_STEP)        # the step the cover's edge lands in,
+    X0, X1, Y0, Y1 = DISPLAY_X0, DISPLAY_X1, DISPLAY_Y0, DISPLAY_Y1
+    ZF, ZLIP, ZBACK = DISPLAY_ZF, DISPLAY_STEP_PLAY, DISPLAY_ZBACK
+    t = rrect_h(X0 - DISPLAY_LWALL, X1 + DISPLAY_RWALL, Y0 - DISPLAY_WALL, Y1 + DISPLAY_WALL, ZBACK, ZF, DISPLAY_R)
+    cut(t, rrect_h(X0, X1, Y0, Y1, ZBACK - 1, ZLIP, DISPLAY_CAV_R))
+    step = rrect_h(X0 - DISPLAY_STEP, X1 + DISPLAY_STEP, Y0 - DISPLAY_STEP, Y1 + DISPLAY_STEP,
+                   ZBACK - 1, ZBACK + DISPLAY_STEP, DISPLAY_CAV_R + DISPLAY_STEP)        # the step the cover's edge lands in,
     for (ya, yb) in TONGUE_Y:                                                   # ... left whole behind each tongue
-        cut(step, box(X0 - HEAD_STEP - 1, X0, ya - 1.0, yb + 1.0, ZBACK - 2, ZBACK + HEAD_STEP + 1))
+        cut(step, box(X0 - DISPLAY_STEP - 1, X0, ya - 1.0, yb + 1.0, ZBACK - 2, ZBACK + DISPLAY_STEP + 1))
     cut(t, step)
     ZT = ZBACK + 2.0                                                            # the cover's inner face
     for (ya, yb) in TONGUE_Y:                                                   # tongue slots in the thin wall
-        cut(t, box(X0 - HEAD_STEP, X0 + 0.01, ya - 0.3, yb + 0.3, ZT - TONGUE_T - HEAD_STEP_PLAY, ZT + 0.25))
+        cut(t, box(X0 - DISPLAY_STEP, X0 + 0.01, ya - 0.3, yb + 0.3, ZT - TONGUE_T - DISPLAY_STEP_PLAY, ZT + 0.25))
     for i, (sx, sy) in enumerate(EAR_SCREW):                                    # ear pockets and insert bores
-        cut(t, head_ear(i, 0.2, ZBACK - 1, ZT))
+        cut(t, display_ear(i, 0.2, ZBACK - 1, ZT))
         cut(t, cyl_z(sx, sy, ZT - 0.01, ZT + INSERT_DEPTH, INSERT_R))
     # --- display window: active area (X 10.68..125.24, Y 5.39..69.84) + 0.8 mm, 1 mm step outside ---
     AX0, AX1, AY0, AY1, MARG = 10.68, 125.24, 5.39, 69.84, 0.8
@@ -317,7 +317,7 @@ def build_head_tray(headc):
     # --- pogo male: a stadium hole through the bottom wall for its nose, and two ribs on the cavity floor that
     #     locate its lip. Everything behind the lip is in open cavity, so with the back cover off you solder the
     #     seven wires to the tails, push the part out through the hole and glue the lip to the floor. ---
-    cut(t, pg_stad(PG_M_L, PG_M_W, Y0 - HEAD_WALL - 1.0, M_Y1 + 0.01, PG_CLR))
+    cut(t, pg_stad(PG_M_L, PG_M_W, Y0 - DISPLAY_WALL - 1.0, M_Y1 + 0.01, PG_CLR))
     for sgn in (-1, 1):                                       # ribs that locate the lip while the glue goes off
         xr = POGO_X + sgn * (PG_M_LIP_L / 2 + PG_CLR + 0.75)
         union(t, box(xr - 0.75, xr + 0.75, M_Y1 - 0.01, M_Y2 - 0.20, POGO_Z - 3.5, POGO_Z + 3.5))
@@ -325,50 +325,50 @@ def build_head_tray(headc):
     #   a 1.5 mm land round its rim and the glue has somewhere to go instead of squeezing out over the contacts
     # --- right wall (thick): USB-C, power button, microSD through stepped pockets ---
     RI = (X1 - 0.5, X1 + 2.0)                       # inner 2 mm skin
-    RO = (X1 + 2.0, X1 + HEAD_RWALL + 1)            # outer pocket region
+    RO = (X1 + 2.0, X1 + DISPLAY_RWALL + 1)            # outer pocket region
     cut(t, box(RI[0], RI[1], 9.53, 20.53, -6.6, -0.6)); cut(t, box(RO[0], RO[1], 8.03, 22.03, -8.0, 0.4))    # USB-C + plug overmold pocket
     cut(t, box(RI[0], RI[1], 22.03, 30.03, -5.5, -0.8)); cut(t, box(RO[0], RO[1], 20.53, 31.53, -7.5, 0.4))  # power button + finger pocket
     cut(t, box(RI[0], RI[1], 35.53, 52.53, -5.0, -1.2)); cut(t, box(RO[0], RO[1], 33.53, 54.53, -8.0, 0.4))  # microSD + finger pocket
     # --- left wall: wake button ---
-    cut(t, box(X0 - HEAD_LWALL - 1, X0 + 0.5, 22.03, 30.03, -5.2, -1.0))
-    # --- no vents in the walls: the head's only opening is the grille in the back cover, over the ESP32, where it
+    cut(t, box(X0 - DISPLAY_LWALL - 1, X0 + 0.5, 22.03, 30.03, -5.2, -1.0))
+    # --- no vents in the walls: the display's only opening is the grille in the back cover, over the ESP32, where it
     #     faces up and back and is invisible from the front and sides ---
-    occ = get_or_make_comp(headc, 'Head tray')
-    return replace_body(occ.component, t, 'Head tray')
+    occ = get_or_make_comp(displayc, 'Display tray')
+    return replace_body(occ.component, t, 'Display tray')
 
-def build_head_cover(headc):
+def build_display_cover(displayc):
     """Flat back cover: sits inside the walls on the Inkplate's four M3 SMT standoffs and screws into them.
     Its outer millimetre is wider and lands in the step in the walls, which is what holds the tray - see the notes
     by the cavity constants for the step and for why there are no tray bosses."""
-    ZO, ZI = HEAD_ZBACK, HEAD_ZBACK + 2.0
-    c = rrect_h(HEAD_X0 + 0.2, HEAD_X1 - 0.2, HEAD_Y0 + 0.2, HEAD_Y1 - 0.2, ZO, ZI, HEAD_CAV_R - 0.2)
-    e = HEAD_STEP - 0.2
-    edge = rrect_h(HEAD_X0 - e, HEAD_X1 + e, HEAD_Y0 - e, HEAD_Y1 + e,
-                   ZO, ZO + HEAD_STEP - HEAD_STEP_PLAY, HEAD_CAV_R + e)
+    ZO, ZI = DISPLAY_ZBACK, DISPLAY_ZBACK + 2.0
+    c = rrect_h(DISPLAY_X0 + 0.2, DISPLAY_X1 - 0.2, DISPLAY_Y0 + 0.2, DISPLAY_Y1 - 0.2, ZO, ZI, DISPLAY_CAV_R - 0.2)
+    e = DISPLAY_STEP - 0.2
+    edge = rrect_h(DISPLAY_X0 - e, DISPLAY_X1 + e, DISPLAY_Y0 - e, DISPLAY_Y1 + e,
+                   ZO, ZO + DISPLAY_STEP - DISPLAY_STEP_PLAY, DISPLAY_CAV_R + e)
     for (ya, yb) in TONGUE_Y:                                    # no wide edge where the wall stays whole
-        cut(edge, box(HEAD_X0 - HEAD_STEP - 1, HEAD_X0 + 0.2, ya - 1.2, yb + 1.2, ZO - 1, ZI + 1))
+        cut(edge, box(DISPLAY_X0 - DISPLAY_STEP - 1, DISPLAY_X0 + 0.2, ya - 1.2, yb + 1.2, ZO - 1, ZI + 1))
     union(c, edge)
     for (ya, yb) in TONGUE_Y:
-        union(c, box(HEAD_X0 - TONGUE_IN, HEAD_X0 + 0.3, ya, yb, ZI - TONGUE_T, ZI))
+        union(c, box(DISPLAY_X0 - TONGUE_IN, DISPLAY_X0 + 0.3, ya, yb, ZI - TONGUE_T, ZI))
     for i, (sx, sy) in enumerate(EAR_SCREW):
-        union(c, head_ear(i, 0.0, ZO, ZI))
-        cut(c, cyl_z(sx, sy, ZO - 1, ZI + 1, 1.7))               # M3 clearance; the head sits on the ear
+        union(c, display_ear(i, 0.0, ZO, ZI))
+        cut(c, cyl_z(sx, sy, ZO - 1, ZI + 1, 1.7))               # M3 clearance; the screw head sits on the ear
     for (x, y) in [(3.4, 3.4), (127.19, 3.4), (3.4, 71.83), (127.19, 71.83)]:   # the Inkplate's own standoffs
         cut(c, cyl_z(x, y, ZO - 1, ZI + 1, 1.7))                                 # M3 clearance
         cut(c, cyl_z(x, y, ZO - 1, ZO + 0.7, 3.1))                               # ... and a shallow counterbore, so
     #   the four heads sit nearly flush in a 2 mm cover instead of standing proud of the back
-    cut(c, box(POGO_X - PG_M_LIP_L / 2 - 1.5, POGO_X + PG_M_LIP_L / 2 + 1.5, HEAD_Y0 - 1.0, M_Y2 + 0.4,
+    cut(c, box(POGO_X - PG_M_LIP_L / 2 - 1.5, POGO_X + PG_M_LIP_L / 2 + 1.5, DISPLAY_Y0 - 1.0, M_Y2 + 0.4,
                ZI - 0.7, ZI + 1.0))     # relief for the male's lip, which overhangs the cover's inner face by 0.33
     vx0, vx1, vy0, vy1 = ESP32_VENT
     slots_x_round(c, vx0, vx1, vy0, vy1, ZO - 1, ZI + 1)         # grille over the ESP32 module
-    occ = get_or_make_comp(headc, 'Head back cover')
-    return replace_body(occ.component, c, 'Head back cover')
+    occ = get_or_make_comp(displayc, 'Display back cover')
+    return replace_body(occ.component, c, 'Display back cover')
 
 # ---------------------------------------------------------------------------------------------
 # Dock: chassis (floor + cradle block + bay features, printed upright) inside a shell (top skin + 4 walls,
-# printed upside down). Dock frame, written "B" in the helpers because D is already the depth axis: X as the head,
+# printed upside down). Dock frame, written "B" in the helpers because D is already the depth axis: X as the display,
 # D = depth from the front-bottom edge, H = height above the desk; Fusion world X_f = X, Y_f = D, Z_f = H. The front
-# face is a 20-deg slab continuous with the head's bezel; the top skin is flat at H 30.5 to D 37.7, then slopes to
+# face is a 20-deg slab continuous with the display's bezel; the top skin is flat at H 30.5 to D 37.7, then slopes to
 # H 25 at the rear. PM sits on the LEFT.
 # The four sensor bays fill D 25..78, and the strip behind them carries, left to right, the AMS1117 that feeds the
 # sensors, the TinyS3 that runs them, and the USB-C socket that powers everything - the rear wall's only opening.
@@ -379,8 +379,8 @@ def build_head_cover(headc):
 # recessed strip on the left wall opposite its inlet and outlet.
 # ---------------------------------------------------------------------------------------------
 B_X0, B_X1 = -10.6, 135.9           # outer at the top of the walls; the draft widens this toward the desk
-#   1.3 mm outside the head's sides: the wall beside the head is 0.8 mm at the top of the walls and thickens down the
-#   draft. Flush with the head, the draft would carry the wall out past its vertical sides to a knife edge.
+#   1.3 mm outside the display's sides: the wall beside the display is 0.8 mm at the top of the walls and thickens down the
+#   draft. Flush with the display, the draft would carry the wall out past its vertical sides to a knife edge.
 B_XI0, B_XI1 = -8.6, 133.9          # bay interior (vertical inner walls)
 B_D1 = 98.7                         # depth: the sensor bays, then the TinyS3's cradle lying across, behind the SCD41
 B_DBAY0, B_DBAY1 = 25.0, 96.7       # bay interior depth range (front = cradle block's rear face)
@@ -405,13 +405,13 @@ C_TOP, C_RIM = 1.5, 0.8             # chamfers on the top edge and on the bottom
 R_CAV = R_PLAN - SKIN               # cavity corners, concentric with the outer ones -> constant wall
 R_CH = R_CAV - CH_INSET             # chassis corners, concentric again -> constant gap
 REC_DEPTH = 1.0                     # depth of the recessed vent strip on the left wall
-HEAD_FRONT_H = 13.5                                    # head's front-bottom edge height. It was 12.0. Only the
-#   female and its plinth sit in the joint now - the male is inside the head - so what the cradle has to find room
+DISPLAY_FRONT_H = 13.5                                    # display's front-bottom edge height. It was 12.0. Only the
+#   female and its plinth sit in the joint now - the male is inside the display - so what the cradle has to find room
 #   for is 6 mm of connector below the mating plane plus wire room under its tails, not the whole 13.2 mm pair.
 #   The 20 deg tilt still spends depth across the connector's width, which is what the extra 1.5 buys.
-HEAD_FRONT_D = HEAD_FRONT_H * math.tan(math.radians(TILT))   # ... and depth: the bezel plane passes through (D 0, H 0)
-BLOCK_TOP_REAR = 14.0               # cradle block height behind the head (rear lip)
-HEAD_CLR = 0.5                      # clearance round the head's outline in the cradle pocket and the shell's opening
+DISPLAY_FRONT_D = DISPLAY_FRONT_H * math.tan(math.radians(TILT))   # ... and depth: the bezel plane passes through (D 0, H 0)
+BLOCK_TOP_REAR = 14.0               # cradle block height behind the display (rear lip)
+DISPLAY_CLR = 0.5                      # clearance round the display's outline in the cradle pocket and the shell's opening
 
 def boxb(X0, X1, D0, D1, H0, H1):  return box(X0, X1, H0, H1, -D1, -D0)
 def cylH(X, D, H0, H1, r):         return cyl_y(X, -D, H0, H1, r)
@@ -458,22 +458,22 @@ def top_chamfer_solid():
     tb.transform(k, m)
     return k
 
-def head_matrix(tilt_deg=TILT, front_d=HEAD_FRONT_D, front_h=HEAD_FRONT_H):
+def display_matrix(tilt_deg=TILT, front_d=DISPLAY_FRONT_D, front_h=DISPLAY_FRONT_H):
     rot = adsk.core.Matrix3D.create()
     rot.setToRotation(math.radians(-tilt_deg), adsk.core.Vector3D.create(1, 0, 0), adsk.core.Point3D.create(0, 0, 0))
-    a = P(0.0, -3.0, HEAD_ZF); a.transformBy(rot)
-    dx = (B_X0 + B_X1) / 2 - POGO_X                                                          # centres the head on the dock
+    a = P(0.0, -3.0, DISPLAY_ZF); a.transformBy(rot)
+    dx = (B_X0 + B_X1) / 2 - POGO_X                                                          # centres the display on the dock
     tr = adsk.core.Matrix3D.create(); tr.translation = adsk.core.Vector3D.create(dx * M, front_d * M - a.y, front_h * M - a.z)
     m = rot.copy(); m.transformBy(tr)
     return m
 
-def head_point(mh, X, Y, Z):
+def display_point(mh, X, Y, Z):
     p = P(X, Y, Z); p.transformBy(mh); return p
-def head_dir(mh, X, Y, Z):
+def display_dir(mh, X, Y, Z):
     v = V(X, Y, Z); v.transformBy(mh); v.normalize(); return v
-def head_volume(mh, clear, z0, z1):
-    """The head's envelope, in dock-frame world position: the pocket and the shell's opening both come from this."""
-    v = head_outline(clear, z0, z1)
+def display_volume(mh, clear, z0, z1):
+    """The display's envelope, in dock-frame world position: the pocket and the shell's opening both come from this."""
+    v = display_outline(clear, z0, z1)
     tb.transform(v, mh)
     return v
 def skin_top(d):                    # outer top surface height at depth d
@@ -500,7 +500,7 @@ AMS_DOME = 1.2                                # the header's solder domes stand 
 COMP = (47.3, 48.8, 74.3, 75.8, 30.0, 72.0, 73.5)
 BAFFLE_D = (50.0, 51.5)
 TRENCH = (42.0, 84.0, 9.5, 26.0)              # Now only a well for the pogo plinth (X 46.1..79.2), with about
-#   4 mm of working room either side of it and the whole top open once the head is off. It used to run the full
+#   4 mm of working room either side of it and the whole top open once the display is off. It used to run the full
 #   width, back when seven loose wires crossed the joint and had to travel along it to reach the boards; they go
 #   out the back of the plinth into the bay now, so the rest of the cradle block - and the wall behind it - stays.
 RIBBON_X = 44.3                               # Qwiic lane, between the AMS pocket rib (42.8) and the compartment wall (47.3): the outer
@@ -577,10 +577,10 @@ CC_SEAT_D0 = 88.1                             # the left ear's seat starts here,
 PLUG_W_MAX, PLUG_T_MAX, PLUG_CLR = 12.35, 7.5, 0.25   # a USB-C plug's moulded body, as allowed for, and the opening's clearance round it
 
 # --- status LED: a 3 mm diffused yellow LED on IO6, behind a clear LEGO 1x1 round tile set flush in the
-#   front face under the display's right end, where the head never hides it. The tile presses into the shell, front
+#   front face under the display's right end, where the display never hides it. The tile presses into the shell, front
 #   sanded, so it glows evenly and the LED behind it does not show. It is thicker than the wall, so its back stands in a
 #   shallow relief in the cradle block, which lets the shell still slide down over the block. The LED goes in from an
-#   access pit that opens under the head: with the head off it is lowered in already wired, pushed forward until its
+#   access pit that opens under the display: with the display off it is lowered in already wired, pushed forward until its
 #   rim stops on a step, and glued; its wires run back along the pit's floor into the bay. ---
 LED_X, LED_H = 118.0, 7.0                     # where the LED's axis meets the cradle block's face: halfway up the face
 LED_BODY_D, LED_RIM_D, LED_RIM_T, LED_L = 3.0, 3.8, 1.0, 5.3   # a typical T-1 LED: body, rim, rim thickness, tip to rim's back
@@ -679,9 +679,9 @@ def tile_hole():
 
 def logo_centre():
     """The logo pill's centre: X across the shell, and its distance up the front face from the bezel plane's foot,
-    halfway up the face. The face runs from the rim's chamfer to the head's opening, 11.5 mm along the slope."""
+    halfway up the face. The face runs from the rim's chamfer to the display's opening, 11.5 mm along the slope."""
     c = math.cos(math.radians(TILT))
-    lo, hi = GAP / c + C_RIM, HEAD_FRONT_H / c - HEAD_CLR
+    lo, hi = GAP / c + C_RIM, DISPLAY_FRONT_H / c - DISPLAY_CLR
     return (B_X0 + B_X1) / 2, (lo + hi) / 2
 
 def logo_recess():
@@ -782,16 +782,16 @@ def build_chassis(dockc, mh):
     body = boxb(B_XI0, B_XI1, SKIN, B_DBAY1, 0.0, 2.0)                                      # floor
     union(body, boxb(B_XI0, B_XI1, SKIN, B_DBAY0 + 0.01, 0.0, H_FRONT - SKIN))               # cradle block
     c, s = math.cos(math.radians(TILT)), math.sin(math.radians(TILT))
-    cut(body, head_volume(mh, HEAD_CLR, HEAD_ZBACK - 0.3, HEAD_ZF + 0.3))                    # cradle pocket
-    cut(body, boxb(B_XI0 - 1, B_XI1 + 1, 17.8, B_DBAY0 + 1, BLOCK_TOP_REAR, H_FRONT))        # low rear lip behind the head
-    #   (no wire tunnel through the block: the PM's wires come from the TinyS3 behind it, not from the head)
+    cut(body, display_volume(mh, DISPLAY_CLR, DISPLAY_ZBACK - 0.3, DISPLAY_ZF + 0.3))                    # cradle pocket
+    cut(body, boxb(B_XI0 - 1, B_XI1 + 1, 17.8, B_DBAY0 + 1, BLOCK_TOP_REAR, H_FRONT))        # low rear lip behind the display
+    #   (no wire tunnel through the block: the PM's wires come from the TinyS3 behind it, not from the display)
     tx0, tx1, td0, td1 = TRENCH
     trench = boxb(tx0, tx1, td0, td1, 3.0, H_FRONT)
     cut(body, trench)     # (the island that used to protect the left dock screw is moot: the trench starts at 42)
     # --- pogo junction: a plinth standing in the trench, with the female dropped into it from above. Its lip
     #     lands on the ledge inside and is glued there; the boss stands PG_BOSS proud of the plinth's rim and goes
-    #     up into the male's pocket. Built in the head frame, so it leans with the head and its rim is parallel to
-    #     the head's underside. Open trench all round it, and a chamber under the tails that breaks out rearward,
+    #     up into the male's pocket. Built in the display frame, so it leans with the display and its rim is parallel to
+    #     the display's underside. Open trench all round it, and a chamber under the tails that breaks out rearward,
     #     so the part goes in with its seven wires already soldered on. ---
     plinth = pg_stad(PG_F_LIP_L + 2 * (PG_CLR + PG_PLINTH_WALL), PG_F_LIP_W + 2 * (PG_CLR + PG_PLINTH_WALL),
                      -30.0, PG_PLINTH_TOP)
@@ -804,18 +804,18 @@ def build_chassis(dockc, mh):
     union(pk, pg_stad(PG_F_LIP_L - 3.0, PG_F_LIP_W - 3.0, F_Y2 - 0.15, F_Y2 + 0.01))     # glue relief in the ledge
     union(pk, box(POGO_X - 8.0, POGO_X + 8.0, F_Y4 - 2.0, F_Y3 + 0.01, POGO_Z - 5.0, POGO_Z + 5.0))   # tails
     union(pk, box(POGO_X - PG_F_LIP_L / 2 - PG_CLR, POGO_X + PG_F_LIP_L / 2 + PG_CLR, F_Y2, PG_PLINTH_TOP + 1.0,
-                  POGO_Z, HEAD_ZF + 1.0))                                                # lip bore open to the front, above its ledge
+                  POGO_Z, DISPLAY_ZF + 1.0))                                                # lip bore open to the front, above its ledge
     tb.transform(pk, mh)
     cut(body, pk)
     chamber_top = 7.5
-    bore_back = head_point(mh, POGO_X, PG_PLINTH_TOP, POGO_Z - PG_F_LIP_W / 2 - PG_CLR)
+    bore_back = display_point(mh, POGO_X, PG_PLINTH_TOP, POGO_Z - PG_F_LIP_W / 2 - PG_CLR)
     bore_back_d = bore_back.y / M - (bore_back.z / M - chamber_top) * math.tan(math.radians(TILT))
     px = bore_back.x / M                                                                     # the connector's X in the dock
     cut(body, boxb(px - 8.0, px + 8.0, 12.0, bore_back_d, 2.5, chamber_top))             # the tails' chamber out
     cut(body, boxb(px - 8.0, px + 8.0, bore_back_d - 0.01, B_DBAY0 + 1.0, 2.5, 5.5))     # through the plinth's back
     #   and into the open trench: where the seven wires leave, and how you see the joints. Under the plinth's back wall
     #   the roof drops to H 5.5, 1.1 mm over the wires in their low lane, so that wall is 2 mm thick rather than a wedge.
-    # (no head screws: the head is held on its cradle by the pogo connector's two magnets)
+    # (no display screws: the display is held on its cradle by the pogo connector's two magnets)
     # --- inset from the shell's inner wall: this slot, open to the room under the shell's rim, is the bay's intake ---
     inter(body, rrect_b(B_XI0 + CH_INSET, B_XI1 - CH_INSET, SKIN + CH_INSET, B_DBAY1 - CH_INSET, -20.0, 100.0, R_CH))
     # board bosses
@@ -869,7 +869,7 @@ def build_chassis(dockc, mh):
     return replace_body(occ.component, body, 'Dock chassis')
 
 def build_shell(dockc, mh):
-    """Outer skin: rounded, drafted walls + sloped top, tilted front face continuous with the head's bezel,
+    """Outer skin: rounded, drafted walls + sloped top, tilted front face continuous with the display's bezel,
     bottom rim floating GAP above the desk. Printed upside down."""
     c, sn = math.cos(math.radians(TILT)), math.sin(math.radians(TILT))
     outer = drafted_rrect(B_X0, B_X1, 0.0, B_D1, GAP, H_FRONT, R_PLAN, DRAFT, H_FRONT)
@@ -883,7 +883,7 @@ def build_shell(dockc, mh):
     for (x, d) in SHELL_PILLARS:
         union(outer, cylH(x, d, 2.0 + PILLAR_BOSS, skin_top(d) - SKIN + 0.5, 3.5))          # standing on the chassis's boss
         cut(outer, cylH(x, d, 1.0, 2.0 + PILLAR_BOSS + 6.0, 2.0))                            # M3 heat-set insert from below, 6 deep
-    cut(outer, head_volume(mh, HEAD_CLR, HEAD_ZBACK - 1.6, HEAD_ZF + 0.3))                  # head opening, corners matching the head; after the pillars, which reach into it
+    cut(outer, display_volume(mh, DISPLAY_CLR, DISPLAY_ZBACK - 1.6, DISPLAY_ZF + 0.3))                  # display opening, corners matching the display; after the pillars, which reach into it
     pt = skin_top(AMS_POST[1]) - SKIN + 0.5                                                # AMS retainer: 4 mm, not 2.4 - it is a
     union(outer, cylH(AMS_POST[0], AMS_POST[1], AMS_POST[3], pt, AMS_POST[2]))               # 17 mm tower printed off the skin, and PLA is brittle
     union(outer, coneH(AMS_POST[0], AMS_POST[1], pt - 3.0, AMS_POST[2], pt, AMS_POST[2] + 1.4))   # flare at the root
@@ -996,9 +996,9 @@ def build_pogo_ref(root):
         out.append((occ, colmap))
     return out
 # ---------------------------------------------------------------------------------------------
-# Wiring layer: 'Head wiring (toggle)' (head frame) + 'Dock wiring (toggle)' (dock frame).
+# Wiring layer: 'Display wiring (toggle)' (display frame) + 'Dock wiring (toggle)' (dock frame).
 # Wires at their measured size, bent as a wire bends (see wire()), bundled where they travel together, and no
-# two through each other. There is no slot between head and dock: the head's runs end on the pogo male's solder
+# two through each other. There is no slot between display and dock: the display's runs end on the pogo male's solder
 # tails and the dock's on the female's, and the joint is the connector.
 # ---------------------------------------------------------------------------------------------
 QWIIC = ('black', 'red', 'blue', 'yellow')          # GND, 3V3, SDA, SCL
@@ -1176,7 +1176,7 @@ def ribbon_b(name, pts, **kw):
     e1 = (0.0, 1.0, 0.0) if abs(b[0] - a[0]) > 1e-6 else (1.0, 0.0, 0.0)
     return ribbon(name, pts, e1, frame='B', **kw)
 
-# --- head-frame connector helpers ---
+# --- display-frame connector helpers ---
 def ra_header(x0, n, y_pad, z_pcb, pin_dir, pins_toward_pcb_side=-1):
     s = pins_toward_pcb_side
     zb0, zb1 = z_pcb, z_pcb + s * 2.54
@@ -1246,7 +1246,7 @@ def add_bodies(parent_comp, comp_name, bodies):
     bf.finishEdit()
     return occ, {name: col for name, body, col in bodies}
 
-# --- head wiring (head frame): two wires from the Inkplate's power pads to the pogo male's tails ---
+# --- display wiring (display frame): two wires from the Inkplate's power pads to the pogo male's tails ---
 #   VBUS goes to PAD3 (VIN) and GND to PAD5, the 4 x 4 mm pads on the top edge above the reset button, both on the
 #   component side, which faces the cover. Soldered's advice for this circuit is 5 V on VIN (forum thread 1934); it
 #   reaches the charger's output through the source-select transistor, which they say is harmless. Each wire lies
@@ -1254,10 +1254,10 @@ def add_bodies(parent_comp, comp_name, bodies):
 #   bulk capacitor and the reset button, VBUS's clear of everything - to a lane along the bottom edge and left to
 #   its tail. Both nets are on the row nearer the cover: GND's wire at Z_NEAR reaches the outermost tail, VBUS's
 #   runs under the two GND tails at Z_FAR and rises onto its own. A bare bridge joins each pair.
-PAD_VIN, PAD_GND = (92.59, 72.2), (76.59, 72.2)   # PAD3 and PAD5, head frame, from the KiCad board
+PAD_VIN, PAD_GND = (92.59, 72.2), (76.59, 72.2)   # PAD3 and PAD5, display frame, from the KiCad board
 Y_NEAR, Z_NEAR = 5.8, -7.4         # GND's bottom lane: the wire meets its tail's tip (Y 2.9, Z -7.15) nearly in line
 Y_FAR, Z_FAR = 8.2, -8.85          # VBUS's bottom lane: 0.17 off the cover, 0.75 under the two GND tails it passes
-Y_TAIL_A, Y_TAIL_B = M_Y4, F_Y4    # the tail tips: the male's up inside the head's cavity, the female's down inside
+Y_TAIL_A, Y_TAIL_B = M_Y4, F_Y4    # the tail tips: the male's up inside the display's cavity, the female's down inside
 #   its plinth. Both parts go in with their wires already soldered on.
 Y_END = 2.4                        # a wire's end lies along the last 0.5 mm of its tail
 
@@ -1265,7 +1265,7 @@ def bridge(p0, p1):
     """A bare link between two adjacent tails: a wire's stripped end, laid across the tips and soldered to both."""
     return cyl(P(*p0), P(*p1), 0.3)
 
-def build_head_wiring(headc):
+def build_display_wiring(displayc):
     ZPAD = -2.45 - WIRE_D / 2                                              # lying on the pad
     bodies = []
     def add(name, pts, col, **kw):
@@ -1280,7 +1280,7 @@ def build_head_wiring(headc):
                                       (tx['GND'], Y_NEAR, Z_NEAR), (tx['GND'], Y_END, zt)], 'black')
     for a, b in (('VBUS', 'VBUS2'), ('GND', 'GND2')):
         bodies.append(('bridge %s-%s' % (a, b), bridge((tx[a], Y_END, zt), (tx[b], Y_END, zt)), 'silver'))
-    return add_bodies(headc, 'Head wiring (toggle)', bodies)
+    return add_bodies(displayc, 'Display wiring (toggle)', bodies)
 
 # --- dock wiring (dock frame X, D, H): the dock's wires; hardware/assembly.md has the circuit ---
 #   Power comes from the USB-C socket through two splices, VBUS and GND, which feed the TinyS3, the AMS1117, the
@@ -1369,7 +1369,7 @@ def build_dock_wiring(dockc, mh):
     def jn(sig):
         """A wire's end on the female's tail: 0.25 up the tail from its tip."""
         x, z = pogo_tail(sig)
-        p = head_point(mh, x, Y_TAIL_B + 0.25, z)
+        p = display_point(mh, x, Y_TAIL_B + 0.25, z)
         return (round(p.x * 10, 3), round(p.y * 10, 3), round(p.z * 10, 3))
     def tail_start(sig, turn_d):
         """From the tail's tip down to the chamber floor, back along it, up to H_LOW and on to the trench."""
@@ -1627,9 +1627,9 @@ def finish_tray(occ):
     """2 mm round on the bezel's outer edge, all the way round."""
     comp = occ.component
     body = comp.bRepBodies.item(0)
-    front = face_by_normal(body, 0.0, -1.0, 0.0)             # head-local: +Z_e is -Y_f
+    front = face_by_normal(body, 0.0, -1.0, 0.0)             # display-local: +Z_e is -Y_f
     if front is None: return {'tray': 'no front face'}
-    return {'bezel_edges': add_fillet(comp, outer_loop_edges(front), HEAD_R_FRONT)}
+    return {'bezel_edges': add_fillet(comp, outer_loop_edges(front), DISPLAY_R_FRONT)}
 
 import json, os, tempfile, urllib.request
 
@@ -1651,7 +1651,7 @@ def mat(rows):
     return m
 
 # rows = 3x4 matrices mapping each model's own frame into the Fusion frame (translation in mm)
-HEAD_PLACEMENTS = {     # head frame: X_f = X, Y_f = -Z, Z_f = Y (USB-C on the right, expander row along the bottom edge)
+DISPLAY_PLACEMENTS = {     # display frame: X_f = X, Y_f = -Z, Z_f = Y (USB-C on the right, expander row along the bottom edge)
     'Soldered Inkplate': [[-1,0,0,130.59],[0,0,1,0.85],[0,1,0,0]],
 }
 BASE_PLACEMENTS = {     # PM on the left with its header at the front
@@ -1737,14 +1737,14 @@ def parts(top):
         if c.component.name == DOCK_ELEC: yield from c.childOccurrences
         else: yield c
 
-def setup_components(app, des, head, dock):
-    """Import the Inkplate into the head and the Adafruit boards into the dock's electronics (STEP downloads), build
+def setup_components(app, des, display, dock):
+    """Import the Inkplate into the display and the Adafruit boards into the dock's electronics (STEP downloads), build
     the Soldered and AMS1117 block-outs, then place everything."""
-    headc, elecc = head.component, dock_electronics(dock.component)
-    have = [o.component.name for o in headc.occurrences] + [o.component.name for o in elecc.occurrences]
+    displayc, elecc = display.component, dock_electronics(dock.component)
+    have = [o.component.name for o in displayc.occurrences] + [o.component.name for o in elecc.occurrences]
     d = os.path.join(tempfile.gettempdir(), 'envmon_step'); os.makedirs(d, exist_ok=True)
     im = app.importManager
-    targets = {'inkplate5gen2.step': ('Soldered Inkplate', headc), 'pmsa003i.step': ('Adafruit PMSA003I', elecc), 'scd41.step': ('PCB Component', elecc),
+    targets = {'inkplate5gen2.step': ('Soldered Inkplate', displayc), 'pmsa003i.step': ('Adafruit PMSA003I', elecc), 'scd41.step': ('PCB Component', elecc),
                'tinys3.step': ('TinyS3 1', elecc)}
     renamed = {'PCB Component': 'Adafruit SCD41', 'TinyS3 1': TS_NAME}
     for fn, url in STEP_URLS.items():
@@ -1767,8 +1767,8 @@ def setup_components(app, des, head, dock):
             header_y=20.4, sensor_wh=(2.0, 2.0, 0.75), slots=[(15, 23, 6.8, 7.8), (15, 23, 14.2, 15.2), (15, 16, 6.8, 15.2)], reg_xy=(9, 16)))
     if not any(n.startswith('AMS1117') for n in have):
         board_component(elecc, 'AMS1117-3.3 module', ams1117_module())
-    for o in headc.occurrences:
-        for key, rows in HEAD_PLACEMENTS.items():
+    for o in displayc.occurrences:
+        for key, rows in DISPLAY_PLACEMENTS.items():
             if o.component.name.startswith(key): o.transform = mat(rows)
     for o in elecc.occurrences:
         for key, rows in BASE_PLACEMENTS.items():
@@ -1811,7 +1811,7 @@ def library_appearance(des, app, name):
     lib = [l for l in app.materialLibraries if l.name == 'Fusion Appearance Library'][0]
     return des.appearances.addByCopy(lib.appearances.itemByName(name), name)
 
-def colour_all(des, app, headc, elecc, wiring):
+def colour_all(des, app, displayc, elecc, wiring):
     def ap(col):
         return library_appearance(des, app, LIB_COLS[col]) if col in LIB_COLS else appearance(des, app, 'col ' + col, COLS[col])
     grey = ic_grey(des, app)                   # the Inkplate STEP model's own IC colour, reused for every IC and PCB
@@ -1842,15 +1842,15 @@ def colour_all(des, app, headc, elecc, wiring):
 def insertion_sweep(tray_body):
     """What the Inkplate would have to pass through to reach its seat. It goes in from the back along Z, so sweep
     its own footprint from the cavity mouth up to its back face and intersect that with the tray. Anything at all
-    here means the head cannot be assembled, however much clearance the board has once it is seated - which is
+    here means the display cannot be assembled, however much clearance the board has once it is seated - which is
     exactly how four cover bosses and two screw blocks got as far as a printed part (Sept 2026)."""
-    prism = rrect_h(0.0, 130.59, 0.0, 75.23, HEAD_ZBACK, -2.45, 3.0)
+    prism = rrect_h(0.0, 130.59, 0.0, 75.23, DISPLAY_ZBACK, -2.45, 3.0)
     tb.booleanOperation(prism, tb.copy(tray_body), adsk.fusion.BooleanTypes.IntersectionBooleanType)
     return round(prism.volume * 1000, 2)
 
 def cover_pullout(tray_body, cover_body):
     """What stops the cover, and the Inkplate screwed to it, from dropping straight out of the back of the tray:
-    the cover moved 0.5 mm backwards, intersected with the tray. It must be more than 0 - hold the head with the
+    the cover moved 0.5 mm backwards, intersected with the tray. It must be more than 0 - hold the display with the
     panel facing up and this is all that carries the Inkplate."""
     moved = tb.copy(cover_body)
     m = adsk.core.Matrix3D.create(); m.translation = V(0, 0, -0.5 * M)
@@ -1922,7 +1922,7 @@ def wiring_report(root):
     return rows
 
 PRINT_MIN_WALL, PRINT_WARN_WALL, PRINT_MIN_EDGE_DEG = 0.45, 0.8, 30.0   # 0.4 mm nozzle: one line is ~0.45 wide, two ~0.8
-PRINTED_PARTS = ('Head tray', 'Head back cover', 'Dock chassis', 'Dock shell')
+PRINTED_PARTS = ('Display tray', 'Display back cover', 'Dock chassis', 'Dock shell')
 
 def _side(body, p):
     c = body.pointContainment(p)
@@ -2014,17 +2014,17 @@ def _thin_walls(body, loc, measure):
                 rows.append({'mm': round(r.value * 10, 2), 'kind': kind, 'at': loc(mid)})
     return _worst_per_cell(rows, 'mm')
 
-def printability(app, head, dock):
+def printability(app, display, dock):
     """Knife edges and thin walls or gaps in the four printed parts, for a 0.4 mm nozzle. Positions are in each
-    part's own frame (head X, Y, Z; dock X, D, H). 'knives' and 'fail' must be empty."""
+    part's own frame (display X, Y, Z; dock X, D, H). 'knives' and 'fail' must be empty."""
     measure = app.measureManager
     out = {}
-    for top, is_head in ((head, True), (dock, False)):
+    for top, is_display in ((display, True), (dock, False)):
         inv = top.transform2.copy(); inv.invert()
-        def loc(p, inv=inv, is_head=is_head):
+        def loc(p, inv=inv, is_display=is_display):
             q = p.copy(); q.transformBy(inv)
             x, y, z = q.x * 10, q.y * 10, q.z * 10
-            return [round(v, 1) for v in ((x, z, -y) if is_head else (x, y, z))]
+            return [round(v, 1) for v in ((x, z, -y) if is_display else (x, y, z))]
         for occ in top.childOccurrences:
             if occ.component.name not in PRINTED_PARTS: continue
             body = occ.bRepBodies.item(0)
@@ -2035,55 +2035,55 @@ def printability(app, head, dock):
     return out
 
 
-BUILD_WIRING = True     # the two wiring layers: the head's two pogo wires, and the dock's. False leaves both out and removes any found
+BUILD_WIRING = True     # the two wiring layers: the display's two pogo wires, and the dock's. False leaves both out and removes any found
 
 def run(context):
     """Build the whole thing, from scratch or over an earlier build: downloads the reference models, places every
-    board, builds the four printed parts (and the wiring layers, with BUILD_WIRING), then tilts the head into the dock."""
+    board, builds the four printed parts (and the wiring layers, with BUILD_WIRING), then tilts the display into the dock."""
     app = adsk.core.Application.get()
     des = adsk.fusion.Design.cast(app.activeProduct)
     root = des.rootComponent
-    head = get_or_make_comp(root, 'Head')
+    display = get_or_make_comp(root, 'Display')
     dock = get_or_make_comp(root, 'Dock')
-    for top in (head, dock):
+    for top in (display, dock):
         for o in parts(top): clear_fillets(o.component)
-    head.transform = adsk.core.Matrix3D.create()
+    display.transform = adsk.core.Matrix3D.create()
     if des.snapshots.hasPendingSnapshot: des.snapshots.add()
-    setup_components(app, des, head, dock)
+    setup_components(app, des, display, dock)
     elec = dock_electronics(dock.component)          # toggle its light bulb to see the bare chassis and shell
     del BEND_LOG[:]                                 # the module can outlive one run in Fusion's script runner
-    mh = head_matrix()
-    t  = build_head_tray(head.component)
-    c  = build_head_cover(head.component)
+    mh = display_matrix()
+    t  = build_display_tray(display.component)
+    c  = build_display_cover(display.component)
     ch = build_chassis(dock.component, mh)
     sh = build_shell(dock.component, mh)
     logo = build_logo(dock.component)               # a separate white print, glued into the shell's recess
     if BUILD_WIRING:                                # toggle these two components' light bulbs to hide the wiring
-        wiring = [build_head_wiring(head.component), build_dock_wiring(elec, mh)]
+        wiring = [build_display_wiring(display.component), build_dock_wiring(elec, mh)]
     else:
         wiring = []
-        for grp in (head.component, dock.component, elec):
+        for grp in (display.component, dock.component, elec):
             for o in list(grp.occurrences):
                 if 'wiring' in o.component.name: o.deleteMe()
-    p1 = build_pogo_head(head.component)            # the two halves of the junction, as bought
+    p1 = build_pogo_display(display.component)            # the two halves of the junction, as bought
     p2 = build_pogo_dock(elec, mh)
     for o in list(elec.occurrences):
         if o.component.name == 'USB-C plugs (toggle)': o.deleteMe()
     fitted = [build_ts_strips(elec), build_pw_socket(elec), build_plug(elec), build_status_led(elec), build_led_tile(elec)]
     refs = build_pogo_ref(root)
-    colour_all(des, app, head.component, elec, wiring + [p1, p2] + fitted + refs + [logo])
+    colour_all(des, app, display.component, elec, wiring + [p1, p2] + fitted + refs + [logo])
     fin = {}
     fin.update(finish_shell([o for o in dock.component.occurrences if o.component.name == 'Dock shell'][0]))
-    fin.update(finish_tray([o for o in head.component.occurrences if o.component.name == 'Head tray'][0]))
-    head.transform = mh                             # the head is the only tilted assembly
+    fin.update(finish_tray([o for o in display.component.occurrences if o.component.name == 'Display tray'][0]))
+    display.transform = mh                             # the display is the only tilted assembly
     if des.snapshots.hasPendingSnapshot: des.snapshots.add()
     app.activeViewport.fit()
     lumps = {}
-    for top in (head, dock):
+    for top in (display, dock):
         for o in top.component.occurrences:
             if o.component.bRepBodies.count == 1 and 'wiring' not in o.component.name:
                 lumps[o.component.name] = o.component.bRepBodies.item(0).lumps.count
-    print(json.dumps({'lumps_must_all_be_1': lumps, 'inkplate_insertion_blocked_mm3': insertion_sweep(t), 'cover_pullout_blocked_mm3': cover_pullout(t, c), 'head tray': bb_mm(t.boundingBox), 'head cover': bb_mm(c.boundingBox),
+    print(json.dumps({'lumps_must_all_be_1': lumps, 'inkplate_insertion_blocked_mm3': insertion_sweep(t), 'cover_pullout_blocked_mm3': cover_pullout(t, c), 'display tray': bb_mm(t.boundingBox), 'display cover': bb_mm(c.boundingBox),
                       'dock chassis': bb_mm(ch.boundingBox), 'dock shell': bb_mm(sh.boundingBox),
-                      'finish': fin, 'interference': interference(des, root), 'printability': printability(app, head, dock),
+                      'finish': fin, 'interference': interference(des, root), 'printability': printability(app, display, dock),
                       'wiring': wiring_report(root)}))

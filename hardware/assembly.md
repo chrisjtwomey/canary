@@ -1,6 +1,6 @@
 # Building a CANARY
 
-CANARY is two boards in one desk enclosure: a **dock** that reads the room, and a **head** that shows it. This
+CANARY is two boards in one desk enclosure: a **dock** that reads the room, and a **display** that shows it. This
 guide builds both, in the order the parts go in.
 
 ![The finished device](images/device.png)
@@ -34,7 +34,7 @@ TinyS3's strips are glued in. Each step draws its own wires, so the circuit come
 6. [The sensor boards](#6-the-sensor-boards)
 7. [The pogo connector](#7-the-pogo-connector)
 8. [Wire the dock](#8-wire-the-dock)
-9. [The head](#9-the-head)
+9. [The display](#9-the-display)
 10. [Close the dock](#10-close-the-dock)
 11. [The logo](#11-the-logo)
 12. [First power-up](#12-first-power-up)
@@ -46,14 +46,14 @@ TinyS3's strips are glued in. Each step draws its own wires, so the circuit come
 Five pieces. Each is drawn to print without supports in one orientation, and only in that one —
 [enclosure.md](enclosure.md#parts) gives it.
 
-1. Print the head tray, the head back cover, the dock chassis and the dock shell in PLA+ with a 0.4 mm nozzle.
+1. Print the display tray, the display back cover, the dock chassis and the dock shell in PLA+ with a 0.4 mm nozzle.
 2. Print the logo in white with a 0.2 mm nozzle, on its own plate.
 
 ## 2. Set the heat-set inserts
 
 
 ![The shell from below: the four pillars that take the inserts](images/step-02-inserts.png)
-Six M3 inserts in Ø 4.0 × 6.0 mm holes: four in the dock shell's internal pillars, two in the head tray's thick
+Six M3 inserts in Ø 4.0 × 6.0 mm holes: four in the dock shell's internal pillars, two in the display tray's thick
 wall at the corners.
 
 1. Push each one in square, with the iron at about 200 °C.
@@ -121,12 +121,12 @@ what make a USB-C to USB-C cable or charger supply any power at all.
 
 ![The status LED](images/3-status-led.png)
 
-It goes in now because it is reached from a pit under the head. Once the head is on, you cannot get at it.
+It goes in now because it is reached from a pit under the display. Once the display is on, you cannot get at it.
 
 1. Sand the tile's front, so it glows evenly instead of showing the LED as a dot.
 2. Press the tile into the shell's front face, flush.
 3. Solder the LED's two wires, with the 1 kΩ resistor spliced into the anode's and heat-shrink over each joint.
-4. With the head off, lower the LED into the pit, push it forward until its rim stops on the step, and glue it.
+4. With the display off, lower the LED into the pit, push it forward until its rim stops on the step, and glue it.
 5. Run its wires back along the pit's floor into the bay.
 
 **Reading the drawings.** Red is 5 V or 3.3 V and black is ground. Blue is SDA and yellow is SCL, which is the
@@ -162,21 +162,21 @@ board on its header instead, in [step 8](#8-wire-the-dock).
 
 ![The trench and the plinth, close up](images/pogo.png)
 
-An 8-pin magnetic pair joins the head to the dock, and carries power only. The pins are 0.5 mm across
-*(measured)*, so about 1 A each, and the head's power-on spike is 1.66 A. Each net therefore crosses on two
+An 8-pin magnetic pair joins the display to the dock, and carries power only. The pins are 0.5 mm across
+*(measured)*, so about 1 A each, and the display's power-on spike is 1.66 A. Each net therefore crosses on two
 contacts joined by a bare bridge, and four contacts stay empty.
 
-![The splices, the pogo pair and the head](images/2-head-link.png)
+![The splices, the pogo pair and the display](images/2-display-link.png)
 
 1. Solder both halves on the bench, before either goes into its shell. GND goes on the two contacts nearest the
-   head's USB-C end, VBUS on the other two.
+   display's USB-C end, VBUS on the other two.
 2. Lay each stripped wire end across its pair of tails, and solder the bridge across the pair in one go.
 3. **Fit the Inkplate before the male half.** The male's back band sits at the board's bottom edge, and with the
    connector in place the board cannot pass it.
-4. Glue the male's lip to the head's cavity floor, between the two locating ribs.
+4. Glue the male's lip to the display's cavity floor, between the two locating ribs.
 5. Drop the female into the dock's plinth, its lip on the ledge, and glue it.
 
-The halves nest, and the contact block's outline keys them, so a head turned end for end will not close.
+The halves nest, and the contact block's outline keys them, so a display turned end for end will not close.
 
 ## 8. Wire the dock
 
@@ -187,7 +187,7 @@ The halves nest, and the contact block's outline keys them, so a head turned end
 ![Power in, from the socket to the two splices](images/1-power-in.png)
 
 Power comes in at the USB-C socket as 5 V and splits three ways: to the TinyS3, to the AMS1117 that makes the
-sensors' 3.3 V, and up two pogo contacts to the head. Each pad, leg and crimp takes one wire only, so each net
+sensors' 3.3 V, and up two pogo contacts to the display. Each pad, leg and crimp takes one wire only, so each net
 is gathered at **one splice** in the middle of the TinyS3's channel — twisted end to end, soldered, heat-shrunk —
 and the branches leave from both ends of it.
 
@@ -210,7 +210,7 @@ that nothing crosses anything else, and wires that travel together are bundled s
    and drops into the PM header's VIN housing.
 5. **The PM group.** The three conductors of cable 1, and SET, leave their legs, become one bundle along the
    channel, and run up and along the front of the bay.
-6. **Enter every housing from the top, coming over the row from behind.** The head's back cover leans over the
+6. **Enter every housing from the top, coming over the row from behind.** The display's back cover leans over the
    header from the front, so no wire can turn into a housing from that side. SET's housing is last in the row, so
    its wire hairpins over it — the tightest bends in the dock.
 7. **The LED pair.** Back over the SHTC3, up the right-hand ribbon lane, past the BME688 and across the bay. At
@@ -225,13 +225,13 @@ cable 3V3 is the red wire; find it in a plug before you cut the plugs off.
 
 [Appendix: every joint](#appendix-every-joint) lists all seventeen in one table, to tick off as you go.
 
-## 9. The head
+## 9. The display
 
-![The Inkplate in its tray, both wires run to the pogo male](images/step-09-head.png)
+![The Inkplate in its tray, both wires run to the pogo male](images/step-09-display.png)
 
 Two wires and nothing else. 5 V on the Inkplate's VIN pads is Soldered's own answer for this circuit
 ([forum thread 1934](https://community.soldered.com/t/externally-powering-the-inkplate-5v2-with-5v/1934)), and
-the board's own USB-C sits behind the dock's side wall while the head is docked.
+the board's own USB-C sits behind the dock's side wall while the display is docked.
 
 1. Solder VBUS to PAD3 (VIN) and GND to PAD5, the 4 × 4 mm pads on the top edge above the reset button. Both are
    on the component side, which faces the cover.
@@ -273,7 +273,7 @@ Each board stores your WiFi and the server's address from `src/defaults.cpp`. Ev
 image, and every later firmware — comes from the server.
 
 1. Write your own `src/defaults.cpp`.
-2. Flash the head and the dock over USB. [CONTRIBUTING.md](../CONTRIBUTING.md) has the commands and the bench
+2. Flash the display and the dock over USB. [CONTRIBUTING.md](../CONTRIBUTING.md) has the commands and the bench
    checks.
 3. Plug one USB-C cable into the dock. It powers both halves.
 

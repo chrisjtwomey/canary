@@ -1,6 +1,6 @@
 # The enclosure
 
-Desk enclosure for the Inkplate 5 Gen2 and the four sensor boards: a thin display head tilted 20° back, standing
+Desk enclosure for the Inkplate 5 Gen2 and the four sensor boards: a thin display tilted 20° back, standing
 in a low sensor dock that extends behind it. Rounded plan corners, drafted walls, a continuous shadow gap instead
 of grilles, and no fixings visible from any normal angle.
 Designed in Fusion (project **CANARY**, design **CANARY**); `enclosure.py` regenerates every part, every board
@@ -38,32 +38,32 @@ saved milestones.
 It is meant to sit on a desk without announcing itself, which drove the architecture:
 
 - **The sensors live in the dock, not behind the display.** That keeps the centre of mass low (below) and lets the
-  head be only 14 mm thick.
+  display be only 14 mm thick.
 - **The dock is a chassis inside a shell.** The shell is one uninterrupted skin; all four of its screws come up
   from underneath through the chassis, so nothing breaks the top or the sides.
-- **The front is one continuous 20° slab.** The head's bezel and the dock's front face lie in the same plane with
-  only a parting line between them. At the sides the dock's walls frame the head, 1.3 mm outside it at the top.
-- **Nothing is square.** 10 mm plan radii on the dock and 5 mm on the head, a 1.5 mm chamfer round the top edge and
+- **The front is one continuous 20° slab.** The display's bezel and the dock's front face lie in the same plane with
+  only a parting line between them. At the sides the dock's walls frame the display, 1.3 mm outside it at the top.
+- **Nothing is square.** 10 mm plan radii on the dock and 5 mm on the display, a 1.5 mm chamfer round the top edge and
   a 1.2 mm round on the bezel, and 4.3° of draft on the side and rear walls so the dock reads as a foot, not a box.
 - **The vents are hidden.** A 1.5 mm shadow gap under the whole shell replaces every grille; the only visible
   openings are the PMSA003I's, sunk in a recessed strip on the left wall.
 
 ## Stability
 
-Mass is ≈ 280 g (92 g Inkplate, 52 g head shells, 145 g dock and boards, PLA+ or PETG at ~1.24 g/cm³ printed near
+Mass is ≈ 280 g (92 g Inkplate, 52 g display shells, 145 g dock and boards, PLA+ or PETG at ~1.24 g/cm³ printed near
 solid). The centre of mass sits **≈ 27 mm above the desk and 32 mm back** (worked out on the 27 mm dock; the extra
 3.5 mm of shell moves it by a fraction of a millimetre), and only the chassis touches the desk
 (X −7.1…132.4, D 3.5…82.5), so tipping needs ≈ 46° forward, 62° backward or 68° sideways. Keeping the sensors in
-the dock rather than behind the panel is what buys that margin — carried in the head they would sit 40 mm higher.
+the dock rather than behind the panel is what buys that margin — carried in the display they would sit 40 mm higher.
 
 ## Parts
 
 | Part | Print orientation | Fixings |
 |---|---|---|
-| **Head tray** | face down | Bezel (2.4 mm lip) and four walls, 14.1 mm deep, 5 mm plan radii, 1.2 mm round on the bezel edge. Right wall 7.3 mm thick, carrying the USB-C, power-button and microSD pockets; left wall 2 mm with the wake-button hole. The rear edge of the walls carries what holds the cover: a 1 mm step all round as its seat, two tongue slots in the thin wall, and two ear pockets with heat-set inserts in the thick wall's corners. No vents. |
-| **Head back cover** | flat, outside down | 2 mm plate resting on the Inkplate's four 7.2 mm SMT standoffs and screwed to them: 4 × M3 through clearance holes, counterbored 0.7 mm so the heads sit near flush in a 2 mm plate. It holds the tray with two 12 mm tongues on one side edge and two ears on the other, each ear screwed to an insert in the thick wall. It goes on tilted, tongues first, and swings down. One grille band over the ESP32 (8 capsule slots, X 74–94, Y 14–40) — the head's only opening, facing up and back. |
-| **Dock chassis** | upright (desk face down) | Floor, the solid 20° cradle block with the head pocket, and every bay feature: board bosses, the SCD41 compartment, the SHTC3 baffle, the AMS1117 pocket. It also carries the pogo plinth standing in the trench. Nothing fastens the head: the connector's two Ø5 magnets hold it down and the cradle pocket locates it. It also carries the TinyS3's cradle, whose channel is the dock's wiring duct, the USB-C socket's holder by the rear wall, and the status LED's access pit. |
-| **Dock shell** | upside down (top skin on the bed) | The visible skin: rounded, drafted walls, the sloped top and a 2 mm front wall under the head, in one piece with no top-side fixings. 4 × M3×8 countersunk up from underneath into heat-set inserts in its internal pillars, which stand on 1 mm bosses on the chassis floor (×10 bottoms out — the insert ends at 8.7 mm). A Ø4 post holds the AMS1117 module down, and the PMSA003I's seal rib is part of this wall. |
+| **Display tray** | face down | Bezel (2.4 mm lip) and four walls, 14.1 mm deep, 5 mm plan radii, 1.2 mm round on the bezel edge. Right wall 7.3 mm thick, carrying the USB-C, power-button and microSD pockets; left wall 2 mm with the wake-button hole. The rear edge of the walls carries what holds the cover: a 1 mm step all round as its seat, two tongue slots in the thin wall, and two ear pockets with heat-set inserts in the thick wall's corners. No vents. |
+| **Display back cover** | flat, outside down | 2 mm plate resting on the Inkplate's four 7.2 mm SMT standoffs and screwed to them: 4 × M3 through clearance holes, counterbored 0.7 mm so the heads sit near flush in a 2 mm plate. It holds the tray with two 12 mm tongues on one side edge and two ears on the other, each ear screwed to an insert in the thick wall. It goes on tilted, tongues first, and swings down. One grille band over the ESP32 (8 capsule slots, X 74–94, Y 14–40) — the display's only opening, facing up and back. |
+| **Dock chassis** | upright (desk face down) | Floor, the solid 20° cradle block with the display pocket, and every bay feature: board bosses, the SCD41 compartment, the SHTC3 baffle, the AMS1117 pocket. It also carries the pogo plinth standing in the trench. Nothing fastens the display: the connector's two Ø5 magnets hold it down and the cradle pocket locates it. It also carries the TinyS3's cradle, whose channel is the dock's wiring duct, the USB-C socket's holder by the rear wall, and the status LED's access pit. |
+| **Dock shell** | upside down (top skin on the bed) | The visible skin: rounded, drafted walls, the sloped top and a 2 mm front wall under the display, in one piece with no top-side fixings. 4 × M3×8 countersunk up from underneath into heat-set inserts in its internal pillars, which stand on 1 mm bosses on the chassis floor (×10 bottoms out — the insert ends at 8.7 mm). A Ø4 post holds the AMS1117 module down, and the PMSA003I's seal rib is part of this wall. |
 
 0.4 mm nozzle, 2 mm walls and skin, 2.2 mm slots on a 3.4 mm pitch where slots remain. The shell prints upside
 down so its whole outer surface is either on the bed or a drafted wall — no supports; the STL is rotated 5.15° past
@@ -71,16 +71,16 @@ the flip so the whole skin lies flat on the bed. Everything is printed in **PLA+
 is the AMS1117's few hundred milliwatts, so PETG is the fallback if its pocket or the shell post over it ever
 softens.
 
-**Nothing stands inside the head's cavity, and nothing may.** The Inkplate is 130.59 × 75.23 in a 134.6 × 77.2
+**Nothing stands inside the display's cavity, and nothing may.** The Inkplate is 130.59 × 75.23 in a 134.6 × 77.2
 opening — 2 mm a side in X, because SW2 and the wake switch stand 0.85 mm past the board's left and right edges,
 and 1 mm top and bottom — and it goes in from the back, which means its own footprint sweeps the whole cavity on
 the way to its seat. A boss is in the way however far behind
 the seated board it finally sits. So the cover screws to the Inkplate's own
-standoffs, and the head is held by magnets.
+standoffs, and the display is held by magnets.
 
 The cover goes in from the back in a straight line, so only something that engages after it is in can keep it
 there. Two tongues on its thin-wall edge enter slots in that wall, and two ears at the other end sit in pockets in
-the thick wall and screw into inserts. All of it is cut into the walls, so the board still passes. Hold the head
+the thick wall and screw into inserts. All of it is cut into the walls, so the board still passes. Hold the display
 with the panel facing up and the tongues and the two ear screws carry the Inkplate; `enclosure.py` reports what
 blocks the cover from dropping straight out as `cover_pullout_blocked_mm3`, which must be **more than 0**.
 
@@ -91,14 +91,14 @@ prints that much short therefore cannot make the ear screws press the lip on to 
 
 Six brass heat-set inserts carry the screwed joints between printed parts: four for the shell on the chassis, two
 for the back cover's ears on the tray. The back cover also
-screws into the Inkplate's own standoffs, the pogo connector's two magnets hold the head down, and everything else
+screws into the Inkplate's own standoffs, the pogo connector's two magnets hold the display down, and everything else
 threads straight into printed plastic.
 
 | Fastener | Qty | Where | Hole |
 |---|---|---|---|
-| M3 heat-set insert (≈ 5.7 long, 4.6 OD) | 6 | Dock shell, internal pillars (4); head tray, thick wall corners (2) | Ø 4.0 × 6.0 deep |
+| M3 heat-set insert (≈ 5.7 long, 4.6 OD) | 6 | Dock shell, internal pillars (4); display tray, thick wall corners (2) | Ø 4.0 × 6.0 deep |
 | M3 × 8 countersunk, 90° | 4 | Shell → chassis, up from underneath | Ø 3.4 clearance, Ø 6.2 × 1.4 cone |
-| M3 × 6 machine screw | 6 | Head back cover → the Inkplate's four SMT standoffs (4) and the tray's two inserts (2) | Ø 3.4 clearance; Ø 6.2 × 0.7 counterbore over the standoffs only |
+| M3 × 6 machine screw | 6 | Display back cover → the Inkplate's four SMT standoffs (4) and the tray's two inserts (2) | Ø 3.4 clearance; Ø 6.2 × 0.7 counterbore over the standoffs only |
 | M2 × 4 self-tapping, pan head | 8 | PMSA003I and SCD41, 4 each | Ø 2.1 pilot, 3 mm deep |
 | M2.5 × 4 self-tapping | 8 | BME688 and SHTC3, 4 each | Ø 2.6 pilot, 3 mm deep |
 
@@ -122,12 +122,12 @@ threads straight into printed plastic.
 
 ## Frames
 
-**Head frame**: X left → right seen from the front (the Inkplate PCB spans 0…130.59), Y up (PCB 0…75.23), Z
+**Display frame**: X left → right seen from the front (the Inkplate PCB spans 0…130.59), Y up (PCB 0…75.23), Z
 toward the viewer with Z = 0 at the panel's front face. In Fusion, X_f = X, Y_f = −Z, Z_f = Y. Z levels: bezel
 front +2.4 · panel 0 · PCB back −2.45 · standoff tops / cover inner −9.67 · cover outer −11.67.
 
-**Dock frame**: X as the head, D = depth from the front-bottom edge (0…86 nominal, 87.9 including the draft),
-H = height above the desk. This is Fusion's world frame; the `Dock` component is untilted and the `Head`
+**Dock frame**: X as the display, D = depth from the front-bottom edge (0…86 nominal, 87.9 including the draft),
+H = height above the desk. This is Fusion's world frame; the `Dock` component is untilted and the `Display`
 component carries the 20° tilt. Bay interior X −8.6…133.9, D 25…84, H 2 up to the skin's underside (28.5 at D 25,
 sloping to 23 at the rear). Board component faces at H 5.6 (Adafruit / Soldered) and 6.0 (AMS1117, raised so the
 regulator on its underside hangs in free air).
@@ -135,8 +135,8 @@ regulator on its underside hangs in free air).
 Inside `Dock`, only the chassis and the shell sit at the top level. Every board, the pogo female and **Dock wiring
 (toggle)** sit in **Dock electronics (toggle)**; switch its light bulb off to see the bare printed parts.
 
-The head's front-bottom edge lands at D 4.91 / H 13.5, chosen so the **bezel plane passes through (D 0, H 0)** —
-that is what makes the dock's front face and the bezel one plane. Change `HEAD_FRONT_H` and the front slab
+The display's front-bottom edge lands at D 4.91 / H 13.5, chosen so the **bezel plane passes through (D 0, H 0)** —
+that is what makes the dock's front face and the bezel one plane. Change `DISPLAY_FRONT_H` and the front slab
 follows automatically.
 
 ## Surfacing rules
@@ -146,20 +146,20 @@ follows automatically.
   r 6.5 about *the same centres*, so the wall stays 2 mm and the chassis-to-shell gap stays 1.5 mm all the way
   round the corner.
 - **Draft** 4.3° on the sides and rear, referenced to the top of the walls: 2.0 mm wider at the desk than at the
-  top, where the shell stands 1.3 mm outside the head's sides. The front (bezel) plane and the cavity are not
-  drafted. Flush with the head, the draft would carry the side walls out past its vertical sides to a knife edge;
-  1.3 mm out, the wall beside the head is 0.8 mm at the top of the walls and thickens down the draft.
+  top, where the shell stands 1.3 mm outside the display's sides. The front (bezel) plane and the cavity are not
+  drafted. Flush with the display, the draft would carry the side walls out past its vertical sides to a knife edge;
+  1.3 mm out, the wall beside the display is 0.8 mm at the top of the walls and thickens down the draft.
 - **The top chamfer is also solid geometry.** A 2 mm skin cannot carry a fillet larger than 1.17 mm — the arc
   breaks through into the cavity at the corner — whereas a 45° chamfer of leg *c* only eats (4 − c)/√2, so 1.5 mm
   is comfortable. It is made by intersecting the shell with a 45°-drafted prism whose reference plane is rotated
   onto the sloped top, which also wraps it around the rounded corners. Fusion's own chamfer feature fails here
-  (`ASM_BL_UNFIN_SHEET`) because the chain runs out onto the head opening's curved wall.
+  (`ASM_BL_UNFIN_SHEET`) because the chain runs out onto the display opening's curved wall.
 - Only two rounds are real features: the bezel's outer edge (1.2 mm, limited the same way by the 2 mm wall and
   2.4 mm lip) and the shell's bottom rim (0.8 mm chamfer). Both are picked geometrically, so the script re-runs.
 
 ## Ventilation
 
-There are no grilles on the top, the right side, the rear or the head.
+There are no grilles on the top, the right side, the rear or the display.
 
 - **Shadow gap.** The shell's bottom rim floats 1.5 mm above the desk and the chassis is inset 1.5 mm from the
   shell's inner wall, so the gap is not decorative: room air passes under the rim, up the slot between chassis
@@ -174,12 +174,12 @@ There are no grilles on the top, the right side, the rear or the head.
   shell still drops on freely.
 - **SCD41** breathes through its compartment's open front (≈ 500 mm² facing the bay) rather than a lid grille.
   If its response turns out sluggish, the fix is a slot row low in the compartment's left wall.
-- **Head.** Sealed except for one grille band in the back cover: 8 stadium slots, 2.2 × 20 mm on the usual 3.4 mm
+- **Display.** Sealed except for one grille band in the back cover: 8 stadium slots, 2.2 × 20 mm on the usual 3.4 mm
   pitch, X 74–94 and Y 14–40, ≈ 344 mm². They sit over the **ESP32-WROVER** (X 75–93, Y −0.2–31.8), which at
-  80–150 mA with Wi-Fi up is the only real heat source in the head and sits directly behind the panel. The slots run
+  80–150 mA with Wi-Fi up is the only real heat source in the display and sits directly behind the panel. The slots run
   **along X**: everything else about this object is horizontal — the shadow gap, the PM's vent strip — and vertical
   ticks cut across all of it. One band spanning low to high also vents better than two discrete ones, since the 20°
-  tilt makes the bottom rows the intake and the top rows the exhaust. Y 14 is the lower limit: the head's five wires
+  tilt makes the bottom rows the intake and the top rows the exhaust. Y 14 is the lower limit: the display's five wires
   cross the board at Y 3–11 and would otherwise show through.
 
 ### Heat
@@ -214,7 +214,7 @@ Each board's place follows the placement rules in its section of [bom.md](bom.md
 
 | Board | X × D (mm) | Placement |
 |---|---|---|
-| PMSA003I | −3.8…31.8 × 27…77.8 | Left end, module face 4.8 mm from the left wall and its vents. X −3.8 puts the board edge and its two left bosses 3.3 mm inside the edge of the chassis floor (which is inset 1.5 mm from the wall). Header row along its **front** edge, so the tall Dupont housings stand behind the head where the dock is deepest. D 27 (not 30) keeps its rear corner clear of the cavity's 10 mm rounded corner. |
+| PMSA003I | −3.8…31.8 × 27…77.8 | Left end, module face 4.8 mm from the left wall and its vents. X −3.8 puts the board edge and its two left bosses 3.3 mm inside the edge of the chassis floor (which is inset 1.5 mm from the wall). Header row along its **front** edge, so the tall Dupont housings stand behind the display where the dock is deepest. D 27 (not 30) keeps its rear corner clear of the cavity's 10 mm rounded corner. |
 | SCD41 | 49.9…72.8 × 35…60.4, sockets facing front and rear | Middle, in its own compartment (walls X 47.3–48.8 and 74.3–75.8 from D 30, rear wall D 72–73.5, all to the skin). Both sockets in use; nothing else is connected to it. |
 | SHTC3 | 82.8…120.8 × 26.5…48.5 | Front-right: coolest corner, against the solid cradle block, farthest from the fan and the LDO, behind a full-height baffle at D 50–51.5. End of the chain, only its right socket used. |
 | BME688 | 82.8…120.8 × 53.5…75.5 | Rear-right, behind the baffle. Both sockets in use. |
@@ -283,13 +283,13 @@ the LED pair just under the board at **H 15.8**. The two splices sit in the chan
   right end and down onto the TinyS3's pin 6; GND onto the GND splice's right end.
 
 **Clearance above the PM header.** The PM board's **straight** 7-pin header is on its front edge at D 29.5, with
-five housings on it whose tops reach **H 22.1**. A housing is entered from the top, and the head's back cover
+five housings on it whose tops reach **H 22.1**. A housing is entered from the top, and the display's back cover
 leans over the row from the front, so wires must come over the housings from behind: SCL, SDA and GND climb
 between the SET housing and the PM's socket B to lanes at **H 26.8**, 1.4 mm under the skin. A housing is 14 mm
 tall and a wire needs about 3.7 mm above it to turn without strain, so the design keeps **17.7 mm clear above
 the header block** *(measured on the real parts)*.
 
-**In the head**, the back cover sits on the Inkplate's own 7.2 mm standoffs, and each of the two wires takes one
+**In the display**, the back cover sits on the Inkplate's own 7.2 mm standoffs, and each of the two wires takes one
 lane in that space.
 
 **The AMS1117's pins** sit at D 87.3 (GND), 84.8 (OUT) and 82.2 (VIN), with their housings running right to
@@ -302,7 +302,7 @@ X 35.8 at H 11.6.
 The pair is centred on the device at X 62.65. Both halves are panel-mount parts fixed by their lips, each fitted
 from inside its own shell.
 
-- **Male, in the head.** Its nose fills the 2 mm bottom wall and stands 0.30 mm proud of the underside. Its lip
+- **Male, in the display.** Its nose fills the 2 mm bottom wall and stands 0.30 mm proud of the underside. Its lip
   is glued to the cavity floor between two locating ribs; its back band and tails are in open cavity.
 - **Female, in the dock.** It drops into a plinth standing in the trench, its lip landing on a ledge with a glue
   relief inside the rim. Only its 1 mm boss stands above the plinth's rim. The plinth is open at the front above
@@ -312,7 +312,7 @@ The boss enters the male's pocket, so the halves nest: the mated bodies come to 
 contact block's own outline — a rounded rectangle with one semicircle cut into the middle of its S-end wall — so
 a half turned end for end fouls it and will not close.
 
-The trench is X 42–84, D 9.5–26, floor at H 3, open at the top once the head is off.
+The trench is X 42–84, D 9.5–26, floor at H 3, open at the top once the display is off.
 
 ## Display window
 
@@ -347,7 +347,7 @@ worth re-checking after any edit to `enclosure.py`: because the parts are built 
 rib whose position drifts clear of the body it should touch silently becomes a second lump in the same body, and
 the slicer will just plate it as a loose part with no indication of where it goes.
 
-The head has a second check for the same reason. `enclosure.py` sweeps the Inkplate's footprint from the cavity
+The display has a second check for the same reason. `enclosure.py` sweeps the Inkplate's footprint from the cavity
 mouth to its seated position, intersects that with the tray, and reports the result as
 `inkplate_insertion_blocked_mm3`. It must be **0**.
 

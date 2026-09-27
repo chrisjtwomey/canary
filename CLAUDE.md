@@ -122,7 +122,7 @@ Unsettled, and each one names what would settle it.
 
 1. **PMSA003I input current at 3.3 V** is derived from the charge-pump datasheet, not measured. Measure; it sets the regulator's rating.
 2. **TinyS3 awake current** is a typical ESP32-S3 figure. Measure the dock alone on the Power Profiler once it runs.
-3. **5 V on the Inkplate's VIN pads**, on the bench, with no battery connected: measure VIN and the battery connector, and check that the charger chip stays cool through a few refreshes. Soldered say the path is harmless ([assembly.md](hardware/assembly.md#9-the-head)); this confirms it on this board.
+3. **5 V on the Inkplate's VIN pads**, on the bench, with no battery connected: measure VIN and the battery connector, and check that the charger chip stays cool through a few refreshes. Soldered say the path is harmless ([assembly.md](hardware/assembly.md#9-the-display)); this confirms it on this board.
 4. **Pull-ups on the TinyS3's bus.** [bom.md](hardware/bom.md#pull-ups) assumes the board adds none. Measure SDA and SCL to 3.3 V with the sensors unplugged.
 5. **What the BME688 board's JP2 joins** ([bom.md](hardware/bom.md#bme688--voc-gas-and-pressure)). Soldered's docs say only that it powers the regulator from 5 V, and no schematic is public. A continuity check across JP2, or the hardware files Soldered sends on request, would settle it.
 6. **Pogo contact resistance.** The connector's listing gives none, so [assembly.md](hardware/assembly.md#7-the-pogo-connector) assumes 30–100 mΩ. Measure across a mated pair with ~200 mA flowing.
@@ -146,17 +146,17 @@ Dated findings and decisions behind the hardware docs, oldest first.
 - **2026-09-13**: on the bench, BSEC restarted from the state in NVS was back at accuracy 3 within 3 minutes.
 - **2026-09-13**: the wiring became one wire per crimp, with ground starred at the Inkplate and cable 1 landing on the PM header. The draft before it chained ground Inkplate → AMS1117 → PM, which put two wires on the regulator's one GND pin.
 - **2026-09-14**: Soldered's pages checked again. Neither Soldered sensor board has a public hardware repo, their docs describe the BME688's JP2 only as feeding the regulator from 5 V, and the Inkplate's BOM names its module only as "ESP32-WROVER", so the PSRAM size stays unverified.
-- **2026-09-14**: the head-to-dock pogo connector is rated 1 A, with no per-pin figure and no contact resistance. The build takes 1 A per pin and assumes 30–100 mΩ per contact.
+- **2026-09-14**: the display-to-dock pogo connector is rated 1 A, with no per-pin figure and no contact resistance. The build takes 1 A per pin and assumes 30–100 mΩ per contact.
 - **2026-09-14**: the module is an ESP32-WROVER-E; its shield prints the name but no variant suffix. The board's Diagnostics report shows 4.0 MB of PSRAM, which rules out the 2 MB variants, so it carries 8 MB. The flash stays 4, 8 or 16 MB.
 - **2026-09-15**: the sensors moved off the Inkplate onto a dock of their own, after the full chain jammed the I²C bus on the Inkplate's rail while each board alone was healthy. One bus carried the panel, the expander, the RTC and the chain, and one 500 mA rail carried the ESP32 and the chain; splitting the device gives each half its own bus and its own regulator.
-- **2026-09-15**: the TinyS3 runs the sensors, with the AMS1117 for their 3.3 V. Its own NCP167 cannot carry the chain: 198 °C/W in a 1 × 1 mm package is +60 °C at the typical load and +130 °C at the peak, which is thermal shutdown. A ProS3, whose second regulator could be switched off, was the alternative; it would have put the SCD41 back on the processor's rail beside the Wi-Fi bursts, which is the fault this design exists to avoid. A 40 mAh cell in the head was ruled out: the Inkplate charges at ~400 mA (10 C) and draws 2.5–40 C from it.
+- **2026-09-15**: the TinyS3 runs the sensors, with the AMS1117 for their 3.3 V. Its own NCP167 cannot carry the chain: 198 °C/W in a 1 × 1 mm package is +60 °C at the typical load and +130 °C at the peak, which is thermal shutdown. A ProS3, whose second regulator could be switched off, was the alternative; it would have put the SCD41 back on the processor's rail beside the Wi-Fi bursts, which is the fault this design exists to avoid. A 40 mAh cell in the display was ruled out: the Inkplate charges at ~400 mA (10 C) and draws 2.5–40 C from it.
 - **2026-09-15**: no fan in the dock. Under a watt of dissipation does not need one, and moving air would disturb the SHTC3, the SCD41's compartment and the BME688's heater.
-- **2026-09-17**: the head takes 5 V at its VIN pads, on Soldered's own advice for this circuit (forum thread 1934). The alternatives were the 0.8 mm VUSB test pad, too small to solder safely, and the battery connector, which is limited to 4.2 V. A Schottky against back-feed was dropped: the dock's side wall covers the head's USB-C socket while it is docked, so nothing can feed it from a computer.
+- **2026-09-17**: the display takes 5 V at its VIN pads, on Soldered's own advice for this circuit (forum thread 1934). The alternatives were the 0.8 mm VUSB test pad, too small to solder safely, and the battery connector, which is limited to 4.2 V. A Schottky against back-feed was dropped: the dock's side wall covers the display's USB-C socket while it is docked, so nothing can feed it from a computer.
 - **2026-09-17**: the chain keeps one ground return, cable 1's GND conductor. A second return existed when seven loose wires crossed the pogo joint; with the sensors in the dock the whole chain returns under 300 mA through 28 AWG, a few millivolts.
 - **2026-09-18**: the right-angle pins on the TinyS3's battery pads are not a fit constraint, so nothing in the enclosure accounts for them. They hang in the 2.5 mm between the board's underside and the tops of the female header strips, where the only things that can meet them are wires and resistors. Both flex, so neither stops the board seating. If the pins ever do get in the way, they come off the board.
 - **2026-09-20**: the SCD41 stays, and a Soldered SCD43 goes in the spares. The SCD43 is a drop-in for the chip — same SCD4x datasheet, same 0x62 address, same commands, single-shot on both, so the driver needs no change — and it is more accurate: ±(30 ppm + 3%) across 400–5000 ppm, against the SCD41's ±(50 ppm + 2.5%) to 1000, ±(50 ppm + 3%) to 2000 and ±(40 ppm + 5%) above it. In this device that is 16 ppm at 800, 20 ppm at 1500 and 70 ppm at 3000. The pages show bands, and yearly drift is ±(5 ppm + 0.5%), so 20 ppm changes nothing a reader would act on. The board is what costs: Soldered's SCD43 has two mounting holes to the Adafruit 5190's four, and its Qwiic sockets are on the left and right rather than front and rear, so the compartment, its bosses and both ribbon lanes move — a chassis redesign and a reprint. Revisit only if the chassis is reprinted for another reason, and check Soldered's JP1 and their bus pull-ups first.
 - **2026-09-21**: the AMS1117 module's pins read GND, OUT, VIN, not IN, OUT, GND. The model, the wiring table and the enclosure notes all had the two ends the wrong way round, and a dock built to them puts 5 V on the regulator's GND pin, which destroys the module. Nothing else is at risk: the output pin can only sit between the two supply rails, so the PM board saw 0 to 5 V, which is inside its rating, and the rest of the chain sits behind the PM board's own regulator. The part has no reverse protection and no marking that survives a drawing, so the fix is procedural as well as numerical — every document now says to read the silkscreen, and that the middle pin is OUT on all of these boards, which is what tells the two ends apart.
-- **2026-09-21**: the bench validation image targets the dock alone, as `dock-validate`. The head has no sensors on its easyC socket any more — the dock reads all four — so an Inkplate build of it proved a wiring that no longer exists. `src/validate/` now builds for the TinyS3: SDA on IO8, SCL on IO9, the PM fan's SET on IO7 as a plain output rather than an expander bit, and no RTC, panel or battery to report. It does not sleep between passes: the serial port is the board's own USB, which a deep sleep drops mid-bench, so it waits ten seconds and runs again. The 2026-09-09 entry's `esp32-validate` command is history.
+- **2026-09-21**: the bench validation image targets the dock alone, as `dock-validate`. The display has no sensors on its easyC socket any more — the dock reads all four — so an Inkplate build of it proved a wiring that no longer exists. `src/validate/` now builds for the TinyS3: SDA on IO8, SCL on IO9, the PM fan's SET on IO7 as a plain output rather than an expander bit, and no RTC, panel or battery to report. It does not sleep between passes: the serial port is the board's own USB, which a deep sleep drops mid-bench, so it waits ten seconds and runs again. The 2026-09-09 entry's `esp32-validate` command is history.
 
 ### The enclosure
 
@@ -174,37 +174,37 @@ Dated findings and decisions behind the hardware docs, oldest first.
   - The right-hand ribbon lane moved in from X 129.1 to X 126, behind a guide rib. At 129.1 the ribbon overhung the
     chassis, had to be stuffed in as the shell came down, and sprang out every time it came off.
   - The lumps check caught two strays: the PM seal rib, built at X −6.1…−5.3 after the chassis had been trimmed to
-    X ≥ −4.8, and the four head-cover bosses, floating 0.5 mm clear of the cavity wall through several revisions
-    of the head.
+    X ≥ −4.8, and the four display-cover bosses, floating 0.5 mm clear of the cavity wall through several revisions
+    of the display.
   - A standing Dupont housing and its wire were measured at 17.7 mm above the header, which set the dock at
     30.5 mm tall at the front. Everything is printed in PLA+ from here.
-- **2026-09-14**: the first printed head could not be assembled. Four cover-boss towers and two dock-screw blocks
+- **2026-09-14**: the first printed display could not be assembled. Four cover-boss towers and two dock-screw blocks
   stood in the cavity that the Inkplate sweeps on its way in. All six went: the cover screws to the Inkplate's
-  standoffs, and an 8-pin magnetic pogo connector holds the head down and carries the head-to-dock wiring.
+  standoffs, and an 8-pin magnetic pogo connector holds the display down and carries the display-to-dock wiring.
   `enclosure.py` reports the swept volume as `inkplate_insertion_blocked_mm3`; it would have read several hundred
-  on the printed head.
+  on the printed display.
 - **2026-09-15**:
-  - Fitting the Inkplate into the printed head broke off SW2 (power) and the wake switch. Both stand 0.85 mm past
+  - Fitting the Inkplate into the printed display broke off SW2 (power) and the wake switch. Both stand 0.85 mm past
     the board's edges, and the cavity was 1 mm clear of the board: 0.15 mm for the switches, less whatever the print
-    took. The cavity went to 2 mm a side in X, and the head 1 mm wider each side with it.
-  - The printed shell was tight as well. The dock went 1 mm wider each side to stay flush with the head, the chassis
-    with it, and the clearance round the head in the cradle pocket and the shell's opening went from 0.3 to 0.5 mm.
+    took. The cavity went to 2 mm a side in X, and the display 1 mm wider each side with it.
+  - The printed shell was tight as well. The dock went 1 mm wider each side to stay flush with the display, the chassis
+    with it, and the clearance round the display in the cradle pocket and the shell's opening went from 0.3 to 0.5 mm.
   - The switches stay pin-operated. SW2 and the wake switch sit 1.15 mm behind the wall's inner face, behind an
     8 × 4.7 mm hole in the left wall's inner skin and an 8 × 4.2 mm hole through the right wall, and a finger did not
     reach them on the print even at 0.15 mm. Kept in reserve: a printed plunger in each hole, with a flange inside
-    the wall to keep it and a head to press, fitted before the Inkplate goes in. On the current board SW2 is
+    the wall to keep it and a display to press, fitted before the Inkplate goes in. On the current board SW2 is
     bypassed (R34 bridged), so the wake switch would get one first.
   - The shell had no front wall above H 5.5. The two cuts meant to leave it 2 mm thick had the offset in X, which a
     plane tilted about X ignores, so the front was a 1 mm wedge that bent easily, with the cradle block showing above
-    it. The wall is now 2 mm from the rim to the head, and the cradle block stands CH_FRONT (0.3 mm) behind it. The
+    it. The wall is now 2 mm from the rim to the display, and the cradle block stands CH_FRONT (0.3 mm) behind it. The
     pogo plinth opens to the front above its ledge, since its front wall would have been 0.4 mm.
-  - The side walls ended beside the head in a 4.3° knife edge: flush with the head at the top of the walls, the
-    draft carried them out past its vertical sides. The dock is now 1.3 mm wider each side than the head, so the
-    walls frame it with 0.8 mm at the top, more below. Kept in reserve: stop the side walls behind the head, with a
-    2 mm shoulder round its bottom corners; or drop the side draft, so the head is flush with the dock's sides the
+  - The side walls ended beside the display in a 4.3° knife edge: flush with the display at the top of the walls, the
+    draft carried them out past its vertical sides. The dock is now 1.3 mm wider each side than the display, so the
+    walls frame it with 0.8 mm at the top, more below. Kept in reserve: stop the side walls behind the display, with a
+    2 mm shoulder round its bottom corners; or drop the side draft, so the display is flush with the dock's sides the
     full height and the dock looks boxier.
-  - The two front shell pillars stood 0.55 mm into the clearance behind the head and left a 0.23 mm sliver at their
-    tops: the head opening was cut before they were added. It is cut after them now.
+  - The two front shell pillars stood 0.55 mm into the clearance behind the display and left a 0.23 mm sliver at their
+    tops: the display opening was cut before they were added. It is cut after them now.
   - The pogo plinth's rim sloped down onto the tails chamber's ceiling at 20°, so the plinth's back wall over the
     chamber was a wedge under 0.8 mm. It printed, but thin. The chamber's roof now drops to H 5.5 under that wall,
     which makes it 2 mm thick, and the wires climb to their H 7 lane at D 21, behind the plinth, not inside it.
@@ -227,17 +227,17 @@ Dated findings and decisions behind the hardware docs, oldest first.
     tunnel's far end is rounded into that mouth, so a wire pushed along it turns out instead of jamming on a corner.
     Two traps on the way: cutting the mouth's box and its rounded end as separate cuts leaves a fin that thins to
     nothing where the two faces cross, so the mouth is built as one tool; and the mouth has to stop short of the
-    block's top, because the head's pocket leans back into it and the wall in front would feather away to nothing.
+    block's top, because the display's pocket leans back into it and the wall in front would feather away to nothing.
   - The wires were schematic: right angles, and several passing through each other. They are drawn at their
     measured size now (jumpers Ø1.3, Qwiic conductors Ø1.0), with an arc of four diameters at every corner where
     the straights allow one, bundled where they travel together, and none passing through another — `run()`
     reports the overlaps (none) and every bend that got less than it wanted. Doing that honestly moved things:
-    - The pogo connector's ways are reassigned. Two of the head's tail ways sit under the AVX capacitor with
+    - The pogo connector's ways are reassigned. Two of the display's tail ways sit under the AVX capacitor with
       1.27 mm above their tips, reachable only along a lane in front of them, one wire from each side; the row
       nearer the cover can only be reached from behind, one wire per line; and in the dock the wires must turn
       out of the chamber in lane order. Between them that fixes which signal takes which way.
     - The tunnel's mouth is 5 mm wider (to X 28.5). A wire cannot turn back over a PM housing from the front —
-      the head's back cover leans over the header row, and the hairpin would get 2.5 mm — so the four PM wires
+      the display's back cover leans over the header row, and the hairpin would get 2.5 mm — so the four PM wires
       leave the mouth at its right-hand end, go round the end of the housing row, climb, and drop in from above.
     - The Qwiic lane moved from X 45.05 to 44.3: a ribbon's outer conductor swings wide on a corner, and at
       45.05 it swept into the corner of the compartment wall. The SCD41 → BME688 ribbon runs a longer loop, its
@@ -255,17 +255,17 @@ Dated findings and decisions behind the hardware docs, oldest first.
   - The strips' legs hang into an open channel. The first cradle had a deck with a 1.2 mm slot under each strip,
     and a soldered wire (1.3 mm) cannot pass through such a slot as the strip goes in.
   - A 3 mm yellow status LED on the TinyS3's IO6 sits under the display's right end, behind a clear LEGO 1×1 round
-    tile pressed flush into the shell, its front sanded. The LED goes in from a pit that opens under the head. The
-    top of the dock was not used, because the leaning head hides it from the seat. The centre of the front face was
+    tile pressed flush into the shell, its front sanded. The LED goes in from a pit that opens under the display. The
+    top of the dock was not used, because the leaning display hides it from the seat. The centre of the front face was
     not used, because the pogo connector is directly behind it.
   - The Inkplate sits as it comes again: the USB-C, the power button and the microSD are in the right wall, and the
-    wake button is in the left wall. The head takes its power from the pogo connector, so no opening has to face
-    left. The thick wall is on the right, the head sits 5.3 mm left in its own frame, and the back-cover grille is
+    wake button is in the left wall. The display takes its power from the pogo connector, so no opening has to face
+    left. The thick wall is on the right, the display sits 5.3 mm left in its own frame, and the back-cover grille is
     over the ESP32 at the top of the board. The firmware's `kRotation` is 0.
-  - With the head docked, the dock's side wall covers most of the head's USB-C opening. This is accepted: to flash
-    the Inkplate by cable, lift the head off, and the cable powers it.
+  - With the display docked, the dock's side wall covers most of the display's USB-C opening. This is accepted: to flash
+    the Inkplate by cable, lift the display off, and the cable powers it.
 - **2026-09-17**, the wiring:
-  - The head carries two wires: 5 V to the VIN pad and ground to the GND pad, the 4 × 4 mm pads on the top edge
+  - The display carries two wires: 5 V to the VIN pad and ground to the GND pad, the 4 × 4 mm pads on the top edge
     above the reset button. Each runs down the board in its own column to a lane along the bottom edge and onto the
     pogo male's cover-side row; each net is on two adjacent contacts joined by a bare bridge. VIN is Soldered's
     recommendation for this circuit ([forum thread 1934](https://community.soldered.com/t/externally-powering-the-inkplate-5v2-with-5v/1934));
@@ -284,15 +284,21 @@ Dated findings and decisions behind the hardware docs, oldest first.
     TinyS3's GND leg, the LED, the AMS1117's GND and the pogo. No joint anywhere takes two wires, because a second
     wire on a joint melts the first. **Check with a meter that the wide end pad on the top face is ground** before
     soldering to it; if it is not, the GND stub moves to the G pad underneath and the holder needs a slot for it.
-  - The pogo connector carries GND on the two contacts nearest the head's USB-C end and VBUS on the other two, so
+  - The pogo connector carries GND on the two contacts nearest the display's USB-C end and VBUS on the other two, so
     that in the dock the GND wire runs in front of the VBUS wire, on the side of its splice.
 - **2026-09-18**, the top skin: one plane from the front edge to the rear. The first print had the skin flat over
   the cradle and sloping from D 37.7, so printed upside down only one of the two planes could lie on the bed, and
   the change of angle printed badly. Carrying the rear's 5.15° slope to the front edge puts the whole skin on the
   bed; the front rises from 30.5 to 33.9 mm and the wiring over the PM header gains 0.4 mm. Lowering the front
   instead was ruled out: the wire lanes over the header allow 0.5 mm at most.
-- **2026-09-19**, the head tray: on the printed head nothing held the Inkplate and the cover in the tray, because
+- **2026-09-19**, the display tray: on the printed display nothing held the Inkplate and the cover in the tray, because
   the cover screws only to the Inkplate; held panel up, they dropped out of the back. The cover now hooks into the
   thin wall with two tongues and screws to the thick wall through two ears. A step for the cover's edge alone was
   tried first and held nothing: it and the bezel lip stop the same direction. Clips were ruled out because PLA+
   ridges wear. The ear screws sit in line with the standoff screws.
+- **2026-09-27**, the name: the head became the display, here as in the product, since a builder reads the same
+  word a user does. The printed parts are the display tray and the display back cover, and their exports, the
+  wiring drawing and the assembly step were renamed with them. `enclosure.py` finds its Fusion components by name,
+  so the design's Head, Head tray, Head back cover, Head wiring (toggle) and Pogo male (head) components are renamed
+  to match in Fusion before the script next runs, or it builds a second set beside them. The exports' own contents
+  still say head until they are next exported. A screw head is still a head.
