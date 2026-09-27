@@ -7,5 +7,6 @@
 src/defaults.cpp
 !scripts/version.py
 !scripts/bsec.py
+!scripts/dock_core.py
 !server/requirements.txt
 !firmware-builder/build.sh

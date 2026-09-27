@@ -30,6 +30,7 @@ jobs:
           path: |
             ~/.cache/pip
             ~/.platformio/.cache
+            ~/.platformio-canary-dock/.cache
           key: ${{ runner.os }}-pio-${{ hashFiles('canary/platformio.ini') }}
       - uses: actions/setup-python@v6
         with:
@@ -40,12 +41,16 @@ jobs:
       - name: Create defaults.cpp from example
         run: cp src/defaults.example.cpp src/defaults.cpp
 
+      - name: Build the display
+        run: pio run -e esp32
+
       # Both sensor paths, plus the bench routine that runs instead of the
       # awake loop: the drivers the board runs, the mocks that stand in when
       # nothing is attached, and the wiring check. The validation image needs
-      # epd 0.4.0 for writeExpanderPin() and enableWakeOnTimer().
-      - name: Build firmware
-        run: pio run -e esp32 -e dock -e dock-mock -e dock-validate
+      # epd 0.4.0 for writeExpanderPin() and enableWakeOnTimer(). In a
+      # PlatformIO folder of its own (CONTRIBUTING.md, Building the dock).
+      - name: Build the dock
+        run: PLATFORMIO_CORE_DIR=~/.platformio-canary-dock pio run -e dock -e dock-mock -e dock-validate
 
       # This project's own logic, on the host: the room model, the sensor
       # mocks, the drivers against a fake I2C bus, the suite that reads

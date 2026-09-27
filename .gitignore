@@ -14,6 +14,11 @@ server/static/*.html
 # A link to Fusion's API stubs, for type-checking hardware/enclosure.py
 .fusion-api
 
+# Written by pioarduino when it compiles the dock's IDF libraries
+.dummy/
+managed_components/
+sdkconfig.*
+
 # Firmware images the board updates itself from
 server/firmware/
 

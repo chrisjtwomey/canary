@@ -188,10 +188,10 @@ commit a change, and put each board's build of it in the folder, named by
 its version:
 
 ```sh
-pio run -e esp32 -t upload && pio run -e dock -t upload
+pio run -e esp32 -t upload && PLATFORMIO_CORE_DIR=~/.platformio-canary-dock pio run -e dock -t upload
 v=$(git describe --tags --match 'v*' --dirty)
 pio run -e esp32 && cp .pio/build/esp32/firmware.bin server/firmware/canary-display/$v.bin
-pio run -e dock && cp .pio/build/dock/firmware.bin server/firmware/canary-dock/$v.bin
+PLATFORMIO_CORE_DIR=~/.platformio-canary-dock pio run -e dock && cp .pio/build/dock/firmware.bin server/firmware/canary-dock/$v.bin
 ```
 
 The file's name must be the `CLIENT_VERSION` the build prints, and the
@@ -216,7 +216,8 @@ fails three times, and boots the previous one again.
 It then refuses that version for good, so the next offer logs `firmware
 v0.3.1-52-gcd34ef5 is offered again; this board rolled back from it` rather
 than looping. To try the same version again, erase the board with
-`pio run -e esp32 -t erase` (or `-e dock`), or commit again for a new one.
+`pio run -e esp32 -t erase` (the dock with `-e dock` in its own folder: see
+Building the dock), or commit again for a new one.
 
 To watch a board go back to the server's line, build an image under a tag
 the server's line is behind, flash it over USB, and leave the older image in
@@ -233,8 +234,9 @@ offers only to boards on a tagged build, and leaves the others alone.
 Two boards: the display (`esp32`) fetches the pages from the server and draws
 them; the dock (`dock`) reads the four sensors over I2C and posts them.
 Three things to set up. See [hardware/assembly.md](hardware/assembly.md) for the
-wiring; `pio run -e dock-mock -t upload` builds the dock's firmware with the
-simulated room in place of the sensors, for a board with nothing attached.
+wiring; `PLATFORMIO_CORE_DIR=~/.platformio-canary-dock pio run -e dock-mock -t upload`
+builds the dock's firmware with the simulated room in place of the sensors,
+for a board with nothing attached.
 
 1. **Credentials.** Copy `src/defaults.example.cpp` to `src/defaults.cpp`
    (gitignored) and fill in the WiFi SSID and password. Point `serverURL`
@@ -332,7 +334,7 @@ capture: it has no network and no server, so what the log shows is the
 sensors and nothing else.
 
 ```sh
-pio run -e dock-validate -t upload
+PLATFORMIO_CORE_DIR=~/.platformio-canary-dock pio run -e dock-validate -t upload
 pio device monitor -b 115200
 ```
 
@@ -401,6 +403,25 @@ ln -s "$HOME/Library/Application Support/Autodesk/webdeploy/production/Autodesk 
 
 Without the link, only the `adsk` imports show as unresolved.
 
+## Building the dock
+
+The dock builds in a PlatformIO folder of its own, `~/.platformio-canary-dock`.
+Name it in every dock command, `dock-mock` and `dock-validate` too:
+
+```sh
+PLATFORMIO_CORE_DIR=~/.platformio-canary-dock pio run -e dock -t upload
+```
+
+Its `custom_sdkconfig` turns on automatic light sleep, which the core's
+precompiled IDF libraries leave out, so pioarduino compiles those libraries
+again. It writes them into a package that every build in the PlatformIO
+folder shares, and the display then fails to build there.
+`scripts/dock_core.py` stops a dock build in `~/.platformio` before that
+happens.
+
+The first build in the folder takes about 6 minutes, and the folder grows to
+about 7 GB. Later builds take about 20 seconds.
+
 ## The wiring diagrams
 
 The circuit drawings in `hardware/images/` are generated, not painted.
@@ -449,8 +470,9 @@ for, which may be an older one.
 Run the builder beside a server of the same tag. A pair on `latest` moves
 the boards with every push, because a server past a tag offers development
 builds; a pair on `0.3.1` keeps them on that release. The one USB flash a
-board needs, with your own `src/defaults.cpp`, is `pio run -e dock -t upload`
-(`-e esp32` for the display) from a checkout of the version the server runs.
+board needs, with your own `src/defaults.cpp`, is `pio run -e esp32 -t upload`
+for the display (the dock's command is in Building the dock), from a checkout
+of the version the server runs.
 
 The server image runs `python server.py` with the example config on port
 8080. Mount your own `config.yaml` at `/app/config.yaml`, and volumes at

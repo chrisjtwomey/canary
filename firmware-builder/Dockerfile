@@ -12,8 +12,8 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
 RUN pip install --no-cache-dir platformio==6.2.0
 
 # The toolchain and Bosch's BSEC library download on the first build, and a
-# volume at /platformio keeps the toolchain. Open to every uid, because
-# compose chooses the uid.
+# volume at /platformio keeps the toolchain; the dock's is in /platformio/dock
+# (build.sh). Open to every uid, because compose chooses the uid.
 ENV PLATFORMIO_CORE_DIR=/platformio \
     HOME=/tmp
 RUN mkdir -m 1777 /platformio
@@ -29,7 +29,7 @@ COPY platformio.ini partitions.csv /src/canary/
 COPY include /src/canary/include
 COPY lib /src/canary/lib
 COPY src /src/canary/src
-COPY scripts/version.py scripts/bsec.py /src/canary/scripts/
+COPY scripts/version.py scripts/bsec.py scripts/dock_core.py /src/canary/scripts/
 COPY server/requirements.txt /src/canary/server/requirements.txt
 RUN cp /src/canary/src/defaults.example.cpp /src/canary/src/defaults.cpp \
     && ref=$(sed -n 's|.*/epd\.git@\([^#]*\)#subdirectory=server.*|\1|p' /src/canary/server/requirements.txt) \

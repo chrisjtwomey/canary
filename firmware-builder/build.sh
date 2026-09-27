@@ -27,15 +27,15 @@ fi
 work=$(mktemp -d)
 cp -r "$src"/. "$work"/
 
-build() {  # <product> <environment>
-    local product=$1 env=$2
+build() {  # <product> <environment> [<PlatformIO folder>]
+    local product=$1 env=$2 core=${3:-$PLATFORMIO_CORE_DIR}
     local out=$dir/$product/$version.bin
     if [ -e "$out" ]; then
         log "$product $version is already built"
         return
     fi
     log "building $product $version"
-    if ! pio run -d "$work/canary" -e "$env" > "$work/$env.log" 2>&1; then
+    if ! PLATFORMIO_CORE_DIR=$core pio run -d "$work/canary" -e "$env" > "$work/$env.log" 2>&1; then
         tail -n 20 "$work/$env.log"
         log "$product $version failed; restart the container to try again"
         return
@@ -53,5 +53,7 @@ build() {  # <product> <environment>
 }
 
 build canary-display esp32
-build canary-dock dock
+# The dock compiles its own IDF libraries, which break the display's build in a
+# shared folder. A subfolder keeps them in the same volume.
+build canary-dock dock "$PLATFORMIO_CORE_DIR/dock"
 idle
