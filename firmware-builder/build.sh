@@ -35,8 +35,9 @@ build() {  # <product> <environment> [<PlatformIO folder>]
         return
     fi
     log "building $product $version"
-    if ! PLATFORMIO_CORE_DIR=$core pio run -d "$work/canary" -e "$env" > "$work/$env.log" 2>&1; then
-        tail -n 20 "$work/$env.log"
+    # PlatformIO's output goes to the container's log as it builds, and to a
+    # file for the version check below. pipefail keeps pio's exit status.
+    if ! PLATFORMIO_CORE_DIR=$core pio run -d "$work/canary" -e "$env" 2>&1 | tee "$work/$env.log"; then
         log "$product $version failed; restart the container to try again"
         return
     fi

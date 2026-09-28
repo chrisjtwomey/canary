@@ -467,7 +467,8 @@ firmware's sources instead, at its commit, and builds them where it runs.
 When it starts, it builds the display's and the dock's firmware of its own
 version into the folder the server offers images from, as
 `canary-display/<version>.bin` and `canary-dock/<version>.bin`, and then waits.
-Images already in the folder stay: a server offers the one its version calls
+Its container log shows PlatformIO's output as each build runs. Images
+already in the folder stay: a server offers the one its version calls
 for, which may be an older one.
 
 Run the builder beside a server of the same tag. A pair on `latest` moves
