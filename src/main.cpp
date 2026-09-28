@@ -27,7 +27,6 @@
 #include "log_utils.h"
 #include "network_utils.h"
 #include "ota.h"
-#include "sd_config.h"
 #include "settings.h"
 #include "sleep_utils.h"
 #include "wake.h"
@@ -309,7 +308,6 @@ void setup() {
     // A wake from deep sleep keeps the page it went to sleep on.
     if (!woke) showSplash();
     config = loadConfig(builtInSettings());
-    applySdConfig(&config);
 
     connectNetworkOrSleep();
     if (urlOrigin(config.serverURL, readingsURL, sizeof(readingsURL) - sizeof(kReadingsPath))) {

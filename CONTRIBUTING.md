@@ -243,11 +243,6 @@ for a board with nothing attached.
    at the machine that runs the server, for example
    `http://192.168.1.20:8080/breathe.png`. On a Mac, `ipconfig getifaddr en0`
    prints its address.
-
-   An SD card can carry the same settings instead. Copy
-   [docs/config.yaml](docs/config.yaml) to the root of the card. The board
-   reads it after the built-in settings and its own store, so the card wins.
-   One image then serves boards on different networks.
 2. **The server**, on the same network:
 
    ```sh

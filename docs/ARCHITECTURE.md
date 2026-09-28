@@ -86,7 +86,7 @@ each wake:  board.begin(); wifi
 ```
 
 Every answer from the server sets the display's clock, time zone and RTC, so
-it asks no NTP.
+it asks no NTP, and it reads no SD card: its settings are in its own store.
 The RTC's alarm wakes it, and the ESP32's timer stands behind the alarm a
 little later, so a missed alarm makes a late page rather than a display that
 never wakes. What must outlast the sleep, the wake plan, the next URL and the
@@ -532,3 +532,4 @@ Dated decisions and status behind the text above, oldest first.
 - **2026-09-27**: the dock builds in a PlatformIO folder of its own: `~/.platformio-canary-dock` locally and in CI, `/platformio/dock` in the builder. Automatic light sleep needs power management and tickless idle, which the core's precompiled IDF libraries leave out, so pioarduino compiles them again for the dock. It writes them into a package that every build in the folder shares, and the display then fails to build there. `scripts/dock_core.py` stops a dock build in `~/.platformio`. A separate dock project with its own `core_dir` was not taken: `PLATFORMIO_CORE_DIR` overrides `core_dir`, and the builder image sets it for every build.
 - **2026-09-27**: the dock light-sleeps between passes of its loop (§3.1), with Wi-Fi kept: automatic light sleep at 80 MHz, the loop once a second rather than every 10 ms, and the LED task waiting for the pattern's next step rather than looking every 5 ms. On mains power the reasons are heat and power: awake, the dock drew about 71 mA at 5 V between readings, with the BME688 1.3 mm from the TinyS3. It stays online rather than deep-sleeping, which would lose the PSRAM queue and BSEC's settling. Its LED runs on the IDF's LEDC driver, because Arduino's leaves the channel no output in light sleep.
 - **2026-09-28**: the boards take their time and time zone from the server instead of NTP and a time-zone lookup, which cost the display about a second at every wake, seven when NTP timed out. The zone comes as a POSIX TZ string from `server.timezone`, sent on every response, and the C library reads it. ezTime, which did the lookup, is gone: it misreads the string the zone database writes for Europe/Dublin, whose winter is a negative daylight shift, and would show summer time all year. The Wi-Fi join is checked every 100 ms rather than every second.
+- **2026-09-28**: the display reads no SD card. Looking for one cost two seconds at every wake, the time the SD library waits for a card that is not there, and the display's settings are in its own store, so a card would only repeat them.
