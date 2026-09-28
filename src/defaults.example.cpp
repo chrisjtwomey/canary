@@ -15,8 +15,6 @@ ClientConfig builtInSettings() {
     cfg.wifiSSID = "XXXX";
     cfg.wifiPass = "XXXX";
     cfg.wifiRetries = 10;
-    cfg.ntpHost = "pool.ntp.org";
-    cfg.ntpTimezone = "Europe/Dublin";
     cfg.mqttEnabled = false;
     cfg.mqttBroker = "XXXX";
     cfg.mqttPort = 1883;

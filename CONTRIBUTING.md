@@ -264,7 +264,7 @@ for a board with nothing attached.
    pio device monitor -b 115200
    ```
 
-The log shows the boot banner and User-Agent, WiFi and NTP, then
+The log shows the boot banner and User-Agent and the WiFi join, then
 `downloading file at URL ...`, `drawing image from buffer` and
 `next refresh in N s`. The panel works through the pools in turn, one page
 every five minutes on the wall clock (:00, :05, ...). A fetch that fails

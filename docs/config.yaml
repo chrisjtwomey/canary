@@ -2,7 +2,7 @@
 #
 # The board reads this after its built-in settings and its own store, so
 # anything here wins. Without a card, or with a key missing, the board keeps
-# what it already had. The five keys marked required must all be present or
+# what it already had. The three keys marked required must all be present or
 # the file is ignored whole.
 server:
   # Required. The first page the board fetches. The server names the next one
@@ -16,10 +16,6 @@ wifi:
   ssid: XXXX          # required
   pass: XXXX          # required
   retries: 10
-ntp:
-  host: pool.ntp.org  # required
-  # Required. The timezone in "Olson" format.
-  timezone: Europe/Dublin
 mqtt_logger:
   # Set to true to publish the board's logs to a broker.
   enabled: false

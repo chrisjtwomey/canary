@@ -25,7 +25,6 @@
 #include <Wire.h>
 #include <driver/ledc.h>
 #include <esp_pm.h>
-#include <ezTime.h>
 
 #include "log_utils.h"
 #include "mqtt_topic.h"
@@ -641,7 +640,8 @@ static void heardFrom(const PageResponse& rsp, uint32_t atMs, bool schedule) {
     portENTER_CRITICAL(&clockLock);
     serverClock.sync(rsp.serverEpoch, atMs);
     portEXIT_CRITICAL(&clockLock);
-    setTime((time_t)rsp.serverEpoch);
+    setClock((time_t)rsp.serverEpoch);
+    setTimezone(rsp.serverTimezone);
     if (schedule && rsp.nextSensorPollSeconds) postTimer.answered(atMs, rsp.nextSensorPollSeconds);
     if (!first) return;
     bootEpoch = epochAt(0);
@@ -960,7 +960,6 @@ void setup() {
     if (onTrial) logf(LOG_NOTICE, "trial boot of %s", CLIENT_VERSION);
     config = loadConfig(builtInSettings());
     connectNetworkForever();
-    setInterval(0);   // ezTime: no NTP; the log's clock is set from the server
     static char mqttTopic[128];
     if (config.mqttEnabled && mqttSettingsAreSet(config.mqttBroker) &&
         boardLogTopic(config.mqttPrefix, CLIENT_NAME, mqttTopic, sizeof(mqttTopic))) {

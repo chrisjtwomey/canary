@@ -26,7 +26,7 @@ bool parseBme688Calibration(const char* json, uint8_t* state, uint32_t max, uint
                             uint8_t& accuracy, uint32_t& savedEpoch, uint16_t& sampleS);
 
 // What the board knows of a saved state. A savedEpoch of 0 is a copy saved
-// before NTP set the clock, whose age is unknown.
+// before the server set the clock, whose age is unknown.
 struct SavedCopy {
     bool     present;
     uint8_t  accuracy;

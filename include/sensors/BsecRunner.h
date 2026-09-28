@@ -12,7 +12,7 @@ struct BsecState {
     uint8_t  blob[IBsec::kMaxState];
     uint32_t len;
     uint8_t  accuracy;     // the IAQ accuracy when it was taken, 0-3
-    uint32_t savedEpoch;   // UTC seconds when it was taken; 0 before NTP set the clock
+    uint32_t savedEpoch;   // UTC seconds when it was taken; 0 before the server set the clock
     uint16_t sampleS;      // the rate it was learned at; useless at the other
 };
 
@@ -31,7 +31,7 @@ public:
 // marked "any task", which take the lock.
 class BsecRunner {
 public:
-    typedef uint32_t (*EpochFn)();   // UTC seconds, or 0 before NTP has set the clock
+    typedef uint32_t (*EpochFn)();   // UTC seconds, or 0 before the server has set the clock
 
     struct Status {
         bool     started;      // BSEC took its configuration, whether or not the sensor answers

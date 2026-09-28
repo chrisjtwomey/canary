@@ -19,7 +19,6 @@
 // with a progress bar.
 #include <Arduino.h>
 #include <WiFi.h>
-#include <ezTime.h>
 
 #include "epd.h"
 #include "InkplateBoard.h"
@@ -57,7 +56,7 @@ static const uint8_t  kRotation = 0;             // landscape, as the board come
 // Buffer size when the server sends no Content-Length. An eight-grey
 // 1280x720 PNG is under 200 KB.
 static const int32_t  kDownloadFallbackBytes = 512 * 1024;
-// A shorter wait is spent awake: a wake costs a boot, Wi-Fi and NTP.
+// A shorter wait is spent awake: a wake costs a boot and Wi-Fi.
 static const uint32_t kShortestSleepS = 10;
 static const uint32_t kWifiRetryS = 30;
 
@@ -93,11 +92,8 @@ static char     clientJson[768];
 static char     body[768 + 96];
 static char     ipText[16];
 
-// UTC seconds: network time once NTP has answered, the RTC until then.
-static uint32_t epochNow() {
-    if (timeStatus() != timeNotSet) return (uint32_t)now();
-    return (uint32_t)epdBoard().rtcGetEpoch();
-}
+// UTC seconds: the server's clock once it has answered, the RTC's until then.
+static uint32_t epochNow() { return (uint32_t)time(nullptr); }
 
 // Deep sleep until `at`, in UTC seconds, which the RTC holds. The ESP32's
 // own timer stands behind the RTC's alarm, a little later, so a missed alarm
@@ -172,7 +168,7 @@ static void fetchSucceeded() {
     logf(LOG_INFO, "next refresh in %u s",
          fetched->response.nextRefreshSeconds ? fetched->response.nextRefreshSeconds
                                               : config.defaultRefreshSeconds);
-    if (timeStatus() != timeNotSet) strlcpy(lastPageAt, nowTzFmt().c_str(), sizeof(lastPageAt));
+    strlcpy(lastPageAt, nowTzFmt().c_str(), sizeof(lastPageAt));
 
     // Something is on the panel, so a freshly written image has proved itself.
     // Confirming it also frees the idle slot for the next update.
@@ -287,6 +283,7 @@ static void wake() {
     if (page) fetchAndDraw();
 
     const PageResponse rsp = postStatus();
+    keepServerTime(rsp);
     synced(plan, epochNow(), rsp.nextSensorPollSeconds);
     if (!startedAt && rsp.serverEpoch) startedAt = rsp.serverEpoch - millis() / 1000;
     if (!page) takeOffer(rsp);
@@ -331,7 +328,6 @@ void loop() {
     }
     if (!onTrial && secondsUntil(nextWake(plan), now) >= kShortestSleepS) sleepUntil(nextWake(plan));
 
-    events();   // ezTime: periodic NTP re-sync
     keepMQTTConnected();
     delay(10);
 }
