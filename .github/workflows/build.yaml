@@ -33,13 +33,16 @@ jobs:
             ~/.platformio-canary-dock/.cache
           key: ${{ runner.os }}-pio-${{ hashFiles('canary/platformio.ini') }}
       # The IDF libraries the dock's custom_sdkconfig compiles, which take
-      # about six minutes. pioarduino skips the compile when the package's
-      # sdkconfig matches the options, and platformio.ini holds those and the
+      # about six minutes. pioarduino skips the compile when the first line of
+      # the project's sdkconfig.defaults holds the hash of the options, so that
+      # file is kept with them. platformio.ini holds the options and the
       # platform version.
       - uses: actions/cache@v5
         with:
-          path: ~/.platformio-canary-dock/packages/framework-arduinoespressif32-libs
-          key: ${{ runner.os }}-dock-idf-libs-${{ hashFiles('canary/platformio.ini') }}
+          path: |
+            ~/.platformio-canary-dock/packages/framework-arduinoespressif32-libs
+            canary/sdkconfig.defaults
+          key: ${{ runner.os }}-dock-idf-${{ hashFiles('canary/platformio.ini') }}
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
