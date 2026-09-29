@@ -37,6 +37,8 @@ While the server runs:
 The config page:
 
 - The form keeps the file's comments and layout. The YAML tab shows the keys that the form does not show.
+- The Display tab holds the `display` and `image` blocks: the page schedule, the sync, the pools, the image's size
+  and its drawn area. They are one tab because they are the settings the display takes at its sync.
 - **Check** tests an edit, as the server tests the file at start.
 - **Save and restart** lists the changes, keeps the old file as `config.yaml.bak`, writes the new file and
   restarts the server. **Restore** puts the `.bak` back.

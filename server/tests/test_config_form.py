@@ -489,7 +489,7 @@ def test_a_changed_double_or_triple_reads_by_its_name():
 @pytest.mark.parametrize("path, name", [
     (("server", "port"), "Server · Port"),
     (("status", "keep_days"), "Storage · Board reports · Delete after"),
-    (("image", "innerWidth"), "Image · Drawn area · Width"),
+    (("image", "innerWidth"), "Display · Drawn area · Width"),
     (("display", "pools", "co2"), "Display · Pools · co2"),
 ])
 def test_a_label_two_fields_share_is_named_with_its_group(path, name):

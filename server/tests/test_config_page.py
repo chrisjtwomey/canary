@@ -97,7 +97,7 @@ def test_the_page_shows_the_file_as_a_form_and_as_text(client, path):
     assert one(soup, '[data-field="server.port"] .reset').has_attr("hidden")
     assert soup.select_one('[data-field="source.kind"]') is None
     assert [attr(t, "data-tab") for t in soup.select("nav.tabs a")] == [
-        "server", "display", "image", "dock", "storage", "firmware", "mqtt", "yaml"]
+        "server", "display", "dock", "storage", "firmware", "mqtt", "yaml"]
 
 
 def test_the_form_posted_back_as_it_is_changes_nothing(client, path, restarts):
@@ -979,7 +979,7 @@ def test_after_a_save_the_save_bar_says_when_each_board_takes_it(
     assert one(soup, "#settings-form .savebar .status").get_text() == words
 
 
-# ── The Image tab ───────────────────────────────────────────────────
+# ── The Display tab's image size and drawn area ─────────────────────
 
 def image_client(path, tz, display):
     app = Flask(__name__)
@@ -991,7 +991,7 @@ def image_client(path, tz, display):
 
 
 def test_the_position_grid_stands_for_both_alignments(client):
-    panel = one(soup_of(client.get("/web/config")), "#panel-image")
+    panel = one(soup_of(client.get("/web/config")), "#panel-display")
     grid = one(panel, ".grid3")
 
     assert (attr(grid, "data-x"), attr(grid, "data-y")) == ("image.innerAlignX", "image.innerAlignY")

@@ -164,8 +164,6 @@ TABS: tuple[Tab, ...] = (
         Group("Pools", about="The pages to show, in groups taken in turn", fields=(
             Field("display.pools", "Pools", "Drag to reorder.", "pools", env=False),
         )),
-    ), sheet=True),
-    Tab("image", "Image", (
         Group("Size", about="The size of the image the server draws for the panel", fields=(
             Field("image.width", "Width", "", "int", 1280, unit="px",
                   minimum=1),
