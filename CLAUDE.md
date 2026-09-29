@@ -16,12 +16,18 @@ Each doc covers one area. Read a doc only when the task needs it.
 |---|---|
 | Sets up the venv, runs the tests, or builds the dock | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Changes how a builder deploys the server or flashes a board | [README.md](README.md) |
-| Uses the simulated room or `pio run -e sim` | [docs/simulator.md](docs/simulator.md) |
+| Uses or changes the simulated room, the mock sensors or `pio run -e sim` | [docs/simulator.md](docs/simulator.md) |
 | Changes a page, the web UI, the config page or the pools | [docs/pages.md](docs/pages.md) |
 | Runs the firmware on a board, reads a board's log, or checks the wiring | [docs/boards.md](docs/boards.md) |
 | Changes or tests the updates over the air | [docs/firmware-updates.md](docs/firmware-updates.md) |
 | Changes the release workflow, the images or the firmware builder | [docs/releases.md](docs/releases.md) |
-| Changes the firmware or server design: wire headers, LED, version gate, notices | [docs/architecture.md](docs/architecture.md) |
+| Needs the overview of the firmware and the server, or the repo tree | [docs/architecture.md](docs/architecture.md) |
+| Changes the dock's loop, its clock, the readings queue or the sensor code | [docs/dock.md](docs/dock.md) |
+| Changes the display's wakes, its notices or its splash screen | [docs/display.md](docs/display.md) |
+| Changes the page schedule, the dock's schedule or the display's sync | [docs/schedules.md](docs/schedules.md) |
+| Changes the status LED | [docs/led.md](docs/led.md) |
+| Changes a header, `/about`, the version rule or the updates over the air | [docs/versions.md](docs/versions.md) |
+| Changes a dock setting or the recalibration | [docs/dock-settings.md](docs/dock-settings.md) |
 | Changes the JSON that the boards post | [docs/readings.md](docs/readings.md) |
 | Looks for a file in `hardware/` | [hardware/README.md](hardware/README.md) |
 | Changes what to buy, or an alternative part | [hardware/bom.md](hardware/bom.md) |

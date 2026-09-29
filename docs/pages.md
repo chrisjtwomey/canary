@@ -72,7 +72,7 @@ The `display` block in `config.yaml`:
 - `pools` is what the display can show: named lists of pages. Each pool shows its pages in turn, from a random start
   that moves every `reshuffle_hours`. The clock seeds the random start, so a restart changes nothing.
 - `schedule` is when. At each slot of its `week`, the display shows the next pool in `order`. Each group of days has
-  its own time ranges, and each range has an interval ([ARCHITECTURE §3.3](architecture.md)).
+  its own time ranges, and each range has an interval ([schedules.md](schedules.md)).
 - To keep a pool off the panel, leave it out of `order`.
 - To check pages on the panel quickly, set the page schedule to one range of `every: 60`, and restart the server.
 

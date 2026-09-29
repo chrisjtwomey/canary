@@ -33,7 +33,7 @@ server/
   config.example.yaml
 ```
 
-[docs/architecture.md §5](docs/architecture.md#5-shape-of-the-repo) has the full tree.
+[docs/architecture.md](docs/architecture.md#the-repo) has the full tree.
 
 Each board is a PlatformIO environment, and `build_src_filter` gives each one only its own files. No build flag
 selects what a board runs, so code that the display does not compile cannot get into the display.
