@@ -183,7 +183,8 @@ client:
     enabled: true
 ```
 
-Flash each board once over USB, so it stores its WiFi and server URL. Then
+Flash each board once over USB, so it stores its WiFi and server URL. Lift the
+display off the dock first: the dock's side wall covers its USB-C socket. Then
 commit a change, and put each board's build of it in the folder, named by
 its version:
 
@@ -412,7 +413,9 @@ precompiled IDF libraries leave out, so pioarduino compiles those libraries
 again. It writes them into a package that every build in the PlatformIO
 folder shares, and the display then fails to build there.
 `scripts/dock_core.py` stops a dock build in `~/.platformio` before that
-happens.
+happens. A dock project with its own `core_dir` would not do:
+`PLATFORMIO_CORE_DIR` overrides `core_dir`, and the builder image sets it for
+every build.
 
 The dock does not light-sleep while its USB port is connected to a host, so
 measure its current with the port's data lines disconnected.

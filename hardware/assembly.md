@@ -231,7 +231,9 @@ cable 3V3 is the red wire; find it in a plug before you cut the plugs off.
 
 Two wires and nothing else. 5 V on the Inkplate's VIN pads is Soldered's own answer for this circuit
 ([forum thread 1934](https://community.soldered.com/t/externally-powering-the-inkplate-5v2-with-5v/1934)), and
-the board's own USB-C sits behind the dock's side wall while the display is docked.
+the board's own USB-C sits behind the dock's side wall while the display is docked. So no diode guards against
+back-feed: nothing can feed the display from a computer while it is docked. An enclosure that opens the socket
+needs one.
 
 1. Solder VBUS to PAD3 (VIN) and GND to PAD5, the 4 × 4 mm pads on the top edge above the reset button. Both are
    on the component side, which faces the cover.

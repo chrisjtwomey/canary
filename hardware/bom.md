@@ -108,10 +108,11 @@ No conflict with 0x12, 0x62, 0x70, 0x76/0x77.
 - 3V3: TPS7A2633, **500 mA**, 2 µA quiescent, from VIN. Feeds ESP32, expander, RTC, panel PMIC 3.3 V input, microSD, and the easyC connector.
 - Deep sleep 18 µA *(product page)*; 20–30 µA with peripherals asleep *(docs)*. Awake, Wi-Fi and refresh currents: not published.
 - `readBattery()`: expander P1_1 enables a MOSFET, 100k/100k divider, `analogReadMilliVolts(35) × 2`.
+- No cell in the display: the charger runs at about 400 mA, which is 10 C for a 40 mAh cell that would fit, and the board draws 2.5–40 C from it.
 
 ### Deep sleep and wake
 
-- RTC INT → JP2 (default INT) → **GPIO39** with 10 k pull-up *(schematic)*. Library example: `setAlarmEpoch(..., RTC_ALARM_MATCH_DHHMMSS); esp_sleep_enable_ext0_wakeup(GPIO_NUM_39, 0);` — the example carries the comment "GPIO39 is NOT guaranteed for Inkplate 5v2". Matches what `EpdBoardInkplate::enableWakeOnRtcAlarm()` does. **It works on this board** *(measured)*: the validation build sets a 10 s alarm and every wake logs `ESP_SLEEP_WAKEUP_EXT0` on time. Soldered's warning stands for the family, not for this unit.
+- RTC INT → JP2 (default INT) → **GPIO39** with 10 k pull-up *(schematic)*. Library example: `setAlarmEpoch(..., RTC_ALARM_MATCH_DHHMMSS); esp_sleep_enable_ext0_wakeup(GPIO_NUM_39, 0);`, which is what `EpdBoardInkplate::enableWakeOnRtcAlarm()` does. Measured: every wake from a 10 s alarm logged `ESP_SLEEP_WAKEUP_EXT0` on time. The display's deep sleep uses it.
 - Wake button SW3 → GPIO36, active low. Expander INT → GPIO34.
 - **easyC 3V3 stays on in deep sleep.** It is the unswitched LDO output the ESP32 itself runs from. Only microSD and RTC rails are switched.
 - Free GPIO: expander P1_3–P1_7 on the bottom header; `gpioInit()` sets them OUTPUT LOW. Use `display.expander1.pinMode/digitalWrite(IO_PIN_B3..B7, ...)`. Do not use P0_x.
@@ -141,8 +142,9 @@ No conflict with 0x12, 0x62, 0x70, 0x76/0x77.
 PSRAM, USB-C, and two 12-way header rows. It hosts the four sensors, keeps the reading queue in its PSRAM and
 posts to the server.
 
-- **Supply**: 5 V on its 5V pin, from the dock's USB-C socket. About 100 mA awake, with bursts near 350 mA when
-  the radio transmits *(typical ESP32-S3 figures)*.
+- **Supply**: 5 V on its 5V pin, from the dock's USB-C socket. The whole dock at 5 V, light-sleeping *(measured,
+  PPK2)*: 11.7 mA at its lowest, 36.8 mA idle, 48.9 mA on average at 5-minute readings, 140 mA while the PM fan
+  runs. Kept awake, the chip draws about 40 mA more.
 - **Pins used**, by the labels printed on the board: **9** SCL, **8** SDA, **7** the PM fan's SET line,
   **6** the status LED, both **GND** pins, and **5V** the 5 V in. Nothing else is wired.
 - **Headers**: soldered long pins down, so the board drops into the female strips in its cradle and lifts out
@@ -391,8 +393,9 @@ Sequence from sleep: wakeup → ≥ 240 µs → measure → ≥ 12.1 ms (0.8 ms 
 
 ## The small parts
 
-**AMS1117-3.3 module.** The sensors' 3.3 V comes from here, not from the TinyS3's own regulator: see the
-decision log in [CLAUDE.md](../CLAUDE.md). It is an LDO, so it drops 1.7 V and turns about 0.37 W into heat at
+**AMS1117-3.3 module.** The sensors' 3.3 V comes from here, not from the TinyS3's own regulator: that is an
+NCP167 at 198 °C/W in a 1 × 1 mm package, which the chain would heat by about 60 °C at a typical load and 130 °C at
+the peak, past its thermal shutdown. It is an LDO, so it drops 1.7 V and turns about 0.37 W into heat at
 215 mA; [enclosure.md](enclosure.md#ventilation) has the air passage under it. Buy the plain 3-pin module, no
 mounting holes: 12.5 × 8.5 mm, which is what its pocket is drawn to. Its pins read **GND, OUT, VIN** along the
 header. The middle one is OUT on every one of these boards, so it is what tells the two ends apart. **5 V on the

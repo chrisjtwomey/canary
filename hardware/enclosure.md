@@ -41,8 +41,10 @@ It is meant to sit on a desk without announcing itself, which drove the architec
   display be only 14 mm thick.
 - **The dock is a chassis inside a shell.** The shell is one uninterrupted skin; all four of its screws come up
   from underneath through the chassis, so nothing breaks the top or the sides.
-- **The front is one continuous 20° slab.** The display's bezel and the dock's front face lie in the same plane with
-  only a parting line between them. At the sides the dock's walls frame the display, 1.3 mm outside it at the top.
+- **The front is one continuous 20° slab.** The display's bezel and the dock's front face lie in the same plane
+  with only a parting line between them. At the sides the dock's walls frame the display, 1.3 mm outside it at the
+  top. Two other shapes would work: side walls that stop behind the display, with a 2 mm shoulder round its bottom
+  corners; or no side draft, so the display is flush with the dock's sides the full height, which looks boxier.
 - **Nothing is square.** 10 mm plan radii on the dock and 5 mm on the display, a 1.5 mm chamfer round the top edge and
   a 1.2 mm round on the bezel, and 4.3° of draft on the side and rear walls so the dock reads as a foot, not a box.
 - **The vents are hidden.** A 1.5 mm shadow gap under the whole shell replaces every grille; the only visible
@@ -78,11 +80,18 @@ the way to its seat. A boss is in the way however far behind
 the seated board it finally sits. So the cover screws to the Inkplate's own
 standoffs, and the display is held by magnets.
 
+SW2 and the wake switch sit 1.15 mm behind the walls' inner faces, so a finger does not reach them; press them
+with a pin. If one ever needs a finger, a printed plunger in its hole, with a flange inside the wall to keep it,
+fitted before the Inkplate goes in, would do. SW2 is bypassed (R34 bridged), so the wake switch would get one
+first.
+
 The cover goes in from the back in a straight line, so only something that engages after it is in can keep it
 there. Two tongues on its thin-wall edge enter slots in that wall, and two ears at the other end sit in pockets in
 the thick wall and screw into inserts. All of it is cut into the walls, so the board still passes. Hold the display
 with the panel facing up and the tongues and the two ear screws carry the Inkplate; `enclosure.py` reports what
-blocks the cover from dropping straight out as `cover_pullout_blocked_mm3`, which must be **more than 0**.
+blocks the cover from dropping straight out as `cover_pullout_blocked_mm3`, which must be **more than 0**. A step
+for the cover's edge alone holds nothing, because it stops the cover in the same direction as the bezel lip. Clips
+are not used: PLA+ ridges wear.
 
 The bezel lip stands 0.15 mm clear of the panel, and the tongues have the same play in their slots. A wall that
 prints that much short therefore cannot make the ear screws press the lip on to the glass.

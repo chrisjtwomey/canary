@@ -26,5 +26,5 @@ On the desk it is 150.7 × 87.3 × 89.8 mm. One USB-C cable powers both halves.
 | `logo/` | The source picture and the script that traced it. |
 
 The firmware and the server are in [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md), and what each board posts is
-in [docs/READINGS.md](../docs/READINGS.md). Why the hardware is as it is, and what is still unsettled, are in the
-decision log and the open questions in [CLAUDE.md](../CLAUDE.md).
+in [docs/READINGS.md](../docs/READINGS.md). Each hardware doc gives the reasons for its choices. What is
+still unsettled is in the open questions in [CLAUDE.md](../CLAUDE.md).
