@@ -48,7 +48,8 @@ The boards follow the server's version.
 - The offer goes on any response to the board, a refusal included.
 - The firmware builder beside the server builds the firmware of its own commit into that folder when it starts. So
   a redeploy moves the server and the boards together ([releases.md](releases.md)).
-- A server past a tag offers development builds. A server on a tag offers images only to boards on a tagged build.
+- A server past a tag offers development builds. A server on a tag offers its image to boards on a tagged build, and
+  to boards on a development build older than the image ([firmware-updates.md](firmware-updates.md)).
 - The server logs each offer of an older image. The Diagnostics page shows the posts that the server refused from
   each board, even from a board it has never taken a report from.
 

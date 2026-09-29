@@ -39,4 +39,6 @@ checkout reports what `git describe` gives, for example `v0.6.2-5-gab12cd4`, so 
   the dock's folder.
 - A server past a tag moves every board to the newest image in the folder, even when that image is older than the
   board's.
-- A server on a clean tag offers images only to boards on a tagged build.
+- A server on a clean tag offers its image to a board on a tagged build, and to a board on a development build
+  older than the image. So a board tested on main moves to the release tagged on that commit, over the air. A
+  development build past the release is left alone, so a bench board is not flashed back.
