@@ -15,7 +15,7 @@ server decides *when* (`Canary-Next-Display-Refresh-Seconds`) and *what*
 
 | | Weather calendar | Env monitor |
 |---|---|---|
-| Power | LiPo, years | **USB mains** ([hardware/bom.md](../hardware/bom.md)) |
+| Power | LiPo, years | **USB mains** ([hardware/parts.md](../hardware/parts.md)) |
 | Data origin | server fetches from APIs | **the device holds the sensors**, in a dock the panel stands in |
 | Cadence | 7 wakes a day | readings every few seconds, display every few minutes |
 | Client between refreshes | deep sleep | **awake**: sensors need it (SCD41 periodic mode with ASC, BSEC calibration state, PM fan warm-up) |
@@ -103,7 +103,7 @@ does not need to know what a sensor is.
 ### 3.2 Readings travel client → server by HTTP POST
 
 The dock queues one document a minute in PSRAM, in the layout of
-[READINGS.md](READINGS.md), and each pass of its loop posts the oldest 100
+[readings.md](readings.md), and each pass of its loop posts the oldest 100
 to `/sensor-readings` as one batch. A reading is kept before anything is sent, so
 one path covers the post that works and the outage that does not, and a
 queue that built up while the server was down drains a batch per pass
@@ -137,7 +137,7 @@ running past midnight to the first; each has an interval, and 0 turns its range 
 stay as it is overnight. A day stands alone: before its first start its own last range runs, not the
 day before's, so a group's dial shows all that happens on its days. By default the page changes every
 300 seconds all day, every day, on :00, :05, … on the wall clock; the weather calendar keeps `times`.
-[CONTRIBUTING.md](../CONTRIBUTING.md) explains the pools. A slot is a local time in a range that is on,
+[pages.md](pages.md) explains the pools. A slot is a local time in a range that is on,
 whose seconds past midnight are a multiple of that range's interval. epd's `TimeRanges` finds the slot
 by stepping through the minutes and asking of each which range it is in, because some clocks change at
 01:00: in spring that hour never happens, and in autumn it happens twice. The page's turn through the
@@ -172,7 +172,7 @@ The panel and the sensors are two boards, in two halves of one enclosure:
 - **Dock**: an ESP32-S3 (TinyS3), the four sensors on a regulator of their own, and the USB-C socket that powers
   both halves. A magnetic pogo connector carries 5 V and ground up to the display, which sits in the dock's cradle.
 
-Three things forced it, all in [hardware/bom.md](../hardware/bom.md):
+Three things forced it, all in [hardware/parts.md](../hardware/parts.md):
 
 - **The bus.** With the chain on the Inkplate's bus, a jammed sensor also stopped panel refreshes and the panel
   temperature read, because the expander, the RTC and the PMIC share that bus.
@@ -213,7 +213,7 @@ the gap always shows. A fade moves in equal steps of perceived light: `dock.led.
 `StatusLed` turns the time into an LEDC duty and holds no hardware, so the pattern is tested on the host, and so
 is `LightTriggers`, which judges the air and calibration triggers from a reading. The Dock tab plays a look on a dot,
 with the same timings and steps in `sheet.js`, so it can be seen before it is saved: what the light showed at the
-dock's last sync, which the dock reports as `light` (READINGS.md), until a row is changed or clicked. The dot's
+dock's last sync, which the dock reports as `light` (readings.md), until a row is changed or clicked. The dot's
 area follows the brightness, and at 0 it stays dark. Brightness is perceived
 brightness, mapped through gamma 2.2 onto a 14-bit channel at 1 kHz. A task of its own drives the pin, because
 `setup()` blocks for as long as the network takes and the booting pulse runs through it. It waits until the
@@ -351,7 +351,7 @@ src/main.cpp                   the display: fetch, draw, post its own state
 src/dock/main.cpp              the dock: the loop from §3.1
 src/defaults.example.cpp       copy to defaults.cpp: WiFi, server URL, MQTT logging
 include/sensors/  src/sensors/
-  Readings.h  ReadingsJson.cpp                  what the sensors return, and the wire format in READINGS.md
+  Readings.h  ReadingsJson.cpp                  what the sensors return, and the wire format in readings.md
   IShtc3.h  IScd41.h  IPmsa003i.h  IBme688.h    one interface per part, shaped by its datasheet
   IClock.h  II2cBus.h                           the clock and bus seams
   SensorSuite  SensorHealth                     the four sensors as one begin() and one sample(), and how they fare
@@ -387,7 +387,7 @@ server/
   static/                      CSS, fonts, charts.js; web.css, browse.js, explore.js and config.js for /web/
   config.example.yaml
 hardware/                      the boards, the desk enclosure and how to build it: README, bom, assembly, enclosure, enclosure.py, images/
-docs/                          ARCHITECTURE and READINGS
+docs/                          architecture, readings, and the developer guides CONTRIBUTING points to
 ```
 
 ## 5.1 The sensor seam

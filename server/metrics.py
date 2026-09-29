@@ -1,6 +1,6 @@
 """Derived values and wording for the pages.
 
-Pure functions over readings documents (docs/READINGS.md), so they are
+Pure functions over readings documents (docs/readings.md), so they are
 tested without a browser.
 """
 from __future__ import annotations

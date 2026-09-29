@@ -6,7 +6,7 @@ services:
       - "8080:8080"
     volumes:
       # Without it the image runs its example config, the simulated room.
-      # CONTRIBUTING.md, Releases, says which keys a deployment sets. Writable,
+      # README.md, "Run the server", says which keys a deployment sets. Writable,
       # so /web/config can save it: the container's user (uid 1000) must be
       # able to write the host file. Mount it :ro to allow checks only.
       - ./server/config.yaml:/app/config.yaml
@@ -22,7 +22,7 @@ services:
 
   # Builds the firmware of the commit its image was built from into
   # server/firmware, so the boards follow this server. Keep its tag the same
-  # as the server's. See CONTRIBUTING.md, Releases.
+  # as the server's. See docs/releases.md.
   firmware-builder:
     image: ghcr.io/chrisjtwomey/canary-firmware-builder:latest
     restart: unless-stopped

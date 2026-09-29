@@ -1,4 +1,4 @@
-"""The Python room matches the firmware room, and the source emits READINGS.md documents."""
+"""The Python room matches the firmware room, and the source emits readings.md documents."""
 import json
 
 import pytest

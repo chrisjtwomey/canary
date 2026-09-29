@@ -1,83 +1,125 @@
 # CANARY
 
-An indoor air-quality display: CO₂, particulates, VOC and temperature on a
-5.2" e-paper panel, rendered server-side.
+CANARY shows the air in a room on a 5.2" e-paper display. It measures CO₂, particulates, gas (VOC),
+temperature, humidity and pressure.
 
-The dock checks the four sensors every minute and takes a reading on the
-server's slots, every five minutes and every half hour overnight. It posts
-the readings to the server, and the display shows the pages the server renders
-from them in turn. A simulated room stands in for the sensors on the host
-and on a board with nothing attached.
+![CANARY on a desk](hardware/images/device.png)
 
-| | |
+It has two halves and a server:
+
+- The **dock** holds the sensors. It takes a reading every 5 minutes, and every 30 minutes from 01:00 to 07:00,
+  and sends it to the server.
+- The **display** stands on the dock. Every 5 minutes it shows the next page that the server draws from the
+  readings.
+- The **server** runs on a computer of yours. It keeps the readings, draws the pages, and can update the firmware
+  on both boards. Its config sets the times above.
+
+One USB-C cable powers the dock and the display.
+
+| What | Part |
 |---|---|
-| CO₂ | Sensirion SCD41 |
-| PM1.0 / PM2.5 / PM10 | Plantower PMSA003I (Adafruit breakout) |
-| VOC, gas, pressure | Bosch BME688 (Soldered breakout) |
-| Temperature, humidity | Sensirion SHTC3 (Soldered breakout) — the reference |
-| Display / controller | Soldered Inkplate 5 Gen2 (ESP32-WROVER-E) |
+| CO₂ | Sensirion SCD41 (Adafruit breakout) |
+| Particulates: PM1.0, PM2.5, PM10 | Plantower PMSA003I (Adafruit breakout) |
+| Gas (VOC) and pressure | Bosch BME688 (Soldered breakout) |
+| Temperature and humidity | Sensirion SHTC3 (Soldered breakout) |
+| Display | Soldered Inkplate 5 Gen2 |
+| Dock controller | Unexpected Maker TinyS3 |
 
-All four sensors hang off one I²C bus over Qwiic/easyC, and the device runs
-from USB-C; [hardware/bom.md](hardware/bom.md) has the power budget.
+## Build one
+
+**You build the firmware yourself.** The dock uses Bosch's BSEC2 library to calculate the air quality index.
+BSEC2 is closed source, and Bosch's licence does not let this project give out firmware that contains it. The
+build downloads BSEC2 from Bosch, and Bosch's terms then apply to you. Read them first: the
+[library's LICENSE.md](https://github.com/boschsensortec/Bosch-BSEC2-Library) links to them.
+
+You need:
+
+- The parts in [hardware/bom.md](hardware/bom.md). They cost about €220.
+- A 3D printer with a 0.4 mm and a 0.2 mm nozzle, and a soldering iron.
+- A computer that is always on, with Docker, on the same network as the device.
+- [PlatformIO](https://platformio.org/install) on the computer that you flash the boards from.
+
+### 1. Run the server
+
+On the computer that is always on:
+
+```sh
+git clone https://github.com/chrisjtwomey/canary.git
+cd canary
+cp server/config.example.yaml server/config.yaml
+mkdir -p server/firmware
+```
+
+Set these keys in `server/config.yaml`:
+
+| Key | Value | Why |
+|---|---|---|
+| `source.kind` | `store` | The pages show your readings. `mock` shows a simulated room. |
+| `source.path`, `status.path`, `calibration.path`, `logs.path` | The file name in `data/`, for example `data/status.db` | The data stays when Docker recreates the container. |
+| `client.firmware.enabled` | `true` | The boards take new firmware from the server. |
+| `server.timezone` | Your time zone, for example `Europe/London` | The pages and the schedules use it. |
+| `site.altitude_m` | Your altitude in metres | The pages show the pressure at sea level. |
+
+Then start it:
+
+```sh
+docker compose up -d
+```
+
+- The containers run as user 1000. That user must be able to write `server/config.yaml` and `server/firmware/`.
+- The second container builds the firmware for both boards. Its first build takes some minutes.
+  `docker compose logs -f firmware-builder` shows it.
+- `http://<server>:8080/web/` shows the pages, and `/web/config` changes the config. **The config page has no
+  login: anyone on your network can change the config.**
+- The images follow this repo's `main` branch. Your boards take each new version.
+
+### 2. Flash each board once
+
+The first flash stores your Wi-Fi and the server's address on the board. After that, each board takes its
+firmware from the server.
+
+Flash both boards before you build the device. The dock's USB-C socket carries power only. To flash the dock
+later, you must open it and lift the TinyS3 off its strips.
+
+```sh
+git clone https://github.com/chrisjtwomey/canary.git   # skip this if step 1 ran on this computer
+tag=$(grep -o 'epd.git@[^#]*' canary/server/requirements.txt | cut -d@ -f2)
+git clone --branch "$tag" https://github.com/chrisjtwomey/epd.git
+cd canary
+cp src/defaults.example.cpp src/defaults.cpp
+```
+
+In `src/defaults.cpp`, set `wifiSSID`, `wifiPass`, and `serverURL` to `http://<server>:8080/breathe.png`.
+
+Connect the Inkplate by USB, then:
+
+```sh
+pio run -e esp32 -t upload
+```
+
+Connect the TinyS3 by USB, then:
+
+```sh
+PLATFORMIO_CORE_DIR=~/.platformio-canary-dock pio run -e dock -t upload
+```
+
+- The dock builds in a PlatformIO folder of its own. Its first build takes about 6 minutes, and the folder grows
+  to about 7 GB.
+- `pio device monitor` shows a board's log.
+
+### 3. Build it
+
+[hardware/assembly.md](hardware/assembly.md) builds the device in 12 steps, with a picture for each. Set aside a
+day. The last step is the first power-up.
 
 ## Documentation
 
-| | |
+| Doc | What it tells you |
 |---|---|
-| [hardware/](hardware/README.md) | The two boards and the desk enclosure they sit in, and where the rest of the hardware docs are. |
-| [hardware/bom.md](hardware/bom.md) | What to buy, what each part does, what else would do, and roughly what it costs. |
-| [hardware/assembly.md](hardware/assembly.md) | How to build one, in order, with a picture at each step. |
-| [hardware/enclosure.md](hardware/enclosure.md) | The printed parts: shape, fit, fasteners and the rules the Fusion model follows. |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How this departs from the weather calendar's model, and how it builds on [epd](https://github.com/chrisjtwomey/epd). |
-| [docs/READINGS.md](docs/READINGS.md) | The JSON the firmware posts. |
-
-## Build and test
-
-epd must be checked out beside this repo.
-
-```sh
-pio test -e native     # host tests: room model, mocks, drivers
-pio run -e esp32       # the display: fetches and draws the pages
-
-# the dock, in a PlatformIO folder of its own (CONTRIBUTING.md, Building the dock);
-# -e dock-mock uses the simulated room
-PLATFORMIO_CORE_DIR=~/.platformio-canary-dock pio run -e dock
-```
-
-```sh
-cd server
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements-dev.txt
-pip install -e ../../epd/server     # the local kit, last: CONTRIBUTING.md, Setup, says why
-pytest
-```
-
-Rendering needs Chrome. Then:
-
-```sh
-cp config.example.yaml config.yaml
-python3 server.py --once                                   # every page -> server/*.png
-python3 server.py --only breathe.png --at 2026-09-03T21:45  # one page, clock pinned
-```
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the pages and the render loop.
-
-`PLATFORMIO_CORE_DIR=~/.platformio-canary-dock pio run -e dock -t upload` then
-`pio device monitor` shows the dock print
-one readings document a minute; `-e dock-mock` does the same with the
-simulated room in place of the sensors. `pio run -e esp32 -t upload` shows
-the display fetch a page every five minutes. [CONTRIBUTING.md](CONTRIBUTING.md)
-has the setup.
-
-## The mocks
-
-`EnvModel` is a simulated room: CO₂ rises with occupancy and decays with
-ventilation, windows open twice a day, cooking spikes particulates and VOCs,
-the heating follows a schedule. It exists in C++ and in Python, pinned to the
-same pseudo-random sequence, so the firmware and the page rendering see the
-same shapes.
-
-Each mock reproduces its datasheet's timing and quirks rather than its
-registers: the SCD41's 5 s cadence and untrustworthy first reading, the
-PMSA003I's 30 s fan warm-up and occasional bad checksum, the BME688's
-unstable first heater cycle, the SHTC3's 13 ms measurement and sleep.
+| [hardware/](hardware/README.md) | What is in the hardware folder. |
+| [hardware/bom.md](hardware/bom.md) | The parts to buy, and what else would do. |
+| [hardware/assembly.md](hardware/assembly.md) | How to build the device, step by step. |
+| [hardware/enclosure.md](hardware/enclosure.md) | The design of the printed parts, for changes to the model. |
+| [docs/architecture.md](docs/architecture.md) | How the firmware and the server work. |
+| [docs/readings.md](docs/readings.md) | The data that each board sends. |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | For developers: the setup, the tests, and where the other developer docs are. |

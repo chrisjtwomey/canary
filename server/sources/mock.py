@@ -2,7 +2,7 @@
 
 The same dynamics as ``src/sensors/mock/EnvModel.cpp`` (same constants,
 same schedule), so pages developed against this see the shapes the device
-will send. It produces documents in the layout of docs/READINGS.md.
+will send. It produces documents in the layout of docs/readings.md.
 
     source = MockReadingsSource(seed=7)
     source.datasets()["latest"]()          # one document, now
@@ -166,7 +166,7 @@ def _iaq_from_gas(gas_ohm: float) -> float:
 
 
 def reading_from(room: EnvModel, device: str = "canary-dock") -> dict:
-    """One docs/READINGS.md document from the room's current state, with the
+    """One docs/readings.md document from the room's current state, with the
     per-sensor quirks the firmware mocks add: SCD41 T runs +4 C less its
     default offset (net zero), BME688 T runs +1.5 C, repeatability noise."""
     t = room.temp
@@ -196,7 +196,7 @@ def reading_from(room: EnvModel, device: str = "canary-dock") -> dict:
                    "rh_pct": round(rh_from_abs(room.abs_hum, bme_t) + room.noise(0.2), 1)},
         # The simulated room is always settled, so every measurement is
         # trustworthy here. The firmware drops keys it does not trust; see
-        # docs/READINGS.md.
+        # docs/readings.md.
         "valid": {"temp_humidity": True, "co2": True, "particulates": True,
                   "pressure": True, "gas": True},
     }

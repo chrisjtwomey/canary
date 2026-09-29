@@ -1,6 +1,6 @@
 # Builds the display's and the dock's firmware of the commit this image was
 # built from, into the directory the server offers images from. See
-# CONTRIBUTING.md, Releases, and the firmware-builder service in
+# docs/releases.md, and the firmware-builder service in
 # docker-compose.yml.
 FROM python:3.13-slim-bookworm
 

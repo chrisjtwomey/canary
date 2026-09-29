@@ -144,7 +144,7 @@ static void startI2c() {
     pinMode(kPmSetPin, OUTPUT);
     digitalWrite(kPmSetPin, LOW);        // the fan stays off until the suite starts it
     Wire.begin(kSdaPin, kSclPin);
-    Wire.setClock(100000);               // hardware/bom.md, the I2C bus: 100 kHz, and nothing cut
+    Wire.setClock(100000);               // hardware/parts.md, the I2C bus: 100 kHz, and nothing cut
     // A sensor that drops off the bus would otherwise slow every sample.
     Wire.setTimeOut(ArduinoI2cBus::kTimeoutMs);
 }

@@ -23,6 +23,9 @@ front of you, before step 1.
 Every joint is soldered by hand to a header leg, a 1 mm pad or another wire. Nothing is surface-mount work. Set
 aside a full day, and expect step 8 to take half of it.
 
+**Reading the drawings.** Red is 5 V or 3.3 V, and black is ground. Blue is SDA and yellow is SCL, as on a Qwiic
+cable. Any other colour only tells two wires apart: use what you have.
+
 **Work in this order.** Each step leaves the next one reachable. Going back means taking the dock apart, and the
 TinyS3's strips are glued in. Each step draws its own wires, so the circuit comes together as you do.
 
@@ -41,18 +44,18 @@ TinyS3's strips are glued in. Each step draws its own wires, so the circuit come
 
 ## 1. Print the parts
 
-
 ![The dock chassis, straight off the printer](images/step-01-printed-parts.png)
-Five pieces. Each is drawn to print without supports in one orientation, and only in that one —
-[enclosure.md](enclosure.md#parts) gives it.
+
+Five parts, in `3mf/` or `stl/`. The files are already in print orientation, and no part needs supports. Print
+each part only in that orientation.
 
 1. Print the display tray, the display back cover, the dock chassis and the dock shell in PLA+ with a 0.4 mm nozzle.
 2. Print the logo in white with a 0.2 mm nozzle, on its own plate.
 
 ## 2. Set the heat-set inserts
 
-
 ![The shell from below: the four pillars that take the inserts](images/step-02-inserts.png)
+
 Six M3 inserts in Ø 4.0 × 6.0 mm holes: four in the dock shell's internal pillars, two in the display tray's thick
 wall at the corners.
 
@@ -129,9 +132,6 @@ It goes in now because it is reached from a pit under the display. Once the disp
 4. With the display off, lower the LED into the pit, push it forward until its rim stops on the step, and glue it.
 5. Run its wires back along the pit's floor into the bay.
 
-**Reading the drawings.** Red is 5 V or 3.3 V and black is ground. Blue is SDA and yellow is SCL, which is the
-Qwiic connector's own standard. Any other colour is there only to tell two wires apart — use what you have.
-
 ## 6. The sensor boards
 
 ![All four boards in the bay, chained](images/step-06-sensors.png)
@@ -162,9 +162,10 @@ board on its header instead, in [step 8](#8-wire-the-dock).
 
 ![The trench and the plinth, close up](images/pogo.png)
 
-An 8-pin magnetic pair joins the display to the dock, and carries power only. The pins are 0.5 mm across
-*(measured)*, so about 1 A each, and the display's power-on spike is 1.66 A. Each net therefore crosses on two
-contacts joined by a bare bridge, and four contacts stay empty.
+An 8-pin magnetic pair joins the display to the dock, and carries only power. The pins are 0.5 mm across
+*(measured)*, so each carries about 1 A. At power-on the device takes 1.07 A
+([parts.md](parts.md#measured-peaks)). So each net crosses on two contacts, joined by a bare bridge, and four
+contacts are not used.
 
 ![The splices, the pogo pair and the display](images/2-display-link.png)
 
@@ -186,13 +187,13 @@ The halves nest, and the contact block's outline keys them, so a display turned 
 
 ![Power in, from the socket to the two splices](images/1-power-in.png)
 
-Power comes in at the USB-C socket as 5 V and splits three ways: to the TinyS3, to the AMS1117 that makes the
-sensors' 3.3 V, and up two pogo contacts to the display. Each pad, leg and crimp takes one wire only, so each net
-is gathered at **one splice** in the middle of the TinyS3's channel — twisted end to end, soldered, heat-shrunk —
-and the branches leave from both ends of it.
+5 V comes in at the USB-C socket and goes three ways: to the TinyS3, to the AMS1117 that makes the sensors'
+3.3 V, and up two pogo contacts to the display. Each pad, leg and crimp takes only one wire. So each net meets at
+**one splice** in the middle of the TinyS3's channel: twisted end to end, soldered and heat-shrunk. The branches
+leave from both ends of it.
 
-The channel is the dock's duct. Every wire that crosses behind the sensors runs through it, stacked in layers so
-that nothing crosses anything else, and wires that travel together are bundled so their bends stay concentric.
+The channel is the dock's duct. Every wire that crosses behind the sensors runs through it, in layers, so that no
+wire crosses another. Wires that go the same way are bundled, so that their bends stay concentric.
 
 ![The TinyS3 and the regulator to the PM header](images/4-sensor-bus.png)
 
@@ -258,8 +259,8 @@ needs one.
 
 ## 11. The logo
 
-
 ![The logo in the recess in the front face](images/step-11-logo.png)
+
 One white piece, 0.8 mm thick, in the pill recess in the shell's front face: a border, the emblem and the
 letters, and a line under the letters that holds them together.
 
@@ -269,19 +270,24 @@ letters, and a line under the letters that holds them together.
 
 ## 12. First power-up
 
-
 ![Built](images/step-12-finished.png)
-Each board stores your WiFi and the server's address from `src/defaults.cpp`. Everything after that — every
-image, and every later firmware — comes from the server.
 
-1. Write your own `src/defaults.cpp`.
-2. Flash the display and the dock over USB. [CONTRIBUTING.md](../CONTRIBUTING.md) has the commands and the bench
-   checks.
-3. Plug one USB-C cable into the dock. It powers both halves.
+The server must run, and both boards must have their first flash:
+[README.md, steps 1 and 2](../README.md#build-one). Every page and every later firmware then comes from the server.
 
-The LED then tells you where it is. By default: a fast pulse while it boots, a slow one once it runs, a flash
-every second when something is wrong, a double flash when the air is poor, and a slow swell while a sensor
-calibrates. The server's Dock tab sets these patterns, and the Boards page says what is wrong.
+1. Plug one USB-C cable into the dock. It powers both halves.
+
+The LED then shows the dock's state. By default:
+
+| LED | State |
+|---|---|
+| Fast pulse | Booting |
+| Slow pulse | Running |
+| Flash every second | Something is wrong. The Boards page says what. |
+| Double flash | The air is poor |
+| Slow swell | A sensor calibrates |
+
+The Dock tab of the server's config page sets these patterns.
 
 ## Appendix: every joint
 
@@ -309,7 +315,7 @@ The PM board's 7-pin header is VIN, 3Vo, GND, SCL, SDA, RST, SET. Rows 9, 10 and
 SET**; 3Vo and RST stay empty.
 
 **The SET wire is optional.** The PM breakout pulls SET high through 100 kΩ
-([bom.md](bom.md#pmsa003i--particulates)), so without it the fan runs from power-on and every reading is still
+([parts.md](parts.md#pmsa003i--particulates)), so without it the fan runs from power-on and every reading is still
 valid. With it, the firmware stops the fan between readings and the 30 s warm-up counts from when it starts.
 
-[bom.md](bom.md#power-and-the-bus) has the current budget, the single ground return and the bus.
+[parts.md](parts.md#power-and-the-bus) has the current budget, the single ground return and the bus.

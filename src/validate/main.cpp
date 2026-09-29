@@ -2,7 +2,7 @@
 //
 // One pass over the bus and the four parts, then ten seconds and round again.
 // It says which addresses answered, whether each sensor reads sensibly running
-// and in its low-power state (hardware/bom.md, 2-5), and takes one reading set
+// and in its low-power state (hardware/parts.md, per sensor), and takes one reading set
 // from them all. There is no network and no server, so what the serial log
 // shows is the wiring and nothing else.
 //
@@ -86,7 +86,7 @@ void setup() {
     pinMode(kPmSetPin, OUTPUT);
     digitalWrite(kPmSetPin, LOW);   // the fan stays off until the suite starts it
     Wire.begin(kSdaPin, kSclPin);
-    Wire.setClock(100000);          // hardware/bom.md, the I2C bus: 100 kHz, and nothing cut
+    Wire.setClock(100000);          // hardware/parts.md, the I2C bus: 100 kHz, and nothing cut
     // A bench with three sensors missing pays the timeout a dozen times, so the
     // effective value is logged.
     Wire.setTimeOut(ArduinoI2cBus::kTimeoutMs);

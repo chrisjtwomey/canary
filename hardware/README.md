@@ -1,30 +1,35 @@
 # Hardware
 
-CANARY is two boards in one desk enclosure. The **display** is an Inkplate 5 Gen2, a 5.2" e-paper panel tilted 20°
-back, which shows the pages the server renders. The **dock** is a TinyS3 carrying four sensors — CO₂,
-particulates, temperature and humidity, and a gas index — that reads the room and posts it. The display stands in
-the dock, and an 8-pin magnetic connector carries 5 V up to it: the only wire between the two halves.
+CANARY has two halves in one desk enclosure:
+
+- The **display** is an Inkplate 5 Gen2: a 5.2" e-paper panel, tilted 20° back. It shows the pages that the server
+  draws.
+- The **dock** is a TinyS3 with four sensors: CO₂, particulates, temperature and humidity, and gas. It reads the
+  room and sends the readings to the server.
+
+The display stands in the dock. An 8-pin magnetic connector carries 5 V up to it, and it is the only connection
+between the two halves. One USB-C cable into the dock powers both.
+
+On the desk, it is 150.7 mm wide, 87.3 mm deep and 89.8 mm tall.
 
 ![The finished device](images/device.png)
 
-On the desk it is 150.7 × 87.3 × 89.8 mm. One USB-C cable powers both halves.
-
-| Where to look | |
+| Doc | What it tells you |
 |---|---|
-| [bom.md](bom.md) | What to buy, what each part does, what else would do instead, and roughly what it costs. |
-| [assembly.md](assembly.md) | How to build one, in order, with a picture at each step. |
-| [enclosure.md](enclosure.md) | The printed parts: shape, fit, fasteners, ventilation, and the rules the model follows. |
-| [enclosure.py](enclosure.py) | The design itself. It is a Fusion script: it places every board and builds every part from the numbers in `enclosure.md`. |
+| [bom.md](bom.md) | The parts to buy, what else would do, and the cost. |
+| [parts.md](parts.md) | The datasheet facts for each part, and the power and the I²C bus. For developers. |
+| [assembly.md](assembly.md) | How to build it, step by step, with a picture for each step. |
+| [enclosure.md](enclosure.md) | The design of the printed parts, for a person who changes the model. |
 
-| In this folder | |
+| In this folder | What it holds |
 |---|---|
-| `stl/`, `step/`, `3mf/` | The five printed parts, in print orientation (STEP is upright in each part's own frame). |
-| `canary-logo.svg` | The logo's outline, in millimetres, imported by the script. |
-| `canary-logo-screen.svg` | The logo as drawn, without the changes for printing: the display's splash screen. |
-| `images/` | Views of the model and the wiring drawings, used by the guides. |
-| `wiring/` | The circuit as text, one file per run of wire, for [WireViz](https://github.com/wireviz/WireViz). `render.sh` draws them into `images/`. |
-| `logo/` | The source picture and the script that traced it. |
+| `stl/`, `3mf/` | The five printed parts, in print orientation. |
+| `step/` | The same parts as STEP, each upright in its own frame. |
+| `enclosure.py` | The design: a Fusion script that places each board and builds each part from the numbers in `enclosure.md`. |
+| `canary-logo.svg` | The logo's outline in millimetres. The script imports it. |
+| `canary-logo-screen.svg` | The logo as drawn, with no changes for printing. The display's splash screen uses it. |
+| `images/` | Views of the model, and the wiring drawings, for the guides. |
+| `wiring/` | The circuit as YAML, one file for each run of wire ([wiring/README.md](wiring/README.md)). |
+| `logo/` | The source picture, and the script that traced it. |
 
-The firmware and the server are in [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md), and what each board posts is
-in [docs/READINGS.md](../docs/READINGS.md). Each hardware doc gives the reasons for its choices. What is
-still unsettled is in the open questions in [CLAUDE.md](../CLAUDE.md).
+The open design questions are in [CLAUDE.md](../CLAUDE.md).

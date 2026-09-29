@@ -3,7 +3,7 @@
 #include <cstdint>
 
 // What each sensor hands back, and the set the firmware posts.
-// Units and key names follow docs/READINGS.md.
+// Units and key names follow docs/readings.md.
 
 struct Shtc3Data {
     float tempC;
@@ -47,6 +47,6 @@ struct Readings {
     uint16_t   pmWarmupS;
 };
 
-// Encode to the JSON in docs/READINGS.md. Returns the length written, or 0
+// Encode to the JSON in docs/readings.md. Returns the length written, or 0
 // if the buffer is too small (nothing partial is left behind).
 size_t readingsToJson(const Readings& r, const char* device, char* buf, size_t len);

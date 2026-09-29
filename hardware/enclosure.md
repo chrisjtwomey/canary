@@ -1,14 +1,17 @@
 # The enclosure
 
-Desk enclosure for the Inkplate 5 Gen2 and the four sensor boards: a thin display tilted 20° back, standing
-in a low sensor dock that extends behind it. Rounded plan corners, drafted walls, a continuous shadow gap instead
-of grilles, and no fixings visible from any normal angle.
-Designed in Fusion (project **CANARY**, design **CANARY**); `enclosure.py` regenerates every part, every board
-placement and the wiring layers from the numbers in this file. [assembly.md](assembly.md) builds it, and
-[bom.md](bom.md) lists what goes in it.
+The design of the printed parts, for a person who changes the model. To print and build the enclosure, you need
+only [bom.md](bom.md) and [assembly.md](assembly.md).
 
-The four enclosure parts print in **PLA+ with a 0.4 mm nozzle**; `logo` needs the **0.2 mm nozzle** and
-goes on its own plate, in white.
+The enclosure holds the Inkplate 5 Gen2 and the four sensor boards: a thin display, tilted 20° back, stands in a
+low sensor dock that extends behind it. It has rounded plan corners, drafted walls, a continuous shadow gap in
+place of grilles, and no fixings that show from a normal angle.
+
+The design is in Fusion (project **CANARY**, design **CANARY**). `enclosure.py` makes every part, every board
+placement and the wiring layers again from the numbers in this file.
+
+The four enclosure parts print in **PLA+ with a 0.4 mm nozzle**. The logo needs the **0.2 mm nozzle**, and prints
+in white on its own plate.
 
 On the desk: **150.7 wide × 87.3 deep × 89.8 tall mm**. The dock's top is one plane, 33.9 mm tall at the front
 edge and 25 mm at the rear, 5.15°. The rear is set by the TinyS3's USB-C under the skin; over the PMSA003I's
@@ -52,11 +55,13 @@ It is meant to sit on a desk without announcing itself, which drove the architec
 
 ## Stability
 
-Mass is ≈ 280 g (92 g Inkplate, 52 g display shells, 145 g dock and boards, PLA+ or PETG at ~1.24 g/cm³ printed near
-solid). The centre of mass sits **≈ 27 mm above the desk and 32 mm back** (worked out on the 27 mm dock; the extra
-3.5 mm of shell moves it by a fraction of a millimetre), and only the chassis touches the desk
-(X −7.1…132.4, D 3.5…82.5), so tipping needs ≈ 46° forward, 62° backward or 68° sideways. Keeping the sensors in
-the dock rather than behind the panel is what buys that margin — carried in the display they would sit 40 mm higher.
+- Mass ≈ 280 g: 92 g Inkplate, 52 g display shells, 145 g dock and boards (PLA+ or PETG at ~1.24 g/cm³, printed
+  near solid).
+- The centre of mass is **≈ 27 mm above the desk and 32 mm back**. That was worked out for a dock 3.5 mm lower,
+  and the difference moves it by less than a millimetre.
+- Only the chassis touches the desk (X −7.1…132.4, D 3.5…82.5). So the device tips only at ≈ 46° forward, 62°
+  backward or 68° sideways.
+- The sensors in the dock give that margin. In the display, they would be 40 mm higher.
 
 ## Parts
 
@@ -74,34 +79,37 @@ is the AMS1117's few hundred milliwatts, so PETG is the fallback if its pocket o
 softens.
 
 **Nothing stands inside the display's cavity, and nothing may.** The Inkplate is 130.59 × 75.23 in a 134.6 × 77.2
-opening — 2 mm a side in X, because SW2 and the wake switch stand 0.85 mm past the board's left and right edges,
-and 1 mm top and bottom — and it goes in from the back, which means its own footprint sweeps the whole cavity on
-the way to its seat. A boss is in the way however far behind
-the seated board it finally sits. So the cover screws to the Inkplate's own
-standoffs, and the display is held by magnets.
+opening: 2 mm a side in X, because SW2 and the wake switch stand 0.85 mm past the board's left and right edges,
+and 1 mm at the top and bottom. The board goes in from the back, so its footprint sweeps the whole cavity on the
+way to its seat. A boss in the cavity would stop it, however far behind the seated board the boss is. So the
+cover screws to the Inkplate's own standoffs, and magnets hold the display.
 
-SW2 and the wake switch sit 1.15 mm behind the walls' inner faces, so a finger does not reach them; press them
-with a pin. If one ever needs a finger, a printed plunger in its hole, with a flange inside the wall to keep it,
-fitted before the Inkplate goes in, would do. SW2 is bypassed (R34 bridged), so the wake switch would get one
-first.
+SW2 and the wake switch sit 1.15 mm behind the walls' inner faces, so a finger cannot reach them. Press them
+with a pin. If a switch must take a finger, fit a printed plunger in its hole before the Inkplate goes in, with a
+flange inside the wall to hold it. SW2 is bypassed (R34 bridged), so the wake switch would get a plunger first.
 
-The cover goes in from the back in a straight line, so only something that engages after it is in can keep it
-there. Two tongues on its thin-wall edge enter slots in that wall, and two ears at the other end sit in pockets in
-the thick wall and screw into inserts. All of it is cut into the walls, so the board still passes. Hold the display
-with the panel facing up and the tongues and the two ear screws carry the Inkplate; `enclosure.py` reports what
-blocks the cover from dropping straight out as `cover_pullout_blocked_mm3`, which must be **more than 0**. A step
-for the cover's edge alone holds nothing, because it stops the cover in the same direction as the bezel lip. Clips
-are not used: PLA+ ridges wear.
+The cover goes in from the back in a straight line. So only a feature that engages after the cover is in can
+hold it:
+
+- Two tongues on its thin-wall edge go into slots in that wall.
+- Two ears at the other end sit in pockets in the thick wall, and screw into inserts.
+
+All of it is cut into the walls, so the board still passes. With the panel facing up, the tongues and the two ear
+screws carry the Inkplate. `enclosure.py` reports what stops the cover from dropping straight out as
+`cover_pullout_blocked_mm3`, which must be **more than 0**.
+
+- A step for the cover's edge alone holds nothing: it stops the cover in the same direction as the bezel lip.
+- Clips are not used: PLA+ ridges wear.
 
 The bezel lip stands 0.15 mm clear of the panel, and the tongues have the same play in their slots. A wall that
 prints that much short therefore cannot make the ear screws press the lip on to the glass.
 
 ## Fasteners
 
-Six brass heat-set inserts carry the screwed joints between printed parts: four for the shell on the chassis, two
-for the back cover's ears on the tray. The back cover also
-screws into the Inkplate's own standoffs, the pogo connector's two magnets hold the display down, and everything else
-threads straight into printed plastic.
+Six brass heat-set inserts carry the screwed joints between printed parts: four hold the shell on the chassis,
+and two hold the back cover's ears on the tray. The back cover also screws into the Inkplate's own standoffs. The
+pogo connector's two magnets hold the display down. All other screws go straight into printed plastic.
+[bom.md](bom.md) gives the quantities to buy.
 
 | Fastener | Qty | Where | Hole |
 |---|---|---|---|
@@ -184,8 +192,8 @@ There are no grilles on the top, the right side, the rear or the display.
 - **SCD41** breathes through its compartment's open front (≈ 500 mm² facing the bay) rather than a lid grille.
   If its response turns out sluggish, the fix is a slot row low in the compartment's left wall.
 - **Display.** Sealed except for one grille band in the back cover: 8 stadium slots, 2.2 × 20 mm on the usual 3.4 mm
-  pitch, X 74–94 and Y 14–40, ≈ 344 mm². They sit over the **ESP32-WROVER** (X 75–93, Y −0.2–31.8), which at
-  80–150 mA with Wi-Fi up is the only real heat source in the display and sits directly behind the panel. The slots run
+  pitch, X 74–94 and Y 14–40, ≈ 344 mm². They sit over the **ESP32-WROVER** (X 75–93, Y −0.2–31.8). It is the display's only real heat source, at
+  80–150 mA while it is awake with Wi-Fi, and it sits directly behind the panel. It deep-sleeps between pages. The slots run
   **along X**: everything else about this object is horizontal — the shadow gap, the PM's vent strip — and vertical
   ticks cut across all of it. One band spanning low to high also vents better than two discrete ones, since the 20°
   tilt makes the bottom rows the intake and the top rows the exhaust. Y 14 is the lower limit: the display's five wires
@@ -195,20 +203,22 @@ There are no grilles on the top, the right side, the rear or the display.
 
 | Source | Dissipation | Note |
 |---|---|---|
-| TinyS3, awake with Wi-Fi | ~0.5 W | ~100 mA at 5 V. The dock's largest heater. |
-| AMS1117 | 0.37 W at 215 mA, ~0.2 W at 120 mA | 1.7 V dropped. A SOT-223 on the module's copper runs ~70 °C/W, so the tab sits 25–30 °C above the room, about 55 °C. Rated 125 °C. |
-| PMSA003I | ≤ 0.5 W | vents straight out through the left wall |
+| Whole dock, averaged | ~0.25 W | 48.9 mA at 5 V with light sleep and a reading every 5 minutes *(measured, [parts.md](parts.md#tinys3--the-dock))* |
+| AMS1117, while the PM fan runs | 0.37 W at 215 mA | 1.7 V dropped. A SOT-223 on the module's copper runs ~70 °C/W, so the tab sits 25–30 °C above the room, about 55 °C. Rated 125 °C. |
+| PMSA003I, while its fan runs | ≤ 0.5 W | It vents straight out through the left wall. |
 | Sensors | < 0.1 W | |
 
-There is no fan. Under a watt in a vented dock lifts the air near the parts by a degree or two and the far corner
-by nothing. A fan would blow over the SHTC3, stir the SCD41's compartment and pull the BME688's heater about, so
-both heaters instead sit on the PM side, as far from the SHTC3 as the layout allows.
+The PM fan runs only for the 35 s before each reading, so its rows are peaks, not averages.
+
+There is no fan. Under a watt in a vented dock warms the air near the parts by a degree or two, and the far
+corner not at all. A fan would blow over the SHTC3, stir the SCD41's compartment, and move the BME688's heat
+about. So both heaters sit on the PM side, as far from the SHTC3 as the layout allows.
 
 ---
 
 ## Bay layout
 
-Each board's place follows the placement rules in its section of [bom.md](bom.md):
+Each board's place follows the placement rules in its section of [parts.md](parts.md):
 
 - **SHTC3**: at a corner or edge, in the incoming airflow, slit-isolated from any mounting plate, nowhere near the
   Inkplate's LDO, PMIC or ESP32 or the PM fan's exhaust. It sets the reading everyone sees.

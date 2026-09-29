@@ -1,25 +1,34 @@
 # CANARY
 
-**Read [CONTRIBUTING.md](CONTRIBUTING.md) first.** It covers the repository layout, how to run the tests, and how to build and run things locally.
-
 ## This repo
 
-- A thin consumer of [epd](https://github.com/chrisjtwomey/epd): the firmware (`src/`, `include/`) builds with `-DARDUINO_INKPLATE5V2` against epd's two libraries, and the server (`server/`) is its data sources, a page list and `DisplayServer(...).run()`. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has the layout.
+- A thin consumer of [epd](https://github.com/chrisjtwomey/epd): the firmware (`src/`, `include/`) builds with `-DARDUINO_INKPLATE5V2` against epd's two libraries, and the server (`server/`) is its data sources, a page list and `DisplayServer(...).run()`. [docs/architecture.md](docs/architecture.md) has the layout.
 - epd must be checked out beside this repo.
 - The two boards are **the display** (the Inkplate) and **the dock** (the TinyS3), in code, docs and anything a person reads. Never "the head".
+- Build the dock only with `PLATFORMIO_CORE_DIR=~/.platformio-canary-dock`, for `dock`, `dock-mock` and `dock-validate`.
+- In `server/.venv`, install the editable epd last: `pip install -e ../epd/server` after any `pip install -r`.
 
 ## Docs
 
-Each doc covers one area:
+Each doc covers one area. Read a doc only when the task needs it.
 
-- [README.md](README.md): what CANARY is.
-- [CONTRIBUTING.md](CONTRIBUTING.md): layout, tests, local builds.
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): firmware and server design, wire headers, LED, version gate, notices.
-- [docs/READINGS.md](docs/READINGS.md): the JSON the dock posts.
-- [hardware/README.md](hardware/README.md): the front door to the hardware, and what is in that folder.
-- [hardware/bom.md](hardware/bom.md): every part, what to buy, alternatives, cost, and the datasheet facts each one brings.
-- [hardware/assembly.md](hardware/assembly.md): how to build one, with the circuit and every connection.
-- [hardware/enclosure.md](hardware/enclosure.md): the printed parts, fit, fasteners and the model's rules.
+| When the task | Read |
+|---|---|
+| Sets up the venv, runs the tests, or builds the dock | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| Changes how a builder deploys the server or flashes a board | [README.md](README.md) |
+| Uses the simulated room or `pio run -e sim` | [docs/simulator.md](docs/simulator.md) |
+| Changes a page, the web UI, the config page or the pools | [docs/pages.md](docs/pages.md) |
+| Runs the firmware on a board, reads a board's log, or checks the wiring | [docs/boards.md](docs/boards.md) |
+| Changes or tests the updates over the air | [docs/firmware-updates.md](docs/firmware-updates.md) |
+| Changes the release workflow, the images or the firmware builder | [docs/releases.md](docs/releases.md) |
+| Changes the firmware or server design: wire headers, LED, version gate, notices | [docs/architecture.md](docs/architecture.md) |
+| Changes the JSON that the boards post | [docs/readings.md](docs/readings.md) |
+| Looks for a file in `hardware/` | [hardware/README.md](hardware/README.md) |
+| Changes what to buy, or an alternative part | [hardware/bom.md](hardware/bom.md) |
+| Touches a datasheet fact, the power budget or the I²C bus | [hardware/parts.md](hardware/parts.md) |
+| Changes a build step, the circuit or a connection | [hardware/assembly.md](hardware/assembly.md) |
+| Changes the wiring drawings | [hardware/wiring/README.md](hardware/wiring/README.md) |
+| Changes the printed parts, the fit, the fasteners or the model's rules | [hardware/enclosure.md](hardware/enclosure.md) |
 
 The hardware docs carry no open questions of their own: they are below, so those docs inform a reader and
 this file holds what is still being decided.
@@ -122,8 +131,8 @@ Unsettled, and each one names what would settle it.
 
 1. **PMSA003I input current at 3.3 V** is derived from the charge-pump datasheet, not measured. Measure; it sets the regulator's rating.
 2. **5 V on the Inkplate's VIN pads**, on the bench, with no battery connected: measure VIN and the battery connector, and check that the charger chip stays cool through a few refreshes. Soldered say the path is harmless ([assembly.md](hardware/assembly.md#9-the-display)); this confirms it on this board.
-3. **Pull-ups on the TinyS3's bus.** [bom.md](hardware/bom.md#pull-ups) assumes the board adds none. Measure SDA and SCL to 3.3 V with the sensors unplugged.
-4. **What the BME688 board's JP2 joins** ([bom.md](hardware/bom.md#bme688--voc-gas-and-pressure)). Soldered's docs say only that it powers the regulator from 5 V, and no schematic is public. A continuity check across JP2, or the hardware files Soldered sends on request, would settle it.
+3. **Pull-ups on the TinyS3's bus.** [parts.md](hardware/parts.md#pull-ups) assumes the board adds none. Measure SDA and SCL to 3.3 V with the sensors unplugged.
+4. **What the BME688 board's JP2 joins** ([parts.md](hardware/parts.md#bme688--voc-gas-and-pressure)). Soldered's docs say only that it powers the regulator from 5 V, and no schematic is public. A continuity check across JP2, or the hardware files Soldered sends on request, would settle it.
 5. **Pogo contact resistance.** The connector's listing gives none, so [assembly.md](hardware/assembly.md#7-the-pogo-connector) assumes 30–100 mΩ. Measure across a mated pair with ~200 mA flowing.
 6. **Flash size** of the Inkplate's ESP32-WROVER-E: 4, 8 or 16 MB by variant, and the module's shield prints no suffix. `esptool.py flash_id` over USB settles it; it resets the board.
 
