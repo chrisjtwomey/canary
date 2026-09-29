@@ -4,8 +4,8 @@
 // When the PM module's fan runs.
 //
 // The fan is the dock's largest load and its largest heat source: about
-// 200 mA of the sensors' 215 mA, which is a watt off the 5 V rail once the
-// regulator's own loss is counted. A particle reading is only wanted when
+// 95 mA of the sensors' 110 mA, measured, which is half a watt off the 5 V
+// rail once the regulator's own loss is counted. A particle reading is only wanted when
 // the dock posts, so the fan runs for a window before each post and stops
 // after it.
 //

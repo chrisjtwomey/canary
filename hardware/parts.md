@@ -191,7 +191,7 @@ Sources: [Plantower PMSA003I manual V2.6](https://cdn-shop.adafruit.com/product-
 ### Electrical — the 5 V question
 
 - Module: **DC 5.0 V (4.5–5.5)**, "needed because the FAN should be driven by 5V". Data pins are 3.3 V logic (L < 0.8 V, H > 2.7 V). Active ≤ 100 mA, standby ≤ 200 µA.
-- Adafruit board: **makes its own 5 V** with an AP3602A charge pump from VIN 3–5 V, so it runs from a 3.3 V Qwiic chain. AP3602A: 100 mA continuous, 250 mA for 100 ms, input current ≈ 2 × output → **~200 mA from 3.3 V while the fan runs** *(derived)*.
+- Adafruit board: **makes its own 5 V** with an AP3602A charge pump from VIN 3–5 V, so it runs from a 3.3 V Qwiic chain. AP3602A: 100 mA continuous, 250 mA for 100 ms, input current ≈ 2 × output. Measured: **about 95 mA from 3.3 V while the fan runs** *(PPK2: the dock's current with the fan on, less the current with it off)*.
 - Board also has an AP2112K 3.3 V LDO (pull-ups, LED, level shifter) and a BSS138 level shifter. **10 kΩ pull-ups on both sides of the shifter; the connector side is pulled to VIN.** ⇒ a 5 V VIN pulls the shared bus to 5 V, past the SCD41's VDD + 0.3 V absolute maximum. **Keep VIN at 3.3 V**, though the module itself wants 5 V: the charge pump makes that.
 - I²C **0x12**, fixed. 100 kHz-class timing. No UART on this variant (pins 6 and 8 NC).
 
@@ -345,9 +345,8 @@ Low-power mode is ±0.8 °C. The dock measures in normal mode unless `dock.shtc3
 ## AMS1117-3.3 — the sensors' 3.3 V
 
 - The sensors' 3.3 V comes from this module, not from the TinyS3's own regulator. That regulator is an NCP167 at
-  198 °C/W in a 1 × 1 mm package. The sensors would heat it by about 60 °C at a typical load and by 130 °C at the
-  peak, past its thermal shutdown.
-- It is an LDO, so it drops 1.7 V and turns about 0.37 W into heat at 215 mA.
+  198 °C/W in a 1 × 1 mm package. At the sensors' peak it would heat by about 130 °C, past its thermal shutdown.
+- It is an LDO, so it drops 1.7 V and turns about 0.19 W into heat at 110 mA, while the PM fan runs.
   [enclosure.md](enclosure.md#ventilation) has the air passage under it.
 - The plain 3-pin module is 12.5 × 8.5 mm, with its pins in the order GND, OUT, VIN. [bom.md](bom.md#the-small-parts)
   has the pin trap.
@@ -358,11 +357,11 @@ Low-power mode is ±0.8 °C. The dock measures in normal mode unless `dock.shtc3
 
 | Load | Typical | Peak |
 |---|---|---|
-| PMSA003I via its charge pump, fan running | ~200 mA *(derived)* | 250 mA / 100 ms |
+| PMSA003I via its charge pump, fan running | ~95 mA *(measured)* | 250 mA / 100 ms (the charge pump's limit) |
 | SCD41, periodic 5 s | 15 mA | **175–205 mA** during each measurement |
 | BME688, BSEC at 300 s (at 3 s: 0.9 mA) | 0.09 mA | 17 mA |
 | SHTC3 | 0.4 mA | 0.9 mA |
-| **Total** | **~215 mA** | **~470 mA** |
+| **Total** | **~110 mA** | **~470 mA** |
 
 The dock is fed 5 V over USB-C. The TinyS3 takes it on its 5V pin, the AMS1117 turns it into the sensors'
 3.3 V, and two pogo contacts carry it up to the display's VIN pads. [assembly.md](assembly.md) has the circuit
@@ -400,7 +399,7 @@ guards against back-feed, because the dock's side wall covers the board's own US
 Every sensor runs at 3.3 V on an ordinary Qwiic cable, so for bring-up the whole chain can hang off any 3.3 V
 I²C host, the Inkplate's own easyC socket included, with nothing to change on any board. What that arrangement
 cannot do is *run*. The host's rail cannot carry the sensor peaks on top of its own processor and Wi-Fi bursts,
-and the PM board's ~200 mA would cross every upstream board's connectors. The symptom is an intermittent
+and the PM board's ~100 mA would cross every upstream board's connectors. The symptom is an intermittent
 brown-out when the fan, an SCD41 measurement peak and a Wi-Fi transmit coincide — the hardest kind of fault to
 find later. That is why the dock has its own regulator.
 

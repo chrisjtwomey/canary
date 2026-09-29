@@ -74,6 +74,6 @@ order.
 | PMSA003I | The Plantower PMS5003 is the same sensor with a UART, not I²C, so it needs a serial port and its own driver. The Sensirion SPS30 is a better sensor. |
 | BME688 | Adafruit 5046 is the same sensor on a STEMMA QT board. A BME680 fits the sockets and gives the same chip ID, but BSEC's gas index is different, so check the variant byte. |
 | SHTC3 | Adafruit 4636, or an SHT4x breakout: a better part, which needs its own driver. |
-| AMS1117-3.3 module | A 3.3 V regulator that takes 5 V in and carries 500 mA. A small buck module would not make the 0.37 W of heat that this LDO makes, but it needs its own pocket. |
+| AMS1117-3.3 module | A 3.3 V regulator that takes 5 V in and carries 500 mA. A small buck module would not make the 0.19 W of heat that this LDO makes while the fan runs, but it needs its own pocket. |
 | Magnetic pogo pair | An 8-pin pair with the same outline and pitch. The tray, the plinth and the key shape are drawn to this one. |
 | LEGO tile | A clear 8 mm disc, or a drop of clear resin, sanded on the front. |

@@ -2,7 +2,7 @@
 
 ## This repo
 
-- A thin consumer of [epd](https://github.com/chrisjtwomey/epd): the firmware (`src/`, `include/`) builds with `-DARDUINO_INKPLATE5V2` against epd's two libraries, and the server (`server/`) is its data sources, a page list and `DisplayServer(...).run()`. [docs/architecture.md](docs/architecture.md) has the layout.
+- A thin consumer of [epd](https://github.com/chrisjtwomey/epd). The display builds against EpdClient and EpdBoardInkplate (`-DARDUINO_INKPLATE5V2`), and the dock against EpdClient alone. The server (`server/`) is its data sources, a page list and `DisplayServer(...).run()`. [docs/architecture.md](docs/architecture.md) has the layout.
 - epd must be checked out beside this repo.
 - The two boards are **the display** (the Inkplate) and **the dock** (the TinyS3), in code, docs and anything a person reads. Never "the head".
 - Build the dock only with `PLATFORMIO_CORE_DIR=~/.platformio-canary-dock`, for `dock`, `dock-mock` and `dock-validate`.
@@ -35,9 +35,6 @@ Each doc covers one area. Read a doc only when the task needs it.
 | Changes a build step, the circuit or a connection | [hardware/assembly.md](hardware/assembly.md) |
 | Changes the wiring drawings | [hardware/wiring/README.md](hardware/wiring/README.md) |
 | Changes the printed parts, the fit, the fasteners or the model's rules | [hardware/enclosure.md](hardware/enclosure.md) |
-
-The hardware docs carry no open questions of their own: they are below, so those docs inform a reader and
-this file holds what is still being decided.
 
 Before each commit:
 
@@ -121,24 +118,17 @@ The test: a comment that would read the same in any codebase isn't earning its p
 
 Ask yourself: "Does the metaphor explain this better than plain words would?" If you have to weigh it up, it doesn't.
 
-## Words in the interface
+## UX writing
 
-**A page says what other web interfaces say. Our words are for the code.**
+Use UX writing (microcopy) when you write words into an interface.
 
-- The code has a store that holds a document under a key. The page says `4 of 4 records already exist`, and the button says `Replace`.
-- Use the word the rest of the web uses for the act: Download, Upload, Replace, Delete, Cancel.
-- A label, a button and a message are a few words each. Nothing explains the design.
+People learn the words of an interface from the other apps they use. A familiar word lets them act without reading
+further. A word from the code makes them stop and guess. So the interface uses the common word, even where the code
+has a more exact one:
 
-Ask yourself: "Is this the language I would expect from a web interface?" If it is not, it belongs in the code, not on the page.
+- "Delete", not "Purge".
+- "Download", not "Export the store".
+- "4 records already exist", not "4 keys collide in the store".
+- "Try again", not "Re-send the POST".
 
-## Open hardware questions
-
-Unsettled, and each one names what would settle it.
-
-1. **PMSA003I input current at 3.3 V** is derived from the charge-pump datasheet, not measured. Measure; it sets the regulator's rating.
-2. **5 V on the Inkplate's VIN pads**, on the bench, with no battery connected: measure VIN and the battery connector, and check that the charger chip stays cool through a few refreshes. Soldered say the path is harmless ([assembly.md](hardware/assembly.md#9-the-display)); this confirms it on this board.
-3. **Pull-ups on the TinyS3's bus.** [parts.md](hardware/parts.md#pull-ups) assumes the board adds none. Measure SDA and SCL to 3.3 V with the sensors unplugged.
-4. **What the BME688 board's JP2 joins** ([parts.md](hardware/parts.md#bme688--voc-gas-and-pressure)). Soldered's docs say only that it powers the regulator from 5 V, and no schematic is public. A continuity check across JP2, or the hardware files Soldered sends on request, would settle it.
-5. **Pogo contact resistance.** The connector's listing gives none, so [assembly.md](hardware/assembly.md#7-the-pogo-connector) assumes 30–100 mΩ. Measure across a mated pair with ~200 mA flowing.
-6. **Flash size** of the Inkplate's ESP32-WROVER-E: 4, 8 or 16 MB by variant, and the module's shield prints no suffix. `esptool.py flash_id` over USB settles it; it resets the board.
-
+Ask yourself: "Would a person who has never seen the code understand this at a glance?" If not, use the words that other apps use for the same thing, and keep the code's words in the code.

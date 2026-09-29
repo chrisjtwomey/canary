@@ -31,5 +31,3 @@ On the desk, it is 150.7 mm wide, 87.3 mm deep and 89.8 mm tall.
 | `images/` | Views of the model, and the wiring drawings, for the guides. |
 | `wiring/` | The circuit as YAML, one file for each run of wire ([wiring/README.md](wiring/README.md)). |
 | `logo/` | The source picture, and the script that traced it. |
-
-The open design questions are in [CLAUDE.md](../CLAUDE.md).

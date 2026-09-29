@@ -204,8 +204,8 @@ There are no grilles on the top, the right side, the rear or the display.
 | Source | Dissipation | Note |
 |---|---|---|
 | Whole dock, averaged | ~0.25 W | 48.9 mA at 5 V with light sleep and a reading every 5 minutes *(measured, [parts.md](parts.md#tinys3--the-dock))* |
-| AMS1117, while the PM fan runs | 0.37 W at 215 mA | 1.7 V dropped. A SOT-223 on the module's copper runs ~70 °C/W, so the tab sits 25–30 °C above the room, about 55 °C. Rated 125 °C. |
-| PMSA003I, while its fan runs | ≤ 0.5 W | It vents straight out through the left wall. |
+| AMS1117, while the PM fan runs | ~0.19 W at 110 mA | 1.7 V dropped. A SOT-223 on the module's copper runs ~70 °C/W, so the tab sits about 13 °C above the room. Rated 125 °C. |
+| PMSA003I, while its fan runs | ~0.3 W | 95 mA at 3.3 V *(measured)*. It vents straight out through the left wall. |
 | Sensors | < 0.1 W | |
 
 The PM fan runs only for the 35 s before each reading, so its rows are peaks, not averages.

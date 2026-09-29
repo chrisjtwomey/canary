@@ -27,7 +27,7 @@ LED:    a FreeRTOS task of its own, so the booting pattern runs while setup() bl
   samples, and the LED task for each step of the pattern ([led.md](led.md)). The LED's PWM runs through the sleep on
   the RC_FAST clock. The chip stays awake while its USB port is connected to a computer.
 - **The PM fan.** It runs for the 35 s before each reading, and stops after it: 12% of the time at 5-minute slots,
-  and 2% overnight. It is the dock's largest load, about 200 mA of the sensors' 215 mA. The 35 s is Plantower's
+  and 2% overnight. It is the dock's largest load: about 95 mA of the sensors' 110 mA *(measured)*. The 35 s is Plantower's
   30 s warm-up and a margin, counted back from the next slot. Each reading records in `pm_warmup_s` how long the fan
   ran, so the stored readings can show whether 30 s is enough. `SensorSuite` counts no missed frame while the fan is
   off, so a stopped fan does not make the module look dead. The settings can lengthen the time, or keep the fan on.
