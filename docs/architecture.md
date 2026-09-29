@@ -98,12 +98,14 @@ server/
   server.py                    config, sources, pages, DisplayServer(...).run()
   about.py  version.py         GET /about, and what this server calls itself
   web.py  html_doc.py          /web/: the pages in a browser, the explorer, and GET /history
-  config_page.py               /web/config: config.yaml as a form in tabs and as text, checked, saved, and restarted on
+  config_page.py               /web/config: config.yaml as a form in tabs and as text, checked, saved, and restarted on;
+                               whether each board runs the saved settings
   config_form.py               the form's fields, and how a filled-in form edits config.yaml
   transfer.py                  a store out to a file and back in, and what it holds, for the Storage tab
   board_logs.py                what each board logs over MQTT, for the Logs view
   schedule.py                  the dock's reading slots (schedules.md)
   dock_settings.py             the dock block and GET /board-settings (dock-settings.md)
+  display_settings.py          whether the display runs the saved display and image blocks (schedules.md)
   sources/                     the mock room, readings ingest, calibration store, device status, sea-level pressure
   pages/                       Breathe, Comfort, Dust, Air, Day, the Diagnostics pages, and the trace and delta pages
   metrics.py                   derived values and wording

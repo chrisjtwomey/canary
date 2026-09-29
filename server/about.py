@@ -4,9 +4,12 @@ A board asks at boot, after a post the server would not take, and once an
 hour. It carries the same version and clock the response headers carry, and
 adds what only a document has room for: the firmware each board is offered,
 which library this server is built on, and each board's sync schedule.
+
+The config page asks after a save, until the server names the config it saved.
 """
 from __future__ import annotations
 
+import hashlib
 import time
 from typing import Callable
 
@@ -15,6 +18,11 @@ from epd_server.config import FirmwareSettings
 from epd_server.firmware import FirmwareStore
 
 from epd_server.timeranges import Week
+
+
+def config_version(text: str) -> str:
+    """Eight hex digits that change whenever config.yaml's text does."""
+    return hashlib.sha1(text.encode()).hexdigest()[:8]
 
 
 class About:
@@ -28,26 +36,27 @@ class About:
         now: the clock, for tests.
         syncs: each board's sync schedule, by its short name, when the
             server keeps them.
+        config: the config_version of the config.yaml the server started on.
     """
 
     def __init__(self, version: str, firmware: FirmwareSettings | None = None,
                  now: Callable[[], float] = time.time,
-                 syncs: dict[str, Week] | None = None):
+                 syncs: dict[str, Week] | None = None, config: str | None = None):
         self.version = version
         self.firmware = firmware
         self.now = now
         self.syncs = syncs or {}
+        self.config = config
         self.stores = ({p: FirmwareStore(firmware.dir_for(p)) for p in firmware.names()}
                        if firmware and firmware.enabled else {})
 
     def answer(self, args: dict) -> dict:
         now = self.now()
+        server = {"version": self.version, "library": library_version, "epoch": int(now)}
+        if self.config is not None:
+            server["config"] = self.config
         return {
-            "server": {
-                "version": self.version,
-                "library": library_version,
-                "epoch": int(now),
-            },
+            "server": server,
             "firmware": self._firmware(),
             "sync": self._sync(now),
         }

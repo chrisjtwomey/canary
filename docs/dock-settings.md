@@ -17,7 +17,8 @@ The server holds the dock's settings: the `dock` block of `config.yaml`, which t
 - The dock asks `GET /board-settings` at the pre-warm before each slot, and applies what has changed. It keeps the
   answer in NVS, so it starts on the same settings after a power cut.
 - The answer carries a version, which is a hash of the settings. The dock reports the version it runs, and any key
-  it refused, in its `client` object. The Dock tab says whether the dock has taken the saved settings.
+  it refused, in its `client` object. The Dock tab says whether the dock has taken the saved settings. The
+  Display tab says the same of the display ([schedules.md](schedules.md#the-displays-sync)).
 - The dock holds each value to limits of its own. So a value out of range from the server changes nothing.
 - A board that has missed two of its syncs (two slots of its own schedule) is offline. The Boards page marks it.
   The Dock tab greys out its settings and its recalibration until the dock syncs again, because nothing sent then

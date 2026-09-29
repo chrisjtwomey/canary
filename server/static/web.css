@@ -710,7 +710,7 @@ html:not(.js) .panel + .panel {
   border-top: 2px solid var(--ink-faint);
 }
 
-.panel.sheet .dock-state + .section {
+.panel.sheet .board-state + .section {
   margin-top: 14px;
 }
 
@@ -1031,10 +1031,10 @@ html:not(.js) .panel.sheet .content {
   }
 }
 
-/* Whether the dock runs the saved settings: a pill for each state, solid
-   when the dock is offline, outlined when it is synchronized, and dashed
+/* Whether a board runs the saved settings: a pill for each state, solid
+   when the board is offline, outlined when it is synchronized, and dashed
    while it has yet to take the saved settings. */
-.dock-line {
+.board-line {
   display: flex;
   flex-wrap: wrap;
   align-items: center;

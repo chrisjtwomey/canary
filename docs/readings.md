@@ -207,8 +207,11 @@ first. By default it gives the last day, and every board unless `device` names o
 ```json
 { "doc": { ... the newest report of any board ... }, "age_s": 12, "count": 40,
   "boards": { "canary-dock": { "doc": { "ts": ..., "client": { ... }, "health": { ... } }, "age_s": 12 },
-              "canary-display": { "doc": { ... }, "age_s": 48 } } }
+              "canary-display": { "doc": { ..., "settings_version": "3f2a9c1e" }, "age_s": 48 } } }
 ```
+
+- The server puts `settings_version` on each report from the display: the version of the display and image
+  settings it ran when the report came ([schedules.md](schedules.md#the-displays-sync)). The status store keeps it.
 
 `age_s` is the seconds since the report arrived.
 

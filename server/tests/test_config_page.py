@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup
 from epd_server import ReadingsStore
 from flask import Flask
 
+from about import config_version
 from config_page import _bytes, _contents_parts, _since, config_blueprint
 from transfer import Corrupt, Held, Overlap, Transfer
 from server import check_config, make_pages
@@ -159,12 +160,21 @@ def test_review_lists_the_changes_and_writes_nothing(client, path, restarts):
 def test_a_save_from_config_js_is_answered_in_json(client, path, restarts):
     json = {"Accept": "application/json"}
     rsp = client.post("/web/config", data={"text": EDITED, "action": "save"}, headers=json)
-    assert rsp.get_json() == {"saved": True} and restarts == [1]
+    assert rsp.get_json() == {"saved": True, "config": config_version(EDITED)} and restarts == [1]
     rsp = client.post("/web/config", data={"text": EDITED, "action": "save"}, headers=json)
     assert rsp.get_json() == {"saved": False, "same": True} and restarts == [1]
     rsp = client.post("/web/config", data={"text": UNKNOWN_PAGE, "action": "save"}, headers=json)
     assert rsp.status_code == 400 and "radon.png" in rsp.get_json()["problem"]
     assert open(path).read() == EDITED and restarts == [1]
+
+
+def test_a_save_names_the_version_of_the_file_it_wrote(client, path):
+    """The version /about names once the server runs the file: of the text
+    as written, with the newline the save adds."""
+    rsp = client.post("/web/config", data={"text": EDITED.rstrip("\n"), "action": "save"},
+                      headers={"Accept": "application/json"})
+
+    assert rsp.get_json()["config"] == config_version(open(path).read())
 
 
 def test_review_of_a_refused_config_says_why(client, path):
@@ -905,6 +915,68 @@ def test_a_dock_on_the_saved_settings_is_synchronized(dock_client, dock_report, 
     assert one(soup, "#dock-synced").get_text() == "Synchronized"
     assert " ".join(one(soup, "#dock-applied").get_text().split()) == \
         "Synchronized Last sync 1 h ago."
+
+
+# ── The Display tab ─────────────────────────────────────────────────
+
+def display_sync(doc, offline=False):
+    from display_settings import DISPLAY, DisplaySync
+    from epd_server.timeranges import TimeRanges, parse_hhmm
+    from tests.conftest import AT, TZ
+    return DisplaySync("3f2a9c1e", TimeRanges([(parse_hhmm("00:00"), 900)], TZ),
+                       lambda device: ({"doc": doc, "age_s": 120, "offline": offline}
+                                       if device == DISPLAY and doc else None),
+                       now=lambda: AT)
+
+
+def display_client(path, tz, display, dock=None):
+    app = Flask(__name__)
+    app.register_blueprint(config_blueprint(make_pages(tz, width=1280, height=720), path,
+                                            check_config, lambda: None, dock=dock,
+                                            display=display))
+    return app.test_client()
+
+
+@pytest.mark.parametrize("doc, offline, words", [
+    (None, False, "No sync from the display yet. Settings apply once it connects."),
+    ({"ts": 1, "settings_version": "3f2a9c1e"}, False, "Synchronized Last sync 2 min ago."),
+    ({"ts": 1, "settings_version": "0b1c2d3e"}, False,
+     "Not synchronized The display takes these settings when it next syncs, at 22:00."),
+    ({"ts": 1, "settings_version": "0b1c2d3e"}, True,
+     "Offline Last sync 2 min ago. The display takes these settings when it syncs again."),
+])
+def test_the_display_tab_says_whether_the_display_runs_the_saved_settings(
+        path, tz, doc, offline, words):
+    soup = soup_of(display_client(path, tz, display_sync(doc, offline)).get("/web/config"))
+
+    assert " ".join(one(soup, "#panel-display #display-applied").get_text().split()) == words
+
+
+def test_the_display_lines_come_live_without_a_dock(path, tz):
+    rsp = display_client(path, tz, display_sync({"ts": 1, "settings_version": "3f2a9c1e"})) \
+        .get("/web/config/live")
+
+    line = one(BeautifulSoup(rsp.get_json()["display"], "html.parser"), "#display-synced")
+    assert line.get_text() == "Synchronized" and "state" not in rsp.get_json()
+
+
+@pytest.mark.parametrize("dock_version, display_doc, words", [
+    ("same", {"ts": 1, "settings_version": "3f2a9c1e"}, "Saved."),
+    ("old", {"ts": 1, "settings_version": "3f2a9c1e"},
+     "Saved. The dock takes the new settings at 21:50."),
+    ("same", {"ts": 1, "settings_version": "0b1c2d3e"},
+     "Saved. The display takes the new settings at 22:00."),
+    ("old", {"ts": 1, "settings_version": "0b1c2d3e"},
+     "Saved. The dock takes the new settings at 21:50, the display at 22:00."),
+])
+def test_after_a_save_the_save_bar_says_when_each_board_takes_it(
+        path, tz, dock, dock_report, dock_version, display_doc, words):
+    version = dock.settings.version if dock_version == "same" else "0b1c2d3e"
+    dock_report["client"] = {"dock": {"settings": {"version": version, "refused": []}}}
+    soup = soup_of(display_client(path, tz, display_sync(display_doc), dock=dock)
+                   .get("/web/config?saved=1"))
+
+    assert one(soup, "#settings-form .savebar .status").get_text() == words
 
 
 # ── The Image tab ───────────────────────────────────────────────────

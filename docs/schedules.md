@@ -49,3 +49,10 @@ The Display tab of `/web/config` edits the week beside a dial of the day:
   page that it fetches. The Display tab sets it in minutes.
 - Each board gets its own next slot in `Canary-Next-Sensor-Poll-Seconds`, by the name it gives in `Canary-Device`.
 - The display posts its state at each wake. It also wakes for a sync that comes before its next page.
+- The display holds none of the `display` and `image` settings: the server picks each page, and the time to the
+  next wake, from them. So the display runs a saved change from the answer to its next sync.
+- The server keeps the version for it: a hash of those two blocks, taken at the server's start. It puts the
+  version on each report from the display as `settings_version`. The Display tab compares the newest report's with
+  the one the server runs: "Synchronized", or "Not synchronized" with the time of the next sync. A save that leaves
+  both blocks alone leaves the display synchronized, where a test of the restart alone would mark it out of step
+  after every save.

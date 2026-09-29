@@ -5,7 +5,7 @@ import pytest
 from epd_server import __version__ as library_version
 from epd_server.config import FirmwareSettings
 
-from about import About
+from about import About, config_version
 from version import server_version
 
 
@@ -19,6 +19,18 @@ def test_it_reports_the_version_it_was_given_and_the_library_it_uses():
     assert answer["server"] == {"version": "canary-v2.0.0",
                                 "library": library_version,
                                 "epoch": 1_700_000_000}
+
+
+def test_it_names_the_config_it_started_on():
+    answer = About("v1.0.0", config=config_version("server:\n  port: 8080\n")).answer({})
+
+    assert answer["server"]["config"] == config_version("server:\n  port: 8080\n")
+    assert "config" not in About("v1.0.0").answer({})["server"]
+
+
+def test_the_config_version_changes_with_the_text():
+    assert config_version("a: 1\n") != config_version("a: 2\n")
+    assert len(config_version("a: 1\n")) == 8
 
 
 def test_a_server_with_no_firmware_says_so():

@@ -805,7 +805,7 @@
       .then(function (answer) {
         if (answer.saved) {
           status(form, 'Restarting…');
-          waitForRestart(form, submitter);
+          waitForRestart(form, submitter, answer.config);
           return;
         }
         busy(submitter, false);
@@ -817,11 +817,10 @@
       });
   }
 
-  // A server that answers straight away has not restarted yet, so an answer
-  // counts only after a failure.
-  function waitForRestart(form, submitter) {
+  // The server is back on the saved file once /about names its version. A
+  // restart can take less time than one poll, so being down is no sign.
+  function waitForRestart(form, submitter, config) {
     var started = Date.now();
-    var wentDown = false;
 
     function next() {
       if (Date.now() - started > GIVE_UP_MS) {
@@ -834,19 +833,16 @@
 
     function poll() {
       fetch('../about', { cache: 'no-store' })
-        .then(function (r) {
-          if (r.ok && wentDown) {
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (about) {
+          if (about && about.server && about.server.config === config) {
             leaving = true;
             location.replace('config?saved=1' + location.hash);
             return;
           }
-          if (!r.ok) wentDown = true;
           next();
         })
-        .catch(function () {
-          wentDown = true;
-          next();
-        });
+        .catch(next);
     }
 
     next();
@@ -912,11 +908,12 @@
     notice.showModal();
   }
 
-  // The Dock tab's lines about the dock, fresh every 10 s. When the dock goes
-  // offline or comes back, the page loads again to lock or unlock its
-  // settings, unless that would lose something typed.
+  // The Dock and Display tabs' lines about each board, fresh every 10 s. When
+  // the dock goes offline or comes back, the page loads again to lock or
+  // unlock its settings, unless that would lose something typed.
   var LIVE_MS = 10000;
   var dockState = document.getElementById('dock-state');
+  var displayState = document.getElementById('display-state');
   var ppm = document.getElementById('recalibrate-ppm');
   var locked = dockState && dockState.getAttribute('data-offline') === 'true';
 
@@ -931,6 +928,11 @@
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (s) {
         if (!s) return;
+        if (displayState && s.display) {
+          displayState.outerHTML = s.display;
+          displayState = document.getElementById('display-state');
+        }
+        if (!dockState || !s.state) return;
         dockState.outerHTML = s.state;
         dockState = document.getElementById('dock-state');
         var line = document.getElementById('recalibrate-state');
@@ -945,7 +947,7 @@
       .catch(function () {});
   }
 
-  if (dockState) setInterval(live, LIVE_MS);
+  if (dockState || displayState) setInterval(live, LIVE_MS);
 
   open(nav.getAttribute('data-open') || location.hash.slice(1));
   if (location.search) history.replaceState(null, '', 'config' + location.hash);

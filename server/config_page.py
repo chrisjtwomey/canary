@@ -16,7 +16,8 @@ save and a restart.
                               action=review: the same, and what it changes, as JSON
                               action=save: the same check, then the old file kept
                               as config.yaml.bak, the new one written, and the
-                              server restarted on it
+                              server restarted on it; as JSON, with the
+                              config_version /about names once it runs it
 
 Nothing guards these routes yet: anyone who can reach the server can change
 its config.
@@ -40,6 +41,8 @@ from markupsafe import Markup
 
 import config_form as cf
 import dock_settings as ds
+from about import config_version
+from display_settings import DisplaySync
 from html_doc import Html
 from pages.base import EnvPage
 from metrics import age_span
@@ -79,15 +82,18 @@ NOTICES = {
 READ_ONLY = "config.yaml is read-only. Change its permissions to save."
 
 
-def save(path: str, text: str) -> None:
+def save(path: str, text: str) -> str:
     """Keep ``path`` as it was beside it, then write ``text`` over it in place.
+    Returns what it wrote: ``text`` ending in a newline.
 
     In place, because a file mounted into a container on its own cannot be
     replaced by a rename.
     """
     shutil.copyfile(path, path + ".bak")
+    written = text if text.endswith("\n") else text + "\n"
     with open(path, "w") as f:
-        f.write(text if text.endswith("\n") else text + "\n")
+        f.write(written)
+    return written
 
 
 @dataclass
@@ -118,6 +124,7 @@ class View:
     report: Report = field(default_factory=Report)
     dock: DockState | None = None
     display: dict | None = None     # the display's panel as it reports it: width, height, board
+    display_state: DisplayState | None = None
     changes: list[dict] = field(default_factory=list)   # what a check found a save would change
 
 
@@ -145,6 +152,20 @@ def display_panel(entry: dict | None) -> dict | None:
     if not isinstance(width, int) or not isinstance(height, int) or width <= 0 or height <= 0:
         return None
     return {"width": width, "height": height, "board": str(client.get("board") or "")}
+
+
+@dataclass
+class DisplayState:
+    """What the Display tab says about the display beside its settings."""
+    applied: bool | None = None     # runs the saved settings; None before it reports
+    offline: bool = False           # it has missed two slots
+    age_s: int | None = None        # since its last sync
+    next_sync: str = ""             # the local time of its next slot, HH:MM
+
+
+def display_state(display: DisplaySync) -> DisplayState:
+    offline, age = display.offline()
+    return DisplayState(display.applied(), offline, age, display.next_sync())
 
 
 def dock_state(dock: ds.BoardSettings) -> DockState:
@@ -525,34 +546,60 @@ def _disk_data(held: dict[str, Held], disk: tuple[int, int] | None) -> dict:
     return data
 
 
-def _settings_line(a: Airium, state: DockState) -> None:
-    """Whether the dock runs the saved settings, as a banner across the tab:
+# When each board takes new settings: the dock before the reading at its
+# sync, the display in the answer to its sync.
+TAKES = {"dock": "before its next sync", "display": "when it next syncs"}
+
+
+def _settings_line(a: Airium, state: DockState | DisplayState, board: str) -> None:
+    """Whether ``board`` runs the saved settings, as a banner across its tab:
     a pill naming the state, then what it means. config.js puts a new one in
     its place from GET /web/config/live."""
     last = Markup("Last sync {} ago.").format(age_span(state.age_s or 0))
-    if state.offline:
+    at = f", at {state.next_sync}" if state.next_sync else ""
+    if state.offline and board == "dock":
         pill = ("offline", "Offline", last + " Settings unlock when the dock syncs again.")
+    elif state.offline:
+        pill = ("offline", "Offline", last + (" The display takes these settings when it "
+                                              "syncs again." if state.applied is False else ""))
     elif state.applied is None:
         pill = None
     elif state.applied:
         pill = ("synced", "Synchronized", last)
     else:
         pill = ("waiting", "Not synchronized",
-                f"The dock takes these settings before its next sync, "
-                f"at {state.next_sync}.")
-    with a.div(klass="dock-state", id="dock-state",
+                f"The {board} takes these settings {TAKES[board]}{at}.")
+    with a.div(klass="board-state", id=f"{board}-state",
                **{"data-offline": "true" if state.offline else "false"}):
-        with a.p(klass="banner dock-line", id="dock-applied"):
+        with a.p(klass="banner board-line", id=f"{board}-applied"):
             if pill is None:
-                a.span(_t="No sync from the dock yet. Settings apply once it connects.")
+                a.span(_t=f"No sync from the {board} yet. Settings apply once it connects.")
             else:
                 klass, name, words = pill
-                a.span(klass=f"pill {klass}", id=f"dock-{klass}", _t=name)
+                a.span(klass=f"pill {klass}", id=f"{board}-{klass}", _t=name)
                 a.span(_t=words)
-        if state.refused:
+        if getattr(state, "refused", None):
             names = ", ".join(_label_of(("dock", *key.split("."))) for key in state.refused)
             a.p(klass="error", id="dock-refused",
                 _t=f"Refused by the dock: {names}. Check the dock's firmware version.")
+
+
+def _saved_words(states: dict[str, DockState | DisplayState | None]) -> str:
+    """The save bar's words after a save: which board has yet to take the new
+    settings, and when."""
+    waiting = [(board, _takes_at(state)) for board, state in states.items()
+               if state is not None and state.applied is False]
+    if not waiting:
+        return "Saved."
+    (board, when), *rest = waiting
+    return (f"Saved. The {board} takes the new settings {when}"
+            + "".join(f", the {b} {w}" for b, w in rest) + ".")
+
+
+def _takes_at(state: DockState | DisplayState) -> str:
+    if state.offline:
+        return "when it syncs again"
+    return f"at {state.next_sync}" if state.next_sync else "at its next sync"
 
 
 def _label_of(path: tuple) -> str:
@@ -823,8 +870,10 @@ def config_html(pages: list[EnvPage], view: View, writable: bool,
                                               "aria-labelledby": f"tab-{t.name}"}):
                                 locked = False
                                 if t.name == "dock" and view.dock is not None:
-                                    _settings_line(a, view.dock)
+                                    _settings_line(a, view.dock, "dock")
                                     locked = view.dock.offline
+                                if t.name == "display" and view.display_state is not None:
+                                    _settings_line(a, view.display_state, "display")
                                 for g in t.groups:
                                     if t.sheet:
                                         with a.div(klass="section"):
@@ -907,6 +956,7 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
                      restart: Callable[[], None],
                      stores: dict[str, Transfer] | None = None,
                      dock: ds.BoardSettings | None = None,
+                     display: DisplaySync | None = None,
                      boards: Callable[[str], dict | None] | None = None) -> Blueprint:
     """The /web/config routes for the file at ``path``.
 
@@ -918,6 +968,8 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
             can come out of and go into, by the group's ``store`` name.
         dock: the dock's settings, for what the Dock tab says of them and
             for its recalibration.
+        display: whether the display runs the saved settings, for what the
+            Display tab says of them.
         boards: what the server knows of a board, as DeviceReports.device
             gives it, for the size the display reports.
     """
@@ -937,26 +989,39 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
         except OSError:
             return None
 
+    def board_states(view: View) -> None:
+        if dock is not None and view.dock is None:
+            view.dock = dock_state(dock)
+        if display is not None and view.display_state is None:
+            view.display_state = display_state(display)
+
     def page(view: View, status: int = 200):
         view.held = {name: store.held() for name, store in stores.items()}
         view.now = time.time()
         view.disk = _disk_usage(stores)
-        if dock is not None and view.dock is None:
-            view.dock = dock_state(dock)
+        board_states(view)
         if boards is not None:
             view.display = display_panel(boards("canary-display"))
         return config_html(pages, view, writable(), bak()), status
 
     @bp.route("/live", methods=["GET"])
     def live():
-        """The Dock tab's lines about the dock as they are now, for config.js."""
-        if dock is None:
+        """The Dock and Display tabs' lines about each board as it is now,
+        for config.js."""
+        if dock is None and display is None:
             abort(404)
-        state = dock_state(dock)
-        a = Html()
-        _settings_line(a, state)
-        return jsonify(state=str(a), recalibration=_recalibration_words(state),
-                       offline=state.offline, light=state.light)
+        answer: dict[str, Any] = {}
+        if dock is not None:
+            state = dock_state(dock)
+            a = Html()
+            _settings_line(a, state, "dock")
+            answer.update(state=str(a), recalibration=_recalibration_words(state),
+                          offline=state.offline, light=state.light)
+        if display is not None:
+            a = Html()
+            _settings_line(a, display_state(display), "display")
+            answer["display"] = str(a)
+        return jsonify(answer)
 
     @bp.route("/export/<name>", methods=["GET"])
     def export(name: str):
@@ -1024,7 +1089,8 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
         with open(path) as f:
             view = file_view(f.read())
         if request.args.get("saved"):
-            view.status = "Saved."
+            board_states(view)
+            view.status = _saved_words({"dock": view.dock, "display": view.display_state})
         return page(view)
 
     @bp.route("", methods=["POST"])
@@ -1111,12 +1177,12 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
         if not writable():
             return refuse(READ_ONLY, 403)
         try:
-            save(path, text)
+            written = save(path, text)
         except OSError as exc:
             return refuse(f"Cannot save config.yaml. {exc.strerror}.", 500)
         restart()
         if wants_json:
-            return jsonify(saved=True)
+            return jsonify(saved=True, config=config_version(written))
         return restarting_html(pages, view.tab or cf.TABS[0].name)
 
     return bp

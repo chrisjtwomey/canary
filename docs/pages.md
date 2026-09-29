@@ -40,6 +40,12 @@ The config page:
 - **Check** tests an edit, as the server tests the file at start.
 - **Save and restart** lists the changes, keeps the old file as `config.yaml.bak`, writes the new file and
   restarts the server. **Restore** puts the `.bak` back.
+- The page opens again when `GET /about` names the version of the file it saved ([versions.md](versions.md)). A
+  restart can take less time than the page's 2 s between polls, so a poll that fails is no sign of one. After 180 s
+  the page says "The server has not come back. Check its log."
+- After a save, the save bar names each board that has yet to take the new settings, and when: "Saved. The dock
+  takes the new settings at 17:30, the display at 17:45." The Dock and Display tabs each say whether that board
+  runs the saved settings ([dock-settings.md](dock-settings.md), [schedules.md](schedules.md#the-displays-sync)).
 - When a container has the file mounted alone, the `.bak` stays in the container. It goes when the container is
   recreated.
 - The Storage tab downloads each store as a file, one JSON document a line, and takes such a file back. An import

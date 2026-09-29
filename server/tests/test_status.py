@@ -215,6 +215,24 @@ def test_the_health_object_is_kept_beside_the_client_one(tmp_path):
     store.close()
 
 
+def test_a_stamped_boards_reports_carry_the_settings_version(tmp_path):
+    """The server's own record of the settings it ran when the report came:
+    kept in memory and in the store, on that board's reports alone."""
+    store = ReadingsStore(tmp_path / "status.db")
+    reports = DeviceReports(store=store, stamps={"canary-display": "3f2a9c1e"})
+    posted = {"ts": 10, "device": "canary-display", "client": {"rssi": -60}}
+    reports.accept(posted)
+    reports.accept({"ts": 11, "device": "canary-dock", "client": {"rssi": -70}})
+
+    assert reports.device("canary-display")["doc"]["settings_version"] == "3f2a9c1e"
+    assert store.latest("canary-display")["settings_version"] == "3f2a9c1e"
+    assert "settings_version" not in reports.device("canary-dock")["doc"]
+    assert "settings_version" not in posted
+    restarted = DeviceReports(store=store, stamps={"canary-display": "0b1c2d3e"})
+    assert restarted.device("canary-display")["doc"]["settings_version"] == "3f2a9c1e"
+    store.close()
+
+
 def _silence(device, now):
     return 600 if device == "canary-dock" else 120
 

@@ -30,6 +30,8 @@ def status_doc(doc: dict) -> dict | None:
     kept = {"ts": doc["ts"], "device": str(doc.get("device", "")), "client": client}
     if isinstance(doc.get("health"), dict):
         kept["health"] = doc["health"]
+    if doc.get("settings_version"):
+        kept["settings_version"] = doc["settings_version"]
     return kept
 
 
@@ -49,6 +51,9 @@ class DeviceReports:
     OFFLINE_GRACE_S, the board is offline. Without it no board is judged.
     ``next_sync`` gives, for a board and the time now, the seconds until its
     next sync slot, or None for a board without slots.
+    ``stamps`` gives, by board, the version of the settings the server runs
+    for it, put on each of its reports as ``settings_version``: for a board
+    that does not report its settings itself.
 
     The server answers each request on a thread of its own, so every method
     holds ``lock``; a caller that needs several answers to agree holds it
@@ -58,12 +63,14 @@ class DeviceReports:
     def __init__(self, now: Callable[[], float] = time.time,
                  store: ReadingsStore | None = None, keep_days: float = 0,
                  silence: Callable[[str, float], float] | None = None,
-                 next_sync: Callable[[str, float], int | None] | None = None):
+                 next_sync: Callable[[str, float], int | None] | None = None,
+                 stamps: Mapping[str, str] | None = None):
         self.now = now
         self.store = store
         self.keep_days = keep_days
         self.silence = silence
         self.next_sync = next_sync
+        self.stamps = stamps or {}
         self.by_device: dict[str, dict] = {}     # device -> {"doc", "received"}
         self.refusals: dict[str, dict] = {}      # device -> {"version", "count", "at"}
         self.count = 0
@@ -158,11 +165,16 @@ class DeviceReports:
             ts = doc.get("ts")
             if isinstance(ts, bool) or not isinstance(ts, int):
                 raise ValueError("ts must be an integer epoch")
+        docs = [self._stamped(doc) for doc in docs]
         with self.lock:
             fresh = self._keep(docs)
             for doc, new in zip(docs, fresh):
                 self._note(doc, new)
             return fresh
+
+    def _stamped(self, doc: dict) -> dict:
+        stamp = self.stamps.get(str(doc.get("device", "")))
+        return {**doc, "settings_version": stamp} if stamp else doc
 
     def _note(self, doc: dict, new: bool) -> None:
         device = str(doc.get("device", ""))

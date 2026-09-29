@@ -26,9 +26,10 @@ from epd_server.scheduling import TimeRangesSchedule
 from epd_server.source import CompositeSource, IngestSource
 from epd_server.timeranges import TimeRanges, Week, check_interval
 
-from about import About
+from about import About, config_version
 from board_logs import LogsQuery
 from config_page import config_blueprint
+from display_settings import DISPLAY, DisplaySync, display_version
 from dock_settings import DOCK, BoardSettings, DockSettings, load_dock_settings
 from pages.air import AirPage
 from pages.breathe import BreathePage
@@ -60,7 +61,6 @@ SOURCE_KINDS = ("mock", "store")
 FIRMWARE_PRODUCTS = ("canary-display", "canary-dock")
 # The history windows the pages ask for, as history_24h and history_72h.
 HISTORY_HOURS = (24, 72)
-DISPLAY = "canary-display"
 
 
 def make_pages(tz, **geometry) -> list:
@@ -311,7 +311,10 @@ def parse_args():
 
 def main():
     args = parse_args()
-    config = load_yaml(os.path.join(cwd, "config.yaml"))
+    config_path = os.path.join(cwd, "config.yaml")
+    with open(config_path) as f:
+        running = config_version(f.read())
+    config = load_yaml(config_path)
 
     try:
         settings = load_settings(config)
@@ -337,9 +340,11 @@ def main():
         log.info("clock pinned to %s", args.at)
 
     status_store = ReadingsStore(os.path.join(cwd, settings.status_path))
+    display_settings = display_version(config)
     reports = DeviceReports(store=status_store, keep_days=settings.status_days,
                             silence=make_silence(settings.syncs),
-                            next_sync=make_next_sync(settings.syncs))
+                            next_sync=make_next_sync(settings.syncs),
+                            stamps={DISPLAY: display_settings})
     log.info("board reports in %s, %d held", status_store.path, status_store.count())
     store = None
     if settings.kind == "store":
@@ -351,7 +356,8 @@ def main():
     ingest = ReadingsIngest(reports, store, settings.keep_days)
     dock_sync = settings.dock_sync
     about = About(version, core.firmware,
-                  syncs={"dock": settings.dock_sync, "display": settings.display_sync})
+                  syncs={"dock": settings.dock_sync, "display": settings.display_sync},
+                  config=running)
     pages = make_pages(tz, **core.image.page_kwargs())
     between = make_between(settings.seed, clock, store)
     history = HistoryQuery(make_history(between, settings.altitude_m), tz, now=clock)
@@ -360,6 +366,7 @@ def main():
     board_logs = LogStore(os.path.join(cwd, settings.logs_path), keep_days=settings.logs_days)
     logs = LogsQuery(board_logs, tz)
     board_settings = BoardSettings(settings.dock, dock_sync, calibration, reports.device, now=clock)
+    display_sync = DisplaySync(display_settings, settings.display_sync, reports.device, now=clock)
 
     try:
         server = DisplayServer(
@@ -396,7 +403,8 @@ def main():
     }
     server.app.register_blueprint(config_blueprint(pages, os.path.join(cwd, "config.yaml"),
                                                    check_config, restart_soon, stores,
-                                                   dock=board_settings, boards=reports.device))
+                                                   dock=board_settings, display=display_sync,
+                                                   boards=reports.device))
 
     if args.once or args.only:
         server.regenerate(only=args.only)

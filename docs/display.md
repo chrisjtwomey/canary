@@ -16,7 +16,9 @@ each wake:  board.begin(); wifi
 ```
 
 - **Time.** Each answer from the server sets the display's clock, time zone and RTC, so it does not ask NTP.
-- **Settings.** The display reads no SD card: its settings are in its own store.
+- **Settings.** The display reads no SD card: its settings are in its own store. The server applies the display
+  and image settings for it, so the display reports no settings version
+  ([schedules.md](schedules.md#the-displays-sync)).
 - **Wake-up.** The RTC's alarm wakes it, on GPIO39 as the schematic shows. The ESP32's timer is set a little later
   as a backup, so a missed alarm makes a late page, not a display that never wakes.
 - **RTC memory** holds what must outlast the sleep: the wake plan, the next URL and the counts. A real start clears
