@@ -11,20 +11,13 @@ jobs:
         working-directory: canary
 
     steps:
-      # Checked out side by side so lib_deps' symlink://../epd/... paths
-      # resolve. The client's own tests live in epd and run in its CI.
+      # epd comes from the PlatformIO registry, at the version platformio.ini
+      # pins. The client's own tests live in epd and run in its CI.
       - uses: actions/checkout@v6
         with:
           path: canary
           # Tags, so scripts/version.py can derive CLIENT_VERSION.
           fetch-depth: 0
-      - uses: actions/checkout@v6
-        with:
-          repository: chrisjtwomey/epd
-          path: epd
-          # The same version the server core is pinned to in
-          # server/requirements.txt; the two share the header contract.
-          ref: v0.9.0
       - uses: actions/cache@v5
         with:
           path: |
@@ -57,9 +50,8 @@ jobs:
 
       # Both sensor paths, plus the bench routine that runs instead of the
       # awake loop: the drivers the board runs, the mocks that stand in when
-      # nothing is attached, and the wiring check. The validation image needs
-      # epd 0.4.0 for writeExpanderPin() and enableWakeOnTimer(). In a
-      # PlatformIO folder of its own (CONTRIBUTING.md, Building the dock).
+      # nothing is attached, and the wiring check. In a PlatformIO folder of
+      # its own (CONTRIBUTING.md, Building the dock).
       - name: Build the dock
         run: PLATFORMIO_CORE_DIR=~/.platformio-canary-dock pio run -e dock -e dock-mock -e dock-validate
 

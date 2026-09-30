@@ -1,44 +1,52 @@
-"""The two places this repo names an epd version must agree.
+"""The places this repo names an epd version must agree.
 
-``server/requirements.txt`` pins the server core. The CI workflow checks the
-firmware's headers out at a ref. Both sides implement one contract — the
-``EPD-Next-*`` headers — so a bump that moves only one of them builds the
-firmware against a library the code has outgrown. That is what left the
-workflow on v0.5.1 while the code needed 0.6.0.
+``server/requirements.txt`` pins the server core, from PyPI. ``platformio.ini``
+pins the firmware's libraries, from the PlatformIO registry. Both sides
+implement one contract — the ``EPD-Next-*`` headers — so a bump that moves only
+one of them builds the firmware against a library the server has outgrown.
 """
 from __future__ import annotations
 
+import configparser
 import re
 from pathlib import Path
 
-import yaml
-
 ROOT = Path(__file__).resolve().parents[2]
-WORKFLOW = ROOT / ".github" / "workflows" / "build.yaml"
+PLATFORMIO = ROOT / "platformio.ini"
 REQUIREMENTS = ROOT / "server" / "requirements.txt"
 
 
-def _workflow_epd_ref() -> str:
-    """The ref every epd checkout in the workflow uses."""
-    steps = [
-        step
-        for job in yaml.safe_load(WORKFLOW.read_text())["jobs"].values()
-        for step in job.get("steps", [])
-        if (step.get("with") or {}).get("repository") == "chrisjtwomey/epd"
-    ]
-    assert steps, f"no step in {WORKFLOW.name} checks epd out; rewrite this test"
-
-    refs = {step["with"].get("ref") for step in steps}
-    assert len(refs) == 1, f"epd is checked out at more than one ref: {sorted(refs)}"
-    return refs.pop()
-
-
 def _requirements_epd_pin() -> str:
-    """The tag requirements.txt pins epd-server to."""
-    pin = re.search(r"epd-server @ git\+\S+?@(\S+?)#", REQUIREMENTS.read_text())
-    assert pin, "requirements.txt no longer pins epd-server to a tag"
+    """The release requirements.txt pins epd-server to."""
+    pin = re.search(r"^epd-server==(\S+)$", REQUIREMENTS.read_text(), re.MULTILINE)
+    assert pin, "requirements.txt no longer pins epd-server to a release"
     return pin.group(1)
 
 
-def test_ci_builds_the_firmware_against_the_pinned_epd():
-    assert _workflow_epd_ref() == _requirements_epd_pin()
+def _firmware_epd_pins() -> dict[str, str]:
+    """The release platformio.ini pins each epd library to, by library."""
+    ini = configparser.ConfigParser(interpolation=None)
+    ini.read(PLATFORMIO)
+    pins = {}
+    for key in ("client", "inkplate"):
+        name, _, version = ini["kit"][key].partition(" @ ")
+        pins[name] = version
+    return pins
+
+
+def test_the_firmware_and_the_server_pin_the_same_epd():
+    assert _firmware_epd_pins() == {
+        "chrisjtwomey/EpdClient": _requirements_epd_pin(),
+        "chrisjtwomey/EpdBoardInkplate": _requirements_epd_pin(),
+    }
+
+
+def test_a_board_environment_takes_epd_from_the_registry_and_its_dev_twin_from_a_checkout():
+    ini = configparser.ConfigParser(interpolation=None)
+    ini.read(PLATFORMIO)
+
+    for board in ("esp32", "dock"):
+        assert "symlink://" not in ini[f"env:{board}"]["lib_deps"]
+        assert "${kit.client}" in ini[f"env:{board}"]["lib_deps"]
+        assert ini[f"env:{board}-dev"]["extends"] == f"env:{board}"
+        assert "symlink://../epd/firmware" in ini[f"env:{board}-dev"]["lib_deps"]

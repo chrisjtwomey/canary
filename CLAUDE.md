@@ -3,9 +3,9 @@
 ## This repo
 
 - A thin consumer of [epd](https://github.com/chrisjtwomey/epd). The display builds against EpdClient and EpdBoardInkplate (`-DARDUINO_INKPLATE5V2`), and the dock against EpdClient alone. The server (`server/`) is its data sources, a page list and `DisplayServer(...).run()`. [docs/architecture.md](docs/architecture.md) has the layout.
-- epd must be checked out beside this repo.
+- The firmware takes epd from the PlatformIO registry and the server from PyPI, at one pinned release. epd must be checked out beside this repo only to change epd: the `-dev` environments and the editable server install use that checkout ([CONTRIBUTING.md](CONTRIBUTING.md#working-on-epd)).
 - The two boards are **the display** (the Inkplate) and **the dock** (the TinyS3), in code, docs and anything a person reads. Never "the head".
-- Build the dock only with `PLATFORMIO_CORE_DIR=~/.platformio-canary-dock`, for `dock`, `dock-mock` and `dock-validate`.
+- Build the dock only with `PLATFORMIO_CORE_DIR=~/.platformio-canary-dock`, for `dock`, `dock-mock`, `dock-validate` and their `-dev` twins.
 - In `server/.venv`, install the editable epd last: `pip install -e ../epd/server` after any `pip install -r`.
 
 ## Docs

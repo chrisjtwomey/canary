@@ -10,9 +10,7 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     CHROME_BIN=/usr/bin/chromium
 
-# git: requirements.txt takes epd-server from GitHub.
 RUN apt-get update && apt-get install --no-install-recommends -y \
-        git \
         chromium \
         chromium-driver \
         fonts-dejavu-core \

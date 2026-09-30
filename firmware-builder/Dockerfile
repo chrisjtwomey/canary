@@ -23,18 +23,15 @@ RUN mkdir -m 1777 /platformio
 ARG CANARY_VERSION=dev
 ENV CANARY_VERSION=${CANARY_VERSION}
 
-# The firmware sources at this commit, with the example settings, and epd's
-# at the tag the server pins, where platformio.ini's ../epd finds it.
+# The firmware sources at this commit, with the example settings. The build
+# downloads epd from the PlatformIO registry, at the version platformio.ini
+# pins.
 COPY platformio.ini partitions.csv /src/canary/
 COPY include /src/canary/include
 COPY lib /src/canary/lib
 COPY src /src/canary/src
 COPY scripts/version.py scripts/bsec.py scripts/dock_core.py /src/canary/scripts/
-COPY server/requirements.txt /src/canary/server/requirements.txt
-RUN cp /src/canary/src/defaults.example.cpp /src/canary/src/defaults.cpp \
-    && ref=$(sed -n 's|.*/epd\.git@\([^#]*\)#subdirectory=server.*|\1|p' /src/canary/server/requirements.txt) \
-    && git -c advice.detachedHead=false clone -q --depth 1 --branch "$ref" https://github.com/chrisjtwomey/epd.git /src/epd \
-    && rm -rf /src/epd/.git
+RUN cp /src/canary/src/defaults.example.cpp /src/canary/src/defaults.cpp
 
 COPY --chmod=755 firmware-builder/build.sh /usr/local/bin/build-firmware
 ENTRYPOINT ["/usr/bin/tini", "--"]

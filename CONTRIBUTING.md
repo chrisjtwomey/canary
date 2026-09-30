@@ -21,7 +21,7 @@ CANARY uses [epd](https://github.com/chrisjtwomey/epd) for everything that is no
 the client firmware, HTTP, the schedules and the rendering. A change to those goes into epd, with its tests.
 
 ```
-platformio.ini            one environment per board; lib_deps symlink://../epd/firmware
+platformio.ini            one environment per board, and a -dev twin of each that builds against an epd checkout
 src/main.cpp              the display: fetches and draws the page, and deep-sleeps between wakes
 src/dock/                 the dock: the TinyS3 that reads the sensors
 src/defaults.example.cpp  copy to defaults.cpp: Wi-Fi, server URL, MQTT logging
@@ -40,18 +40,37 @@ selects what a board runs, so code that the display does not compile cannot get 
 
 ## Setup
 
-epd must be in a folder beside this repo. Then, in this order:
-
 ```sh
 python3 -m venv server/.venv && source server/.venv/bin/activate
-pip install -r server/requirements-dev.txt   # the tools, and epd-server at its pinned tag
-pip install -e ../epd/server                 # then your epd checkout, editable, on top
+pip install -r server/requirements-dev.txt   # the tools, and epd-server at its pinned release
 ```
 
-**Install the epd checkout last.** `requirements.txt` pins `epd-server` to a release tag. pip treats that pin as a
-direct reference, so each `pip install -r` replaces the editable epd with the tagged release. Install the checkout
-again after each `pip install -r`. `pip freeze | grep epd` shows which one you have: a line that starts with `-e`
-is the checkout.
+The firmware takes epd from the PlatformIO registry, and the server takes `epd-server` from PyPI. `platformio.ini`
+and `server/requirements.txt` pin both to the same release. So you need an epd checkout only to change epd.
+
+### Working on epd
+
+Put the epd checkout in a folder beside this repo.
+
+- **Firmware.** Build the `-dev` twin of an environment: `esp32-dev`, `dock-dev`, `dock-mock-dev` or
+  `dock-validate-dev`. A twin takes every setting from its board's environment, and takes epd from
+  `symlink://../epd/firmware`. So nobody edits `platformio.ini` to work on epd.
+
+  ```sh
+  pio run -e esp32-dev
+  PLATFORMIO_CORE_DIR=~/.platformio-canary-dock pio run -e dock-dev
+  ```
+
+  `PLATFORMIO_DEFAULT_ENVS=esp32-dev` in your shell makes a plain `pio run` build the twin.
+- **Server.** Install the checkout editable, on top of the pinned release:
+
+  ```sh
+  pip install -e ../epd/server
+  ```
+
+  **Install the epd checkout last.** Each `pip install -r` puts the pinned release back when the checkout
+  declares another version. Install the checkout again after each one. `pip freeze | grep epd` shows which one
+  you have: a line that starts with `-e` is the checkout.
 
 **The editor.** `pyrightconfig.json` points the editor at `server/.venv`, and adds `server/` and `../epd/server` to
 the import path. It also type-checks `hardware/enclosure.py` against Fusion's API stubs. For the stubs, link
@@ -73,7 +92,7 @@ cd server && pytest           # the server
 ## Building the dock
 
 The dock builds in a PlatformIO folder of its own, `~/.platformio-canary-dock`. Give it in every dock command,
-`dock-mock` and `dock-validate` too:
+`dock-mock`, `dock-validate` and the `-dev` twins too:
 
 ```sh
 PLATFORMIO_CORE_DIR=~/.platformio-canary-dock pio run -e dock -t upload

@@ -13,7 +13,8 @@ with what `git describe` gives:
 
 - A published GitHub release adds its version tags: `0.3.0` and `0.3` for `v0.3.0`.
 - No image holds firmware. The firmware links Bosch's BSEC binary, and this project does not give it out. The
-  builder image holds the firmware's sources at its commit, and builds them where it runs.
+  builder image holds the firmware's sources at its commit, and builds them where it runs. Each build downloads
+  epd from the PlatformIO registry, at the version that `platformio.ini` pins.
 - At start, the builder builds the display's and the dock's firmware of its own version into the server's firmware
   folder, as `canary-display/<version>.bin` and `canary-dock/<version>.bin`. Then it waits. Its container log shows
   each build.

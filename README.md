@@ -83,8 +83,6 @@ later, you must open it and lift the TinyS3 off its strips.
 
 ```sh
 git clone https://github.com/chrisjtwomey/canary.git   # skip this if step 1 ran on this computer
-tag=$(grep -o 'epd.git@[^#]*' canary/server/requirements.txt | cut -d@ -f2)
-git clone --branch "$tag" https://github.com/chrisjtwomey/epd.git
 cd canary
 cp src/defaults.example.cpp src/defaults.cpp
 ```
