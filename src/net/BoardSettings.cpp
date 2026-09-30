@@ -19,6 +19,7 @@ static const char* const kKeyNames[kSettingKeys] = {
     "scd41.poor_air_ppm",
     "pm.poor_air_ug_m3",
     "bsec.poor_air_iaq",
+    "scd41.warmup_s",
 };
 
 static const char* const kLedTriggerNames[kLedTriggers] = {
@@ -54,6 +55,7 @@ BoardSettings defaultBoardSettings() {
     s.scd41PoorPpm = 1500;
     s.pmPoorUgM3 = 37.5f;
     s.bsecPoorIaq = 150;
+    s.scd41WarmupS = 180;
     return s;
 }
 
@@ -87,6 +89,9 @@ bool warmupUsable(JsonVariantConst v) {
     if (!v.is<int>()) return false;
     const int s = v.as<int>();
     return s == 0 || (s >= kPmWarmupMinS && s <= kPmWarmupMaxS);
+}
+bool scd41WarmupUsable(JsonVariantConst v) {
+    return v.is<int>() && v.as<int>() >= 0 && v.as<int>() <= kScd41WarmupMaxS;
 }
 bool offsetUsable(JsonVariantConst v) {
     if (!v.is<float>()) return false;
@@ -178,6 +183,7 @@ bool parseBoardSettings(const char* json, size_t len, const BoardSettings& curre
     t.take(doc["scd41"]["poor_air_ppm"], kScd41PoorPpm, s.scd41PoorPpm, poorPpmUsable);
     t.take(doc["pm"]["poor_air_ug_m3"], kPmPoorUgM3, s.pmPoorUgM3, poorUgM3Usable);
     t.take(doc["bsec"]["poor_air_iaq"], kBsecPoorIaq, s.bsecPoorIaq, poorIaqUsable);
+    t.take(doc["scd41"]["warmup_s"], kScd41Warmup, s.scd41WarmupS, scd41WarmupUsable);
     JsonVariantConst looks = doc["led"]["looks"];
     if (!looks.isNull() && !takeLedLooks(looks, s)) t.refuse(kLedLooks);
 

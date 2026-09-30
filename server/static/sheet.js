@@ -1,8 +1,9 @@
 /* The drawings on the Config page's sheet tabs, with rough.js for the
    hand-drawn look the pages have: a day of syncs or page changes as a
-   dial, the time before one sync as a strip, the image with its drawn
+   dial, the time before one sync as a strip, the minutes after the SCD41
+   starts as another, the image with its drawn
    area as a panel, the space the stores take on the disk, and the status
-   light playing one of its looks. The first three are drawn from the
+   light playing one of its looks. The first four are drawn from the
    settings form's inputs, and dragging one writes the inputs, so the
    form stays what a save sends. A locked input, such as an offline
    dock's, cannot be dragged. The position grid sets the drawn area's two
@@ -169,6 +170,33 @@
     }
     ctx.fillText(s, x, y);
     ctx.restore();
+  }
+
+  function dashed(ctx, x, top, bottom, dash, color, width) {
+    ctx.save();
+    ctx.setLineDash(dash);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width || 1;
+    ctx.beginPath();
+    ctx.moveTo(x, top);
+    ctx.lineTo(x, bottom);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // The value to keep, which the server marks on a drawing's canvas; a
+  // field below it shows its caution.
+  function recommended(canvas) {
+    var rec = parseFloat(canvas.getAttribute('data-recommended'));
+    return isNaN(rec) ? null : rec;
+  }
+
+  // The line, and its label at the top on the side away from the band.
+  function markRecommended(p, x, axis, bandSide) {
+    dashed(p.ctx, x, axis - 56, axis + 8, [6, 4], G[4], 1.5);
+    var left = bandSide === 'right';
+    text(p.ctx, 'recommended', left ? x - 6 : x + 6, axis - 58,
+         { size: 13, italic: true, color: G[4], halo: true, align: left ? 'right' : 'left' });
   }
 
   // ── The dial: a day of syncs or page changes ─────────────────────
@@ -355,7 +383,9 @@
     p.rc.rectangle(bandLeft, axis - 26, g.right - bandLeft, 26,
                    { stroke: ink, strokeWidth: 1.2, fill: fixed ? G[5] : G[3],
                      fillStyle: 'hachure', hachureGap: 5, roughness: 1.2 });
-    text(p.ctx, always ? 'fan always on' : 'fan ' + span(fan),
+    var rec = recommended(this.canvas);
+    if (rec !== null && rec < g.span) markRecommended(p, g.x(rec), axis, 'right');
+    text(p.ctx, always ? 'fan always on' : 'warm-up ' + span(fan),
          Math.max(bandLeft + 4, Math.min((bandLeft + g.right) / 2, g.right - 50)), axis - 46,
          { size: 14, italic: true, color: ink, halo: true });
 
@@ -369,15 +399,9 @@
 
     // The pre-warm: settings, a recalibration, a stopped sensor started again.
     var pre = g.x(Math.min(lead, g.span));
-    p.ctx.save();
-    p.ctx.setLineDash([3, 4]);
-    p.ctx.strokeStyle = G[2];
-    p.ctx.beginPath();
-    p.ctx.moveTo(pre, axis - 44);
-    p.ctx.lineTo(pre, axis + 30);
-    p.ctx.stroke();
-    p.ctx.restore();
+    dashed(p.ctx, pre, axis - 44, axis + 30, [3, 4], G[2]);
     text(p.ctx, 'pre-warm', pre - 6, axis + 22, { size: 13, italic: true, align: 'right', color: G[2], halo: true });
+
 
     if (!fixed && !always) {
       p.rc.line(bandLeft, axis - 30, bandLeft, axis + 4, { stroke: G[0], strokeWidth: 3, roughness: 0.6 });
@@ -406,6 +430,105 @@
     }
     var before = (g.right - x) / (g.right - g.left) * g.span;
     set('dock.pm.warmup_s', Math.max(30, Math.min(600, Math.round(before / 5) * 5)));
+  };
+
+  // ── The start strip: the minutes after the SCD41 starts ──────────
+  // Time runs from the start on the left. The hatched band is the warm-up,
+  // dragged by its right edge. Each dot is a reading: the first a fan
+  // warm-up after the start, as the pre-warm starts the SCD41 again after a
+  // change to its settings, then one each sync. A hollow dot leaves out the
+  // SCD41's temperature and humidity.
+  var START_SPAN_S = 600;
+  var SCD41_WARMUP = 'dock.scd41.warmup_s';
+
+  function Start(canvas) {
+    this.canvas = canvas;
+    this.drag = false;
+    var self = this;
+    canvas.addEventListener('pointerdown', function (e) { self.down(e); });
+    canvas.addEventListener('pointermove', function (e) { self.move(e); });
+    canvas.addEventListener('pointerup', function () { self.drag = false; });
+    canvas.addEventListener('pointercancel', function () { self.drag = false; });
+  }
+
+  Start.prototype.geometry = function () {
+    var r = this.canvas.getBoundingClientRect();
+    var left = 14, right = r.width - 14;
+    return {
+      left: left, right: right,
+      x: function (after) { return left + (after / START_SPAN_S) * (right - left); }
+    };
+  };
+
+  Start.prototype.warmup = function () {
+    var s = number(SCD41_WARMUP);
+    if (isNaN(s)) s = recommended(this.canvas) || 0;
+    return Math.max(0, Math.min(START_SPAN_S, s));
+  };
+
+  Start.prototype.draw = function () {
+    var p = prepare(this.canvas);
+    if (!p.w) return;
+    var g = this.geometry();
+    var w = this.warmup();
+    var fixed = locked(SCD41_WARMUP);
+    var ink = fixed ? G[4] : G[1];
+    var axis = 72;
+
+    if (w > 0) {
+      p.rc.rectangle(g.left, axis - 26, g.x(w) - g.left, 26,
+                     { stroke: ink, strokeWidth: 1.2, fill: fixed ? G[5] : G[3],
+                       fillStyle: 'hachure', hachureGap: 5, roughness: 1.2 });
+    }
+    var rec = recommended(this.canvas);
+    if (rec !== null) markRecommended(p, g.x(rec), axis, 'left');
+    text(p.ctx, w > 0 ? 'warm-up ' + span(w) : 'no warm-up',
+         Math.max(g.left + 50, Math.min((g.left + g.x(w)) / 2, g.right - 50)), axis - 40,
+         { size: 14, italic: true, color: ink, halo: true });
+
+    p.rc.line(g.left, axis, g.right, axis, { stroke: ink, strokeWidth: 1.6, roughness: 1 });
+    p.rc.line(g.left, axis - 34, g.left, axis + 8, { stroke: G[0], strokeWidth: 2, roughness: 0.8 });
+    text(p.ctx, 'SCD41 starts', g.left, axis + 22, { size: 13, italic: true, align: 'left', color: G[2] });
+    text(p.ctx, span(START_SPAN_S) + ' after', g.right, axis + 22,
+         { size: 13, italic: true, align: 'right', color: G[3] });
+
+    var fan = warmup();
+    var gap = shortest(schedule(SYNC));
+    var first = fan === 0 ? PREWARM_S : Math.min(fan, gap);
+    for (var t = first; t <= START_SPAN_S; t += gap) {
+      var kept = t >= w;
+      p.rc.circle(g.x(t), axis, 11, { stroke: G[0], strokeWidth: 1.4, roughness: 0.5,
+                                      fill: kept ? G[1] : G[7], fillStyle: 'solid' });
+    }
+
+    if (!fixed) {
+      var edge = w > 0 ? g.x(w) : g.left;
+      p.rc.line(edge, axis - 30, edge, axis + 4, { stroke: G[0], strokeWidth: 3, roughness: 0.6 });
+    }
+  };
+
+  Start.prototype.down = function (e) {
+    if (locked(SCD41_WARMUP)) return;
+    var r = this.canvas.getBoundingClientRect(), g = this.geometry();
+    var w = this.warmup();
+    var edge = w > 0 ? g.x(w) : g.left;
+    var x = e.clientX - r.left, y = e.clientY - r.top;
+    if (Math.abs(x - edge) > 14 || y > 90) return;
+    this.drag = true;
+    this.canvas.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  };
+
+  Start.prototype.move = function (e) {
+    if (!this.drag) return;
+    var r = this.canvas.getBoundingClientRect(), g = this.geometry();
+    var x = e.clientX - r.left;
+    if (x <= g.left + 2) {
+      set(SCD41_WARMUP, 0);
+      return;
+    }
+    var after = (x - g.left) / (g.right - g.left) * START_SPAN_S;
+    set(SCD41_WARMUP, Math.max(0, Math.min(START_SPAN_S, Math.round(after / 5) * 5)));
   };
 
   // ── The panel: the image and its drawn area ──────────────────────
@@ -815,6 +938,7 @@
     var kind = canvas.getAttribute('data-visual');
     if (kind === 'dial') drawings.push(new Dial(canvas));
     if (kind === 'slot') drawings.push(new Strip(canvas));
+    if (kind === 'start') drawings.push(new Start(canvas));
     if (kind === 'panel') drawings.push(new Panel(canvas));
     if (kind === 'disk') drawings.push(new Disk(canvas));
   });

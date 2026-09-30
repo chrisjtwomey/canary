@@ -491,6 +491,7 @@ static void judgeReading() {
 static void applySettings() {
     fanWindow.setLeadMs((uint32_t)boardSettings.pmWarmupS * 1000);
     sensors.setScd41Options(boardSettings.scd41OffsetC, boardSettings.scd41SelfCalibration);
+    sensors.setScd41WarmupS(boardSettings.scd41WarmupS);
     sensors.setShtc3LowPower(boardSettings.shtc3LowPower);
     statusLed.brightness(ledDark ? 0 : boardSettings.ledBrightnessPct);
     for (uint8_t t = 0; t < kLedTriggers; ++t) {

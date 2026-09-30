@@ -58,6 +58,10 @@ public:
     // call it keeps its own.
     void setScd41Options(float offsetC, bool selfCalibration);
 
+    // How long after each SCD41 start a reading leaves out its temperature
+    // and humidity; 0 keeps them all.
+    void setScd41WarmupS(uint16_t seconds) { scd41WarmupMs_ = (uint32_t)seconds * 1000; }
+
     // SHTC3 low-power mode, from the next sample.
     void setShtc3LowPower(bool on) { shtc3LowPower_ = on; }
 
@@ -80,6 +84,11 @@ public:
     static const uint32_t kShtc3LowPowerMs = 1;
     // The SCD41 takes no command for 500 ms after a stop.
     static const uint32_t kScd41StopMs = 500;
+    // After each start the SCD41's temperature reads high by about half its
+    // offset, and its humidity low to match. Measured on the dock, not from
+    // the datasheet: 2.6 C at 40 s with an offset of 4.5, 0.6 C at 110 s,
+    // nothing at 260 s. The default warm-up, and the one the server recommends.
+    static const uint32_t kScd41WarmupMs = 180000;
     // Datasheet 3.7.1: a forced recalibration wants 3 minutes of measuring.
     static const uint32_t kFrcAfterMs = 180000;
     // BME688 forced-mode profile: 300 C for 100 ms is Bosch's indoor VOC
@@ -157,4 +166,5 @@ private:
     float       scd41OffsetC_ = 0.0f;
     bool        scd41Asc_ = true;
     uint32_t    scd41MeasuringSinceMs_ = 0;
+    uint32_t    scd41WarmupMs_ = kScd41WarmupMs;
 };

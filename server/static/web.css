@@ -843,12 +843,14 @@ html:not(.js) .panel.sheet .content {
   color: var(--ink-mid);
 }
 
-.panel.sheet .visual-slot .visual {
+.panel.sheet .visual-slot .visual,
+.panel.sheet .visual-start .visual {
   max-width: 640px;
   margin-bottom: 16px;
 }
 
-.panel.sheet .visual-slot .visual canvas {
+.panel.sheet .visual-slot .visual canvas,
+.panel.sheet .visual-start .visual canvas {
   height: 110px;
 }
 
@@ -1010,6 +1012,7 @@ html:not(.js) .panel.sheet .content {
 
 .panel.sheet .field .help,
 .panel.sheet .field .env,
+.panel.sheet .field .caution,
 .panel.sheet .field .error {
   grid-column: 1 / -1;
 }
@@ -1179,6 +1182,16 @@ form:empty {
   padding-left: 8px;
   font-size: 15px;
   border-left: 3px solid var(--ink);
+}
+
+/* A value below the recommended one: taken, but read less well. Dashed, as
+   the drawing's line at the recommended value is. */
+.field .caution {
+  margin: 6px 0 0;
+  padding-left: 8px;
+  font-size: 14px;
+  line-height: 1.35;
+  border-left: 3px dashed var(--ink-mid);
 }
 
 .settings input[type="text"],

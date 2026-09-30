@@ -79,6 +79,14 @@ On the server:
   2. Run one BME688 forced cycle, then give its pressure to the SCD41, so that the CO₂ conversion is correct.
   3. Take the value that the SCD41's periodic mode has ready.
   4. Read a PM frame, only after the fan's 30 s warm-up. Read once more after a bad checksum.
+- **A reading has no `scd41` temperature and humidity during the SCD41's warm-up after each start.** The warm-up is
+  `dock.scd41.warmup_s`, 3 minutes by default; 0 keeps every value. A start is a dock start, a change to the part's
+  settings, or a recalibration. After a start the part's temperature reads high by about half its offset, and its
+  humidity reads low to match: 2.6 °C at 40 s with an offset of 4.5, 0.6 °C at 110 s, and nothing at 260 s. These
+  figures come from the dock's stored readings, not from the datasheet. The first reading after a dock start comes
+  inside the first minute, and a change to the settings restarts the part 35 s before a slot, so each start would
+  store one wrong value. The CO₂ stays in the reading: at a start it was within 15 ppm of the readings on each
+  side, which is inside the part's accuracy.
 - **The clock is injected** (`IClock`), because the waits are real: `ArduinoClock` on the device, a fake in the
   tests. `ArduinoClock` waits until the millisecond clock has moved on, not for one `::delay()`. While the chip
   light-sleeps, a delay can return up to 51 ms early, and a read before a conversion ends fails.

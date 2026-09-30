@@ -301,7 +301,7 @@ void test_json_matches_readings_md() {
     Readings r = {};
     r.ts = 1756900000;
     r.shtc3 = {21.34f, 44.06f}; r.shtc3Valid = true;
-    r.scd41 = {812, 25.2f, 36.0f}; r.scd41Valid = true;
+    r.scd41 = {812, 25.2f, 36.0f}; r.scd41Valid = true; r.scd41WarmedUp = true;
     r.pm = {4, 6, 8, 4, 6, 8, 900, 250, 40, 4, 1, 0, 0x97, 0}; r.pmValid = true;
     r.bme688 = {22.8f, 1011.2f, 40.2f, 132000.0f, true, true, 63.4f, 2, true}; r.bme688Valid = true;
     char buf[640];
@@ -327,6 +327,18 @@ void test_json_omits_invalid_sensors_and_flags_them() {
     TEST_ASSERT_EQUAL_STRING(
         "{\"ts\":1,\"device\":\"x\",\"temp_c\":20.0,\"rh_pct\":50.0"
         ",\"valid\":{\"temp_humidity\":true,\"co2\":false,\"particulates\":false"
+        ",\"pressure\":false,\"gas\":false}}", buf);
+}
+
+void test_json_keeps_co2_but_drops_the_scd41s_temperature_while_it_settles() {
+    Readings r = {};
+    r.ts = 3;
+    r.scd41 = {812, 27.8f, 30.1f}; r.scd41Valid = true;
+    char buf[256];
+    TEST_ASSERT_TRUE(readingsToJson(r, "x", buf, sizeof(buf)) > 0);
+    TEST_ASSERT_EQUAL_STRING(
+        "{\"ts\":3,\"device\":\"x\",\"co2_ppm\":812"
+        ",\"valid\":{\"temp_humidity\":false,\"co2\":true,\"particulates\":false"
         ",\"pressure\":false,\"gas\":false}}", buf);
 }
 
@@ -417,6 +429,7 @@ int main(int, char**) {
     RUN_TEST(test_bme_iaq_accuracy_climbs_with_cycles);
     RUN_TEST(test_json_matches_readings_md);
     RUN_TEST(test_json_omits_invalid_sensors_and_flags_them);
+    RUN_TEST(test_json_keeps_co2_but_drops_the_scd41s_temperature_while_it_settles);
     RUN_TEST(test_json_keeps_pressure_but_drops_gas_when_the_heater_is_cold);
     RUN_TEST(test_json_drops_gas_when_the_conversion_was_a_dummy_slot);
     RUN_TEST(test_json_leaves_the_index_out_when_the_driver_has_none);

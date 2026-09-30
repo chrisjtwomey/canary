@@ -591,7 +591,7 @@ def test_a_key_the_dock_refused_is_named_as_the_form_names_it(dock_client, dock_
     soup = soup_of(dock_client.get("/web/config"))
 
     assert one(soup, "#dock-refused").get_text() == \
-        "Refused by the dock: Fan warm-up. Check the dock's firmware version."
+        "Refused by the dock: Fine dust warm-up. Check the dock's firmware version."
 
 
 def test_a_refused_key_the_form_does_not_know_is_shown_as_text(dock_client, dock_report, dock):
@@ -641,6 +641,56 @@ def test_the_fine_dust_section_holds_the_fan_and_its_strip(dock_client):
     assert [sp.get_text() for sp in one(section, "h2").find_all("span")] == [
         "Fine dust", "PMSA003I"]
     assert section.select_one("canvas[data-visual=slot]") is not None
+
+
+def test_the_co2_section_holds_its_warm_up_and_its_strip(dock_client):
+    panel = one(soup_of(dock_client.get("/web/config")), "#panel-dock")
+    field = one(panel, '[data-field="dock.scd41.warmup_s"]')
+    section = field.find_parent(class_="section")
+    assert [sp.get_text() for sp in one(section, "h2").find_all("span")] == ["CO₂", "SCD41"]
+    assert attr(one(field, "input"), "value") == "180"
+    assert attr(one(section, "canvas[data-visual=start]"), "data-recommended") == "180"
+
+
+@pytest.mark.parametrize("key", ["dock.pm.warmup_s", "dock.scd41.warmup_s"])
+def test_both_warm_ups_have_one_name(dock_client, key):
+    field = one(soup_of(dock_client.get("/web/config")), f'#panel-dock [data-field="{key}"]')
+    assert one(field, ".name").get_text() == "Warm-up"
+
+
+def test_the_fan_strip_marks_the_recommended_warm_up(dock_client):
+    panel = one(soup_of(dock_client.get("/web/config")), "#panel-dock")
+    assert attr(one(panel, "canvas[data-visual=slot]"), "data-recommended") == "35"
+
+
+@pytest.mark.parametrize("block, key, shown", [
+    ("", "dock.pm.warmup_s", False),
+    ("", "dock.scd41.warmup_s", False),
+    ("  pm:\n    warmup_s: 30\n", "dock.pm.warmup_s", True),
+    ("  pm:\n    warmup_s: 0\n", "dock.pm.warmup_s", False),
+    ("  pm:\n    warmup_s: 60\n", "dock.pm.warmup_s", False),
+    ("  scd41:\n    warmup_s: 60\n", "dock.scd41.warmup_s", True),
+    ("  scd41:\n    warmup_s: 0\n", "dock.scd41.warmup_s", True),
+    ("  scd41:\n    warmup_s: 300\n", "dock.scd41.warmup_s", False),
+])
+def test_a_warm_up_below_the_recommended_one_shows_its_caution(dock_client, path, block, key,
+                                                                 shown):
+    if block:
+        with open(path, "a") as f:
+            f.write("dock:\n" + block)
+    field = one(soup_of(dock_client.get("/web/config")), f'#panel-dock [data-field="{key}"]')
+    caution = one(field, ".caution")
+    assert caution.has_attr("hidden") is not shown
+    assert "less accurate" in caution.get_text()
+
+
+def test_the_scd41_warm_up_the_dock_refused_is_named_by_its_sensor(dock_client, dock_report,
+                                                                   dock):
+    dock_report["client"] = {"dock": {"settings": {"version": dock.settings.version,
+                                                   "refused": ["scd41.warmup_s"]}}}
+    soup = soup_of(dock_client.get("/web/config"))
+    assert one(soup, "#dock-refused").get_text() == \
+        "Refused by the dock: CO₂ warm-up. Check the dock's firmware version."
 
 
 def test_the_status_light_has_a_preview_that_plays_one_look(dock_client):

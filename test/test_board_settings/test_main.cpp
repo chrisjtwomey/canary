@@ -7,7 +7,8 @@
 
 static const char kFull[] =
     "{\"version\":\"3f2a9c1e\",\"pm\":{\"warmup_s\":0,\"poor_air_ug_m3\":25.5},"
-    "\"scd41\":{\"temperature_offset_c\":2.5,\"self_calibration\":false,\"poor_air_ppm\":1200},"
+    "\"scd41\":{\"temperature_offset_c\":2.5,\"self_calibration\":false,\"poor_air_ppm\":1200,"
+    "\"warmup_s\":240},"
     "\"shtc3\":{\"low_power\":true},\"led\":{\"brightness_pct\":40,\"dark\":true,"
     "\"smoothness\":6,\"looks\":["
     "{\"trigger\":\"booting\",\"pattern\":\"solid\",\"length_s\":0.25},"
@@ -44,6 +45,7 @@ void test_the_defaults_are_the_servers() {
     TEST_ASSERT_EQUAL_UINT16(1500, s.scd41PoorPpm);
     TEST_ASSERT_EQUAL_FLOAT(37.5f, s.pmPoorUgM3);
     TEST_ASSERT_EQUAL_UINT16(150, s.bsecPoorIaq);
+    TEST_ASSERT_EQUAL_UINT16(180, s.scd41WarmupS);
 }
 
 void test_it_reads_every_key() {
@@ -65,6 +67,7 @@ void test_it_reads_every_key() {
     TEST_ASSERT_EQUAL_UINT16(1200, a.settings.scd41PoorPpm);
     TEST_ASSERT_EQUAL_FLOAT(25.5f, a.settings.pmPoorUgM3);
     TEST_ASSERT_EQUAL_UINT16(200, a.settings.bsecPoorIaq);
+    TEST_ASSERT_EQUAL_UINT16(240, a.settings.scd41WarmupS);
     TEST_ASSERT_TRUE(a.dark);
     TEST_ASSERT_EQUAL_UINT32(1758650400, a.recalibrateId);
     TEST_ASSERT_EQUAL_UINT16(420, a.recalibratePpm);
@@ -93,7 +96,7 @@ void test_a_value_out_of_the_docks_limits_is_refused_and_the_current_kept() {
     SettingsAnswer a;
     TEST_ASSERT_TRUE(parse("{\"version\":\"a\",\"pm\":{\"warmup_s\":10,\"poor_air_ug_m3\":0.5},"
                            "\"scd41\":{\"temperature_offset_c\":25,\"self_calibration\":1,"
-                           "\"poor_air_ppm\":6000},"
+                           "\"poor_air_ppm\":6000,\"warmup_s\":601},"
                            "\"shtc3\":{\"low_power\":\"yes\"},\"led\":{\"brightness_pct\":101,"
                            "\"smoothness\":7,"
                            "\"looks\":{\"running\":{\"pattern\":\"off\",\"length_s\":1}}},"
@@ -108,6 +111,7 @@ void test_a_value_out_of_the_docks_limits_is_refused_and_the_current_kept() {
     TEST_ASSERT_EQUAL_UINT8(d.ledBrightnessPct, a.settings.ledBrightnessPct);
     TEST_ASSERT_EQUAL_UINT8(d.logLevel, a.settings.logLevel);
     TEST_ASSERT_EQUAL_UINT16(d.bsecSampleS, a.settings.bsecSampleS);
+    TEST_ASSERT_EQUAL_UINT16(d.scd41WarmupS, a.settings.scd41WarmupS);
     TEST_ASSERT_EQUAL_UINT8_ARRAY(d.ledPattern, a.settings.ledPattern, kLedTriggers);
     TEST_ASSERT_EQUAL_UINT16_ARRAY(d.ledLengthMs, a.settings.ledLengthMs, kLedTriggers);
     TEST_ASSERT_EQUAL_UINT8(d.ledSmoothness, a.settings.ledSmoothness);
@@ -239,6 +243,23 @@ void test_the_warm_up_limits_are_0_or_30_to_600() {
     }
 }
 
+void test_the_scd41_warm_up_limits_are_0_to_600() {
+    const char* const good[] = {"0", "180", "600"};
+    const char* const bad[] = {"601", "-1", "90.5"};
+    char json[80];
+    SettingsAnswer a;
+    for (const char* v : good) {
+        snprintf(json, sizeof(json), "{\"version\":\"a\",\"scd41\":{\"warmup_s\":%s}}", v);
+        TEST_ASSERT_TRUE(parse(json, a));
+        TEST_ASSERT_EQUAL_UINT32_MESSAGE(0, a.refused, v);
+    }
+    for (const char* v : bad) {
+        snprintf(json, sizeof(json), "{\"version\":\"a\",\"scd41\":{\"warmup_s\":%s}}", v);
+        TEST_ASSERT_TRUE(parse(json, a));
+        TEST_ASSERT_EQUAL_UINT32_MESSAGE(1u << kScd41Warmup, a.refused, v);
+    }
+}
+
 void test_a_recalibration_out_of_range_is_not_run() {
     SettingsAnswer a;
     TEST_ASSERT_TRUE(parse("{\"version\":\"a\",\"recalibrate\":{\"id\":5,\"ppm\":3000}}", a));
@@ -283,6 +304,7 @@ int main(int, char**) {
     RUN_TEST(test_the_poor_air_limits_and_their_ranges);
     RUN_TEST(test_looks_the_dock_cannot_use_are_refused_whole);
     RUN_TEST(test_the_warm_up_limits_are_0_or_30_to_600);
+    RUN_TEST(test_the_scd41_warm_up_limits_are_0_to_600);
     RUN_TEST(test_a_recalibration_out_of_range_is_not_run);
     RUN_TEST(test_an_answer_without_a_version_or_not_json_is_not_taken);
     RUN_TEST(test_refused_keys_are_named_as_the_server_names_them);

@@ -184,6 +184,7 @@ void SensorSuite::sampleScd41(Readings& r) {
     bool ready = false;
     if (!scd41_.getDataReadyStatus(clock_.millis(), ready) || !ready) return;
     r.scd41Valid = scd41_.readMeasurement(clock_.millis(), r.scd41);
+    r.scd41WarmedUp = clock_.millis() - scd41MeasuringSinceMs_ >= scd41WarmupMs_;
 }
 
 void SensorSuite::samplePm(Readings& r) {

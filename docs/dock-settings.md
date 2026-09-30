@@ -4,7 +4,8 @@ The server holds the dock's settings: the `dock` block of `config.yaml`, which t
 
 ## What they set
 
-- The PM fan's warm-up.
+- The warm-ups: how long the PM fan runs before each reading, and how long after each start the SCD41's temperature
+  and humidity are left out.
 - The SCD41's temperature offset and self-calibration.
 - The SHTC3's low-power mode.
 - BSEC's sample rate.
@@ -31,8 +32,10 @@ Each setting takes effect as soon as it can.
 
 - **The SCD41's offset and self-calibration.** The SCD41 takes them only while idle, and forgets them at a power
   cycle. So the dock sets them at each start of the part. A change stops its measurements for half a second at the
-  pre-warm, which leaves time for five seconds of conversions before the slot. Neither is written to the part's
-  EEPROM.
+  pre-warm, which leaves time for five seconds of conversions before the slot. The reading at that slot has the
+  CO₂, but not the SCD41's own temperature and humidity ([the sensor code](dock.md#the-sensor-code)). Neither
+  setting is written to the part's EEPROM.
+- **The SCD41's warm-up** takes effect at the next reading. It does not stop the part.
 - **BSEC's sample rate:** every 3 s, or every 5 minutes, which is the default. Bosch gives a configuration for each
   rate, and the state that BSEC learns at one rate is no use at the other. So each saved copy says its rate, the
   dock restores only a copy at its own rate, and a change of rate starts BSEC again from nothing. At 5 minutes, Bosch

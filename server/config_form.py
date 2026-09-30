@@ -43,7 +43,9 @@ class Field:
     is another field and a
     value, as ``source.kind=store``, or values, as ``log.level=info|debug``:
     the field shows only while that one holds one of them. ``env`` is false for keys the server reads without looking for an
-    environment variable.
+    environment variable. ``recommended`` is the value to keep, which the
+    group's drawing marks; below it, ``caution`` shows under the field. With
+    ``zero_means_always``, 0 is not below it: the fan's 0 keeps it on.
     """
     key: str
     label: str
@@ -60,6 +62,19 @@ class Field:
     env: bool = True
     long: str = ""          # the name in messages, when the label leans on its place on the page
     scale: int = 1          # the file's units in one of the input's: 60 shows seconds as minutes
+    recommended: float | None = None
+    caution: str = ""
+    zero_means_always: bool = False
+
+    def cautions(self, value: Any) -> bool:
+        """Whether ``value``, as the form or the file holds it, is below the recommended one."""
+        if self.recommended is None:
+            return False
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            return False
+        return v < self.recommended and not (v == 0 and self.zero_means_always)
 
     @property
     def path(self) -> tuple[str, ...]:
@@ -82,7 +97,8 @@ class Group:
     once rather than saving; ``position``, a grid that sets the group's two
     alignments together; or ``display``, the size the display reports. ``visual``
     names a drawing of the group's values that can also set them: ``dial``,
-    the day's syncs, ``slot``, the time before one sync, ``panel``, the
+    the day's syncs, ``slot``, the time before one sync, ``start``, the
+    minutes after the SCD41 starts, ``panel``, the
     image and its drawn area. ``disk``, the space the stores take on the
     server's disk, and ``led``, the light playing one of its looks, only
     show. ``caption`` says what the drawing shows, when
@@ -193,8 +209,11 @@ TABS: tuple[Tab, ...] = (
                                   "Drag a time range's start to move it."),
         Group("Fine dust · PMSA003I", about="How long the fan runs before each reading, and "
                                             "how much dust is poor air", fields=(
-            Field("dock.pm.warmup_s", "Fan warm-up", "0 = always on.", "int", ds.PM_WARMUP_S,
-                  unit="seconds", minimum=0, maximum=ds.PM_WARMUP_MAX_S),
+            Field("dock.pm.warmup_s", "Warm-up", "How long the fan runs before each reading. "
+                  "0 = always on.", "int", ds.PM_WARMUP_S, unit="seconds", minimum=0,
+                  maximum=ds.PM_WARMUP_MAX_S, long="Fine dust warm-up",
+                  recommended=ds.PM_WARMUP_S, zero_means_always=True,
+                  caution=f"Below {ds.PM_WARMUP_S} s, particle readings are less accurate."),
             Field("dock.pm.poor_air_ug_m3", "Alert threshold", "PM2.5. " + POOR_AIR_HELP, "number",
                   ds.POOR_AIR_UG_M3, unit="µg/m³", minimum=ds.POOR_AIR_UG_M3_RANGE[0],
                   maximum=ds.POOR_AIR_UG_M3_RANGE[1], long="Fine dust alert threshold"),
@@ -203,12 +222,18 @@ TABS: tuple[Tab, ...] = (
             Field("dock.scd41.temperature_offset_c", "Temperature offset",
                   "Heat from the dock, taken off the SCD41's reading.", "number",
                   ds.SCD41_OFFSET_C, unit="°C", minimum=0, maximum=ds.SCD41_OFFSET_MAX_C),
+            Field("dock.scd41.warmup_s", "Warm-up", "After each start, its temperature and "
+                  "humidity are left out for this long. CO₂ is kept. 0 = keep all.", "int",
+                  ds.SCD41_WARMUP_S, unit="seconds", minimum=0, maximum=ds.SCD41_WARMUP_MAX_S,
+                  long="CO₂ warm-up", recommended=ds.SCD41_WARMUP_S,
+                  caution=f"Below {ds.SCD41_WARMUP_S // 60} min, the SCD41's temperature and "
+                          "humidity are less accurate."),
             Field("dock.scd41.self_calibration", "Self-calibration",
                   "Takes the lowest reading of each week as fresh air.", "bool", True),
             Field("dock.scd41.poor_air_ppm", "Alert threshold", POOR_AIR_HELP, "int",
                   ds.POOR_AIR_PPM, unit="ppm", minimum=ds.POOR_AIR_PPM_RANGE[0],
                   maximum=ds.POOR_AIR_PPM_RANGE[1], long="CO₂ alert threshold"),
-        ), action="recalibrate"),
+        ), visual="start", action="recalibrate"),
         Group("Humidity · SHTC3", about="How the humidity sensor measures", fields=(
             Field("dock.shtc3.low_power", "Low power", "Faster readings, less repeatable.",
                   "bool", False),

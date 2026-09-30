@@ -121,6 +121,18 @@
     whens();
     markDefaults();
     stopWords();
+    cautions();
+  }
+
+  // A field's caution while its value is below the recommended one; the
+  // server puts the same rule in config_form.Field.cautions.
+  function cautions() {
+    all('.caution[data-below]').forEach(function (p) {
+      var el = p.closest('.field').querySelector('input[data-key]');
+      var v = el ? parseFloat(el.value || el.getAttribute('data-default') || '') : NaN;
+      var always = p.hasAttribute('data-zero-means-always') && v === 0;
+      p.hidden = isNaN(v) || always || v >= parseFloat(p.getAttribute('data-below'));
+    });
   }
 
   // Each slider's name for the stop it is on, beside it and read out.

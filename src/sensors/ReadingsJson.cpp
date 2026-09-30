@@ -45,7 +45,9 @@ size_t readingsToJson(const Readings& r, const char* device, char* buf, size_t l
                  (double)r.bme688.iaqAccuracy)) goto fail;
     }
     if (r.bme688Valid && !add(",\"pressure_hpa\":%.1f", r.bme688.pressureHpa, 0.0)) goto fail;
-    if (r.scd41Valid && !add(",\"scd41\":{\"temp_c\":%.1f,\"rh_pct\":%.1f}", r.scd41.tempC, r.scd41.rhPct)) goto fail;
+    if (r.scd41Valid && r.scd41WarmedUp) {
+        if (!add(",\"scd41\":{\"temp_c\":%.1f,\"rh_pct\":%.1f}", r.scd41.tempC, r.scd41.rhPct)) goto fail;
+    }
     if (r.bme688Valid && !add(",\"bme688\":{\"temp_c\":%.1f,\"rh_pct\":%.1f}", r.bme688.tempC, r.bme688.rhPct)) goto fail;
 
     {

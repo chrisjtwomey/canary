@@ -27,6 +27,7 @@ struct BoardSettings {
     uint16_t scd41PoorPpm;
     float    pmPoorUgM3;         // PM2.5
     uint16_t bsecPoorIaq;
+    uint16_t scd41WarmupS;       // 0 keeps every SCD41 temperature and humidity
 };
 
 // The server's defaults, which the dock runs until the server has said anything.
@@ -46,6 +47,7 @@ enum SettingKey : uint8_t {
     kScd41PoorPpm,
     kPmPoorUgM3,
     kBsecPoorIaq,
+    kScd41Warmup,
     kSettingKeys,
 };
 
@@ -75,6 +77,7 @@ static const size_t kRefusedJsonBytes = 512;
 
 static const uint16_t kPmWarmupMinS = 30;
 static const uint16_t kPmWarmupMaxS = 600;
+static const uint16_t kScd41WarmupMaxS = 600;
 static const float    kScd41OffsetMaxC = 20.0f;
 static const uint16_t kRecalibrateMinPpm = 400;
 static const uint16_t kRecalibrateMaxPpm = 2000;

@@ -40,6 +40,9 @@ struct Readings {
     uint32_t   ts;
     Shtc3Data  shtc3;   bool shtc3Valid;
     Scd41Data  scd41;   bool scd41Valid;
+    // The SCD41's own temperature and humidity are to be kept. False during
+    // its warm-up after a start; its CO2 is good from the first reading.
+    bool       scd41WarmedUp;
     PmData     pm;      bool pmValid;
     Bme688Data bme688;  bool bme688Valid;
     // How long the PM fan had run when the particle reading was taken, in

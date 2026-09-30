@@ -64,6 +64,8 @@ VISUAL_CAPTIONS = {
              "Drag the round handle to resize it; click a dot to move it.",
     "slot": "The time before one sync. "
             "Drag the fan band's left edge; past the start, the fan never stops.",
+    "start": "The ten minutes after the SCD41 starts. Each dot is a reading; a hollow one "
+             "leaves out the SCD41's temperature and humidity. Drag the band's right edge.",
     "disk": "The lower bar is the files' part of the disk, drawn larger.",
     "led": "What the light showed at the dock's last sync, until you change or click a "
            "pattern. Its size follows Brightness.",
@@ -448,6 +450,13 @@ def _field(a: Airium, f: cf.Field, view: View, images: list[str], heading: str,
             _control(a, f, view, env, locked)
         if f.help and f.kind not in cf.ROWS:
             a.p(klass="help", _t=f.help)
+        if f.caution:
+            # config.js shows it while the value is below data-below.
+            shown = f.cautions(env if env is not None else view.values.get(f.key))
+            a.p(klass="caution", _t=f.caution,
+                **{"data-below": f"{f.recommended:g}"},
+                **({"data-zero-means-always": "true"} if f.zero_means_always else {}),
+                **({} if shown else {"hidden": "hidden"}))
         if env is not None:
             a.p(klass="env", _t=f"Set by {f.env_name}")
         if error:
@@ -773,6 +782,9 @@ def _group(a: Airium, g: cf.Group, view: View, images: list[str], locked: bool,
             # A dial draws the schedule its group holds.
             key = next((f.key for f in g.fields if f.kind == "week"), "")
             marks = {"data-schedule": key} if key else {}
+            rec = next((f.recommended for f in g.fields if f.recommended is not None), None)
+            if rec is not None:
+                marks["data-recommended"] = f"{rec:g}"
             if g.visual == "disk":
                 marks["data-disk"] = json.dumps(_disk_data(view.held, view.disk),
                                                 separators=(",", ":"))

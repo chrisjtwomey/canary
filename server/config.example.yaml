@@ -65,6 +65,7 @@ dock:               # what the dock does between readings; it takes a change bef
     temperature_offset_c: 4.0   # the dock's own heat, taken off the CO2 sensor's temperature
     self_calibration: true      # takes the lowest reading of each week as fresh air
     poor_air_ppm: 1500          # CO2 from which the light's poor_air_quality trigger holds
+    warmup_s: 180               # seconds after each start without its temperature; 0 keeps all
   shtc3:
     low_power: false
   led:

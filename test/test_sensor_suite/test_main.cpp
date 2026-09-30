@@ -318,6 +318,40 @@ void test_the_scd41_reads_again_before_the_next_slot_after_its_options_change() 
     TEST_ASSERT_TRUE(suite->scd41Present());
 }
 
+void test_the_scd41s_own_temperature_is_not_kept_for_3_minutes_after_its_start() {
+    suite->begin();
+    settle();
+    Readings early = suite->sample(room->epoch());
+    TEST_ASSERT_TRUE_MESSAGE(early.scd41Valid, "its CO2 is good from the first reading");
+    TEST_ASSERT_FALSE(early.scd41WarmedUp);
+    clk->advance(SensorSuite::kScd41WarmupMs);
+    TEST_ASSERT_TRUE(suite->sample(room->epoch()).scd41WarmedUp);
+}
+
+void test_the_scd41_settles_again_after_its_options_change() {
+    suite->begin();
+    clk->advance(SensorSuite::kScd41WarmupMs + 5000);
+    TEST_ASSERT_TRUE(suite->sample(room->epoch()).scd41WarmedUp);
+    suite->setScd41Options(3.0f, true);        // stops and starts it
+    clk->advance(35000);
+    Readings r = suite->sample(room->epoch());
+    TEST_ASSERT_TRUE(r.scd41Valid);
+    TEST_ASSERT_FALSE(r.scd41WarmedUp);
+}
+
+void test_the_scd41_warm_up_is_a_setting_and_0_keeps_every_reading() {
+    suite->setScd41WarmupS(60);
+    suite->begin();
+    settle();
+    TEST_ASSERT_FALSE(suite->sample(room->epoch()).scd41WarmedUp);
+    clk->advance(30000);
+    TEST_ASSERT_TRUE(suite->sample(room->epoch()).scd41WarmedUp);
+    suite->setScd41WarmupS(0);
+    suite->setScd41Options(3.0f, true);        // stops and starts it
+    clk->advance(5000);
+    TEST_ASSERT_TRUE(suite->sample(room->epoch()).scd41WarmedUp);
+}
+
 void test_low_power_shtc3_waits_its_shorter_conversion() {
     suite->begin();
     settle();
@@ -390,6 +424,9 @@ int main(int, char**) {
     RUN_TEST(test_scd41_options_changed_while_it_runs_stop_it_for_half_a_second);
     RUN_TEST(test_the_same_scd41_options_again_do_not_stop_it);
     RUN_TEST(test_the_scd41_reads_again_before_the_next_slot_after_its_options_change);
+    RUN_TEST(test_the_scd41s_own_temperature_is_not_kept_for_3_minutes_after_its_start);
+    RUN_TEST(test_the_scd41_settles_again_after_its_options_change);
+    RUN_TEST(test_the_scd41_warm_up_is_a_setting_and_0_keeps_every_reading);
     RUN_TEST(test_low_power_shtc3_waits_its_shorter_conversion);
     RUN_TEST(test_a_recalibration_waits_for_3_minutes_of_measuring);
     RUN_TEST(test_a_recalibration_moves_the_co2_readings_and_measuring_goes_on);

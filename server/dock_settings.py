@@ -7,7 +7,8 @@ light is dark until the next reading, and a recalibration waiting to run.
 
     {"version": "3f2a9c1e",
      "pm": {"warmup_s": 35, "poor_air_ug_m3": 37.5},
-     "scd41": {"temperature_offset_c": 4.0, "self_calibration": true, "poor_air_ppm": 1500},
+     "scd41": {"temperature_offset_c": 4.0, "self_calibration": true, "poor_air_ppm": 1500,
+               "warmup_s": 180},
      "shtc3": {"low_power": false},
      "led": {"brightness_pct": 15, "smoothness": 3, "dark": false,
              "looks": [{"trigger": "booting", "pattern": "pulse", "length_s": 0.5}, ...]},
@@ -39,6 +40,11 @@ DOCK = "canary-dock"
 PM_WARMUP_S = 35
 PM_WARMUP_MIN_S = 30
 PM_WARMUP_MAX_S = 600
+# After each start the SCD41's temperature reads high for about two minutes
+# (measured on the dock), so a reading leaves it and the humidity out for this
+# long. 0 keeps them all.
+SCD41_WARMUP_S = 180
+SCD41_WARMUP_MAX_S = 600
 # The SCD41's own default, and the range the datasheet recommends (3.6.1).
 SCD41_OFFSET_C = 4.0
 SCD41_OFFSET_MAX_C = 20.0
@@ -120,6 +126,7 @@ class DockSettings:
     scd41_poor_air_ppm: int = POOR_AIR_PPM
     pm_poor_air_ug_m3: float = POOR_AIR_UG_M3
     bsec_poor_air_iaq: int = POOR_AIR_IAQ
+    scd41_warmup_s: int = SCD41_WARMUP_S
 
     def document(self) -> dict:
         """The settings as the dock reads them, without the version."""
@@ -127,7 +134,8 @@ class DockSettings:
             "pm": {"warmup_s": self.pm_warmup_s, "poor_air_ug_m3": self.pm_poor_air_ug_m3},
             "scd41": {"temperature_offset_c": self.scd41_temperature_offset_c,
                       "self_calibration": self.scd41_self_calibration,
-                      "poor_air_ppm": self.scd41_poor_air_ppm},
+                      "poor_air_ppm": self.scd41_poor_air_ppm,
+                      "warmup_s": self.scd41_warmup_s},
             "shtc3": {"low_power": self.shtc3_low_power},
             "led": {"brightness_pct": self.led_brightness_pct,
                     "smoothness": self.led_smoothness,
@@ -258,6 +266,7 @@ def load_dock_settings(config: dict) -> DockSettings:
         scd41_poor_air_ppm=_int(config, "scd41.poor_air_ppm", POOR_AIR_PPM, *POOR_AIR_PPM_RANGE),
         pm_poor_air_ug_m3=round(float(dust), 1),
         bsec_poor_air_iaq=_int(config, "bsec.poor_air_iaq", POOR_AIR_IAQ, *POOR_AIR_IAQ_RANGE),
+        scd41_warmup_s=_int(config, "scd41.warmup_s", SCD41_WARMUP_S, 0, SCD41_WARMUP_MAX_S),
     )
 
 

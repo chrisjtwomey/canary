@@ -58,6 +58,10 @@ lag, and each mock uses the τ63 that its datasheet gives:
 - Self-heating rises from zero after power-on, with a time constant of 300 s. That is not a datasheet figure. It
   puts the part within 5% at 15 minutes, which is the time Sensirion's design-in guide asks you to wait before you
   judge the temperature offset.
+- The real SCD41 also reads high for about 2 minutes after each start of its measurements
+  ([the sensor code](dock.md#the-sensor-code)). That is a different effect from the cold start below, and the mock
+  does not make that error. The dock's rule still applies: the JSON has no `scd41` object during the warm-up, the
+  first 3 minutes of a run by default.
 - This is why the SHTC3 is the display's reference for temperature:
 
   ```

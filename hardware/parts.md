@@ -155,6 +155,7 @@ T = −45 + 175 × word/65535; RH = 100 × word/65535.
 
 ### Gotchas
 
+- After each start of the periodic measurement, the temperature reads high by about half the offset and the humidity low to match, for about 2 minutes. Measured on the dock (2.6 °C at 40 s with an offset of 4.5); not in the datasheet. The dock leaves both values out of a reading for its warm-up after a start (`dock.scd41.warmup_s`, 3 minutes by default).
 - Self-heating: the default 4 °C offset is a guess; measure it in situ. Design-in guide sanity check: > 0.5 °C from the reference after 15 min, or > 20 ppm between consecutive readings, means the design-in is poor.
 - Placement: large opening near the sensor, small dead volume, away from CPU, display, Wi-Fi, regulators, battery; lowest part of the device; out of sunlight and vibration.
 - Do not touch or wet the white membrane.

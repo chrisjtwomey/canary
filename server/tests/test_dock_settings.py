@@ -46,7 +46,8 @@ def test_a_config_without_a_dock_block_gives_the_defaults():
             ("booting", "pulse", 0.5), ("error", "flash", 1.0),
             ("poor_air_quality", "double_flash", 2.0), ("calibrating", "swell", 4.0),
             ("running", "pulse", 1.0)),
-        led_smoothness=3, scd41_poor_air_ppm=1500, pm_poor_air_ug_m3=37.5, bsec_poor_air_iaq=150)
+        led_smoothness=3, scd41_poor_air_ppm=1500, pm_poor_air_ug_m3=37.5, bsec_poor_air_iaq=150,
+        scd41_warmup_s=180)
 
 
 def test_it_reads_each_key_of_the_dock_block():
@@ -67,6 +68,9 @@ def test_it_reads_each_key_of_the_dock_block():
     ({"scd41": {"temperature_offset_c": 21}}, "dock.scd41.temperature_offset_c"),
     ({"scd41": {"temperature_offset_c": -1}}, "dock.scd41.temperature_offset_c"),
     ({"scd41": {"self_calibration": "yes"}}, "dock.scd41.self_calibration"),
+    ({"scd41": {"warmup_s": 601}}, "dock.scd41.warmup_s"),
+    ({"scd41": {"warmup_s": -1}}, "dock.scd41.warmup_s"),
+    ({"scd41": {"warmup_s": 90.5}}, "dock.scd41.warmup_s"),
     ({"led": {"brightness_pct": 101}}, "dock.led.brightness_pct"),
     ({"log": {"level": "verbose"}}, "dock.log.level"),
     ({"bsec": {"sample_s": 60}}, "dock.bsec.sample_s"),
@@ -182,6 +186,13 @@ def test_the_lights_schedule_is_not_part_of_the_version():
     assert DockSettings(led_schedule=DAY).version == DockSettings().version
 
 
+@pytest.mark.parametrize("seconds", [0, 60, 600])
+def test_the_scd41_warm_up_is_0_to_600_seconds(seconds):
+    settings = load_dock_settings({"dock": {"scd41": {"warmup_s": seconds}}})
+    assert settings.scd41_warmup_s == seconds
+    assert settings.document()["scd41"]["warmup_s"] == seconds
+
+
 def test_a_schedule_given_as_nothing_is_all_day():
     assert load_dock_settings({"dock": {"led": {"schedule": {}}}}).led_schedule is None
 
@@ -192,7 +203,8 @@ def test_the_answer_is_the_settings_and_their_version(requests):
     assert answer == {
         "version": DockSettings().version,
         "pm": {"warmup_s": 35, "poor_air_ug_m3": 37.5},
-        "scd41": {"temperature_offset_c": 4.0, "self_calibration": True, "poor_air_ppm": 1500},
+        "scd41": {"temperature_offset_c": 4.0, "self_calibration": True, "poor_air_ppm": 1500,
+                  "warmup_s": 180},
         "shtc3": {"low_power": False},
         "led": {"brightness_pct": 15, "smoothness": 3, "dark": False, "looks": [
             {"trigger": "booting", "pattern": "pulse", "length_s": 0.5},

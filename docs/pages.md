@@ -39,6 +39,10 @@ The config page:
 - The form keeps the file's comments and layout. The YAML tab shows the keys that the form does not show.
 - The Display tab holds the `display` and `image` blocks: the page schedule, the sync, the pools, the image's size
   and its drawn area. They are one tab because they are the settings the display takes at its sync.
+- A warm-up trades accuracy for time or power, so it has a recommended value: the particle fan's is 35 s, the
+  SCD41's is 3 minutes. The group's drawing marks it with a dashed line, "recommended", and a line under the field
+  warns while the value is below it. A shorter warm-up is still saved, because it can be the right choice for a
+  dock on a battery. `Field.cautions` and `config.js` apply the same rule.
 - **Check** tests an edit, as the server tests the file at start.
 - **Save and restart** lists the changes, keeps the old file as `config.yaml.bak`, writes the new file and
   restarts the server. **Restore** puts the `.bak` back.
