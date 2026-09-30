@@ -60,13 +60,13 @@ TAB_NAMES = [t.name for t in cf.TABS] + [YAML_TAB]
 VISUAL_CAPTIONS = {
     "dial": "Each tick is a sync. Hatching marks a time range that is off. "
             "Drag a time range's start to move it.",
-    "panel": "The image, with the drawn area hatched. "
+    "panel": "Hatching shows where pages are drawn. "
              "Drag the round handle to resize it; click a dot to move it.",
     "slot": "The time before one sync. "
             "Drag the fan band's left edge; past the start, the fan never stops.",
-    "start": "The ten minutes after the SCD41 starts. Each dot is a reading; a hollow one "
-             "leaves out the SCD41's temperature and humidity. Drag the band's right edge.",
-    "disk": "The lower bar is the files' part of the disk, drawn larger.",
+    "start": "Each dot is a reading after the sensor starts; open dots have CO₂ only. "
+             "Drag the band's edge to change the warm-up.",
+    "disk": "",
     "led": "What the light showed at the dock's last sync, until you change or click a "
            "pattern. Its size follows Brightness.",
 }
@@ -77,11 +77,11 @@ VISUAL_CAPTIONS = {
 NOTICES = {
     "No problems found.": ("No problems found", "Save and restart to apply these changes.",
                            True),
-    "Nothing to save.": ("No changes", "config.yaml already says this.", False),
+    "Nothing to save.": ("No changes", "The file already has these settings.", False),
 }
 
 # One wording for the state, whether it is a banner or a refused save.
-READ_ONLY = "config.yaml is read-only. Change its permissions to save."
+READ_ONLY = "Cannot save: the server is missing write access to the configuration."
 
 
 def save(path: str, text: str) -> str:
@@ -205,11 +205,11 @@ def _pool_row(a: Airium, key: str, name: str, pages: str, images: list[str]) -> 
     with a.div(klass="row"):
         a.input(type="text", klass="pool-name", name=key + ".name", value=name,
                 placeholder="name", spellcheck="false", autocomplete="off",
-                **{"aria-label": "Pool name"})
+                **{"aria-label": "Set name"})
         a.input(type="text", klass="chips", name=key + ".pages", value=pages,
                 spellcheck="false", autocomplete="off", placeholder="breathe.png, co2-trace.png",
-                **{"aria-label": "Images", "data-options": " ".join(images)})
-        a.button(type="button", klass="remove", _t="×", **{"aria-label": "Remove this pool"})
+                **{"aria-label": "Pages", "data-options": " ".join(images)})
+        a.button(type="button", klass="remove", _t="×", **{"aria-label": "Remove this set"})
 
 
 # A clock face in the ink of the button it is on.
@@ -275,7 +275,7 @@ def _row(a: Airium, f: cf.Field, cells: tuple, images: list[str], locked: bool) 
 # What a new row starts as: a look takes its trigger's default once it has one.
 BLANK_ROWS = {"looks": ("", "pulse", "1")}
 # The words on each field's button that adds a row.
-ADD_WORDS = {"pools": "Add a pool", "looks": "Add a pattern"}
+ADD_WORDS = {"pools": "Add a set", "looks": "Add a pattern"}
 
 
 def _week(a: Airium, f: cf.Field, view: View, heading: str, locked: bool) -> None:
@@ -458,7 +458,7 @@ def _field(a: Airium, f: cf.Field, view: View, images: list[str], heading: str,
                 **({"data-zero-means-always": "true"} if f.zero_means_always else {}),
                 **({} if shown else {"hidden": "hidden"}))
         if env is not None:
-            a.p(klass="env", _t=f"Set by {f.env_name}")
+            a.p(klass="env", _t=f"Set by the environment variable {f.env_name}")
         if error:
             a.p(klass="error", id="e-" + _id(f.key)[2:], _t=error)
 
@@ -633,8 +633,7 @@ def _recalibration_words(state: DockState) -> str:
     asked = _when(datetime.fromtimestamp(last["id"]))
     if not last.get("ok"):
         return (f"Last recalibration failed: {last.get('ppm', '?')} ppm, asked {asked}. "
-                "The SCD41 refused it. Try again once the dock has been in that air "
-                "for 3 minutes.")
+                "The sensor refused it. Try again after 3 minutes in that air.")
     correction = last.get("correction_ppm", 0)
     return (f"Last recalibration: {last.get('ppm', '?')} ppm, asked {asked}. "
             f"Corrected by {correction:+d} ppm.")
@@ -739,7 +738,7 @@ def _display_size(a: Airium, view: View) -> None:
         a.p(klass="help display-size", id="display-size", _t=f"The display reports {said}.")
     else:
         a.p(klass="error display-size", id="display-size",
-            _t=f"Not the display's size: it reports {said}. Set Width and Height to match.")
+            _t=f"Size mismatch: the display reports {said}. Set Width and Height to match.")
 
 
 def _runs(fields: tuple[cf.Field, ...], sheet: bool) -> list[tuple[str, list[cf.Field]]]:
@@ -801,7 +800,9 @@ def _group(a: Airium, g: cf.Group, view: View, images: list[str], locked: bool,
                     a.canvas(id="-".join(["visual", g.visual, *key.split(".")]) if key
                              else f"visual-{g.visual}",
                              **{"data-visual": g.visual, "aria-hidden": "true"}, **marks)
-                a.p(klass="caption", _t=g.caption or VISUAL_CAPTIONS[g.visual])
+                caption = g.caption or VISUAL_CAPTIONS[g.visual]
+                if caption:
+                    a.p(klass="caption", _t=caption)
         with a.div(klass="fields"):
             if stored:
                 _contents(a, g.store, view)
@@ -833,16 +834,17 @@ def config_html(pages: list[EnvPage], view: View, writable: bool,
     tabs.append((YAML_TAB, "YAML"))
     marked = _tab_problems(view)
     status = view.note or view.status or (
-        "Not saved." if view.problem or view.errors else "No changes.")
+        "Not saved. Fix the marked fields." if view.errors
+        else "Not saved." if view.problem else "No changes.")
     a = Html()
     a("<!DOCTYPE html>")
     with a.html(lang="en"):
-        page_head(a, "Canary · Config")
+        page_head(a, "Canary · Settings")
         with a.body(klass="web config"):
             menu_bar(a, pages, BROWSE_HREF, "config")
             with a.main(klass="settings"):
                 with a.div(klass="top"):
-                    a.h1(klass="title label", _t="Config")
+                    a.h1(klass="title label", _t="Settings")
                     with a.div(klass="where"):
                         if bak is not None and writable:
                             with a.form(method="post", action="config", klass="restore",
@@ -923,8 +925,6 @@ def config_html(pages: list[EnvPage], view: View, writable: bool,
                                  _t="Save and restart")
             if view.note in NOTICES:
                 title, lead, offers_save = NOTICES[view.note]
-                if offers_save and not view.changes:
-                    lead = "Only comments and layout change. Save and restart to apply them."
                 with a.dialog(id="notice", **{"aria-labelledby": "notice-title"},
                               **({"klass": "with-changes"} if view.changes else {})):
                     with a.form(method="dialog"):
@@ -959,7 +959,7 @@ def restarting_html(pages: list[EnvPage], tab: str) -> str:
         with a.body(klass="web config"):
             menu_bar(a, pages, BROWSE_HREF, "config")
             with a.main(klass="settings"):
-                a.h1(klass="title label", _t="Config")
+                a.h1(klass="title label", _t="Settings")
                 a.p(klass="banner", id="restarting", _t="Restarting…")
     return str(a)
 
@@ -1065,11 +1065,11 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
 
         upload = request.files.get("file")
         if upload is None or not upload.filename:
-            return answer("Choose a file to import.", 400, bad=True)
+            return answer("Choose a file to upload.", 400, bad=True)
         try:
             counts = store.take(upload.stream, request.form.get("replace") == "true")
         except Corrupt as exc:
-            return answer(f"The file is corrupted and cannot be imported. Line {exc.line}.",
+            return answer(f"Upload failed: line {exc.line} is not a record. Check the file.",
                           400, bad=True)
         except Overlap as exc:
             return answer(f"{exc.held:,} of {exc.total:,} records already exist.",
@@ -1087,7 +1087,7 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
 
     @bp.errorhandler(413)
     def too_big(exc):
-        words = f"The file is too big. The limit is {MAX_UPLOAD // (1024 * 1024)} MB."
+        words = f"File too big. Choose one under {MAX_UPLOAD // (1024 * 1024)} MB."
         if "application/json" in request.headers.get("Accept", ""):
             return jsonify(words=words, bad=True), 413
         with open(path) as f:
@@ -1142,7 +1142,7 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
                 with open(path + ".bak") as f:
                     text = f.read()
             except OSError:
-                return refuse("No earlier version.", 404)
+                return refuse("No earlier version to restore.", 404)
         elif mode == "yaml":
             # A text box sends its lines with CRLF.
             text = form.get("text", "").replace("\r\n", "\n")
@@ -1191,7 +1191,7 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
         try:
             written = save(path, text)
         except OSError as exc:
-            return refuse(f"Cannot save config.yaml. {exc.strerror}.", 500)
+            return refuse(f"Save failed: {exc.strerror}.", 500)
         restart()
         if wants_json:
             return jsonify(saved=True, config=config_version(written))

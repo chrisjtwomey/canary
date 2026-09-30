@@ -190,7 +190,7 @@ def test_check_says_so_and_changes_nothing(client, path, restarts):
     notice = one(soup_of(rsp), "dialog#notice")
     assert one(notice, "#notice-title").get_text() == "No problems found"
     assert one(notice, ".lead").get_text() == "Save and restart to apply these changes."
-    assert "Display · Pools · co2" in [th.get_text() for th in notice.select(".changes th")]
+    assert "Display · Page sets · co2" in [th.get_text() for th in notice.select(".changes th")]
     assert [b.get_text() for b in notice.select("button")] == ["Close", "Save and restart"]
     assert open(path).read() == GOOD and restarts == []
 
@@ -214,7 +214,7 @@ def test_check_of_the_file_as_it_is_offers_no_save(client, path, restarts):
 
     notice = one(soup_of(rsp), "dialog#notice")
     assert one(notice, "#notice-title").get_text() == "No changes"
-    assert one(notice, ".lead").get_text() == "config.yaml already says this."
+    assert one(notice, ".lead").get_text() == "The file already has these settings."
     assert notice.select(".changes") == []
     assert [b.get_text() for b in notice.select("button")] == ["Close"]
 
@@ -459,7 +459,7 @@ def test_a_corrupted_file_is_refused(exporting):
                          content_type="multipart/form-data",
                          data={"file": (io.BytesIO(b"{ not json\n"), "readings.jsonl")})
     assert rsp.status_code == 400
-    assert "corrupted and cannot be imported" in rsp.json["words"]
+    assert "Upload failed: line" in rsp.json["words"]
 
 
 def test_a_store_the_page_does_not_offer_takes_no_file(exporting):
@@ -470,7 +470,7 @@ def test_without_a_file_it_says_to_choose_one(exporting):
     rsp = exporting.post("/web/config/import/sensor-readings",
                          headers={"Accept": "application/json"},
                          content_type="multipart/form-data", data={})
-    assert rsp.status_code == 400 and rsp.json["words"] == "Choose a file to import."
+    assert rsp.status_code == 400 and rsp.json["words"] == "Choose a file to upload."
 
 
 def test_a_page_that_cannot_ask_gets_the_answer_under_the_row(exporting):
@@ -576,7 +576,7 @@ def test_a_reference_out_of_range_is_refused_on_the_dock_tab(dock_client, dock):
                                            "correction_ppm": -12}}}},
      "Corrected by -12 ppm."),
     ({"client": {"dock": {"recalibrated": {"id": 1_758_600_000, "ppm": 420, "ok": False}}}},
-     "The SCD41 refused it."),
+     "The sensor refused it."),
 ])
 def test_the_dock_tab_says_what_the_dock_reported(dock_client, words):
     text = one(soup_of(dock_client.get("/web/config")), "#panel-dock").get_text()
@@ -726,7 +726,7 @@ def test_the_light_has_a_row_for_each_look(dock_client):
                               ("calibrating", "swell", "4"), ("running", "pulse", "1")]
     assert [o.get_text() for o in box.select('.list > .row:first-child select[name$=".trigger"] '
                                              'option')] \
-        == ["Booting", "Error", "Poor air quality", "Calibrating", "Running"]
+        == ["Booting", "Error", "Alert", "Calibrating", "Running"]
     assert [o.get_text() for o in box.select('.list > .row:first-child select[name$=".pattern"] '
                                              'option')] \
         == ["Off", "Solid", "Blip", "Pulse", "Double pulse", "Triple pulse", "Swell", "Ramp",
@@ -1056,7 +1056,7 @@ def test_the_position_grid_stands_for_both_alignments(client):
     ({"board": "Inkplate5V2", "width": 1280, "height": 720},
      "The display reports 1280 × 720 px, Inkplate5V2.", "help"),
     ({"board": "Inkplate10", "width": 1200, "height": 825},
-     "Not the display's size: it reports 1200 × 825 px, Inkplate10. Set Width and Height to match.",
+     "Size mismatch: the display reports 1200 × 825 px, Inkplate10. Set Width and Height to match.",
      "error"),
 ])
 def test_the_size_line_says_what_the_display_reports(path, tz, display, words, klass):

@@ -180,7 +180,7 @@ def menu_bar(a: Airium, pages: list[EnvPage], browse_href: str, current: str) ->
                 a.span(klass="version", id="server-version", title="Server version",
                        _t=own_version())
             with a.div(klass="views"):
-                for view, words in (("explore", "Explore"), ("logs", "Logs"), ("config", "Config")):
+                for view, words in (("explore", "Explore"), ("logs", "Logs"), ("config", "Settings")):
                     extra = {"aria-current": "page"} if current == view else {}
                     a.a(klass=f"{view}-link", href=view, _t=words, **extra)
         with a.div(klass="here"):
@@ -301,7 +301,7 @@ def logs_html(pages: list[EnvPage], logging_on: bool) -> str:
             with a.main(klass="logview"):
                 if not logging_on:
                     a.p(klass="banner", id="logging-off",
-                        _t=Markup('Board logging is off. Turn it on in <a href="config#mqtt">Config</a>.'))
+                        _t=Markup('Board logging is off. Turn it on in <a href="config#mqtt">Settings</a>.'))
                 with a.div(klass="filters"):
                     with a.select(id="board", **{"aria-label": "Board"}):
                         a.option(value="", _t="All boards")

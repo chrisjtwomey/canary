@@ -79,7 +79,7 @@ def test_the_logs_view_has_its_filters_and_says_when_logging_is_off(query, pages
     app = Flask(__name__)
     app.register_blueprint(web_blueprint(pages, source, logging_on=False))
     soup = BeautifulSoup(app.test_client().get("/web/logs").get_data(as_text=True), "html.parser")
-    assert one(soup, "#logging-off").get_text() == "Board logging is off. Turn it on in Config."
+    assert one(soup, "#logging-off").get_text() == "Board logging is off. Turn it on in Settings."
     assert attr(one(soup, "#logging-off a"), "href") == "config#mqtt"
     assert [o.get_text() for o in soup.select("#board option")] == ["All boards"]
     assert [attr(o, "value") for o in soup.select("#level option")] == \

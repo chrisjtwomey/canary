@@ -198,17 +198,17 @@ ROWS = [("07:00", "5")]
 
 
 @pytest.mark.parametrize("groups, words", [
-    ([(ALL_DAYS, [("07:00", "5"), ("25:00", "5")])], "25:00: not a time."),
+    ([(ALL_DAYS, [("07:00", "5"), ("25:00", "5")])], "25:00: enter a time as HH:MM."),
     ([(ALL_DAYS, [("07:00", "1.5")])], "From 07:00: enter a whole number of minutes."),
     ([(ALL_DAYS, [("07:00", "-5")])], "From 07:00: enter 0 to 1440 minutes."),
-    ([(ALL_DAYS, [("07:00", "5"), ("7:00", "10")])], "Two time ranges start at 07:00."),
+    ([(ALL_DAYS, [("07:00", "5"), ("7:00", "10")])], "Two time ranges start at 07:00. Change one."),
     ([(ALL_DAYS, [])], "Keep at least one time range."),
-    ([(ALL_DAYS, [(f"{h:02d}:00", "5") for h in range(9)])], "At most 8 time ranges."),
+    ([(ALL_DAYS, [(f"{h:02d}:00", "5") for h in range(9)])], "Use 8 time ranges or fewer."),
     ([("mon,tue,wed,thu,fri", ROWS), ("sat,sun", [("07:00", "5"), ("07:00", "10")])],
-     "Sat–Sun: Two time ranges start at 07:00."),
-    ([("mon,tue,wed,thu,fri", ROWS), ("fri,sat,sun", ROWS)], "Friday is in two groups."),
-    ([("mon,tue,wed,thu,fri", ROWS)], "Sat–Sun: in no group. Each day needs one."),
-    ([("", ROWS), (ALL_DAYS, ROWS)], "Each group needs at least one day."),
+     "Sat–Sun: Two time ranges start at 07:00. Change one."),
+    ([("mon,tue,wed,thu,fri", ROWS), ("fri,sat,sun", ROWS)], "Friday is in two groups. Remove it from one."),
+    ([("mon,tue,wed,thu,fri", ROWS)], "Sat–Sun: in no group. Add each day to a group."),
+    ([("", ROWS), (ALL_DAYS, ROWS)], "Choose at least one day for each group."),
     ([("funday", ROWS)], "funday: not a day."),
 ])
 def test_a_schedule_the_form_cannot_write_is_refused_at_its_field(groups, words):
@@ -292,7 +292,7 @@ def test_looks_without_a_block_are_written_where_the_led_block_is():
 
 @pytest.mark.parametrize("rows, words", [
     ((("", "pulse", "1"),), "Choose a trigger for each row."),
-    ((("running", "pulse", "1"), ("running", "off", "1")), "Two rows for Running."),
+    ((("running", "pulse", "1"), ("running", "off", "1")), "Running has two rows. Remove one."),
     ((("error", "blink", "1"),), "Error: choose a pattern."),
     ((("error", "flash", ""),), "Error: enter a length in seconds."),
     ((("error", "flash", "0.2"),), "Error: enter 0.25 to 10 seconds for a flash."),
@@ -343,9 +343,9 @@ def test_a_field_an_environment_variable_sets_is_left_alone(monkeypatch):
 
 @pytest.mark.parametrize("key, value, words", [
     ("server.port", "abc", "whole number"),
-    ("server.port", "70000", "at most 65535"),
+    ("server.port", "70000", "65535 or less"),
     ("dock.led.schedule.from", "25:00", "HH:MM"),
-    ("image.innerAlignX", "middle", "one of"),
+    ("image.innerAlignX", "middle", "Choose Left, Centre or Right."),
 ])
 def test_a_value_the_form_cannot_write_is_refused_at_its_field(key, value, words):
     e = cf.apply(EXAMPLE, MultiDict({key: value}))
@@ -354,8 +354,8 @@ def test_a_value_the_form_cannot_write_is_refused_at_its_field(key, value, words
 
 @pytest.mark.parametrize("names, pages, words", [
     (["", "x"], ["a.png", ""], "needs a name"),
-    (["co2", "co2"], ["a.png", "b.png"], "Duplicate pool"),
-    (["co2"], [""], "no images"),
+    (["co2", "co2"], ["a.png", "b.png"], "Two sets are named co2. Rename one."),
+    (["co2"], [""], "no pages"),
     ([], [], "at least one pool"),
 ])
 def test_pools_the_form_cannot_write_are_refused(names, pages, words):
@@ -448,7 +448,7 @@ def test_the_smoothness_is_a_stop_written_as_its_number():
 
 def test_a_smoothness_past_the_last_stop_is_refused():
     e = cf.apply(EXAMPLE, as_posted(EXAMPLE, dock__led__smoothness="7"))
-    assert e.errors["dock.led.smoothness"].startswith("Must be one of 4 steps")
+    assert e.errors["dock.led.smoothness"].startswith("Choose 4 steps")
 
 
 def test_a_changed_smoothness_reads_by_its_stops_name():
@@ -468,7 +468,7 @@ def test_each_poor_air_limit_is_written_under_its_sensor():
 
 def test_a_poor_air_limit_out_of_range_is_refused_and_named_by_its_sensor():
     e = cf.apply(EXAMPLE, as_posted(EXAMPLE, dock__scd41__poor_air_ppm="399"))
-    assert e.errors == {"dock.scd41.poor_air_ppm": "Must be at least 400."}
+    assert e.errors == {"dock.scd41.poor_air_ppm": "Enter 400 or more."}
     assert cf.name_of(("dock", "scd41", "poor_air_ppm")) == "Dock · CO₂ alert threshold"
 
 
@@ -476,7 +476,7 @@ def test_a_change_to_the_looks_reads_as_one_line():
     new = cf.read(looks(EXAMPLE, ("error", "flash", "1"), ("running", "solid", "1")).text)
     assert cf.changes(cf.read(EXAMPLE), new) == [
         {"name": "Dock · Patterns",
-         "old": "Booting pulse 0.5 s · Error flash 1 s · Poor air quality double flash 2 s · "
+         "old": "Booting pulse 0.5 s · Error flash 1 s · Alert double flash 2 s · "
                 "Calibrating swell 4 s · Running pulse 1 s",
          "new": "Error flash 1 s · Running solid"}]
 
@@ -489,8 +489,8 @@ def test_a_changed_double_or_triple_reads_by_its_name():
 @pytest.mark.parametrize("path, name", [
     (("server", "port"), "Server · Port"),
     (("status", "keep_days"), "Storage · Board reports · Delete after"),
-    (("image", "innerWidth"), "Display · Drawn area · Width"),
-    (("display", "pools", "co2"), "Display · Pools · co2"),
+    (("image", "innerWidth"), "Display · Page area · Width"),
+    (("display", "pools", "co2"), "Display · Page sets · co2"),
 ])
 def test_a_label_two_fields_share_is_named_with_its_group(path, name):
     assert cf.name_of(path) == name

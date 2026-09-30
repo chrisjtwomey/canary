@@ -69,8 +69,8 @@ docker compose up -d
 - The containers run as user 1000. That user must be able to write `server/config.yaml` and `server/firmware/`.
 - The second container builds the firmware for both boards. Its first build takes some minutes.
   `docker compose logs -f firmware-builder` shows it.
-- `http://<server>:8080/web/` shows the pages, and `/web/config` changes the config. **The config page has no
-  login: anyone on your network can change the config.**
+- `http://<server>:8080/web/` shows the pages, and `/web/config` is the Settings page. **It has no login:
+  anyone on your network can change the settings.**
 - The images follow this repo's `main` branch. Your boards take each new version.
 
 ### 2. Flash each board once

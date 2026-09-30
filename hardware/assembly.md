@@ -287,7 +287,7 @@ The LED then shows the dock's state. By default:
 | Double flash | The air is poor |
 | Slow swell | A sensor calibrates |
 
-The Dock tab of the server's config page sets these patterns.
+The Dock tab of the server's Settings page sets these patterns.
 
 ## Appendix: every joint
 

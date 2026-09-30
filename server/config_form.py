@@ -130,7 +130,7 @@ class Tab:
 
 # The status light's triggers, as the Dock tab names them, in their order.
 LED_TRIGGER_LABELS = {"booting": "Booting", "error": "Error",
-                      "poor_air_quality": "Poor air quality", "calibrating": "Calibrating",
+                      "poor_air_quality": "Alert", "calibrating": "Calibrating",
                       "running": "Running"}
 # The light's patterns, as the Dock tab names them.
 LED_PATTERN_LABELS = {p: p.replace("_", " ").capitalize() for p in ds.LED_PATTERNS}
@@ -138,7 +138,7 @@ LED_PATTERN_LABELS = {p: p.replace("_", " ").capitalize() for p in ds.LED_PATTER
 SMOOTHNESS_STOPS = tuple((str(i), f"{n} steps" if n else "Smooth")
                          for i, n in enumerate(ds.LED_SMOOTHNESS_STEPS, 1))
 # What each limit's help says it is for.
-POOR_AIR_HELP = "Will trigger the status light pattern, if enabled."
+POOR_AIR_HELP = "Above this, the status light shows its Alert pattern."
 
 
 TABS: tuple[Tab, ...] = (
@@ -147,12 +147,14 @@ TABS: tuple[Tab, ...] = (
             Field("server.port", "Port", "", "int", 8080, minimum=1, maximum=65535),
         )),
         Group("Pages", about="When the server draws each page", fields=(
-            Field("server.regen_lead_seconds", "Pre-render pages", "Before each page change.", "int", 120,
+            Field("server.regen_lead_seconds", "Pre-render",
+                  "How long before each page change the server renders the page.", "int", 120,
                   unit="seconds", minimum=0),
         )),
         Group("Location", about="Where the device is, for its local time and sea-level pressure", fields=(
             Field("server.timezone", "Time zone", "", "zone", lambda cfg: host_zone()),
-            Field("site.altitude_m", "Altitude", "", "number", 0, unit="m"),
+            Field("site.altitude_m", "Altitude", "Height above sea level. Corrects the pressure reading.",
+                  "number", 0, unit="m"),
         )),
         Group("Log", about="How much the server writes to its log", fields=(
             Field("debug", "Debug log", "", "bool", False),
@@ -161,32 +163,34 @@ TABS: tuple[Tab, ...] = (
     Tab("display", "Display", (
         Group("Page schedule", about="When to change to the next page", fields=(
             Field("display.schedule.week", "Page schedule",
-                  "Each time range runs until the next one starts; 0 minutes = off.", "week",
+                  "A time range lasts until the next one starts. 0 minutes turns it off.", "week",
                   DEFAULT_PAGE_WEEK, env=False),
             Field("display.schedule.order", "Order", "", "order", lambda cfg: pool_names(cfg),
                   env=False),
-            Field("display.schedule.reshuffle_hours", "Reshuffle",
-                  "Changes where each pool starts.", "number", 3, unit="hours", minimum=0,
+            Field("display.schedule.reshuffle_hours", "Reshuffle every",
+                  "Each set starts from a new page this often.", "number", 3, unit="hours", minimum=0,
                   env=False),
-            Field("display.schedule.seed", "Seed", "", "int", 0, env=False),
-        ), visual="dial", caption="Each tick is a page change. Hatching marks a time range "
-                                  "that is off. Drag a time range's start to move it."),
-        Group("Sync schedule", about="How often to update the server with its display state", fields=(
+            Field("display.schedule.seed", "Seed",
+                  "Picks each set's random first page. Change it for a different order.", "int", 0,
+                  env=False),
+        ), visual="dial", caption="Each tick is a page change. Hatching is a time range "
+                                  "that is off. Drag a range's start to move it."),
+        Group("Sync schedule", about="How often the display syncs with the server", fields=(
             Field("display.sync.every", "Every",
-                  "Not including automatic syncs during page refreshes. 0 = only then.", "int",
+                  "Not including automatic syncs during page changes. 0 = only then.", "int",
                   DEFAULT_DISPLAY_SYNC_S, unit="minutes", minimum=0, maximum=24 * 60,
                   scale=60, long="Sync every"),
         )),
-        Group("Pools", about="The pages to show, in groups taken in turn", fields=(
-            Field("display.pools", "Pools", "Drag to reorder.", "pools", env=False),
+        Group("Page sets", about="The pages to show, in groups taken in turn", fields=(
+            Field("display.pools", "Page sets", "Drag to reorder.", "pools", env=False),
         )),
-        Group("Size", about="The size of the image the server draws for the panel", fields=(
+        Group("Size", about="The size of the image the display shows", fields=(
             Field("image.width", "Width", "", "int", 1280, unit="px",
                   minimum=1),
             Field("image.height", "Height", "", "int", 720, unit="px",
                   minimum=1),
         ), action="display", visual="panel"),
-        Group("Drawn area", about="The part of the image the pages are drawn in", fields=(
+        Group("Page area", about="The part of the image the pages are drawn in", fields=(
             Field("image.innerWidth", "Width", "", "int",
                   lambda cfg: effective(cfg, "image.width"), unit="px",
                   minimum=1),
@@ -202,11 +206,11 @@ TABS: tuple[Tab, ...] = (
     Tab("dock", "Dock", (
         Group("Sync schedule", about="How often to take a reading and update the server with it", fields=(
             Field("dock.sync.week", "Sync schedule",
-                  "Each time range runs until the next one starts; 0 minutes = off.", "week",
+                  "A time range lasts until the next one starts. 0 minutes turns it off.", "week",
                   DEFAULT_DOCK_WEEK, env=False),
-        ), visual="dial", caption="Each tick is a sync and a reading. Hatching marks a time "
-                                  "range that is off; the inner line, the light's schedule. "
-                                  "Drag a time range's start to move it."),
+        ), visual="dial", caption="Each tick is a reading. Hatching is a time range that is "
+                                  "off; the inner line is the light schedule. "
+                                  "Drag a range's start to move it."),
         Group("Fine dust · PMSA003I", about="How long the fan runs before each reading, and "
                                             "how much dust is poor air", fields=(
             Field("dock.pm.warmup_s", "Warm-up", "How long the fan runs before each reading. "
@@ -220,10 +224,10 @@ TABS: tuple[Tab, ...] = (
         ), visual="slot"),
         Group("CO₂ · SCD41", about="How the CO₂ sensor corrects its readings", fields=(
             Field("dock.scd41.temperature_offset_c", "Temperature offset",
-                  "Heat from the dock, taken off the SCD41's reading.", "number",
+                  "Offsets the heat generated by the dock itself.", "number",
                   ds.SCD41_OFFSET_C, unit="°C", minimum=0, maximum=ds.SCD41_OFFSET_MAX_C),
-            Field("dock.scd41.warmup_s", "Warm-up", "After each start, its temperature and "
-                  "humidity are left out for this long. CO₂ is kept. 0 = keep all.", "int",
+            Field("dock.scd41.warmup_s", "Warm-up", "How long after startup to omit temperature and "
+                  "humidity readings. CO₂ is always kept.", "int",
                   ds.SCD41_WARMUP_S, unit="seconds", minimum=0, maximum=ds.SCD41_WARMUP_MAX_S,
                   long="CO₂ warm-up", recommended=ds.SCD41_WARMUP_S,
                   caution=f"Below {ds.SCD41_WARMUP_S // 60} min, the SCD41's temperature and "
@@ -238,12 +242,10 @@ TABS: tuple[Tab, ...] = (
             Field("dock.shtc3.low_power", "Low power", "Faster readings, less repeatable.",
                   "bool", False),
         )),
-        Group("Air quality · BME688", about="How often BSEC samples the air-quality sensor, and "
-                                            "what index is poor air", fields=(
-            Field("dock.bsec.sample_s", "Sample", "A change starts IAQ learning again.", "choice",
+        Group("Air quality · BME688", about="How often the air-quality sensor measures", fields=(
+            Field("dock.bsec.sample_s", "Measure", "Changing this restarts sensor calibration.", "choice",
                   300, choices=(("3", "Every 3 s"), ("300", "Every 5 min"))),
-            Field("dock.bsec.poor_air_iaq", "Alert threshold", "IAQ, once BSEC is calibrated. " +
-                  POOR_AIR_HELP, "int", ds.POOR_AIR_IAQ, minimum=ds.POOR_AIR_IAQ_RANGE[0],
+            Field("dock.bsec.poor_air_iaq", "Alert threshold", "Air-quality index. " + POOR_AIR_HELP, "int", ds.POOR_AIR_IAQ, minimum=ds.POOR_AIR_IAQ_RANGE[0],
                   maximum=ds.POOR_AIR_IAQ_RANGE[1], long="Air quality alert threshold"),
         )),
         Group("Status light", about="How the dock's light shows what it is doing", fields=(
@@ -258,8 +260,8 @@ TABS: tuple[Tab, ...] = (
             Field("dock.led.schedule.to", "To", "", "time", when="dock.led.schedule=true",
                   env=False, long="Schedule to"),
             Field("dock.led.looks", "Patterns",
-                  "The first row whose trigger is true sets the light. A trigger with no row "
-                  "is skipped. Length is one cycle of the pattern.", "looks",
+                  "The status light shows the first row that applies. Length is one cycle of "
+                  "its pattern.", "looks",
                   ds.DEFAULT_LED_LOOKS, env=False),
         ), visual="led"),
         Group("Log", about="How much the dock writes to its log", fields=(
@@ -294,17 +296,18 @@ TABS: tuple[Tab, ...] = (
     Tab("firmware", "Firmware", (
         Group("Updates", about="Whether the server offers new firmware to the boards", fields=(
             Field("client.firmware.enabled", "Update boards", "", "bool", False),
-            Field("client.firmware.dir", "Folder", "", "text", "firmware",
+            Field("client.firmware.dir", "Folder", "Where the firmware builder puts new images.", "text",
+                  "firmware",
                   when="client.firmware.enabled=true"),
         )),
     ), sheet=True),
     Tab("mqtt", "MQTT", (
         Group("Board logs", about="What the boards log over MQTT, kept for the Logs page", fields=(
             Field("mqtt.enabled", "Keep logs", "", "bool", False),
-            Field("mqtt.host", "Host", "", "text", "localhost", when="mqtt.enabled=true"),
+            Field("mqtt.host", "Broker", "", "text", "localhost", when="mqtt.enabled=true"),
             Field("mqtt.port", "Port", "", "int", 1883, minimum=1, maximum=65535,
                   when="mqtt.enabled=true"),
-            Field("mqtt.prefix", "Prefix", "Each board logs to <prefix>/<board>.", "text",
+            Field("mqtt.prefix", "Topic prefix", "Each board logs to <prefix>/<board>.", "text",
                   "mqtt/canary", when="mqtt.enabled=true"),
         )),
     ), sheet=True),
@@ -547,13 +550,19 @@ _HHMM = re.compile(r"(\d{1,2}):(\d{2})")
 _HHMMSS = re.compile(r"(\d{1,2}):(\d{2})(?::(\d{2}))?")
 
 
+def _either(words) -> str:
+    """"A or B", "A, B or C": the choices as a person lists them."""
+    words = list(words)
+    return words[0] if len(words) == 1 else ", ".join(words[:-1]) + " or " + words[-1]
+
+
 def _bounds(f: Field, v: float) -> None:
     if f.minimum is not None and v < f.minimum:
-        raise FieldError(f"Must be at least {f.minimum:g}.")
+        raise FieldError(f"Enter {f.minimum:g} or more.")
     if f.maximum is not None and v > f.maximum:
-        raise FieldError(f"Must be at most {f.maximum:g}.")
+        raise FieldError(f"Enter {f.maximum:g} or less.")
     if f.step > 1 and v % f.step:
-        raise FieldError(f"Must be a multiple of {f.step}.")
+        raise FieldError(f"Enter a multiple of {f.step}.")
 
 
 def _images(pages: str) -> list[str]:
@@ -567,11 +576,11 @@ def _parse_pools(rows) -> dict[str, list[str]]:
         if not name and not images:
             continue
         if not name:
-            raise FieldError("Each pool needs a name.")
+            raise FieldError("Each set needs a name.")
         if name in pools:
-            raise FieldError(f"Duplicate pool: {name}.")
+            raise FieldError(f"Two sets are named {name}. Rename one.")
         if not images:
-            raise FieldError(f"{name} has no images.")
+            raise FieldError(f"{name} has no pages. Add one.")
         pools[name] = images
     return pools
 
@@ -606,7 +615,7 @@ def _parse_clock(rows) -> list[dict]:
             continue
         m = _HHMM.fullmatch(at)
         if not m or int(m[1]) > 23 or int(m[2]) > 59:
-            raise FieldError(f"{at or 'A time range'}: not a time.")
+            raise FieldError(f"{at or 'A time range'}: enter a time as HH:MM.")
         at = f"{int(m[1]):02d}:{m[2]}"
         try:
             minutes = int(every)
@@ -615,12 +624,12 @@ def _parse_clock(rows) -> list[dict]:
         if not 0 <= minutes <= 24 * 60:
             raise FieldError(f"From {at}: enter 0 to {24 * 60} minutes.")
         if at in ranges:
-            raise FieldError(f"Two time ranges start at {at}.")
+            raise FieldError(f"Two time ranges start at {at}. Change one.")
         ranges[at] = minutes * 60
     if not ranges:
         raise FieldError("Keep at least one time range.")
     if len(ranges) > MAX_RANGES:
-        raise FieldError(f"At most {MAX_RANGES} time ranges.")
+        raise FieldError(f"Use {MAX_RANGES} time ranges or fewer.")
     return [{"from": at, "every": ranges[at]} for at in sorted(ranges)]
 
 
@@ -632,13 +641,13 @@ def _parse_week(groups) -> list[dict]:
     for text, rows in groups:
         days = [d.strip() for d in text.split(",") if d.strip()]
         if not days:
-            raise FieldError("Each group needs at least one day.")
+            raise FieldError("Choose at least one day for each group.")
         unknown = [d for d in days if d not in DAYS]
         if unknown:
             raise FieldError(f"{unknown[0]}: not a day.")
         for d in days:
             if d in seen:
-                raise FieldError(f"{DAY_LONG[d]} is in two groups.")
+                raise FieldError(f"{DAY_LONG[d]} is in two groups. Remove it from one.")
             seen.add(d)
         try:
             ranges = _parse_clock(rows)
@@ -649,7 +658,7 @@ def _parse_week(groups) -> list[dict]:
         week.append({"days": sorted(days, key=DAYS.index), "ranges": ranges})
     missing = [d for d in DAYS if d not in seen]
     if missing:
-        raise FieldError(f"{days_words(missing)}: in no group. Each day needs one.")
+        raise FieldError(f"{days_words(missing)}: in no group. Add each day to a group.")
     return sorted(week, key=lambda g: DAYS.index(g["days"][0]))
 
 
@@ -682,7 +691,7 @@ def _parse_looks(rows) -> list[dict]:
         if label is None:
             raise FieldError("Choose a trigger for each row.")
         if trigger in looks:
-            raise FieldError(f"Two rows for {label}.")
+            raise FieldError(f"{label} has two rows. Remove one.")
         if pattern not in ds.LED_PATTERNS:
             raise FieldError(f"{label}: choose a pattern.")
         look: dict[str, Any] = {"trigger": trigger, "pattern": pattern}
@@ -718,7 +727,7 @@ def parse(f: Field, raw: Any) -> Any:
         try:
             v = int(raw)
         except ValueError:
-            raise FieldError("Must be a whole number.") from None
+            raise FieldError("Enter a whole number.") from None
         _bounds(f, v)
         return v * f.scale
     if f.kind == "number":
@@ -728,19 +737,19 @@ def parse(f: Field, raw: Any) -> Any:
             try:
                 v = float(raw)
             except ValueError:
-                raise FieldError("Must be a number.") from None
+                raise FieldError("Enter a number.") from None
             if not math.isfinite(v):
-                raise FieldError("Must be a number.")
+                raise FieldError("Enter a number.")
         _bounds(f, v)
         return v
     if f.kind in ("choice", "stops"):
         if raw not in [c for c, _ in f.choices]:
-            raise FieldError("Must be one of " + ", ".join(w for _, w in f.choices) + ".")
+            raise FieldError("Choose " + _either(w for _, w in f.choices) + ".")
         return int(raw) if raw.isdigit() else raw
     if f.kind == "time":
         m = _HHMM.fullmatch(raw)
         if not m or int(m[1]) > 23 or int(m[2]) > 59:
-            raise FieldError("Must be HH:MM.")
+            raise FieldError("Enter a time as HH:MM.")
         return f"{int(m[1]):02d}:{m[2]}"
     if f.kind == "order":
         return _images(raw)

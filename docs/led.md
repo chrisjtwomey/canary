@@ -13,7 +13,7 @@ trigger that holds. With no trigger, the LED is dark.
 | Updating | The dock writes a new image. | It pulses faster and brighter as the image is written: from 60 a minute at a quarter of the light, to 240 a minute at full light. The server cannot set it. |
 | Booting | `setup()` connects, or starts the sensors. | Pulse every 0.5 s |
 | Error | Anything is wrong: off the network, a post that the server did not get or did not take, readings that wait in the queue, a sensor that does not answer, or a setting that the dock refused. The Boards page says which. | Flash every 1 s |
-| Poor air quality | The latest reading has CO₂, PM2.5 or, once BSEC is calibrated, IAQ at or over its limit. Each limit is a setting in its sensor's section of the Dock tab: by default 1500 ppm, 37.5 µg/m³ and 150, the pages' bands for stuffy, dusty and polluted air. | Double flash every 2 s |
+| Alert | The latest reading has CO₂, PM2.5 or, once BSEC is calibrated, IAQ at or over its limit. Each limit is a setting in its sensor's section of the Dock tab: by default 1500 ppm, 37.5 µg/m³ and 150, the pages' bands for stuffy, dusty and polluted air. | Double flash every 2 s |
 | Calibrating | BSEC's IAQ accuracy is below 2, which Bosch calls unreliable, or a recalibration waits for the SCD41 to measure for 3 minutes. | Swell every 4 s |
 | Running | The dock has booted. | Pulse every 1 s |
 

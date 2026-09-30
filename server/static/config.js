@@ -209,7 +209,7 @@
     box.className = 'chiplist';
     adder.className = 'adder';
     adder.setAttribute('aria-label', input.hasAttribute('data-options-from')
-      ? 'Add a pool' : 'Add an image');
+      ? 'Add a set' : 'Add a page');
     input.type = 'hidden';
     input.parentNode.insertBefore(box, input.nextSibling);
 
@@ -666,6 +666,7 @@
       document.getElementById('review-list').textContent = '';
       document.getElementById('review-title').textContent = 'Replace existing records?';
       document.getElementById('review-lead').textContent = answer.words;
+      dialog.querySelector('.changes-box').hidden = true;
       var confirm = document.getElementById('review-confirm');
       confirm.textContent = 'Replace';
       dialog.returnValue = '';
@@ -674,7 +675,7 @@
           send(true);
           return;
         }
-        say('Nothing imported.', false);
+        say('Nothing uploaded.', false);
         file.value = '';
       };
       dialog.showModal();
@@ -688,7 +689,7 @@
       data.set('file', chosen);
       if (replace) data.set('replace', 'true');
       button.classList.add('busy');
-      say('Importing ' + chosen.name + '…', false);
+      say('Uploading ' + chosen.name + '…', false);
       fetch(form.getAttribute('action'), {
         method: 'POST', body: data, headers: { Accept: 'application/json' }
       })
@@ -708,7 +709,7 @@
         })
         .catch(function () {
           button.classList.remove('busy');
-          say('No answer from the server.', true);
+          say('Cannot reach the server. Check that it is running.', true);
         });
     }
 
@@ -753,8 +754,10 @@
     });
     document.getElementById('review-title').textContent = form.getAttribute('data-title');
     document.getElementById('review-confirm').textContent = form.getAttribute('data-confirm');
-    document.getElementById('review-lead').textContent =
-      answer.changes.length === 0 ? 'Only comments and layout change.' : '';
+    // With only comments or layout changed there is nothing to list, and the
+    // dialog is a plain confirmation.
+    document.getElementById('review-lead').textContent = '';
+    dialog.querySelector('.changes-box').hidden = answer.changes.length === 0;
     dialog.returnValue = '';
     dialog.onclose = function () {
       if (dialog.returnValue === 'confirm') {
@@ -789,7 +792,7 @@
           confirmSave(form, submitter, answer);
         }
       })
-      .catch(function () { status(form, 'No answer from the server.'); });
+      .catch(function () { status(form, 'Cannot reach the server. Check that it is running.'); });
   }
 
   function busy(submitter, on) {
@@ -825,7 +828,7 @@
       })
       .catch(function () {
         busy(submitter, false);
-        status(form, 'No answer from the server.');
+        status(form, 'Cannot reach the server. Check that it is running.');
       });
   }
 

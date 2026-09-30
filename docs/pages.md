@@ -34,11 +34,12 @@ While the server runs:
 | `/web/explore` | One measurement over a time window. Drag to move in time. Scroll or pinch to zoom. |
 | `/web/config` | `config.yaml` as a form, in tabs. |
 
-The config page:
+The Settings page, `/web/config`:
 
 - The form keeps the file's comments and layout. The YAML tab shows the keys that the form does not show.
-- The Display tab holds the `display` and `image` blocks: the page schedule, the sync, the pools, the image's size
-  and its drawn area. They are one tab because they are the settings the display takes at its sync.
+- The Display tab holds the `display` and `image` blocks: the page schedule, the sync, the page sets (the
+  `display.pools` key), the image's size and its page area. They are one tab because they are the settings the
+  display takes at its sync.
 - A warm-up trades accuracy for time or power, so it has a recommended value: the particle fan's is 35 s, the
   SCD41's is 3 minutes. The group's drawing marks it with a dashed line, "recommended", and a line under the field
   warns while the value is below it. A shorter warm-up is still saved, because it can be the right choice for a
@@ -54,7 +55,7 @@ The config page:
   runs the saved settings ([dock-settings.md](dock-settings.md), [schedules.md](schedules.md#the-displays-sync)).
 - When a container has the file mounted alone, the `.bak` stays in the container. It goes when the container is
   recreated.
-- The Storage tab downloads each store as a file, one JSON document a line, and takes such a file back. An import
+- The Storage tab downloads each store as a file, one JSON document a line, and takes such a file back. An upload
   adds what is missing, and asks before it replaces a document.
 - The page has no login.
 

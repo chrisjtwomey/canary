@@ -436,8 +436,8 @@
   // Time runs from the start on the left. The hatched band is the warm-up,
   // dragged by its right edge. Each dot is a reading: the first a fan
   // warm-up after the start, as the pre-warm starts the SCD41 again after a
-  // change to its settings, then one each sync. A hollow dot leaves out the
-  // SCD41's temperature and humidity.
+  // change to its settings, then one each sync. An open dot is a reading in
+  // the warm-up, which has CO₂ only.
   var START_SPAN_S = 600;
   var SCD41_WARMUP = 'dock.scd41.warmup_s';
 
@@ -488,7 +488,7 @@
 
     p.rc.line(g.left, axis, g.right, axis, { stroke: ink, strokeWidth: 1.6, roughness: 1 });
     p.rc.line(g.left, axis - 34, g.left, axis + 8, { stroke: G[0], strokeWidth: 2, roughness: 0.8 });
-    text(p.ctx, 'SCD41 starts', g.left, axis + 22, { size: 13, italic: true, align: 'left', color: G[2] });
+    text(p.ctx, 'startup', g.left, axis + 22, { size: 13, italic: true, align: 'left', color: G[2] });
     text(p.ctx, span(START_SPAN_S) + ' after', g.right, axis + 22,
          { size: 13, italic: true, align: 'right', color: G[3] });
 
