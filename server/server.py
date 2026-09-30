@@ -137,10 +137,26 @@ def make_next_sync(syncs: dict[str, Week]) -> Callable[[str, float], int | None]
     return next_sync
 
 
+# A post this close before a board's slot is that slot's. The dock's clock
+# runs fast in light sleep, about 0.6 s in 30 minutes, so its post can arrive
+# just before the slot; an answer of "1 s" would make it read again at once.
+SLOT_EARLY_S = 5
+
+
 def make_sensor_poll(syncs: dict[str, Week]) -> Callable[[float, str | None], int | None]:
-    """The Canary-Next-Sensor-Poll-Seconds each board gets: its own next sync."""
+    """The Canary-Next-Sensor-Poll-Seconds each board gets: its own next sync,
+    or the one after it when the post is up to SLOT_EARLY_S before a slot."""
     next_sync = make_next_sync(syncs)
-    return lambda now, name: next_sync(name, now) if name else None
+
+    def poll(now: float, name: str | None) -> int | None:
+        if not name:
+            return None
+        seconds = next_sync(name, now)
+        if seconds is None or seconds > SLOT_EARLY_S:
+            return seconds
+        after = next_sync(name, now + seconds)
+        return None if after is None else seconds + after
+    return poll
 
 
 def make_display_sync(config: dict, tz) -> Week:

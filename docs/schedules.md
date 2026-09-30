@@ -39,7 +39,11 @@ The Display tab of `/web/config` edits the week beside a dial of the day:
 - **The PM fan** runs for about 35 s before each reading. So the default week costs about 810 fan hours and 83,000
   starts a year. A reading every minute would cost about 5,100 hours and 526,000 starts.
 - **Each response** tells the dock how long until its next slot, in `Canary-Next-Sensor-Poll-Seconds`, rounded up
-  so that it is never early. With no answer, the dock keeps the last gap that the server gave between two slots.
+  to a whole second. With no answer, the dock keeps the last gap that the server gave between two slots.
+- **A post up to 5 s before a slot counts as that slot's**, and the answer names the slot after it. The dock's clock
+  runs fast in light sleep ([dock.md](dock.md#the-clock)), so after 30 minutes its post can arrive a second early.
+  An answer of "1 s" would make it read again at once, and the SCD41 has no new CO₂ for 5 s. Each answer sets the
+  dock's timer again, so the error never adds up from one slot to the next.
 - A week in which no range syncs is refused, because the dock would take no readings. A day with none is allowed.
 - The Dock tab edits it as the Display tab edits the page schedule.
 
@@ -47,7 +51,8 @@ The Display tab of `/web/config` edits the week beside a dial of the day:
 
 - `display.sync.every` sets how often the display syncs all day: every 1800 s by default. 0 means only beside each
   page that it fetches. The Display tab sets it in minutes.
-- Each board gets its own next slot in `Canary-Next-Sensor-Poll-Seconds`, by the name it gives in `Canary-Device`.
+- Each board gets its own next slot in `Canary-Next-Sensor-Poll-Seconds`, by the name it gives in `Canary-Device`,
+  with the same 5 s rule as the dock.
 - The display posts its state at each wake. It also wakes for a sync that comes before its next page.
 - The display holds none of the `display` and `image` settings: the server picks each page, and the time to the
   next wake, from them. So the display runs a saved change from the answer to its next sync.

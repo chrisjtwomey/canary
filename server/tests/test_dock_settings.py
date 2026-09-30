@@ -339,6 +339,16 @@ def test_each_board_is_sent_its_own_next_sync_and_an_unnamed_one_none():
     assert poll(at(12, 3), None) is None
 
 
+@pytest.mark.parametrize("before_s, answer_s", [
+    (1, 1801), (0.4, 1801), (5, 1805), (6, 6), (60, 60)])
+def test_a_post_just_before_a_slot_is_that_slots_and_is_sent_the_one_after(before_s, answer_s):
+    from server import make_sensor_poll
+    night = TimeRanges([(parse_hhmm("00:00"), 1800)], TZ, "dock.sync")
+    poll = make_sensor_poll({"canary-dock": night, "canary-display": night})
+    assert poll(at(3, 0) - before_s, "canary-dock") == answer_s
+    assert poll(at(3, 0) - before_s, "canary-display") == answer_s
+
+
 def test_the_head_is_offline_after_two_of_its_own_syncs():
     from server import make_silence
     display = TimeRanges([(parse_hhmm("00:00"), 1800)], TZ, "display.sync")

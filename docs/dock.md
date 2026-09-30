@@ -38,6 +38,9 @@ The dock has no clock, and does not ask NTP.
 
 - Every response from the server carries its time and its time zone ([versions.md](versions.md)). The dock holds
   the time as an offset from its uptime, so the readings it stamps and the slots the server counts always agree.
+- Its uptime runs fast while the chip light-sleeps: about +350 ppm against the server, 0.6 s in 30 minutes. Before
+  light sleep it was +25 ppm. Each response sets the time again, so only the timer to the next slot sees it
+  ([schedules.md](schedules.md#the-docks-schedule)).
 - Until the first response, the dock asks `GET /about` every 30 s. It queues its readings with their uptime, and
   stamps them when the time arrives. So a dock that starts while the server is down keeps what it measured, with
   the correct times.
