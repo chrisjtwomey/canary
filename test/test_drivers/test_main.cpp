@@ -187,6 +187,7 @@ void test_scd41_begin_stops_a_part_left_measuring_by_a_warm_reset() {
 
     TEST_ASSERT_TRUE(drv.begin(0));
     TEST_ASSERT_EQUAL_INT(1, part.stopsAccepted);
+    TEST_ASSERT_TRUE(drv.wasMeasuring());
     TEST_ASSERT_FALSE(part.periodic);
     TEST_ASSERT_EQUAL_INT(Scd41Driver::IDLE, drv.mode());
 }
@@ -198,6 +199,7 @@ void test_scd41_begin_tolerates_the_stop_a_cold_part_refuses() {
 
     TEST_ASSERT_TRUE(drv.begin(0));
     TEST_ASSERT_EQUAL_INT(1, part.stopsRefused);
+    TEST_ASSERT_FALSE(drv.wasMeasuring());
 }
 
 void test_scd41_begin_fails_when_nothing_answers() {

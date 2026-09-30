@@ -876,7 +876,8 @@ static void sendQueued() {
 
 static bool sensorsRunning[4] = {false, false, false, false};
 
-// Logs each sensor that has stopped, or started, since the last call.
+// Logs each sensor that has stopped, or started, since the last call. A
+// started SCD41 says whether it was idle, as a reset of the part leaves it.
 static void logSensorChanges() {
     static const char* const names[4] = {"shtc3", "scd41", "pmsa003i", "bme688"};
     const bool running[4] = {sensors.shtc3Present(), sensors.scd41Present(),
@@ -884,9 +885,36 @@ static void logSensorChanges() {
     for (int i = 0; i < 4; ++i) {
         if (running[i] == sensorsRunning[i]) continue;
         sensorsRunning[i] = running[i];
-        logf(running[i] ? LOG_NOTICE : LOG_WARNING, "sensor %s %s", names[i],
-             running[i] ? "running" : "stopped; starting it again");
+        if (!running[i]) {
+            logf(LOG_WARNING, "sensor %s stopped; starting it again", names[i]);
+        } else if (i == 1) {
+            logf(LOG_NOTICE, "sensor scd41 running; it was %s",
+                 sensors.scd41WasMeasuring() ? "still measuring" : "idle");
+        } else {
+            logf(LOG_NOTICE, "sensor %s running", names[i]);
+        }
     }
+}
+
+// Why this reading has no CO2, and what each particle read met when one
+// was damaged.
+static void logReadFaults() {
+    typedef SensorSuite::ReadFault Fault;
+    if (sensors.scd41Fault() != Fault::None) {
+        logf(LOG_WARNING, "[scd41] no CO2 in this reading: %s",
+             SensorSuite::readFaultName(sensors.scd41Fault()));
+    }
+    const uint8_t n = sensors.pmReadCount();
+    bool damaged = false;
+    for (uint8_t i = 0; i < n; ++i) damaged = damaged || sensors.pmRead(i) != Fault::None;
+    if (!damaged) return;
+    char text[96] = "";
+    size_t len = 0;
+    for (uint8_t i = 0; i < n && len < sizeof(text); ++i) {
+        len += snprintf(text + len, sizeof(text) - len, "%sread %u: %s", i ? "; " : "",
+                        (unsigned)(i + 1), SensorSuite::readFaultName(sensors.pmRead(i)));
+    }
+    logf(sensors.pmRead(n - 1) == Fault::None ? LOG_INFO : LOG_WARNING, "[pmsa003i] %s", text);
 }
 
 // The pre-warm comes the fan's lead before each slot, or the default lead
@@ -919,6 +947,7 @@ static Readings sampleSensors(uint32_t nowMs) {
     const uint32_t epoch = epochAt(nowMs);
     advanceSimulation(epoch);
     Readings r = sensors.sample(epoch);
+    logReadFaults();
     logSensorChanges();
     return r;
 }

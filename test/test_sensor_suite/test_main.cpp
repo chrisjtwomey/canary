@@ -51,6 +51,21 @@ public:
     uint16_t readId() override { return 0; }
 };
 
+// An SCD41 whose data-ready question fails as the test sets it.
+class FaultyScd41 : public MockScd41 {
+public:
+    explicit FaultyScd41(EnvModel& room) : MockScd41(room) {}
+    enum { NONE, NO_ANSWER, BAD_CRC, NOT_READY } fault = NONE;
+    uint32_t crc = 0;
+    bool getDataReadyStatus(uint32_t nowMs, bool& ready) override {
+        if (fault == NO_ANSWER) return false;
+        if (fault == BAD_CRC) { ++crc; return false; }
+        if (fault == NOT_READY) { ready = false; return true; }
+        return MockScd41::getDataReadyStatus(nowMs, ready);
+    }
+    uint32_t crcFailures() const override { return crc; }
+};
+
 // Fails the first frame read of every sample, succeeds on the retry.
 class FlakyPm : public IPmsa003i {
 public:
@@ -182,6 +197,39 @@ void test_sample_retries_a_corrupt_pm_frame() {
     TEST_ASSERT_EQUAL_MESSAGE(2, flaky.reads, "one retry after a checksum failure");
     TEST_ASSERT_TRUE(r.pmValid);
     TEST_ASSERT_EQUAL_UINT16(7, r.pm.pm2_5);
+}
+
+void test_each_pm_read_of_a_sample_is_kept_for_the_log() {
+    FlakyPm flaky;
+    SensorSuite s(*clk, *shtc3, *scd41, flaky, *bme);
+    s.begin();
+    settle();
+    s.sample(room->epoch());
+    TEST_ASSERT_EQUAL_UINT8(2, s.pmReadCount());
+    TEST_ASSERT_TRUE(SensorSuite::ReadFault::BadChecksum == s.pmRead(0));
+    TEST_ASSERT_TRUE(SensorSuite::ReadFault::None == s.pmRead(1));
+    TEST_ASSERT_EQUAL_STRING("bad checksum", SensorSuite::readFaultName(s.pmRead(0)));
+}
+
+void test_a_sample_without_co2_says_why() {
+    FaultyScd41 part(*room);
+    SensorSuite s(*clk, *shtc3, part, *pm, *bme);
+    s.begin();
+    settle();
+    TEST_ASSERT_TRUE(s.sample(room->epoch()).scd41Valid);
+    TEST_ASSERT_TRUE(SensorSuite::ReadFault::None == s.scd41Fault());
+    const struct { int fault; SensorSuite::ReadFault why; } cases[] = {
+        {FaultyScd41::NO_ANSWER, SensorSuite::ReadFault::NoAnswer},
+        {FaultyScd41::BAD_CRC, SensorSuite::ReadFault::BadChecksum},
+        {FaultyScd41::NOT_READY, SensorSuite::ReadFault::NoData},
+    };
+    for (const auto& c : cases) {
+        part.fault = (decltype(part.fault))c.fault;
+        clk->advance(5000);
+        TEST_ASSERT_FALSE(s.sample(room->epoch()).scd41Valid);
+        TEST_ASSERT_TRUE(c.why == s.scd41Fault());
+        s.restartFailed();                     // the first miss takes it for stopped
+    }
 }
 
 void test_health_counts_a_bad_pm_frame() {
@@ -413,6 +461,8 @@ int main(int, char**) {
     RUN_TEST(test_sample_feeds_bme_pressure_to_the_scd41);
     RUN_TEST(test_sample_skips_pm_during_the_fan_warm_up);
     RUN_TEST(test_sample_retries_a_corrupt_pm_frame);
+    RUN_TEST(test_each_pm_read_of_a_sample_is_kept_for_the_log);
+    RUN_TEST(test_a_sample_without_co2_says_why);
     RUN_TEST(test_health_counts_a_bad_pm_frame);
     RUN_TEST(test_health_holds_the_scd41_settings_from_its_start_and_the_bme688s_last_state);
     RUN_TEST(test_health_holds_each_sensors_settings);

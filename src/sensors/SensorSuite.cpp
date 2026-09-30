@@ -171,6 +171,7 @@ void SensorSuite::sampleBme688(Readings& r) {
 }
 
 void SensorSuite::sampleScd41(Readings& r) {
+    scd41Fault_ = ReadFault::None;
     if (!scd41State_.running) return;
     // NDIR absorption scales with gas density, so the SCD41 needs the real
     // ambient pressure to convert correctly. The BME688 has just measured it.
@@ -181,22 +182,50 @@ void SensorSuite::sampleScd41(Readings& r) {
             pressurePa_ = pa;
         }
     }
+    // A failed transfer is a bad checksum when the driver counted one.
+    const uint32_t crcBefore = scd41_.crcFailures();
+    auto failed = [&] {
+        return scd41_.crcFailures() != crcBefore ? ReadFault::BadChecksum : ReadFault::NoAnswer;
+    };
     bool ready = false;
-    if (!scd41_.getDataReadyStatus(clock_.millis(), ready) || !ready) return;
+    if (!scd41_.getDataReadyStatus(clock_.millis(), ready)) {
+        scd41Fault_ = failed();
+        return;
+    }
+    if (!ready) {
+        scd41Fault_ = ReadFault::NoData;
+        return;
+    }
     r.scd41Valid = scd41_.readMeasurement(clock_.millis(), r.scd41);
+    if (!r.scd41Valid) {
+        scd41Fault_ = failed();
+        return;
+    }
     r.scd41WarmedUp = clock_.millis() - scd41MeasuringSinceMs_ >= scd41WarmupMs_;
 }
 
 void SensorSuite::samplePm(Readings& r) {
     // Before the fan has run for 30 s the counts are still ramping up, so a
     // frame read now would be believable and wrong.
+    pmReadCount_ = 0;
     if (!pmState_.running || !pm_.stable(clock_.millis())) return;
     uint8_t frame[32];
     for (int attempt = 0; attempt < kPmReadAttempts && !r.pmValid; ++attempt) {
+        ReadFault fault = ReadFault::NoAnswer;
         if (pm_.readFrame(clock_.millis(), frame)) {
-            r.pmValid = IPmsa003i::parseFrame(frame, r.pm);
-            if (!r.pmValid) ++pmBadFrames_;
+            switch (IPmsa003i::frameFault(frame)) {
+                case IPmsa003i::FRAME_OK:     fault = ReadFault::None;        break;
+                case IPmsa003i::BAD_START:    fault = ReadFault::BadStart;    break;
+                case IPmsa003i::BAD_LENGTH:   fault = ReadFault::BadLength;   break;
+                case IPmsa003i::BAD_CHECKSUM: fault = ReadFault::BadChecksum; break;
+            }
+            if (fault == ReadFault::None) {
+                r.pmValid = IPmsa003i::parseFrame(frame, r.pm);
+            } else {
+                ++pmBadFrames_;
+            }
         }
+        pmReads_[pmReadCount_++] = fault;
     }
     if (r.pmValid) {
         pmSeen_ = true;
@@ -231,4 +260,16 @@ SensorHealth SensorSuite::health() const {
     h.shtc3Id = shtc3Id_;
     h.shtc3LowPower = shtc3LowPower_;
     return h;
+}
+
+const char* SensorSuite::readFaultName(ReadFault fault) {
+    switch (fault) {
+        case ReadFault::None:        return "good";
+        case ReadFault::NoAnswer:    return "no answer";
+        case ReadFault::BadChecksum: return "bad checksum";
+        case ReadFault::NoData:      return "no data ready";
+        case ReadFault::BadStart:    return "bad start";
+        case ReadFault::BadLength:   return "bad length";
+    }
+    return "?";
 }

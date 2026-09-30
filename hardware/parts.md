@@ -231,7 +231,7 @@ The fan runs for the 35 s before each reading (`dock.pm.warmup_s`), and stops af
 
 ### Driver
 
-canary's own: `Pmsa003iDriver` (`src/sensors/Pmsa003iDriver.cpp`). A frame with a bad checksum is read once more.
+canary's own: `Pmsa003iDriver` (`src/sensors/Pmsa003iDriver.cpp`). A read that fails, or a damaged frame, is read once more.
 
 ### Adafruit 4632 board
 

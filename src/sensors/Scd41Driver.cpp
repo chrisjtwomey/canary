@@ -8,9 +8,9 @@ bool Scd41Driver::begin(uint32_t nowMs) {
     (void)nowMs;
     // A warm reset leaves the part in whatever mode the last boot chose, and
     // a measuring part refuses everything but a stop. The stop is NACKed when
-    // the part was already idle, which is not a fault, so its result is not
-    // checked.
-    sensirion::sendCommand(bus_, addr_, kCmdStopPeriodic);
+    // the part was already idle, which is not a fault: the answer only tells
+    // the two apart.
+    wasMeasuring_ = sensirion::sendCommand(bus_, addr_, kCmdStopPeriodic);
     clock_.waitMs(kStopBusyMs);
     mode_ = IDLE;
     busyUntilMs_ = clock_.millis();

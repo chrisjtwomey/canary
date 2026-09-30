@@ -2,13 +2,18 @@
 
 // The 32-byte frame the sensor keeps updated, decoded. Shared by every
 // driver: the wire format is the sensor's, not any one implementation's.
-bool IPmsa003i::parseFrame(const uint8_t f[32], PmData& out) {
-    if (f[0] != 0x42 || f[1] != 0x4D) return false;
+IPmsa003i::FrameFault IPmsa003i::frameFault(const uint8_t f[32]) {
+    if (f[0] != 0x42 || f[1] != 0x4D) return BAD_START;
     uint16_t len = (uint16_t)(f[2] << 8 | f[3]);
-    if (len != 28) return false;
+    if (len != 28) return BAD_LENGTH;
     uint16_t sum = 0;
     for (int i = 0; i < 30; ++i) sum += f[i];
-    if (sum != (uint16_t)(f[30] << 8 | f[31])) return false;
+    if (sum != (uint16_t)(f[30] << 8 | f[31])) return BAD_CHECKSUM;
+    return FRAME_OK;
+}
+
+bool IPmsa003i::parseFrame(const uint8_t f[32], PmData& out) {
+    if (frameFault(f) != FRAME_OK) return false;
 
     auto w = [&](int i) { return (uint16_t)(f[i] << 8 | f[i + 1]); };
     out.pm1_0Cf1 = w(4);  out.pm2_5Cf1 = w(6);  out.pm10Cf1 = w(8);

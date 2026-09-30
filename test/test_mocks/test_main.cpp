@@ -237,6 +237,18 @@ void test_pm_parse_rejects_bad_start_length_and_checksum() {
     TEST_ASSERT_FALSE(IPmsa003i::parseFrame(f, d));
 }
 
+void test_pm_frame_fault_names_the_first_check_that_fails() {
+    uint8_t f[32] = {0};
+    TEST_ASSERT_EQUAL(IPmsa003i::BAD_START, IPmsa003i::frameFault(f));
+    f[0] = 0x42; f[1] = 0x4D;
+    TEST_ASSERT_EQUAL(IPmsa003i::BAD_LENGTH, IPmsa003i::frameFault(f));
+    f[3] = 28;
+    TEST_ASSERT_EQUAL(IPmsa003i::BAD_CHECKSUM, IPmsa003i::frameFault(f));
+    uint16_t sum = 0; for (int i = 0; i < 30; ++i) sum += f[i];
+    f[30] = sum >> 8; f[31] = sum & 0xFF;
+    TEST_ASSERT_EQUAL(IPmsa003i::FRAME_OK, IPmsa003i::frameFault(f));
+}
+
 // ---------------- BME688 ----------------
 
 void test_bme_cycle_takes_tph_plus_heater_and_first_cycle_is_unstable() {
@@ -423,6 +435,7 @@ int main(int, char**) {
     RUN_TEST(test_pm_checksum_fails_once_in_200_reads);
     RUN_TEST(test_pm_set_low_silences_and_restarts_warmup);
     RUN_TEST(test_pm_parse_rejects_bad_start_length_and_checksum);
+    RUN_TEST(test_pm_frame_fault_names_the_first_check_that_fails);
     RUN_TEST(test_bme_cycle_takes_tph_plus_heater_and_first_cycle_is_unstable);
     RUN_TEST(test_bme_short_heater_never_stabilises);
     RUN_TEST(test_bme_starts_at_room_temperature_and_warms_above_it);

@@ -31,6 +31,9 @@ public:
         (void)nowMs; (void)ppm; (void)correction;
         return false;
     }
+    // Whether begin() found the part still measuring. False after a reset of
+    // the part or a power cut, which leave it idle.
+    virtual bool wasMeasuring() const { return false; }
     // Answers that arrived with a bad CRC, since start.
     virtual uint32_t crcFailures() const { return 0; }
 };

@@ -18,6 +18,9 @@ public:
     virtual bool readFrame(uint32_t nowMs, uint8_t out[32]) = 0;
     // Decode a frame. False on a bad start word, length or checksum.
     static bool parseFrame(const uint8_t frame[32], PmData& out);
+    // What is wrong with a frame: the first check it fails, in parseFrame's order.
+    enum FrameFault : uint8_t { FRAME_OK, BAD_START, BAD_LENGTH, BAD_CHECKSUM };
+    static FrameFault frameFault(const uint8_t frame[32]);
     // True once the fan has run long enough for the data to be trusted.
     virtual bool stable(uint32_t nowMs) const = 0;
     // Whether SET is connected. False means the fan runs whenever the board

@@ -57,7 +57,13 @@ wiring. First do the [setup](../CONTRIBUTING.md#setup).
   10 minutes. So a sensor that you connect starts with no restart.
 - A running sensor that gives no reading at a slot has stopped: it is disconnected, or it lost its settings in a
   power cut. The first 15 s after its start do not count. The dock starts it again in the same way. The log shows
-  `sensor scd41 stopped; starting it again`, then `sensor scd41 running`.
+  `sensor scd41 stopped; starting it again`, then `sensor scd41 running; it was idle` or `…; it was still
+  measuring`. The SCD41 refuses the stop that each start sends when it is idle, and idle is where a reset of
+  the part or a power cut leaves it.
+- A reading without CO₂ logs why: `[scd41] no CO2 in this reading: no answer`, `bad checksum` or `no data
+  ready`. A damaged particle frame logs each read of that sample, such as `[pmsa003i] read 1: bad checksum;
+  read 2: good`: at info level when the second read was good, as a warning when it was not. The kind of damage
+  helps tell a frame torn by the module's own update, which keeps its start and length, from a noisy wire.
 
 ### BSEC
 

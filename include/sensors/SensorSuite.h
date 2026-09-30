@@ -62,6 +62,21 @@ public:
     // and humidity; 0 keeps them all.
     void setScd41WarmupS(uint16_t seconds) { scd41WarmupMs_ = (uint32_t)seconds * 1000; }
 
+    // Why a read gave nothing, for the dock's log.
+    enum class ReadFault : uint8_t { None, NoAnswer, BadChecksum, NoData, BadStart, BadLength };
+    static const char* readFaultName(ReadFault fault);
+
+    // Why the last sample has no CO2: None when it has one, or when the
+    // SCD41 is stopped.
+    ReadFault scd41Fault() const { return scd41Fault_; }
+    // Each particle read of the last sample, first to last: None for a good
+    // frame. There are none during the fan's warm-up.
+    uint8_t pmReadCount() const { return pmReadCount_; }
+    ReadFault pmRead(uint8_t i) const { return pmReads_[i]; }
+    // Whether the SCD41's last start found it still measuring. False after a
+    // reset of the part or a power cut.
+    bool scd41WasMeasuring() const { return scd41_.wasMeasuring(); }
+
     // SHTC3 low-power mode, from the next sample.
     void setShtc3LowPower(bool on) { shtc3LowPower_ = on; }
 
@@ -167,4 +182,7 @@ private:
     bool        scd41Asc_ = true;
     uint32_t    scd41MeasuringSinceMs_ = 0;
     uint32_t    scd41WarmupMs_ = kScd41WarmupMs;
+    ReadFault   scd41Fault_ = ReadFault::None;
+    ReadFault   pmReads_[kPmReadAttempts] = {};
+    uint8_t     pmReadCount_ = 0;
 };

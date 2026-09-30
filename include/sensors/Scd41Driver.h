@@ -33,6 +33,7 @@ public:
     bool setAutomaticSelfCalibration(bool on) override;
     bool performForcedRecalibration(uint32_t nowMs, uint16_t ppm, int16_t& correction) override;
     uint32_t crcFailures() const override { return crcFailures_; }
+    bool wasMeasuring() const override { return wasMeasuring_; }
 
     enum Mode { IDLE, PERIODIC, LOW_POWER_PERIODIC, SINGLE_SHOT, POWERED_DOWN };
     Mode mode() const { return mode_; }
@@ -86,4 +87,5 @@ private:
     Mode     mode_ = POWERED_DOWN;
     uint32_t busyUntilMs_ = 0;
     uint32_t crcFailures_ = 0;
+    bool     wasMeasuring_ = false;
 };
