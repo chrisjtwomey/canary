@@ -10,9 +10,9 @@ services:
       # so /web/config can save it: the container's user (uid 1000) must be
       # able to write the host file. Mount it :ro to allow checks only.
       - ./server/config.yaml:/app/config.yaml
-      # The readings and calibration stores. A named volume, not a host path:
-      # the container runs as uid 1000 and could not write to a directory the
-      # host owns.
+      # The four stores: readings, board reports, board logs and calibration.
+      # A named volume, not a host path: the container runs as uid 1000 and
+      # could not write to a directory the host owns.
       - canary-data:/app/data
       # Firmware images, from firmware-builder: canary-display/ and canary-dock/,
       # each of <version>.bin. Create the directory before the first start,

@@ -39,15 +39,15 @@ image:
 source:
   kind: mock        # mock: the simulated room; store: what the board posts
   seed: 7           # mock only
-  # path: sensor-readings.db  # store only; relative to this file
+  # path: data/sensor-readings.db  # store only; relative to this file
   # keep_days: 0        # store only; readings older than this are deleted, 0 keeps all
 
 status:             # what each board says about itself, kept as readings are
-  # path: status.db   # relative to this file
+  # path: data/status.db   # relative to this file
   keep_days: 7        # older reports are deleted, 0 keeps all
 
 calibration:        # sensor state the dock backs up whenever BSEC saves a copy
-  # path: calibration.db  # relative to this file
+  # path: data/calibration.db  # relative to this file
   keep_days: 3      # each copy is kept this long; the board asks for one after a restart
 
 dock:               # what the dock does between readings; it takes a change before its next one
@@ -108,7 +108,7 @@ mqtt:               # each board logs to <prefix>/<board>; the Logs view shows t
   prefix: mqtt/canary
 
 logs:               # what each board logs over MQTT, kept for the Logs view
-  # path: board-logs.db # relative to this file
+  # path: data/board-logs.db # relative to this file
   keep_days: 7        # older lines are deleted, 0 keeps all
 
 debug: false

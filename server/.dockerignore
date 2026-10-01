@@ -3,6 +3,7 @@
 config.yaml
 firmware/
 *.db
+data/
 *.png
 static/*.html
 .venv/

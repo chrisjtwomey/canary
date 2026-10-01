@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup
 
 from epd_server import DisplayServer, ReadingsStore
 
-from server import make_pages, make_source
+from server import load_settings, make_pages, make_source, store_file
 from sources.readings import ReadingsIngest, measurements
 from sources.status import DeviceReports
 from tests.conftest import AT
@@ -20,6 +20,18 @@ def store(tmp_path):
     s = ReadingsStore(tmp_path / "sensor-readings.db")
     yield s
     s.close()
+
+
+def test_every_store_defaults_into_the_data_folder():
+    s = load_settings({})
+    paths = (s.store_path, s.status_path, s.calibration_path, s.logs_path)
+    assert all(p.startswith("data/") for p in paths), paths
+
+
+def test_a_store_file_gets_its_folder(tmp_path):
+    path = store_file("data/status.db", base=str(tmp_path))
+    assert path == str(tmp_path / "data" / "status.db") and (tmp_path / "data").is_dir()
+    ReadingsStore(path).close()
 
 
 def test_a_document_with_no_measurements_is_not_a_reading(store):

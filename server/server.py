@@ -265,14 +265,14 @@ def load_settings(config: dict) -> Settings:
         core=core,
         kind=kind,
         seed=int(get_prop_by_keys(config, "source", "seed", default=7)),
-        store_path=str(get_prop_by_keys(config, "source", "path", default="sensor-readings.db")),
+        store_path=str(get_prop_by_keys(config, "source", "path", default="data/sensor-readings.db")),
         keep_days=float(get_prop_by_keys(config, "source", "keep_days", default=0)),
         calibration_path=str(get_prop_by_keys(config, "calibration", "path",
-                                              default="calibration.db")),
+                                              default="data/calibration.db")),
         calibration_days=float(get_prop_by_keys(config, "calibration", "keep_days", default=3)),
-        status_path=str(get_prop_by_keys(config, "status", "path", default="status.db")),
+        status_path=str(get_prop_by_keys(config, "status", "path", default="data/status.db")),
         status_days=float(get_prop_by_keys(config, "status", "keep_days", default=7)),
-        logs_path=str(get_prop_by_keys(config, "logs", "path", default="board-logs.db")),
+        logs_path=str(get_prop_by_keys(config, "logs", "path", default="data/board-logs.db")),
         logs_days=float(get_prop_by_keys(config, "logs", "keep_days", default=7)),
         altitude_m=float(get_prop_by_keys(config, "site", "altitude_m", default=0)),
         dock_sync=make_dock_sync(config, core.server.timezone),
@@ -301,6 +301,14 @@ def check_config(text: str) -> None:
         load_settings(config)
     except Exception as exc:  # noqa: BLE001
         raise ValueError(exc.args[0] if exc.args else repr(exc)) from None
+
+
+def store_file(path: str, base: str = cwd) -> str:
+    """``path`` resolved against ``base``, with its folder made: SQLite makes
+    the file but not the folder, and the stores default into ``data/``."""
+    full = os.path.join(base, path)
+    os.makedirs(os.path.dirname(full), exist_ok=True)
+    return full
 
 
 def restart_soon(delay_s: float = 1.0) -> None:
@@ -355,7 +363,7 @@ def main():
         clock = lambda: pinned  # noqa: E731
         log.info("clock pinned to %s", args.at)
 
-    status_store = ReadingsStore(os.path.join(cwd, settings.status_path))
+    status_store = ReadingsStore(store_file(settings.status_path))
     display_settings = display_version(config)
     reports = DeviceReports(store=status_store, keep_days=settings.status_days,
                             silence=make_silence(settings.syncs),
@@ -364,10 +372,10 @@ def main():
     log.info("board reports in %s, %d held", status_store.path, status_store.count())
     store = None
     if settings.kind == "store":
-        store = ReadingsStore(os.path.join(cwd, settings.store_path))
+        store = ReadingsStore(store_file(settings.store_path))
         log.info("readings from %s, %d held", store.path, store.count())
     source = make_source(settings.seed, clock, reports, settings.altitude_m, store)
-    calibration = CalibrationStore(os.path.join(cwd, settings.calibration_path),
+    calibration = CalibrationStore(store_file(settings.calibration_path),
                                    keep_days=settings.calibration_days)
     ingest = ReadingsIngest(reports, store, settings.keep_days)
     dock_sync = settings.dock_sync
@@ -379,7 +387,7 @@ def main():
     history = HistoryQuery(make_history(between, settings.altitude_m), tz, now=clock)
     readings = ReadingsQuery(between, now=clock)
     status = StatusSource(reports)
-    board_logs = LogStore(os.path.join(cwd, settings.logs_path), keep_days=settings.logs_days)
+    board_logs = LogStore(store_file(settings.logs_path), keep_days=settings.logs_days)
     logs = LogsQuery(board_logs, tz)
     board_settings = BoardSettings(settings.dock, dock_sync, calibration, reports.device, now=clock)
     display_sync = DisplaySync(display_settings, settings.display_sync, reports.device, now=clock)
@@ -412,7 +420,7 @@ def main():
         sys.exit(1)
     server.app.register_blueprint(web_blueprint(pages, source, logging_on=core.mqtt.enabled))
     stores = {
-        "sensor-readings": Transfer("sensor-readings", os.path.join(cwd, settings.store_path)),
+        "sensor-readings": Transfer("sensor-readings", store_file(settings.store_path)),
         "board-reports": Transfer("board-reports", status_store.path),
         "calibration": Transfer("calibration", calibration.path, "calibration"),
         "board-logs": Transfer("board-logs", board_logs.path, "logs"),

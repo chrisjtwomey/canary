@@ -81,9 +81,9 @@ def test_an_empty_field_takes_its_key_out_and_the_lines_after_it_stay():
 
 
 def test_a_new_key_goes_after_its_blocks_comments_and_before_the_blank_line():
-    e = edit(source__path="data/sensor-readings.db")
+    e = edit(source__path="data/readings.db")
     lines = e.text.splitlines()
-    i = lines.index("  path: data/sensor-readings.db")
+    i = lines.index("  path: data/readings.db")
     assert lines[i - 1].startswith("  # keep_days: 0")
     assert lines[i + 1] == "" and lines[i + 2].startswith("status:")
 

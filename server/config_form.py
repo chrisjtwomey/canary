@@ -273,22 +273,22 @@ TABS: tuple[Tab, ...] = (
         Group("Disk", about="The space the files below take on the server's disk", fields=(),
               visual="disk"),
         Group("Sensor readings", about="The dock's readings, kept on the server", fields=(
-            Field("source.path", "File", "", "text", "sensor-readings.db"),
+            Field("source.path", "File", "", "text", "data/sensor-readings.db"),
             Field("source.keep_days", "Delete after", "0 = never.", "number", 0, unit="days",
                   minimum=0),
         ), store="sensor-readings"),
         Group("Board reports", about="What each board says about itself at each sync", fields=(
-            Field("status.path", "File", "", "text", "status.db"),
+            Field("status.path", "File", "", "text", "data/status.db"),
             Field("status.keep_days", "Delete after", "0 = never.", "number", 7, unit="days",
                   minimum=0),
         ), store="board-reports"),
         Group("Board logs", about="What each board logs over MQTT", fields=(
-            Field("logs.path", "File", "", "text", "board-logs.db"),
+            Field("logs.path", "File", "", "text", "data/board-logs.db"),
             Field("logs.keep_days", "Delete after", "0 = never.", "number", 7, unit="days",
                   minimum=0),
         ), store="board-logs"),
         Group("Calibration", about="Copies of the air-quality sensor's calibration, for after a restart", fields=(
-            Field("calibration.path", "File", "", "text", "calibration.db"),
+            Field("calibration.path", "File", "", "text", "data/calibration.db"),
             Field("calibration.keep_days", "Delete after", "0 = never.", "number", 3, unit="days",
                   minimum=0),
         ), store="calibration"),
