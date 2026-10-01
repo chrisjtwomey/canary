@@ -305,6 +305,9 @@ void test_bme_iaq_accuracy_climbs_with_cycles() {
     TEST_ASSERT_EQUAL(3, d.iaqAccuracy);
     TEST_ASSERT_TRUE(d.hasIaq);
     TEST_ASSERT_TRUE(d.iaq >= 0 && d.iaq <= 500);
+    TEST_ASSERT_TRUE(d.hasStaticIaq);
+    TEST_ASSERT_EQUAL_FLOAT(d.iaq, d.staticIaq);
+    TEST_ASSERT_EQUAL_UINT8(d.iaqAccuracy, d.staticIaqAccuracy);
 }
 
 // ---------------- JSON ----------------
@@ -315,7 +318,8 @@ void test_json_matches_readings_md() {
     r.shtc3 = {21.34f, 44.06f}; r.shtc3Valid = true;
     r.scd41 = {812, 25.2f, 36.0f}; r.scd41Valid = true; r.scd41WarmedUp = true;
     r.pm = {4, 6, 8, 4, 6, 8, 900, 250, 40, 4, 1, 0, 0x97, 0}; r.pmValid = true;
-    r.bme688 = {22.8f, 1011.2f, 40.2f, 132000.0f, true, true, 63.4f, 2, true}; r.bme688Valid = true;
+    r.bme688 = {22.8f, 1011.2f, 40.2f, 132000.0f, true, true, 63.4f, 2, true, 58.2f, 2, true};
+    r.bme688Valid = true;
     char buf[640];
     size_t n = readingsToJson(r, "canary-dock", buf, sizeof(buf));
     TEST_ASSERT_TRUE(n > 0);
@@ -323,7 +327,8 @@ void test_json_matches_readings_md() {
         "{\"ts\":1756900000,\"device\":\"canary-dock\""
         ",\"temp_c\":21.3,\"rh_pct\":44.1,\"co2_ppm\":812"
         ",\"pm1_0\":4,\"pm2_5\":6,\"pm10\":8,\"pc_0_3\":900,\"pc_0_5\":250,\"pc_1_0\":40,\"pc_2_5\":4,\"pc_5_0\":1,\"pc_10\":0"
-        ",\"gas_ohm\":132000,\"iaq\":63,\"iaq_accuracy\":2,\"pressure_hpa\":1011.2"
+        ",\"gas_ohm\":132000,\"iaq\":63,\"iaq_accuracy\":2,\"static_iaq\":58,\"static_iaq_accuracy\":2"
+        ",\"pressure_hpa\":1011.2"
         ",\"scd41\":{\"temp_c\":25.2,\"rh_pct\":36.0},\"bme688\":{\"temp_c\":22.8,\"rh_pct\":40.2}"
         ",\"valid\":{\"temp_humidity\":true,\"co2\":true,\"particulates\":true"
         ",\"pressure\":true,\"gas\":true}}";

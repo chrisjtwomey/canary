@@ -107,5 +107,6 @@ On the server:
   mistake gives a number that looks correct. So Bosch's C API does that arithmetic (`lib/bme68x`, v4.4.8,
   BSD-3-Clause). It reaches the bus through function pointers, so it sits behind `II2cBus` too, and it builds for
   the host tests.
-- **BSEC** gives the IAQ. It drives the BME688 through the same driver, from a task of its own. `BsecBme688` gives
-  `SensorSuite` the newest cycle that BSEC ran, so the sampling sequence is the same with BSEC as without it.
+- **BSEC** gives the two indexes, static and not. It drives the BME688 through the same driver, from a task of its
+  own. `BsecBme688` gives `SensorSuite` the newest cycle that BSEC ran, so the sampling sequence is the same with
+  BSEC as without it.

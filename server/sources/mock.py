@@ -189,6 +189,8 @@ def reading_from(room: EnvModel, device: str = "canary-dock") -> dict:
         "gas_ohm": int(round(gas)),
         "iaq": int(round(_iaq_from_gas(gas))),
         "iaq_accuracy": 3,
+        "static_iaq": int(round(_iaq_from_gas(gas))),
+        "static_iaq_accuracy": 3,
         "pressure_hpa": round(room.pressure_hpa + room.noise(0.02), 1),
         "scd41": {"temp_c": round(scd_t, 1),
                   "rh_pct": round(rh_from_abs(room.abs_hum, scd_t) + room.noise(0.4), 1)},

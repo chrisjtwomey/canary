@@ -113,6 +113,7 @@ int BsecLibrary::doSteps(int64_t nowNs, const Bme688Data& data, BsecResult& resu
     add(BSEC_INPUT_GASRESISTOR, data.gasOhm);
     add(BSEC_INPUT_PROFILE_PART, 0.0f);   // a forced cycle is one heater step
     result.hasIaq = false;
+    result.hasStaticIaq = false;
     if (n == 0) return BSEC_OK;
 
     bsec_output_t outputs[BSEC_NUMBER_OUTPUTS];
@@ -120,10 +121,15 @@ int BsecLibrary::doSteps(int64_t nowNs, const Bme688Data& data, BsecResult& resu
     const int status = bsec_do_steps_m(instance, inputs, n, outputs, &nOutputs);
     if (status < BSEC_OK) return status;
     for (uint8_t i = 0; i < nOutputs; ++i) {
-        if (outputs[i].sensor_id != BSEC_OUTPUT_IAQ) continue;
-        result.hasIaq = true;
-        result.iaq = outputs[i].signal;
-        result.iaqAccuracy = outputs[i].accuracy;
+        if (outputs[i].sensor_id == BSEC_OUTPUT_IAQ) {
+            result.hasIaq = true;
+            result.iaq = outputs[i].signal;
+            result.iaqAccuracy = outputs[i].accuracy;
+        } else if (outputs[i].sensor_id == BSEC_OUTPUT_STATIC_IAQ) {
+            result.hasStaticIaq = true;
+            result.staticIaq = outputs[i].signal;
+            result.staticIaqAccuracy = outputs[i].accuracy;
+        }
     }
     return status;
 }

@@ -7,6 +7,7 @@ from metrics import (CALIBRATING_TAG, CALIBRATING_VERDICT, IAQ_ACCURACY, IAQ_ZON
                      NO_SENSOR_VERDICT, fmt_stamp, gaps, hour_ticks, iaq_verdict, sensor_absent,
                      series, y_range)
 from pages.base import EnvPage
+from pages.pool import IAQ
 
 SPARK_HOURS = 12
 
@@ -33,9 +34,9 @@ class AirPage(EnvPage):
         history_24h: list[dict] = data["history_24h"]
         valid = bool(latest.get("valid", {}).get("gas"))
         absent = sensor_absent(data.get("status"), "bme688")
-        iaq = latest.get("iaq") if valid else None
+        iaq = latest.get(IAQ.key) if valid else None
         gas = latest.get("gas_ohm") if valid else None
-        accuracy = latest.get("iaq_accuracy") if valid else None
+        accuracy = latest.get(IAQ.accuracy_key) if valid else None
         calibrating = iaq is None and accuracy is not None
 
         a.div(klass="title label", _t="Air quality")
@@ -88,8 +89,8 @@ class AirPage(EnvPage):
         end = latest["ts"]
         start = end - SPARK_HOURS * 3600
         valid = bool(latest.get("valid", {}).get("gas"))
-        iaq = latest.get("iaq") if valid else None
-        pts = [p for p in series(history_24h, "iaq", 300) if p[0] >= start]
+        iaq = latest.get(IAQ.key) if valid else None
+        pts = [p for p in series(history_24h, IAQ.key, 300) if p[0] >= start]
         now = None
         if iaq is not None:
             pts.append([end, iaq])

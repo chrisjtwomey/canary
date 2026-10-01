@@ -71,6 +71,9 @@ public:
         result.hasIaq = true;
         result.iaq = 42.0f;
         result.iaqAccuracy = accuracy;
+        result.hasStaticIaq = true;
+        result.staticIaq = 37.0f;
+        result.staticIaqAccuracy = accuracy;
         return kOk;
     }
 };
@@ -249,6 +252,9 @@ void test_a_step_runs_the_cycle_bsec_asks_for_and_keeps_the_index() {
     TEST_ASSERT_TRUE(d.hasIaq);
     TEST_ASSERT_EQUAL_FLOAT(42.0f, d.iaq);
     TEST_ASSERT_EQUAL_UINT8(1, d.iaqAccuracy);
+    TEST_ASSERT_TRUE(d.hasStaticIaq);
+    TEST_ASSERT_EQUAL_FLOAT(37.0f, d.staticIaq);
+    TEST_ASSERT_EQUAL_UINT8(1, d.staticIaqAccuracy);
     TEST_ASSERT_FLOAT_WITHIN(0.1f, 1010.0f, d.pressureHpa);
     TEST_ASSERT_UINT32_WITHIN_MESSAGE(250, 3000, wait, "BSEC asks again in 3 s, less the cycle");
 }

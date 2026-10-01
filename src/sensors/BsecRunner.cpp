@@ -163,10 +163,13 @@ void BsecRunner::measure(const BsecRequest& request, int64_t nowNs) {
 
     // Bosch's wrapper hands BSEC only a cycle with a real gas conversion.
     BsecResult result = {};
-    if (data.gasValid && bsec_.doSteps(nowNs, data, result) >= IBsec::kOk && result.hasIaq) {
-        data.hasIaq = true;
+    if (data.gasValid && bsec_.doSteps(nowNs, data, result) >= IBsec::kOk) {
+        data.hasIaq = result.hasIaq;
         data.iaq = result.iaq;
         data.iaqAccuracy = result.iaqAccuracy;
+        data.hasStaticIaq = result.hasStaticIaq;
+        data.staticIaq = result.staticIaq;
+        data.staticIaqAccuracy = result.staticIaqAccuracy;
     }
 
     std::lock_guard<std::mutex> guard(lock_);

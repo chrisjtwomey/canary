@@ -61,5 +61,10 @@ bool MockBme688::fetchData(uint32_t nowMs, Bme688Data& out) {
     out.iaq = iaq;
     out.iaqAccuracy = cycles_ < 5 ? 0 : (cycles_ < 20 ? 1 : (cycles_ < 100 ? 2 : 3));
     out.hasIaq = true;
+    // The simulated room has no history to stretch a scale to, so both
+    // indexes read the same.
+    out.staticIaq = out.iaq;
+    out.staticIaqAccuracy = out.iaqAccuracy;
+    out.hasStaticIaq = true;
     return true;
 }

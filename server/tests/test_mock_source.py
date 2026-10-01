@@ -60,7 +60,8 @@ def test_reading_has_every_key_in_readings_md():
     d = reading_from(m)
     expected = {"ts", "device", "temp_c", "rh_pct", "co2_ppm", "pm1_0", "pm2_5", "pm10",
                 "pc_0_3", "pc_0_5", "pc_1_0", "pc_2_5", "pc_5_0", "pc_10",
-                "gas_ohm", "pressure_hpa", "iaq", "iaq_accuracy", "scd41", "bme688", "valid"}
+                "gas_ohm", "pressure_hpa", "iaq", "iaq_accuracy", "static_iaq",
+                "static_iaq_accuracy", "scd41", "bme688", "valid"}
     assert set(d) == expected
     assert set(d["scd41"]) == set(d["bme688"]) == {"temp_c", "rh_pct"}
     assert d["valid"] == {"temp_humidity": True, "co2": True, "particulates": True,

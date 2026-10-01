@@ -141,5 +141,8 @@ bool Bme688Driver::fetchData(uint32_t nowMs, Bme688Data& out) {
     out.iaq = 0.0f;
     out.iaqAccuracy = 0;
     out.hasIaq = false;
+    out.staticIaq = 0.0f;
+    out.staticIaqAccuracy = 0;
+    out.hasStaticIaq = false;
     return true;
 }

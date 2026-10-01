@@ -34,6 +34,11 @@ struct Bme688Data {
     float    iaq;          // 0–500, when hasIaq
     uint8_t  iaqAccuracy;  // 0–3, when hasIaq
     bool     hasIaq;       // the index came with this reading; false without BSEC
+    // BSEC's static index, which Bosch recommends for a device that stays in
+    // one place: it does not stretch its scale to the last few days' air.
+    float    staticIaq;          // 0–500, when hasStaticIaq
+    uint8_t  staticIaqAccuracy;  // 0–3, when hasStaticIaq
+    bool     hasStaticIaq;
 };
 
 struct Readings {

@@ -11,6 +11,8 @@ from metrics import sea_level_hpa
 # Table 3). Below it, the index moves with BSEC's calibration as much as with
 # the air.
 IAQ_MIN_ACCURACY = 3
+# Each index BSEC gives, with the key of its accuracy.
+IAQ_KEYS = (("iaq", "iaq_accuracy"), ("static_iaq", "static_iaq_accuracy"))
 
 
 def to_sea_level(doc: dict, altitude_m: float) -> dict:
@@ -27,11 +29,13 @@ def to_sea_level(doc: dict, altitude_m: float) -> dict:
 
 
 def without_uncalibrated_iaq(doc: dict) -> dict:
-    """``doc`` without ``iaq`` while its accuracy is below IAQ_MIN_ACCURACY.
-    ``iaq_accuracy`` stays, so a page can say that the index is calibrating."""
-    if doc.get("iaq") is None or (doc.get("iaq_accuracy") or 0) >= IAQ_MIN_ACCURACY:
+    """``doc`` without each index whose accuracy is below IAQ_MIN_ACCURACY.
+    The accuracy stays, so a page can say that the index is calibrating."""
+    held = [key for key, accuracy in IAQ_KEYS
+            if doc.get(key) is not None and (doc.get(accuracy) or 0) < IAQ_MIN_ACCURACY]
+    if not held:
         return doc
-    return {k: v for k, v in doc.items() if k != "iaq"}
+    return {k: v for k, v in doc.items() if k not in held}
 
 
 def correct(doc: dict, altitude_m: float) -> dict:

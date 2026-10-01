@@ -18,6 +18,9 @@ struct BsecResult {
     bool    hasIaq;
     float   iaq;          // 0-500
     uint8_t iaqAccuracy;  // 0-3
+    bool    hasStaticIaq;
+    float   staticIaq;          // 0-500
+    uint8_t staticIaqAccuracy;  // 0-3
 };
 
 // Bosch's BSEC library, as the calls BsecRunner makes, so the host tests can
