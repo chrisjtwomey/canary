@@ -1,13 +1,14 @@
 """Sensor calibration the board sends, kept so it can have it back.
 
 The dock posts ``{"device": ..., "calibration": {...}}`` to /calibration
-whenever BSEC saves a new copy; the block is keyed by sensor.
+after each batch of readings, with BSEC's newest copy; the block is keyed by
+sensor.
 Only the BME688 has learned state the board can back up: BSEC's, as base64,
 with the IAQ accuracy, the time the copy was taken and the seconds between
 BSEC's samples, since a copy learned at one rate is no use at another. This
 keeps every copy for ``keep_days``, and answers the board's
 ``GET /calibration?device=&before=&sample_s=`` with the newest copy at that
-rate saved before that time, preferring one that reached accuracy 3. The
+rate taken before that time, preferring one that reached accuracy 3. The
 board asks with its boot time, so it never gets back a copy it made since.
 
 It also keeps the recalibrations asked of a board, each with the time it
@@ -46,7 +47,7 @@ SAMPLE_S = (3, 300)
 
 def _copy(entry) -> tuple[str, int, int, int] | None:
     """``(state, accuracy, saved, sample_s)`` from one sensor's entry, or None
-    when it is not a usable copy. One saved before the board's clock was set
+    when it is not a usable copy. One taken before the board's clock was set
     has no age to weigh against another, so it is not kept."""
     if not isinstance(entry, dict):
         return None
@@ -104,7 +105,7 @@ class CalibrationStore:
         return len(rows)
 
     def lookup(self, device: str, before: int, sample_s: int) -> dict | None:
-        """Each sensor's newest copy at ``sample_s`` saved before ``before``,
+        """Each sensor's newest copy at ``sample_s`` taken before ``before``,
         one at accuracy 3 first, in the shape of the block the board sends.
         None when there is none."""
         answer = {}

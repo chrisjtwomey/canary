@@ -225,8 +225,8 @@ first. By default it gives the last day, and every board unless `device` names o
 
 ## Calibration
 
-BSEC's learned state is not a reading, so it has a route of its own. Each time BSEC saves a new copy, the dock
-posts it to `POST /calibration`, once the server takes its readings:
+BSEC's learned state is not a reading, so it has a route of its own. BSEC takes a copy of it each minute. After each
+batch of readings that the server takes, the dock posts the newest copy to `POST /calibration`:
 
 ```json
 { "device": "canary-dock",
@@ -238,8 +238,8 @@ posts it to `POST /calibration`, once the server takes its readings:
 | Key | What it is |
 |---|---|
 | `state` | BSEC's 238-byte state |
-| `accuracy` | The IAQ accuracy when the state was saved |
-| `saved` | When it was saved, in UTC seconds. A copy saved before the clock was set is not sent. |
+| `accuracy` | The IAQ accuracy when the copy was taken |
+| `saved` | When the copy was taken, in UTC seconds. A copy taken before the clock was set is not sent. |
 | `sample_s` | The rate at which BSEC learned it. A state is no use to BSEC at the other rate. |
 
 - The block is keyed by sensor, so that other sensors can join it. Only the BME688 has a learned state that the
@@ -247,7 +247,7 @@ posts it to `POST /calibration`, once the server takes its readings:
 - A copy that the server refuses is not sent again. A copy that the server could not take for now goes after the
   next batch that it takes.
 - The calibration store keeps the block for each source kind. It keeps each copy for `calibration.keep_days`.
-- `GET /calibration?device=<device>&before=<epoch>&sample_s=<3 or 300>` gives the newest copy at that rate saved
+- `GET /calibration?device=<device>&before=<epoch>&sample_s=<3 or 300>` gives the newest copy at that rate taken
   before that time, a copy at accuracy 3 first, or a 404. Copies kept before BSEC had a choice of rate count as 3 s.
 
 After a boot, once the server has taken a batch, the dock asks for the server's copy at BSEC's rate:

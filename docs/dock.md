@@ -15,7 +15,7 @@ loop:   once a second, light-sleeping between passes
         each slot     queue a reading      the SCD41 and BME688 means, a fresh SHTC3 and PM sample, the dock's own status, into PSRAM
         every pass    the SCD41            its measurement, when one is ready, for the next reading's mean
                       POST /sensor-readings       the oldest 100 in the queue as one batch, once the time is known
-                      POST /calibration    BSEC's state, after a batch, when BSEC has saved a new copy
+                      POST /calibration    BSEC's newest copy of its state, after each batch
         continuous    the PM fan and the status LED
 BSEC:   a FreeRTOS task of its own; its state goes to NVS when accuracy first reaches 3, and every six hours after
 LED:    a FreeRTOS task of its own, so the booting pattern runs while setup() blocks
@@ -68,9 +68,10 @@ On the server:
   pages read `status`.
 - The fields (`co2_ppm`, `pm2_5`, `iaq`, `temp_c` ...) are CANARY's own. The kit stores a timestamped JSON
   document, and does not read it.
-- BSEC's learned state goes to `POST /calibration` each time BSEC saves a new copy. `CalibrationStore` keeps it, and
-  `GET /calibration` gives it back after the dock restarts. The dock then uses the more accurate copy, or the newer
-  one ([boards.md](boards.md#bsec)).
+- BSEC's learned state goes to `POST /calibration` after each batch: the newest of the copies that BSEC takes each
+  minute. `CalibrationStore` keeps it, and `GET /calibration` gives it back after the dock restarts. The dock then
+  uses the more accurate copy, or the newer one ([boards.md](boards.md#bsec)). So a restart costs BSEC at most the
+  learning since the last batch, even before its first save to NVS.
 
 ## The sensor code
 

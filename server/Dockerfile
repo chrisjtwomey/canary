@@ -25,9 +25,9 @@ RUN pip install --upgrade pip setuptools wheel && pip install -r requirements.tx
 
 COPY . /app
 # The example config makes the image runnable as it is; mount a real
-# /app/config.yaml to replace it. /app/data is for the readings and
-# calibration stores (point source.path and calibration.path there) and
-# /app/firmware for OTA images: mount a volume on each to keep them.
+# /app/config.yaml to replace it. /app/data holds the four stores, where
+# their paths point by default, and /app/firmware the OTA images: mount a
+# volume on each to keep them.
 RUN mkdir -p /app/data /app/firmware \
     && cp config.example.yaml config.yaml \
     && chown -R app:app /app

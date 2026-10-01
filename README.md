@@ -55,7 +55,6 @@ Set these keys in `server/config.yaml`:
 | Key | Value | Why |
 |---|---|---|
 | `source.kind` | `store` | The pages show your readings. `mock` shows a simulated room. |
-| `source.path`, `status.path`, `calibration.path`, `logs.path` | The file name in `data/`, for example `data/status.db` | The data stays when Docker recreates the container. |
 | `client.firmware.enabled` | `true` | The boards take new firmware from the server. |
 | `server.timezone` | Your time zone, for example `Europe/London` | The pages and the schedules use it. |
 | `site.altitude_m` | Your altitude in metres | The pages show the pressure at sea level. |
@@ -67,6 +66,8 @@ docker compose up -d
 ```
 
 - The containers run as user 1000. That user must be able to write `server/config.yaml` and `server/firmware/`.
+- The readings, board reports, board logs and calibration copies go in the `canary-data` volume. They stay when
+  Docker recreates the container.
 - The second container builds the firmware for both boards. Its first build takes some minutes.
   `docker compose logs -f firmware-builder` shows it.
 - `http://<server>:8080/web/` shows the pages, and `/web/config` is the Settings page. **It has no login:

@@ -109,7 +109,7 @@ def test_the_log_store_goes_out_as_a_file_and_back_in_once(store, tmp_path):
 
 def test_settings_keep_board_logs_a_week_under_the_canary_prefix():
     s = load_settings({})
-    assert (s.logs_path, s.logs_days) == ("board-logs.db", 7)
+    assert (s.logs_path, s.logs_days) == ("data/board-logs.db", 7)
     assert s.core.mqtt.prefix == "mqtt/canary"
     s = load_settings({"logs": {"keep_days": 2}, "mqtt": {"prefix": "home/canary"}})
     assert s.logs_days == 2 and s.core.mqtt.prefix == "home/canary"
