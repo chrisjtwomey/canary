@@ -228,10 +228,10 @@ static void fillBsecStatus(ClientStatus& s) {
 
 // The state as of BSEC's last copy, as the calibration block, and when BSEC
 // took it.
-static size_t calibrationBlock(char* buf, size_t len, uint32_t& savedEpoch) {
+static size_t calibrationBlock(char* buf, size_t len, uint32_t& takenAt) {
     BsecState state;
     if (!bsecRunner.current(state)) return 0;
-    savedEpoch = state.savedEpoch;
+    takenAt = state.savedEpoch;
     return calibrationJson(state.blob, state.len, state.accuracy, state.savedEpoch, state.sampleS,
                            buf, len);
 }
@@ -767,9 +767,9 @@ static void queueReading(Readings& r, uint32_t nowMs) {
 // last one sent: about one a batch. A copy it refuses is not sent again.
 static void sendCalibration() {
     if (!calibrationURL[0]) return;
-    uint32_t saved = 0;
-    if (!calibrationBlock(calibration, sizeof(calibration), saved) || !saved ||
-        saved == calibrationSent) {
+    uint32_t takenAt = 0;
+    if (!calibrationBlock(calibration, sizeof(calibration), takenAt) || !takenAt ||
+        takenAt == calibrationSent) {
         return;
     }
     char device[48];
@@ -782,11 +782,11 @@ static void sendCalibration() {
     heardFrom(rsp, millis(), false);
     switch (postResult(code)) {
         case POSTED:
-            calibrationSent = saved;
-            logf(LOG_INFO, "[bsec] state saved at %lu sent (%d)", (unsigned long)saved, code);
+            calibrationSent = takenAt;
+            logf(LOG_INFO, "[bsec] state from %lu sent (%d)", (unsigned long)takenAt, code);
             break;
         case REFUSED:
-            calibrationSent = saved;
+            calibrationSent = takenAt;
             logf(LOG_ERROR, "[bsec] the server refused the state (%d)", code);
             break;
         case TRY_LATER:
