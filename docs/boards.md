@@ -82,6 +82,21 @@ wiring. First do the [setup](../CONTRIBUTING.md#setup).
   samples.
 - `gas_ohm` is the raw gas resistance. It does not need BSEC.
 
+#### Calibrate BSEC
+
+BSEC stays at accuracy 1 while the air is steady, because it cannot set its references. To bring it to 3, give it
+dirty air and then clean air:
+
+1. Wait until the accuracy is 1 or more. At 0 the gas sensor is still settling after a start.
+2. Hold a cloth with isopropyl alcohol 5-10 cm from the dock's air holes for 1 minute.
+3. Open a window near the dock for 10-15 minutes.
+4. Read the accuracy on the Diagnostics page. It goes to 2, then to 3, in about 10 minutes.
+
+- Keep the dock plugged in. A restart sets the accuracy to 0 for about 20 minutes.
+- Do not spray anything at the dock. Droplets get into the PM sensor.
+- **Keep silicone away from the dock, for example sealant or some hair products. Its vapour can damage the gas
+  sensor permanently.**
+
 ### The sensor drivers
 
 - `src/dock/main.cpp` names the sensor types in one `#if` block, and nowhere else.
