@@ -1,9 +1,11 @@
 name: Images
 
-# Every push to main publishes both images as `latest`, which a server's
-# stack follows; a published release adds its version tags.
+# Every push to main that passes CI publishes both images as `latest`, which a
+# server's stack follows; a published release adds its version tags.
 on:
-  push:
+  workflow_run:
+    workflows: [PlatformIO CI]
+    types: [completed]
     branches: [main]
   release:
     types: [published]
@@ -15,6 +17,12 @@ on:
 jobs:
   publish-docker:
     name: Push ${{ matrix.image }} to GHCR
+    # A push only: CI also runs for a pull request, whose branch can be called
+    # main too, and this job can write packages.
+    if: >-
+      github.event_name == 'release' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -30,8 +38,11 @@ jobs:
             file: ./firmware-builder/Dockerfile
 
     steps:
+      # A workflow_run starts on main's newest commit, so take the one CI
+      # passed. Empty for a release, which takes its tag.
       - uses: actions/checkout@v6
         with:
+          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0   # git describe needs the tags
 
       # The version the server reports: the release's tag, or for a push what
@@ -58,6 +69,9 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
+          # The commit built, not main's newest.
+          labels: |
+            org.opencontainers.image.revision=${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Build and push
         uses: docker/build-push-action@v7
