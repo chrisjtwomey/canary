@@ -209,8 +209,8 @@ void SensorSuite::samplePm(Readings& r) {
     // frame read now would be believable and wrong.
     pmReadCount_ = 0;
     if (!pmState_.running || !pm_.stable(clock_.millis())) return;
-    uint8_t frame[32];
     for (int attempt = 0; attempt < kPmReadAttempts && !r.pmValid; ++attempt) {
+        uint8_t* frame = pmFrames_[attempt];
         ReadFault fault = ReadFault::NoAnswer;
         if (pm_.readFrame(clock_.millis(), frame)) {
             switch (IPmsa003i::frameFault(frame)) {

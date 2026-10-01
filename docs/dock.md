@@ -83,7 +83,7 @@ On the server:
   2. Run one BME688 forced cycle, then give its pressure to the SCD41, so that the CO₂ conversion is correct.
   3. Take the value that the SCD41's periodic mode has ready.
   4. Read a PM frame, only after the fan's 30 s warm-up. Read once more after a read that fails or is damaged.
-  The suite keeps why the SCD41 gave no CO₂, and what each PM read met, and the dock logs them
+  The suite keeps why the SCD41 gave no CO₂, and what each PM read met with its 32 bytes, and the dock logs them
   ([boards.md](boards.md)).
 - **A reading has no `scd41` temperature and humidity during the SCD41's warm-up after each start.** The warm-up is
   `dock.scd41.warmup_s`, 3 minutes by default; 0 keeps every value. A start is a dock start, a change to the part's

@@ -62,8 +62,10 @@ wiring. First do the [setup](../CONTRIBUTING.md#setup).
   the part or a power cut leaves it.
 - A reading without CO₂ logs why: `[scd41] no CO2 in this reading: no answer`, `bad checksum` or `no data
   ready`. A damaged particle frame logs each read of that sample, such as `[pmsa003i] read 1: bad checksum;
-  read 2: good`: at info level when the second read was good, as a warning when it was not. The kind of damage
-  helps tell a frame torn by the module's own update, which keeps its start and length, from a noisy wire.
+  read 2: good`: at info level when the second read was good, as a warning when it was not. Each damaged frame
+  then logs its 32 bytes, 16 to a line, so that a line queued while the broker is away keeps them whole:
+  `[pmsa003i] read 1 0-15: 424d001c …`. A frame torn by the module's own update holds parts of two frames and
+  keeps its start; a noisy wire changes single bits anywhere.
 
 ### BSEC
 

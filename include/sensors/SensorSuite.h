@@ -73,6 +73,9 @@ public:
     // frame. There are none during the fan's warm-up.
     uint8_t pmReadCount() const { return pmReadCount_; }
     ReadFault pmRead(uint8_t i) const { return pmReads_[i]; }
+    // The 32 bytes of particle read `i` of the last sample, as the module sent
+    // them. Meaningless for a read that met NoAnswer.
+    const uint8_t* pmFrame(uint8_t i) const { return pmFrames_[i]; }
     // Whether the SCD41's last start found it still measuring. False after a
     // reset of the part or a power cut.
     bool scd41WasMeasuring() const { return scd41_.wasMeasuring(); }
@@ -184,5 +187,6 @@ private:
     uint32_t    scd41WarmupMs_ = kScd41WarmupMs;
     ReadFault   scd41Fault_ = ReadFault::None;
     ReadFault   pmReads_[kPmReadAttempts] = {};
+    uint8_t     pmFrames_[kPmReadAttempts][32] = {};
     uint8_t     pmReadCount_ = 0;
 };

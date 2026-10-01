@@ -897,7 +897,7 @@ static void logSensorChanges() {
 }
 
 // Why this reading has no CO2, and what each particle read met when one
-// was damaged.
+// was damaged, with the bytes of each damaged frame.
 static void logReadFaults() {
     typedef SensorSuite::ReadFault Fault;
     if (sensors.scd41Fault() != Fault::None) {
@@ -914,7 +914,23 @@ static void logReadFaults() {
         len += snprintf(text + len, sizeof(text) - len, "%sread %u: %s", i ? "; " : "",
                         (unsigned)(i + 1), SensorSuite::readFaultName(sensors.pmRead(i)));
     }
-    logf(sensors.pmRead(n - 1) == Fault::None ? LOG_INFO : LOG_WARNING, "[pmsa003i] %s", text);
+    const uint16_t level = sensors.pmRead(n - 1) == Fault::None ? LOG_INFO : LOG_WARNING;
+    logf(level, "[pmsa003i] %s", text);
+    // Sixteen bytes a line, so that a line queued while the broker is away
+    // keeps them whole.
+    for (uint8_t i = 0; i < n; ++i) {
+        if (sensors.pmRead(i) == Fault::None || sensors.pmRead(i) == Fault::NoAnswer) continue;
+        const uint8_t* frame = sensors.pmFrame(i);
+        for (int from = 0; from < 32; from += 16) {
+            char hex[40];
+            size_t k = 0;
+            for (int j = from; j < from + 16; ++j) {
+                k += snprintf(hex + k, sizeof(hex) - k, j > from && j % 4 == 0 ? " %02x" : "%02x",
+                              frame[j]);
+            }
+            logf(level, "[pmsa003i] read %u %d-%d: %s", (unsigned)(i + 1), from, from + 15, hex);
+        }
+    }
 }
 
 // The pre-warm comes the fan's lead before each slot, or the default lead

@@ -211,6 +211,19 @@ void test_each_pm_read_of_a_sample_is_kept_for_the_log() {
     TEST_ASSERT_EQUAL_STRING("bad checksum", SensorSuite::readFaultName(s.pmRead(0)));
 }
 
+void test_a_damaged_pm_frame_keeps_its_bytes() {
+    FlakyPm flaky;
+    SensorSuite s(*clk, *shtc3, *scd41, flaky, *bme);
+    s.begin();
+    settle();
+    s.sample(room->epoch());
+    const uint8_t* damaged = s.pmFrame(0);
+    const uint8_t* good = s.pmFrame(1);
+    TEST_ASSERT_EQUAL_HEX8(0x42, damaged[0]);
+    TEST_ASSERT_EQUAL_HEX8(7, damaged[13]);
+    TEST_ASSERT_EQUAL_HEX8(good[31] ^ 0x5A, damaged[31]);
+}
+
 void test_a_sample_without_co2_says_why() {
     FaultyScd41 part(*room);
     SensorSuite s(*clk, *shtc3, part, *pm, *bme);
@@ -461,6 +474,7 @@ int main(int, char**) {
     RUN_TEST(test_sample_feeds_bme_pressure_to_the_scd41);
     RUN_TEST(test_sample_skips_pm_during_the_fan_warm_up);
     RUN_TEST(test_sample_retries_a_corrupt_pm_frame);
+    RUN_TEST(test_a_damaged_pm_frame_keeps_its_bytes);
     RUN_TEST(test_each_pm_read_of_a_sample_is_kept_for_the_log);
     RUN_TEST(test_a_sample_without_co2_says_why);
     RUN_TEST(test_health_counts_a_bad_pm_frame);
