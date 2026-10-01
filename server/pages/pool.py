@@ -14,9 +14,9 @@ from airium import Airium
 
 from metrics import (CALIBRATING_TAG, CALIBRATING_VERDICT, NO_SENSOR_TAG, NO_SENSOR_VERDICT,
                      barometer_word, change_over, classify_rate, co2_meaning, co2_verdict, extremes,
-                     fmt_hm, fmt_int, fmt_stamp, iaq_meaning, iaq_verdict, pm25_verdict, pm_meaning,
-                     pressure_meaning, rate_words, rh_meaning, rh_words, sensor_absent, series,
-                     temp_meaning, temp_words, value_at)
+                     fmt_hm, fmt_int, fmt_stamp, gaps, iaq_meaning, iaq_verdict, pm25_verdict,
+                     pm_meaning, pressure_meaning, rate_words, rh_meaning, rh_words, sensor_absent,
+                     series, temp_meaning, temp_words, value_at)
 from pages.base import EnvPage
 
 
@@ -110,8 +110,12 @@ def _window_words(hours: float) -> str:
     return f"{int(hours)} h" if hours >= 1 else f"{int(hours * 60)} min"
 
 
+# The trace pages' points are one per this many seconds.
+TRACE_STEP_S = 900
+
+
 def trace_points(history: list[dict], key: str, start: int, latest: dict | None,
-                 step_s: int = 900) -> list[list]:
+                 step_s: int = TRACE_STEP_S) -> list[list]:
     """``[ts, value]`` from ``start`` on, one per ``step_s``, and ``latest`` last."""
     pts = [p for p in series(history, key, step_s) if p[0] >= start]
     if latest is not None and latest.get(key) is not None:
@@ -210,7 +214,7 @@ class TracePage(EnvPage):
         then = value_at(history_72h, m.key, end - int(m.window_h * 3600))
         spec = {
             "kind": "trace", "canvas": "#trace",
-            "points": pts, "recent": recent,
+            "points": pts, "recent": recent, "gaps": gaps(pts, start, end, TRACE_STEP_S),
             "x": {"min": start, "max": end}, "y": y, "yticks": value_ticks(y),
             "guides": [{"y": v, "label": label} for v, label in m.guides],
             "days": days, "dayLabels": labels,
@@ -220,6 +224,7 @@ class TracePage(EnvPage):
         if m.second is not None:
             pts2 = trace_points(history_72h, m.second.key, start, latest)
             spec["points2"] = pts2
+            spec["gaps2"] = gaps(pts2, start, end, TRACE_STEP_S)
             spec["y2"] = value_range(pts2, m.second)
             spec["label2"] = f"{m.second.title.lower()}, {m.second.unit}"
         return [spec]

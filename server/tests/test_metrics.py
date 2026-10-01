@@ -2,7 +2,7 @@ from datetime import datetime
 
 import pytest
 
-from metrics import (co2_verdict, comfort_verdict, dew_point_c, extremes, fmt_int, fmt_stamp,
+from metrics import (co2_verdict, comfort_verdict, dew_point_c, extremes, fmt_int, fmt_stamp, gaps,
                      hour_ticks, night_spans, series, thin, y_range)
 from tests.conftest import AT, TZ
 
@@ -50,6 +50,24 @@ def test_series_skips_documents_without_the_key():
     history = docs(3, co2_ppm=500)
     history[1] = {"ts": history[1]["ts"]}
     assert series(history, "co2_ppm") == [[1000, 500], [1120, 500]]
+
+
+def test_gaps_mark_each_stretch_with_no_point():
+    pts = [[1000, 1], [1300, 1], [5000, 1], [5300, 1]]
+    assert gaps(pts, 1000, 5300) == [[1300, 5000]]
+
+
+def test_gaps_reach_the_window_edges():
+    assert gaps([[5000, 1]], 1000, 9000) == [[1000, 5000], [5000, 9000]]
+    assert gaps([], 1000, 9000) == [[1000, 9000]]
+
+
+def test_night_readings_are_no_gap_and_thinning_widens_the_limit():
+    night = [[t, 1] for t in range(0, 7201, 1800)]
+    assert gaps(night, 0, 7200) == []
+    hourly = [[t, 1] for t in range(0, 14401, 3600)]
+    assert len(gaps(hourly, 0, 14400)) == 4
+    assert gaps(hourly, 0, 14400, step_s=3600) == []
 
 
 def test_extremes_returns_the_documents_and_handles_nothing():

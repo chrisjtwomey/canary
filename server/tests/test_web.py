@@ -216,6 +216,15 @@ class TestHistory:
         detail = history.answer({"metric": "co2"})["detail"]
         assert detail.startswith("High of ") and ", low of " in detail
 
+    def test_a_stretch_with_no_reading_is_a_gap(self, tz):
+        docs = [{"ts": t, "co2_ppm": 600} for t in range(AT - DAY, AT + 1, 300)
+                if not AT - 6 * 3600 < t < AT - 4 * 3600]
+        spec = HistoryQuery(lambda start, end: docs, tz, now=lambda: AT).answer({"metric": "co2"})["spec"]
+        assert spec["gaps"] == [[AT - 6 * 3600, AT - 4 * 3600]]
+
+    def test_the_default_day_has_no_gap(self, history):
+        assert history.answer({"metric": "co2"})["spec"]["gaps"] == []
+
     def test_a_window_before_any_reading_says_so(self, tz):
         empty = HistoryQuery(lambda start, end: [], tz, now=lambda: AT)
         answer = empty.answer({"metric": "co2"})

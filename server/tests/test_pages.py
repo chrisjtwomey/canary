@@ -68,7 +68,7 @@ class TestBreathe:
         assert spark["x"] == {"min": latest["ts"] - 3 * 3600, "max": latest["ts"]}
         assert spark["points"][-1] == [latest["ts"], latest["co2_ppm"]]
         assert spark["now"] == [latest["ts"], latest["co2_ppm"]]
-        assert spark["y"]["min"] == 400
+        assert spark["y"]["min"] == 400 and spark["gaps"] == []
         assert [t["label"] for t in spark["ticks"]] == ["19", "20", "21"]
 
     def test_detail_says_when_now_is_the_days_high(self, data, tz):
@@ -201,6 +201,7 @@ class TestAir:
         assert "accuracy high, 3 of 3" in text(soup, ".detail")
         spark, scale = specs
         assert spark["kind"] == "sparkline" and spark["points"][-1] == [latest["ts"], latest["iaq"]]
+        assert spark["gaps"] == []
         assert scale["kind"] == "scale" and scale["value"] == latest["iaq"]
         assert [z["label"] for z in scale["zones"]] == [
             "excellent", "good", "light", "moderate", "heavy", "severe", "extreme"]
@@ -232,6 +233,16 @@ class TestAir:
         spark, scale = specs
         assert spark["now"] is None and scale["value"] is None
 
+    def test_a_held_back_stretch_is_a_gap_in_the_spark(self, data, tz):
+        end = data["latest"]["ts"]
+        hole = (end - 5 * 3600, end - 3 * 3600)
+        history = [without_uncalibrated_iaq(dict(d, iaq_accuracy=1)) if hole[0] <= d["ts"] <= hole[1] else d
+                   for d in data["history_24h"]]
+        _, (spark, _) = render(AirPage("air", tz=tz, width=WIDTH, height=HEIGHT), dict(data, history_24h=history))
+        (gap,) = spark["gaps"]
+        assert hole[0] - 600 <= gap[0] < hole[0] and hole[1] < gap[1] <= hole[1] + 600
+        assert not any(gap[0] < ts < gap[1] for ts, _ in spark["points"])
+
 
 class TestAirPool:
     def test_trace_and_delta_say_calibrating_below_high_accuracy(self, data72, tz):
@@ -253,6 +264,21 @@ class TestAirPool:
         soup, _ = render(TracePage("air-trace", IAQ, tz=tz, width=WIDTH, height=HEIGHT),
                          dict(data72, latest=latest))
         assert text(soup, "#now .cold-tag") == "heater warming up" and text(soup, ".verdict") == "Warming up."
+
+    def test_the_trace_has_a_gap_where_the_index_was_held_back(self, data72, tz):
+        end = data72["latest"]["ts"]
+        history = [without_uncalibrated_iaq(dict(d, iaq_accuracy=1)) if end - 30 * 3600 <= d["ts"] <= end - 20 * 3600
+                   else d for d in data72["history_72h"]]
+        _, (trace,) = render(TracePage("air-trace", IAQ, tz=tz, width=WIDTH, height=HEIGHT),
+                             dict(data72, history_72h=history))
+        (gap,) = trace["gaps"]
+        assert gap[1] - gap[0] >= 10 * 3600
+
+
+class TestComfortPool:
+    def test_humidity_carries_its_own_gaps(self, data72, tz):
+        _, (trace,) = render(TracePage("comfort-trace", TEMP, tz=tz, width=WIDTH, height=HEIGHT), data72)
+        assert trace["gaps"] == [] and trace["gaps2"] == []
 
 
 class TestBarometerPool:

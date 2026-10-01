@@ -75,6 +75,20 @@ def series(history: list[dict], key: str, step_s: int = 60) -> list[list]:
     return [[d["ts"], d[key]] for d in thin([d for d in history if d.get(key) is not None], step_s)]
 
 
+# The dock reads every 5 minutes by day and every 30 at night. Points further
+# apart than this have a stretch with no reading between them.
+GAP_S = 2700
+
+
+def gaps(points: list[list], start: int, end: int, step_s: int = 0) -> list[list[int]]:
+    """``[from, to]`` for each stretch of ``start``–``end`` with no point in it
+    for longer than GAP_S, or than two ``step_s`` where the points were thinned
+    to that step. A chart shades these and breaks its line across them."""
+    limit = max(GAP_S, 2 * step_s)
+    edges = [start] + [p[0] for p in points] + [end]
+    return [[a, b] for a, b in zip(edges, edges[1:]) if b - a > limit]
+
+
 def extremes(history: list[dict], key: str) -> tuple[dict | None, dict | None]:
     """The documents holding the lowest and the highest ``key``."""
     docs = [d for d in history if d.get(key) is not None]

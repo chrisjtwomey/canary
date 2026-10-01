@@ -83,6 +83,11 @@ The Settings page, `/web/config`:
   those readings out. Bosch rates the index at its best only at 3; below it, the index moves with BSEC's
   calibration as much as with the air. The store keeps every reading as the dock posted it. This and the sea-level
   pressure are in `sources/corrections.py`.
+- A line chart breaks its line where no reading falls for more than 45 minutes, and shades that stretch light grey,
+  as the Day page shades the nights. The shading shows when nothing was measured, or nothing was accurate, without
+  drawing a path that no reading supports. The dock reads every 30 minutes at night, so a normal night is no gap; a
+  chart thinned to fewer points needs two of its steps. The server marks the gaps (`metrics.gaps`); `charts.js` draws
+  them on the sparklines, the trace pages and `/web/explore`.
 
 The `display` block in `config.yaml`:
 

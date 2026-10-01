@@ -101,13 +101,44 @@
     });
   }
 
+  // A light band over each stretch with no reading, as the Day page shades
+  // the nights. Drawn first, so the lines and labels sit on top.
+  function gapBands(c, gaps, X, top, bottom) {
+    (gaps || []).forEach(function (g) {
+      c.ctx.fillStyle = G[6];
+      c.ctx.fillRect(X(g[0]), top, X(g[1]) - X(g[0]), bottom - top);
+    });
+  }
+
+  // The points cut where each gap starts, so no line crosses a gap.
+  function runs(points, gaps) {
+    var starts = {};
+    (gaps || []).forEach(function (g) { starts[g[0]] = true; });
+    var out = [[]];
+    points.forEach(function (p) {
+      out[out.length - 1].push(p);
+      if (starts[p[0]]) out.push([]);
+    });
+    return out.filter(function (r) { return r.length; });
+  }
+
+  // Each run as its own line; a reading alone between two gaps as a dot.
+  function lines(c, runList, draw, width, color) {
+    runList.forEach(function (r) {
+      if (r.length === 1) dot(c.ctx, r[0][0], r[0][1], width, color || G[0]);
+      else draw(c, r, width);
+    });
+  }
+
   function sparkline(canvas, s) {
     var c = prepare(canvas);
     var m = { l: 12, r: 30, t: 30, b: 36 };
     var X = linear(s.x.min, s.x.max, m.l, c.w - m.r);
     var Y = linear(s.y.min, s.y.max, c.h - m.b, m.t);
-    var pts = s.points.map(function (p) { return [X(p[0]), Y(p[1])]; });
+    var project = function (p) { return [X(p[0]), Y(p[1])]; };
+    var parts = runs(s.points, s.gaps).map(function (r) { return r.map(project); });
 
+    gapBands(c, s.gaps, X, m.t, c.h - m.b);
     (s.guides || []).forEach(function (g) {
       var y = Y(g.y);
       c.rc.line(m.l, y, c.w - m.r, y, {
@@ -116,8 +147,8 @@
       label(c.ctx, g.label, c.w - m.r, y - 6, { size: 17, italic: true, color: G[3], align: 'right' });
     });
 
-    area(c, pts, c.h - m.b, G[4]);
-    line(c, pts, 3);
+    parts.forEach(function (r) { area(c, r, c.h - m.b, G[4]); });
+    lines(c, parts, line, 3);
 
     (s.ticks || []).forEach(function (t) {
       var x = X(t.x);
@@ -329,14 +360,20 @@
     var X = linear(s.x.min, s.x.max, m.l, c.w - m.r);
     var Y = linear(s.y.min, s.y.max, c.h - m.b, m.t);
     var guides = (s.guides || []).filter(function (g) { return g.y > s.y.min && g.y < s.y.max; });
+    gapBands(c, s.gaps, X, m.t, c.h - m.b);
     guides.forEach(function (g) {
       var y = Y(g.y);
       c.rc.line(m.l, y, c.w - m.r, y, { stroke: G[4], strokeWidth: 1.5, roughness: 0.6, strokeLineDash: [9, 8] });
     });
     var Y2 = ownScale ? linear(s.y2.min, s.y2.max, c.h - m.b, m.t) : Y;
     if (s.points2 && s.points2.length > 1) {
-      c.rc.curve(s.points2.map(function (p) { return [X(p[0]), Y2(p[1])]; }),
-        { stroke: G[4], strokeWidth: 2, roughness: 0.6, bowing: 0.3, disableMultiStroke: true });
+      var faint = function (cc, pts) {
+        if (pts.length < 2) return;
+        cc.rc.curve(pts, { stroke: G[4], strokeWidth: 2, roughness: 0.6, bowing: 0.3, disableMultiStroke: true });
+      };
+      lines(c, runs(s.points2, s.gaps2).map(function (r) {
+        return r.map(function (p) { return [X(p[0]), Y2(p[1])]; });
+      }), faint, 2, G[4]);
     }
     if (ownScale) {
       var v2 = Math.ceil(s.y2.min / 5) * 5;
@@ -359,7 +396,9 @@
       label(c.ctx, String(v), m.l - 12, Y(v) + 6, { size: 15, align: 'right', color: G[3] });
     });
     c.rc.line(m.l, c.h - m.b, c.w - m.r, c.h - m.b, { stroke: G[3], strokeWidth: 1.5, roughness: 0.6 });
-    (s.step ? steps : line)(c, s.points.map(function (p) { return [X(p[0]), Y(p[1])]; }), 2.5);
+    lines(c, runs(s.points, s.gaps).map(function (r) {
+      return r.map(function (p) { return [X(p[0]), Y(p[1])]; });
+    }), s.step ? steps : line, 2.5);
     if (s.recent && s.recent.length > 1) {
       line(c, s.recent.map(function (p) { return [X(p[0]), Y(p[1])]; }), 5);
     }

@@ -33,7 +33,7 @@ from flask import Blueprint, jsonify, request, send_from_directory
 from markupsafe import Markup
 
 from html_doc import Html
-from metrics import extremes, hour_ticks
+from metrics import extremes, gaps, hour_ticks
 from pages.base import HTML_DIR, EnvPage
 from pages.diagnostics import DiagnosticsPage, DiagnosticsTracePage, HealthTracePage
 from pages.pool import (CO2, IAQ, PM25, PRESSURE, RH, TEMP, DeltaPage, Metric, TracePage,
@@ -433,7 +433,7 @@ class HistoryQuery:
         rules, labels = time_axis(start, end, self.tz)
         spec = {
             "kind": "trace", "canvas": "#trace",
-            "points": pts,
+            "points": pts, "gaps": gaps(pts, start, end, step),
             "x": {"min": start, "max": end}, "y": y, "yticks": value_ticks(y),
             "guides": [{"y": v, "label": words} for v, words in m.guides],
             "days": rules, "dayLabels": labels,
@@ -442,6 +442,7 @@ class HistoryQuery:
         if m.second is not None:
             pts2 = trace_points(docs, m.second.key, start, newest, step)
             spec["points2"] = pts2
+            spec["gaps2"] = gaps(pts2, start, end, step)
             spec["y2"] = value_range(pts2, m.second)
             spec["label2"] = f"{m.second.title.lower()}, {m.second.unit}"
 

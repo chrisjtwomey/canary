@@ -4,8 +4,8 @@ from __future__ import annotations
 from airium import Airium
 
 from metrics import (NO_SENSOR_TAG, NO_SENSOR_VERDICT, co2_verdict, extremes, fmt_duration, fmt_hm,
-                     fmt_int, fmt_stamp, hour_ticks, local_midnight, minutes_above, sensor_absent,
-                     series, ventilation_events, y_range)
+                     fmt_int, fmt_stamp, gaps, hour_ticks, local_midnight, minutes_above,
+                     sensor_absent, series, ventilation_events, y_range)
 from pages.base import EnvPage
 
 SPARK_HOURS = 3
@@ -91,6 +91,7 @@ class BreathePage(EnvPage):
             "kind": "sparkline",
             "canvas": "#co2-spark",
             "points": pts,
+            "gaps": gaps(pts, start, end, 120),
             "x": {"min": start, "max": end},
             "y": y_range([v for _, v in pts], floor=400, ceil=1200, pad=60),
             "guides": [{"y": 1000, "label": "stuffy"}, {"y": 700, "label": "fresh"}],

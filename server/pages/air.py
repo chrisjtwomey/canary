@@ -4,8 +4,8 @@ from __future__ import annotations
 from airium import Airium
 
 from metrics import (CALIBRATING_TAG, CALIBRATING_VERDICT, IAQ_ACCURACY, IAQ_ZONES, NO_SENSOR_TAG,
-                     NO_SENSOR_VERDICT, fmt_stamp, hour_ticks, iaq_verdict, sensor_absent, series,
-                     y_range)
+                     NO_SENSOR_VERDICT, fmt_stamp, gaps, hour_ticks, iaq_verdict, sensor_absent,
+                     series, y_range)
 from pages.base import EnvPage
 
 SPARK_HOURS = 12
@@ -101,6 +101,7 @@ class AirPage(EnvPage):
                 "kind": "sparkline",
                 "canvas": "#iaq-spark",
                 "points": pts,
+                "gaps": gaps(pts, start, end, 300),
                 "x": {"min": start, "max": end},
                 "y": y_range([v for _, v in pts], floor=0, ceil=200, pad=20),
                 "guides": [{"y": 150, "label": "stale"}, {"y": 50, "label": "good"}],
