@@ -105,11 +105,13 @@ server/
   transfer.py                  a store out to a file and back in, and what it holds, for the Storage tab
   board_logs.py                what each board logs over MQTT, for the Logs view
   schedule.py                  the dock's reading slots (schedules.md)
+  off_hours.py                 the splash screen while the page schedule is off (schedules.md)
   dock_settings.py             the dock block and GET /board-settings (dock-settings.md)
   display_settings.py          whether the display runs the saved display and image blocks (schedules.md)
   sources/                     the mock room, readings ingest, calibration store, device status, the corrections
                                the pages see: sea-level pressure, and no IAQ below accuracy 3
-  pages/                       Breathe, Comfort, Dust, Air, Day, the Diagnostics pages, and the trace and delta pages
+  pages/                       Breathe, Comfort, Dust, Air, Day, the Diagnostics pages, the trace and delta pages, and
+                               the splash screen with its logo
   metrics.py                   derived values and wording
   static/                      CSS, fonts, charts.js; web.css, browse.js, explore.js and config.js for /web/
   config.example.yaml

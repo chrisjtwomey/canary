@@ -11,7 +11,11 @@ images, and a `schedule` of `type: times` or `type: timeranges`. CANARY uses `ti
 
 - **`week`** puts each day of the week in one group. Each group has up to 8 time ranges, which cover the whole day.
 - **A range** runs from its start until the next range starts. The last range runs past midnight to the first.
-- **Each range has an interval.** An interval of 0 turns the range off, so the page can stay as it is overnight.
+- **Each range has an interval.** An interval of 0 turns the range off, and the display then shows the splash
+  screen. A page left up overnight would show its readings as if they were current. So where a range that is on
+  gives way to one that is off, the server names the splash for a wake. It also answers any page fetched while off
+  with the splash, such as the first after a restart (`server/off_hours.py`). The display wakes again at the next
+  range that is on.
 - **A day stands alone.** Before its first start, its own last range runs, not the range of the day before. So a
   group's dial shows all that happens on its days.
 - **By default** the page changes every 300 s all day, every day, on :00, :05 ... on the wall clock.

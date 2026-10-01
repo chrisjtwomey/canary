@@ -18,16 +18,14 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "server"))
 
 from pages.notice import notices  # noqa: E402
-from pages.splash import SplashPage  # noqa: E402
+from pages.splash import SplashPage, logo_svg  # noqa: E402
 
 OUT = os.path.join(ROOT, "include", "display", "notices")
 SPLASH_OUT = os.path.join(ROOT, "include", "display")
-LOGO = os.path.join(ROOT, "hardware", "canary-logo-screen.svg")
 
 
 def main() -> None:
-    with open(LOGO) as f:
-        splash = SplashPage(f.read(), width=1280, height=720, png_dir=SPLASH_OUT)
+    splash = SplashPage(logo_svg(), width=1280, height=720, png_dir=SPLASH_OUT)
     for page in [*notices(width=1280, height=720, png_dir=OUT), splash]:
         page.template()
         page.save()

@@ -27,7 +27,6 @@ On the desk, it is 150.7 mm wide, 87.3 mm deep and 89.8 mm tall.
 | `step/` | The same parts as STEP, each upright in its own frame. |
 | `enclosure.py` | The design: a Fusion script that places each board and builds each part from the numbers in `enclosure.md`. |
 | `canary-logo.svg` | The logo's outline in millimetres. The script imports it. |
-| `canary-logo-screen.svg` | The logo as drawn, with no changes for printing. The display's splash screen uses it. |
 | `images/` | Views of the model, and the wiring drawings, for the guides. |
 | `wiring/` | The circuit as YAML, one file for each run of wire ([wiring/README.md](wiring/README.md)). |
 | `logo/` | The source picture, and the script that traced it. |

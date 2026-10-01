@@ -51,8 +51,10 @@ The display draws a notice in place of a page in two cases:
 
 ## The splash screen
 
-- The logo alone, from `hardware/canary-logo-screen.svg`, rendered by `scripts/notices.py` as the notices are, but
-  in black and white.
+- The logo alone, from `server/pages/canary-logo-screen.svg`, rendered by `scripts/notices.py` as the notices are,
+  but in black and white. The SVG is in the server's folder because the server's image holds only that folder.
+- The server also serves it as `splash.png` while the page schedule is off ([schedules.md](schedules.md#the-page-schedule)).
+  The display draws it as any page, with no version under the logo.
 - The display draws it at each start except a wake from deep sleep, before it joins the network, with its firmware
   version under the logo. It stays until the first page or notice replaces it.
 - While the display writes an update, it draws the logo again with a progress bar under it, and under that

@@ -5,7 +5,8 @@ enclosure.py imports: the logo as one white piece glued into the dock's pill
 recess. It is drawn for a flat print on a 0.2 mm nozzle: every line at least
 --line wide, every gap at least --gap, the letters spaced --spacing further
 apart. A second file, canary-logo-screen.svg, is the drawing with none of
-that, for the display's splash screen (server/pages/splash.py).
+that, for the display's splash screen. It goes into server/pages/, where the
+server reads it (server/pages/splash.py).
 
     python3 -m venv .venv && .venv/bin/pip install pillow numpy scipy scikit-image potracer
     .venv/bin/python hardware/logo/trace.py --height 8 --pill 35 9.6
@@ -141,12 +142,14 @@ def main() -> None:
     ap.add_argument("--fit", type=float, default=0.25, help="the piece's clearance to the recess, all round, mm")
     ap.add_argument("--border", type=float, default=0.6, help="the border's width, mm")
     ap.add_argument("--bar", type=float, default=0.45, help="the line under the letters, its height, mm")
-    ap.add_argument("--out", default=os.path.dirname(here), help="where the two SVGs go")
+    ap.add_argument("--out", default=os.path.dirname(here), help="where the enclosure's SVG goes")
+    ap.add_argument("--screen-out", default=os.path.join(os.path.dirname(os.path.dirname(here)), "server", "pages"),
+                    help="where the splash screen's SVG goes")
     args = ap.parse_args()
 
     m = ink_mask(args.image)
     ppm = pixels_per_mm(m, args.height)
-    print("screen: %d outlines -> canary-logo-screen.svg" % to_svg(m, ppm, os.path.join(args.out, "canary-logo-screen.svg")))
+    print("screen: %d outlines -> canary-logo-screen.svg" % to_svg(m, ppm, os.path.join(args.screen_out, "canary-logo-screen.svg")))
     m = space_letters(m, ppm, args.spacing)
     m = printable(m, ppm, args.line, args.gap)
     print("letters: %.1f x %.1f mm, %d pieces, thinnest stroke %.2f mm" % (m.shape[1] / ppm, args.height,

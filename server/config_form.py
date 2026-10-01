@@ -163,7 +163,8 @@ TABS: tuple[Tab, ...] = (
     Tab("display", "Display", (
         Group("Page schedule", about="When to change to the next page", fields=(
             Field("display.schedule.week", "Page schedule",
-                  "A time range lasts until the next one starts. 0 minutes turns it off.", "week",
+                  "A time range lasts until the next one starts. 0 minutes turns it off, and the display "
+                  "shows the logo.", "week",
                   DEFAULT_PAGE_WEEK, env=False),
             Field("display.schedule.order", "Order", "", "order", lambda cfg: pool_names(cfg),
                   env=False),

@@ -5,7 +5,7 @@ import os
 from bs4 import BeautifulSoup
 from PIL import Image
 
-from pages.splash import SplashPage
+from pages.splash import SplashPage, logo_svg
 from tests.html import one
 
 WIDTH, HEIGHT = 1280, 720
@@ -47,3 +47,10 @@ def test_the_splash_is_rendered_and_built_into_the_head():
 
 def test_the_splash_renders_to_its_own_file(tmp_path):
     assert splash(png_dir=tmp_path).png_path == str(tmp_path / "splash.png")
+
+
+def test_the_server_holds_the_logo_it_renders():
+    page = SplashPage(logo_svg(), width=WIDTH, height=HEIGHT)
+    page.template()
+    soup = BeautifulSoup(str(page.airium), "html.parser")
+    assert one(soup, ".page-splash .logo svg").find("path")

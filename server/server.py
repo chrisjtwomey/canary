@@ -31,6 +31,7 @@ from board_logs import LogsQuery
 from config_page import config_blueprint
 from display_settings import DISPLAY, DisplaySync, display_version
 from dock_settings import DOCK, BoardSettings, DockSettings, load_dock_settings
+from off_hours import OffHoursSchedule, splash_when_off
 from pages.air import AirPage
 from pages.breathe import BreathePage
 from pages.comfort import ComfortPage
@@ -38,6 +39,7 @@ from pages.day import DayPage
 from pages.diagnostics import DiagnosticsPage, DiagnosticsTracePage, HealthTracePage
 from pages.dust import DustPage
 from pages.pool import CO2, IAQ, PM25, PRESSURE, TEMP, DeltaPage, TracePage
+from pages.splash import SplashPage, logo_svg
 from schedule import DEFAULT_DISPLAY_SYNC_S, DEFAULT_DOCK_WEEK, DEFAULT_PAGE_WEEK
 from sources.calibration import CalibrationStore
 from sources.corrections import CorrectedSource, correct
@@ -383,6 +385,9 @@ def main():
                   syncs={"dock": settings.dock_sync, "display": settings.display_sync},
                   config=running)
     pages = make_pages(tz, **core.image.page_kwargs())
+    # Served to the display, not listed: no page set or menu shows it.
+    splash = SplashPage(logo_svg(), **core.image.page_kwargs())
+    schedule = OffHoursSchedule(core.server.schedule, splash.png_filename)
     between = make_between(settings.seed, clock, store)
     history = HistoryQuery(make_history(between, settings.altitude_m), tz, now=clock)
     readings = ReadingsQuery(between, now=clock)
@@ -394,9 +399,9 @@ def main():
 
     try:
         server = DisplayServer(
-            pages=pages,
+            pages=[*pages, splash],
             source=source,
-            schedule=core.server.schedule,
+            schedule=schedule,
             tz=tz,
             regen_lead_seconds=core.server.regen_lead_seconds,
             port=core.server.port,
@@ -418,6 +423,7 @@ def main():
     except ValueError as exc:
         log.error(str(exc))
         sys.exit(1)
+    splash_when_off(server.app, schedule, [p.name for p in pages], splash.name, clock)
     server.app.register_blueprint(web_blueprint(pages, source, logging_on=core.mqtt.enabled))
     stores = {
         "sensor-readings": Transfer("sensor-readings", store_file(settings.store_path)),
