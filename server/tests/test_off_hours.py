@@ -25,8 +25,9 @@ def at(day, hour, minute, second=0):
 
 
 def schedule(week=WEEK):
-    settings = load_settings({"display": {"pools": POOLS, "schedule": {
-        "type": "timeranges", "week": week}}})
+    settings = load_settings({"server": {"timezone": "Europe/Dublin"},
+                              "display": {"pools": POOLS, "schedule": {
+                                  "type": "timeranges", "week": week}}})
     return OffHoursSchedule(settings.core.server.schedule, "splash.png")
 
 
