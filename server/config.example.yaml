@@ -46,7 +46,7 @@ status:             # what each board says about itself, kept as readings are
   # path: data/status.db   # relative to this file
   keep_days: 7        # older reports are deleted, 0 keeps all
 
-calibration:        # sensor state the dock backs up whenever BSEC saves a copy
+calibration:        # sensor state the dock backs up after each batch of readings
   # path: data/calibration.db  # relative to this file
   keep_days: 3      # each copy is kept this long; the board asks for one after a restart
 

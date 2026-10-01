@@ -11,7 +11,7 @@
 // and every half hour overnight, and the time: the dock has no clock and asks
 // for none elsewhere. The queue is in PSRAM, and each pass of the loop posts
 // the oldest hundred of it to the server's /sensor-readings as one batch.
-// BSEC's state goes to /calibration whenever BSEC saves a new copy. The server
+// BSEC's latest state goes to /calibration after each batch. The server
 // offers the image its own version calls for on any answer, and the dock takes
 // it once its queue is empty, then keeps it only if it posts. The display fetches
 // the pages the server renders from the readings and knows nothing about any
@@ -226,7 +226,7 @@ static void fillBsecStatus(ClientStatus& s) {
 }
 
 // The state as of BSEC's last copy, as the calibration block, and when BSEC
-// saved it.
+// took it.
 static size_t calibrationBlock(char* buf, size_t len, uint32_t& savedEpoch) {
     BsecState state;
     if (!bsecRunner.current(state)) return 0;
@@ -761,8 +761,8 @@ static void queueReading(Readings& r, uint32_t nowMs) {
     if (!readingsURL[0]) postFailed = true;   // nowhere to post is a fault, not a quiet success
 }
 
-// Sent only while the server is taking readings, and only when BSEC has saved
-// a copy the server does not have. A copy it refuses is not sent again.
+// Sent after a batch the server took, when BSEC has taken a copy since the
+// last one sent: about one a batch. A copy it refuses is not sent again.
 static void sendCalibration() {
     if (!calibrationURL[0]) return;
     uint32_t saved = 0;
