@@ -14,9 +14,14 @@ with what `git describe` gives for the commit that CI tested:
 
 - A push that fails CI publishes no image, so a server on `latest` never takes firmware that does not build or a
   server that fails its tests. The images come when CI ends, about 8 minutes after the push.
-- To stamp `latest` with a tag pushed after its commit, run that commit's `Images` run again
-  (`gh run rerun <id>`). The run builds the same commit, and `git describe` then gives the tag.
-- A published GitHub release adds its version tags: `0.3.0` and `0.3` for `v0.3.0`.
+- A tag publishes nothing. It marks a point tested on `latest`, and names the commits after it in `git describe`:
+  `v0.6.6-1-g03c1761`. `latest` keeps the version of the push that built it, so a tag pushed later does not change
+  what a server on `latest` reports.
+- A published GitHub release builds the images of its tag's commit, as `0.3.0`, `0.3` and `latest` for `v0.3.0`. On
+  that commit `git describe` gives the tag alone. The run fails if CI has not passed on that commit, as a push waits
+  for it, or if `git describe` gives another tag on the same commit.
+- Releases are few. Each is a version with enough changes to be worth upgrading to, or a fix to one. A breaking change
+  alone is no reason for a release. The work in between is tested on `latest` and tags.
 - No image holds firmware. The firmware links Bosch's BSEC binary, and this project does not give it out. The
   builder image holds the firmware's sources at its commit, and builds them where it runs. Each build downloads
   epd from the PlatformIO registry, at the version that `platformio.ini` pins.

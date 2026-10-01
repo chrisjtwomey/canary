@@ -1,7 +1,8 @@
 name: Images
 
 # Every push to main that passes CI publishes both images as `latest`, which a
-# server's stack follows; a published release adds its version tags.
+# server's stack follows. A published release publishes them as its version
+# and as `latest`. A tag push publishes nothing.
 on:
   workflow_run:
     workflows: [PlatformIO CI]
@@ -25,6 +26,7 @@ jobs:
        github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: read
       packages: write
     strategy:
@@ -45,13 +47,35 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0   # git describe needs the tags
 
-      # The version the server reports: the release's tag, or for a push what
-      # git describe says, as a checkout run by hand would.
+      # A release publishes `latest` too, so it needs the CI pass that a push
+      # waits for: a PlatformIO CI run on its commit that succeeded.
+      - name: Check that CI passed
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          sha=$(git rev-parse HEAD)
+          passed=$(gh api "repos/$REPO/actions/workflows/build.yaml/runs?head_sha=$sha&status=success" -q .total_count)
+          if [ "$passed" = 0 ]; then
+            echo "::error::PlatformIO CI has not passed on $sha"
+            exit 1
+          fi
+
+      # The version the server reports: what git describe says, as a checkout
+      # run by hand would. On a release's commit that is the tag alone; another
+      # tag on the same commit could win, so a release checks it gets its own.
       - name: Work out the version
         id: version
         env:
           TAG: ${{ github.event.release.tag_name }}
-        run: echo "version=${TAG:-$(git describe --tags --match 'v*' --always)}" >> "$GITHUB_OUTPUT"
+        run: |
+          version=$(git describe --tags --match 'v*' --always)
+          if [ -n "$TAG" ] && [ "$version" != "$TAG" ]; then
+            echo "::error::git describe gives $version, not the release's $TAG"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v4
@@ -68,7 +92,7 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
           # The commit built, not main's newest.
           labels: |
             org.opencontainers.image.revision=${{ github.event.workflow_run.head_sha || github.sha }}

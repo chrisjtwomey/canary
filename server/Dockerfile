@@ -1,7 +1,8 @@
 FROM python:3.13-slim-bookworm
 
-# The release tag, so the server can say what it is on every response and in
-# GET /about. Unset, it falls back to git, then to "dev".
+# What git describe gives for the commit built, so the server can say what it
+# is on every response and in GET /about. Unset, it falls back to git, then to
+# "dev".
 ARG CANARY_VERSION=dev
 ENV CANARY_VERSION=${CANARY_VERSION}
 
