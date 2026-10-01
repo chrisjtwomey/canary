@@ -12,10 +12,11 @@ from typing import Callable
 
 from airium import Airium
 
-from metrics import (NO_SENSOR_TAG, NO_SENSOR_VERDICT, barometer_word, change_over, classify_rate,
-                     co2_meaning, co2_verdict, extremes, fmt_hm, fmt_int, fmt_stamp, iaq_meaning,
-                     iaq_verdict, pm25_verdict, pm_meaning, pressure_meaning, rate_words, rh_meaning,
-                     rh_words, sensor_absent, series, temp_meaning, temp_words, value_at)
+from metrics import (CALIBRATING_TAG, CALIBRATING_VERDICT, NO_SENSOR_TAG, NO_SENSOR_VERDICT,
+                     barometer_word, change_over, classify_rate, co2_meaning, co2_verdict, extremes,
+                     fmt_hm, fmt_int, fmt_stamp, iaq_meaning, iaq_verdict, pm25_verdict, pm_meaning,
+                     pressure_meaning, rate_words, rh_meaning, rh_words, sensor_absent, series,
+                     temp_meaning, temp_words, value_at)
 from pages.base import EnvPage
 
 
@@ -39,6 +40,7 @@ class Metric:
     second: "Metric | None" = None   # drawn lighter beside this one on the trace
     cold_tag: str = "warming up"
     sensor: str = ""                 # its key in the board's client.sensors block
+    accuracy_key: str = ""           # its accuracy's key, for a value held back until accurate
 
     @property
     def decimals(self) -> int:
@@ -68,7 +70,8 @@ PM25 = Metric("pm2_5", "Fine dust", "µg/m³", fmt_int, "particulates", 0.25, 3,
               floor=0, ceil=20, pad=5, cold_tag="fan warming up", sensor="pmsa003i")
 IAQ = Metric("iaq", "Air quality", "IAQ", _f0, "gas", 0.25, 8, 25,
              ((50, "good"), (150, "stale")), 100, iaq_verdict, iaq_meaning,
-             floor=0, ceil=200, pad=20, cold_tag="heater warming up", sensor="bme688")
+             floor=0, ceil=200, pad=20, cold_tag="heater warming up", sensor="bme688",
+             accuracy_key="iaq_accuracy")
 PRESSURE = Metric("pressure_hpa", "Barometer", "hPa", _f1, "pressure", 1, 0.6, 1.2,
                   ((980, "rain"), (1000, "change"), (1015, "fair"), (1030, "very dry")), 15,
                   lambda v: barometer_word(v) + ".", pressure_meaning, pad=3, cold_tag="no reading",
@@ -79,9 +82,18 @@ def _valid(latest: dict, m: Metric) -> bool:
     return bool(latest.get("valid", {}).get(m.valid_flag)) and latest.get(m.key) is not None
 
 
-def _cold_words(m: Metric, absent: bool) -> tuple[str, str]:
+def _calibrating(latest: dict, m: Metric) -> bool:
+    """The sensor reads, but its value is held back until it is accurate."""
+    return bool(m.accuracy_key) and latest.get(m.accuracy_key) is not None and latest.get(m.key) is None
+
+
+def _cold_words(m: Metric, absent: bool, latest: dict) -> tuple[str, str]:
     """The tag beside the dash, and the verdict, when there is no valid reading."""
-    return (NO_SENSOR_TAG, NO_SENSOR_VERDICT) if absent else (m.cold_tag, "Warming up.")
+    if absent:
+        return NO_SENSOR_TAG, NO_SENSOR_VERDICT
+    if _calibrating(latest, m):
+        return CALIBRATING_TAG, CALIBRATING_VERDICT
+    return m.cold_tag, "Warming up."
 
 
 def _hero(a: Airium, latest: dict, m: Metric, id: str, absent: bool) -> None:
@@ -91,7 +103,7 @@ def _hero(a: Airium, latest: dict, m: Metric, id: str, absent: bool) -> None:
         a.span(klass="value", _t=m.fmt(v) if v is not None else "—")
         a.span(klass="unit", _t=m.unit)
         if not ok:
-            a.span(klass="cold-tag", _t=_cold_words(m, absent)[0])
+            a.span(klass="cold-tag", _t=_cold_words(m, absent, latest)[0])
 
 
 def _window_words(hours: float) -> str:
@@ -165,7 +177,7 @@ class TracePage(EnvPage):
         with a.div(klass="stats"):
             _hero(a, latest, m, "now", absent)
             a.div(klass="verdict",
-                  _t=m.level_words(latest[m.key]) if ok else _cold_words(m, absent)[1])
+                  _t=m.level_words(latest[m.key]) if ok else _cold_words(m, absent, latest)[1])
             lo, hi = extremes(history_72h + [latest], m.key)
             if lo and hi:
                 a.div(klass="detail", _t=(
@@ -235,8 +247,8 @@ class DeltaPage(EnvPage):
             a.span(klass="value", _t=f"{shown:+.{decimals}f}" if shown is not None else "—")
             a.span(klass="unit", _t=f"{m.unit} in {_window_words(m.window_h)}")
             if not ok:
-                a.span(klass="cold-tag", _t=_cold_words(m, absent)[0])
-        a.div(klass="verdict", _t=rate_words(rate) if ok else _cold_words(m, absent)[1],
+                a.span(klass="cold-tag", _t=_cold_words(m, absent, latest)[0])
+        a.div(klass="verdict", _t=rate_words(rate) if ok else _cold_words(m, absent, latest)[1],
               id=f"rate-{m.key}")
         if ok:
             a.div(klass="detail", _t=f"{m.fmt(latest[m.key])} {m.unit} now. {m.level_words(latest[m.key])}")

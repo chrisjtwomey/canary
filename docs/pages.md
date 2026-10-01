@@ -79,6 +79,10 @@ The Settings page, `/web/config`:
   `pages/pool.py` (`TracePage`, `DeltaPage`), and a `Metric` spec drives them.
 - The pages show the pressure at sea level, as forecasts give it, from `site.altitude_m`. The pressure as measured
   stays under `pressure_station_hpa`.
+- The pages show the IAQ only at accuracy 3, BSEC's highest. Below it they say "Calibrating.", and the charts leave
+  those readings out. Bosch rates the index at its best only at 3; below it, the index moves with BSEC's
+  calibration as much as with the air. The store keeps every reading as the dock posted it. This and the sea-level
+  pressure are in `sources/corrections.py`.
 
 The `display` block in `config.yaml`:
 

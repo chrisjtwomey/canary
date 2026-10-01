@@ -166,6 +166,7 @@ from pages.air import AirPage  # noqa: E402
 from pages.pool import PRESSURE, TEMP, DeltaPage, TracePage  # noqa: E402
 from pages.diagnostics import DiagnosticsPage, DiagnosticsTracePage  # noqa: E402
 from pages.dust import MAX_DOTS, DustPage  # noqa: E402
+from sources.corrections import without_uncalibrated_iaq  # noqa: E402
 
 
 class TestDust:
@@ -219,6 +220,39 @@ class TestAir:
         soup, _ = render(AirPage("air", tz=tz, width=WIDTH, height=HEIGHT), dict(data, latest=latest))
         assert text(soup, "#iaq .value") == "—"
         assert text(soup, "#iaq .cold-tag") == "warming up"
+
+    def test_an_index_below_high_accuracy_says_calibrating(self, data, tz):
+        latest = without_uncalibrated_iaq(dict(data["latest"], iaq_accuracy=1))
+        soup, specs = render(AirPage("air", tz=tz, width=WIDTH, height=HEIGHT), dict(data, latest=latest))
+        assert text(soup, "#iaq .value") == "—" and text(soup, "#iaq .unit") == "IAQ"
+        assert text(soup, "#iaq .cold-tag") == "calibrating"
+        assert text(soup, ".verdict") == "Calibrating."
+        assert text(soup, ".detail") == (
+            f"Gas resistance {latest['gas_ohm'] / 1000:.0f} kΩ. Index accuracy low, 1 of 3.")
+        spark, scale = specs
+        assert spark["now"] is None and scale["value"] is None
+
+
+class TestAirPool:
+    def test_trace_and_delta_say_calibrating_below_high_accuracy(self, data72, tz):
+        latest = without_uncalibrated_iaq(dict(data72["latest"], iaq_accuracy=2))
+        soup, specs = render(TracePage("air-trace", IAQ, tz=tz, width=WIDTH, height=HEIGHT),
+                             dict(data72, latest=latest))
+        assert text(soup, "#now .value") == "—" and text(soup, "#now .cold-tag") == "calibrating"
+        assert text(soup, ".verdict") == "Calibrating."
+        assert specs[0]["now"] is None
+        soup, specs = render(DeltaPage("air-delta", IAQ, tz=tz, width=WIDTH, height=HEIGHT),
+                             {"latest": latest, "history_24h": data72["history_72h"]})
+        assert text(soup, "#delta-iaq .value") == "—" and text(soup, "#delta-iaq .cold-tag") == "calibrating"
+        assert text(soup, "#rate-iaq") == "Calibrating."
+        assert specs[0]["value"] is None
+
+    def test_a_cold_heater_still_says_warming_up(self, data72, tz):
+        latest = {k: v for k, v in data72["latest"].items() if k not in ("iaq", "iaq_accuracy", "gas_ohm")}
+        latest["valid"] = dict(data72["latest"]["valid"], gas=False)
+        soup, _ = render(TracePage("air-trace", IAQ, tz=tz, width=WIDTH, height=HEIGHT),
+                         dict(data72, latest=latest))
+        assert text(soup, "#now .cold-tag") == "heater warming up" and text(soup, ".verdict") == "Warming up."
 
 
 class TestBarometerPool:

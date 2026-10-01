@@ -178,6 +178,10 @@ IAQ_WORDS = {
     "extreme": "Extremely polluted.",
 }
 IAQ_ACCURACY = ("calibrating", "low", "medium", "high")
+# What a page shows while the index waits for high accuracy
+# (sources.corrections).
+CALIBRATING_TAG = "calibrating"
+CALIBRATING_VERDICT = "Calibrating."
 
 
 def iaq_zone(iaq: float) -> str:

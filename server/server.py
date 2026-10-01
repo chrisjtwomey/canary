@@ -40,7 +40,7 @@ from pages.dust import DustPage
 from pages.pool import CO2, IAQ, PM25, PRESSURE, TEMP, DeltaPage, TracePage
 from schedule import DEFAULT_DISPLAY_SYNC_S, DEFAULT_DOCK_WEEK, DEFAULT_PAGE_WEEK
 from sources.calibration import CalibrationStore
-from sources.corrections import SeaLevelSource, to_sea_level
+from sources.corrections import CorrectedSource, correct
 from sources.mock import MockReadingsSource
 from sources.readings import ReadingsIngest, ReadingsQuery
 from sources.status import DeviceReports, StatusSource
@@ -85,14 +85,14 @@ def make_pages(tz, **geometry) -> list:
 
 def make_source(seed: int, clock, reports: DeviceReports, altitude_m: float = 0.0,
                 store: ReadingsStore | None = None) -> CompositeSource:
-    """The measurements, pressure reduced to sea level, and the board's own
+    """The measurements, corrected (sources.corrections), and the board's own
     reports for the diagnostics. The measurements are what the board posted
     when there is a store, and the simulated room when there is not."""
     if store is not None:
         readings = IngestSource(store, hours=HISTORY_HOURS, now=clock)
     else:
         readings = MockReadingsSource(seed=seed, now=clock)
-    return CompositeSource(SeaLevelSource(readings, altitude_m), StatusSource(reports))
+    return CompositeSource(CorrectedSource(readings, altitude_m), StatusSource(reports))
 
 
 def make_between(seed: int, clock,
@@ -104,8 +104,8 @@ def make_between(seed: int, clock,
 
 def make_history(between: Callable[[int, int], list[dict]],
                  altitude_m: float = 0.0) -> Callable[[int, int], list[dict]]:
-    """``between`` as the pages see it, with pressure at sea level."""
-    return lambda start, end: [to_sea_level(d, altitude_m) for d in between(start, end)]
+    """``between`` as the pages see it, corrected (sources.corrections)."""
+    return lambda start, end: [correct(d, altitude_m) for d in between(start, end)]
 
 
 def follow_own_version(firmware, version: str):

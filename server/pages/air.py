@@ -3,8 +3,9 @@ from __future__ import annotations
 
 from airium import Airium
 
-from metrics import (IAQ_ACCURACY, IAQ_ZONES, NO_SENSOR_TAG, NO_SENSOR_VERDICT, fmt_stamp,
-                     hour_ticks, iaq_verdict, sensor_absent, series, y_range)
+from metrics import (CALIBRATING_TAG, CALIBRATING_VERDICT, IAQ_ACCURACY, IAQ_ZONES, NO_SENSOR_TAG,
+                     NO_SENSOR_VERDICT, fmt_stamp, hour_ticks, iaq_verdict, sensor_absent, series,
+                     y_range)
 from pages.base import EnvPage
 
 SPARK_HOURS = 12
@@ -34,16 +35,17 @@ class AirPage(EnvPage):
         absent = sensor_absent(data.get("status"), "bme688")
         iaq = latest.get("iaq") if valid else None
         gas = latest.get("gas_ohm") if valid else None
-        accuracy = latest.get("iaq_accuracy")
+        accuracy = latest.get("iaq_accuracy") if valid else None
+        calibrating = iaq is None and accuracy is not None
 
         a.div(klass="title label", _t="Air quality")
         a.div(klass="stamp", _t=fmt_stamp(latest["ts"], self.tz))
 
-        with a.div(klass="hero" + ("" if valid else " cold"), id="iaq"):
+        with a.div(klass="hero" + ("" if valid and not calibrating else " cold"), id="iaq"):
             if iaq is not None:
                 a.span(klass="value", _t=f"{iaq:.0f}")
                 a.span(klass="unit", _t="IAQ")
-            elif gas is not None:
+            elif gas is not None and not calibrating:
                 a.span(klass="value", _t=f"{gas / 1000:.0f}")
                 a.span(klass="unit", _t="kΩ")
             else:
@@ -51,18 +53,22 @@ class AirPage(EnvPage):
                 a.span(klass="unit", _t="IAQ")
             if not valid:
                 a.span(klass="cold-tag", _t=NO_SENSOR_TAG if absent else "warming up")
+            elif calibrating:
+                a.span(klass="cold-tag", _t=CALIBRATING_TAG)
 
         if iaq is not None:
             a.div(klass="verdict", _t=iaq_verdict(iaq))
+        elif calibrating:
+            a.div(klass="verdict", _t=CALIBRATING_VERDICT)
         elif gas is not None:
             a.div(klass="verdict", _t="No index yet.")
         else:
             a.div(klass="verdict", _t=NO_SENSOR_VERDICT if absent else "Warming up.")
 
         parts = []
-        if gas is not None and iaq is not None:
+        if gas is not None and accuracy is not None:
             parts.append(f"Gas resistance {gas / 1000:.0f} kΩ.")
-        if iaq is not None and accuracy is not None:
+        if accuracy is not None:
             word = IAQ_ACCURACY[max(0, min(3, int(accuracy)))]
             parts.append(f"Index accuracy {word}, {int(accuracy)} of 3.")
         elif gas is not None and iaq is None:

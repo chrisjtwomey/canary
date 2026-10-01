@@ -48,7 +48,7 @@ The dock posts one document for each reading:
 | `pc_*` | PMSA003I | Count per 0.1 L | Particles larger than 0.3 … 10 µm |
 | `pm_warmup_s` | The dock | s | How long the PM fan had run when the particle reading was taken. Only with the particles. |
 | `gas_ohm` | BME688 | Ω | The raw resistance of the heated plate. Lower means more VOC. |
-| `iaq`, `iaq_accuracy` | BME688, through BSEC | 0–500, 0–3 | Not there until BSEC has made an index. The mock always sends them. |
+| `iaq`, `iaq_accuracy` | BME688, through BSEC | 0–500, 0–3 | Not there until BSEC has made an index. The pages show the index only at accuracy 3 ([pages.md](pages.md)). The mock always sends them, at 3. |
 | `pressure_hpa` | BME688 | hPa | There each time the chip answered, even on a cold plate |
 | `scd41.*`, `bme688.*` | Those sensors | °C, % | Their own temperature and humidity, which read warm. Kept to tune the offsets, not to show. `scd41` is not there during the SCD41's warm-up after each start, 3 minutes by default ([the sensor code](dock.md#the-sensor-code)). |
 | `client` | The firmware | Object | The board's own state ([below](#the-client-object)) |
