@@ -53,6 +53,13 @@ struct Readings {
     // How long the PM fan had run when the particle reading was taken, in
     // seconds; 0 when nobody measured it.
     uint16_t   pmWarmupS;
+    // How many samples each mean holds, over the interval before ts: the
+    // SCD41's CO2, the BME688's cycles, and of those the cycles each index
+    // counted (Bme688Mean).
+    uint16_t   scd41Samples;
+    uint16_t   bme688Samples;
+    uint16_t   iaqSamples;
+    uint16_t   staticIaqSamples;
 };
 
 // Encode to the JSON in docs/readings.md. Returns the length written, or 0

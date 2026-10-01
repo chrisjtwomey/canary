@@ -53,6 +53,10 @@ size_t readingsToJson(const Readings& r, const char* device, char* buf, size_t l
         if (!add(",\"scd41\":{\"temp_c\":%.1f,\"rh_pct\":%.1f}", r.scd41.tempC, r.scd41.rhPct)) goto fail;
     }
     if (r.bme688Valid && !add(",\"bme688\":{\"temp_c\":%.1f,\"rh_pct\":%.1f}", r.bme688.tempC, r.bme688.rhPct)) goto fail;
+    if (r.scd41Samples || r.bme688Samples) {
+        if (!addI(",\"samples\":{\"scd41\":%lu,\"bme688\":%lu", r.scd41Samples, r.bme688Samples)) goto fail;
+        if (!addI(",\"iaq\":%lu,\"static_iaq\":%lu}", r.iaqSamples, r.staticIaqSamples)) goto fail;
+    }
 
     {
         int k = snprintf(buf + pos, len - pos,

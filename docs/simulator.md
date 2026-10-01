@@ -26,7 +26,8 @@ pio run -e sim
 
 The `sensors` column shows which sensors gave a reading: `T` temperature and humidity, `C` CO₂, `P` particulates,
 `G` gas. A dot means no reading. That is normal while the PM fan warms up, and between the SCD41's 5 s
-measurements.
+measurements. The simulator calls `sample()` alone and never `poll()`, so each of its readings holds one SCD41
+measurement, and its `samples.scd41` is 1 where the dock's is about 60.
 
 For a TinyS3 with no sensors, the `dock-mock` environment reads the room in place of the sensors
 ([boards.md](boards.md)).

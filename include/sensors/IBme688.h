@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include "Readings.h"
+#include "sensors/Bme688Mean.h"
 
 // Bosch BME688 in forced mode: one T/P/H/gas cycle per trigger.
 class IBme688 {
@@ -15,5 +16,15 @@ public:
     virtual uint32_t measurementMs() const = 0;
     // False until the cycle is complete.
     virtual bool fetchData(uint32_t nowMs, Bme688Data& out) = 0;
+    // The mean of the cycles since the last call, the newest of them, and how
+    // many went into each value. A part that runs a cycle only when asked
+    // gives the one it ran.
+    virtual bool fetchMean(uint32_t nowMs, Bme688Data& mean, Bme688Data& newest, Bme688Samples& n) {
+        Bme688Data cycle = {};
+        if (!fetchData(nowMs, cycle)) return false;
+        Bme688Mean one;
+        one.add(cycle);
+        return one.take(mean, newest, n);
+    }
     virtual uint8_t chipId() = 0;
 };

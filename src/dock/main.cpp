@@ -3,11 +3,12 @@
 // A TinyS3 with the four sensors on their own regulator. Mains powered and
 // always online: it connects once, and on each of the server's slots takes a
 // reading and queues it, with its own status beside it. Between passes of its
-// loop, once a second, it light-sleeps with Wi-Fi kept. It reads the sensors
-// at no other time. Before each slot it gets ready for it: it asks the server
-// for its settings and applies any change, runs a recalibration the server
-// asks for, and starts again a sensor that gave nothing at the last slot, so
-// it has settled by this one. The server names the slots, every five minutes
+// loop, once a second, it light-sleeps with Wi-Fi kept. Each pass also takes
+// the SCD41's measurement when one is ready, so a reading holds their mean; it
+// reads the other sensors at no other time. Before each slot it gets ready for
+// it: it asks the server for its settings and applies any change, runs a
+// recalibration the server asks for, and starts again a sensor that gave
+// nothing at the last slot, so it has settled by this one. The server names the slots, every five minutes
 // and every half hour overnight, and the time: the dock has no clock and asks
 // for none elsewhere. The queue is in PSRAM, and each pass of the loop posts
 // the oldest hundred of it to the server's /sensor-readings as one batch.
@@ -476,8 +477,9 @@ static void saveRecalibrated() {
 
 // Each setting where it takes effect. Unchanged ones cost nothing, so this
 // runs on every answer.
-// The latest reading, which the light's air and calibration triggers are
-// judged from, and whether a recalibration waits for the SCD41.
+// The newest samples of the last reading, which the light's air and
+// calibration triggers are judged from, and whether a recalibration waits for
+// the SCD41.
 static Readings latestReading = {};
 static bool     scd41Recalibrating = false;
 
@@ -974,7 +976,7 @@ static void sampleWhenDue(uint32_t nowMs) {
     Readings r = sampleSensors(nowMs);
     postTimer.taken(nowMs);
     prewarmed = false;
-    latestReading = r;
+    latestReading = sensors.newest();
     judgeReading();
     queueReading(r, nowMs);
 }
@@ -1053,6 +1055,7 @@ void loop() {
     askForTime(nowMs);
     prewarmWhenDue(nowMs);
     driveFan(nowMs);
+    sensors.poll();
     sampleWhenDue(nowMs);
     sendQueued();
     backlogged = queue->count() >= kBackloggedAt;

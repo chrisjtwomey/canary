@@ -176,6 +176,7 @@ void BsecRunner::measure(const BsecRequest& request, int64_t nowNs) {
     latest_ = data;
     latestAtMs_ = clock_.millis();
     haveLatest_ = true;
+    mean_.add(data);
     status_.running = true;
     if (data.hasIaq) status_.accuracy = data.iaqAccuracy;
 }
@@ -220,6 +221,11 @@ bool BsecRunner::latest(Bme688Data& out, uint32_t& atMs) const {
     out = latest_;
     atMs = latestAtMs_;
     return true;
+}
+
+bool BsecRunner::takeMean(Bme688Data& mean, Bme688Data& newest, Bme688Samples& n) {
+    std::lock_guard<std::mutex> guard(lock_);
+    return mean_.take(mean, newest, n);
 }
 
 bool BsecRunner::current(BsecState& out) const {

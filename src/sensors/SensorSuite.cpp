@@ -76,6 +76,8 @@ SensorSuite::Recalibration SensorSuite::recalibrateScd41(uint16_t ppm, int16_t& 
     }
     if (!stopScd41()) return Recalibration::Failed;
     const bool done = scd41_.performForcedRecalibration(clock_.millis(), ppm, correction);
+    // The measurements so far are on the old calibration.
+    if (done) scd41Sums_ = Scd41Sums();
     resumeScd41();
     return done ? Recalibration::Done : Recalibration::Failed;
 }
@@ -137,10 +139,18 @@ void SensorSuite::setFanEnabled(bool on) {
 Readings SensorSuite::sample(uint32_t epoch) {
     Readings r = {};
     r.ts = epoch;
+    newest_ = Readings();
     sampleShtc3(r);
     sampleBme688(r);
     sampleScd41(r);
     samplePm(r);
+    // The SHTC3 and the PM module measure once a reading set, so their
+    // newest sample is the reading's.
+    newest_.ts = r.ts;
+    newest_.shtc3 = r.shtc3;
+    newest_.shtc3Valid = r.shtc3Valid;
+    newest_.pm = r.pm;
+    newest_.pmValid = r.pmValid;
 
     track(shtc3State_, true, r.shtc3Valid);
     track(bmeState_, true, r.bme688Valid);
@@ -164,12 +174,48 @@ void SensorSuite::sampleBme688(Readings& r) {
     if (!bmeState_.running) return;
     if (!bme_.startForced(clock_.millis())) return;
     clock_.waitMs(bme_.measurementMs());
-    r.bme688Valid = bme_.fetchData(clock_.millis(), r.bme688);
+    Bme688Samples n = {};
+    r.bme688Valid = bme_.fetchMean(clock_.millis(), r.bme688, newest_.bme688, n);
+    newest_.bme688Valid = r.bme688Valid;
+    r.bme688Samples = n.cycles;
+    r.iaqSamples = n.iaq;
+    r.staticIaqSamples = n.staticIaq;
     bmeSeen_ = r.bme688Valid;
     gasValid_ = r.bme688Valid && r.bme688.gasValid;
     heatStable_ = r.bme688Valid && r.bme688.heatStable;
 }
 
+void SensorSuite::poll() {
+    if (scd41State_.running) pollScd41();
+}
+
+// None when it took a measurement.
+SensorSuite::ReadFault SensorSuite::pollScd41() {
+    // A failed transfer is a bad checksum when the driver counted one.
+    const uint32_t crcBefore = scd41_.crcFailures();
+    auto failed = [&] {
+        return scd41_.crcFailures() != crcBefore ? ReadFault::BadChecksum : ReadFault::NoAnswer;
+    };
+    bool ready = false;
+    if (!scd41_.getDataReadyStatus(clock_.millis(), ready)) return failed();
+    if (!ready) return ReadFault::NoData;
+    Scd41Data d = {};
+    if (!scd41_.readMeasurement(clock_.millis(), d)) return failed();
+    Scd41Sums& sums = scd41Sums_;
+    sums.co2 += d.co2Ppm;
+    ++sums.co2N;
+    if (clock_.millis() - scd41MeasuringSinceMs_ >= scd41WarmupMs_) {
+        sums.tempC += d.tempC;
+        sums.rhPct += d.rhPct;
+        ++sums.warmN;
+    }
+    sums.newest = d;
+    return ReadFault::None;
+}
+
+// The reading set's SCD41 values are the mean of the measurements since the
+// last one, the last of them taken here, so the part is never asked twice for
+// the same measurement.
 void SensorSuite::sampleScd41(Readings& r) {
     scd41Fault_ = ReadFault::None;
     if (!scd41State_.running) return;
@@ -182,26 +228,21 @@ void SensorSuite::sampleScd41(Readings& r) {
             pressurePa_ = pa;
         }
     }
-    // A failed transfer is a bad checksum when the driver counted one.
-    const uint32_t crcBefore = scd41_.crcFailures();
-    auto failed = [&] {
-        return scd41_.crcFailures() != crcBefore ? ReadFault::BadChecksum : ReadFault::NoAnswer;
-    };
-    bool ready = false;
-    if (!scd41_.getDataReadyStatus(clock_.millis(), ready)) {
-        scd41Fault_ = failed();
+    const ReadFault last = pollScd41();
+    const Scd41Sums sums = scd41Sums_;
+    scd41Sums_ = Scd41Sums();
+    if (!sums.co2N) {
+        scd41Fault_ = last;
         return;
     }
-    if (!ready) {
-        scd41Fault_ = ReadFault::NoData;
-        return;
-    }
-    r.scd41Valid = scd41_.readMeasurement(clock_.millis(), r.scd41);
-    if (!r.scd41Valid) {
-        scd41Fault_ = failed();
-        return;
-    }
-    r.scd41WarmedUp = clock_.millis() - scd41MeasuringSinceMs_ >= scd41WarmupMs_;
+    r.scd41Valid = true;
+    r.scd41Samples = sums.co2N;
+    r.scd41.co2Ppm = (uint16_t)((sums.co2 + sums.co2N / 2) / sums.co2N);
+    r.scd41WarmedUp = sums.warmN > 0;
+    r.scd41.tempC = sums.warmN ? (float)(sums.tempC / sums.warmN) : sums.newest.tempC;
+    r.scd41.rhPct = sums.warmN ? (float)(sums.rhPct / sums.warmN) : sums.newest.rhPct;
+    newest_.scd41 = sums.newest;
+    newest_.scd41Valid = true;
 }
 
 void SensorSuite::samplePm(Readings& r) {

@@ -37,6 +37,8 @@ The dock posts one document for each reading:
   "scd41":  { "temp_c": 25.2, "rh_pct": 36.0 },
   "bme688": { "temp_c": 22.8, "rh_pct": 40.2 },
 
+  "samples": { "scd41": 60, "bme688": 100, "iaq": 92, "static_iaq": 92 },
+
   "valid": { "temp_humidity": true, "co2": true, "particulates": true, "pressure": true, "gas": true }
 }
 ```
@@ -54,10 +56,13 @@ The dock posts one document for each reading:
 | `static_iaq`, `static_iaq_accuracy` | BME688, through BSEC | 0–500, 0–3 | BSEC's index for a device that stays in one place, which Bosch recommends for one (BME688 datasheet, table 20). Not there until BSEC has made an index. The pages show it, and only at accuracy 3 ([pages.md](pages.md)). Both mocks send the same value and accuracy as `iaq`. |
 | `pressure_hpa` | BME688 | hPa | There each time the chip answered, even on a cold plate |
 | `scd41.*`, `bme688.*` | Those sensors | °C, % | Their own temperature and humidity, which read warm. Kept to tune the offsets, not to show. `scd41` is not there during the SCD41's warm-up after each start, 3 minutes by default ([the sensor code](dock.md#the-sensor-code)). |
+| `samples` | The dock | Counts | How many samples each mean holds: `scd41` the SCD41's measurements, `bme688` the BME688's cycles, and of those, `iaq` and `static_iaq` the cycles that each index counted, those at accuracy 3. `bme688` is 0 when no cycle ran since the last reading, as can happen with a BSEC sample every 5 minutes: its values then repeat the newest cycle. Not there when both counts are 0. |
 | `client` | The firmware | Object | The board's own state ([below](#the-client-object)) |
 | `health` | The dock | Object | How its sensors are ([below](#the-health-object)) |
 | `valid.*` | The firmware | Bool | False when that measurement cannot be trusted this time |
 
+- The SCD41's and the BME688's values are the means of their samples over the interval before `ts`: 5 minutes by
+  day, 30 at night ([the sensor code](dock.md#the-sensor-code)). The SHTC3 and the PMSA003I measure once a reading.
 - Integers are integers. Floats (temperature, humidity, pressure) have one decimal.
 - A key never changes its meaning. A new sensor adds new keys.
 

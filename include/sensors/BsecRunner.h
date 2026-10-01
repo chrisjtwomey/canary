@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <mutex>
 
+#include "sensors/Bme688Mean.h"
 #include "sensors/IBme688.h"
 #include "sensors/IBsec.h"
 #include "sensors/IClock.h"
@@ -62,6 +63,9 @@ public:
     // Any task: the newest cycle, with BSEC's index when it has one, and the
     // clock reading it was taken at. False before the first.
     bool latest(Bme688Data& out, uint32_t& atMs) const;
+    // Any task: the mean of the cycles since the last call, the newest of
+    // them, and the counts. False when no cycle has run since.
+    bool takeMean(Bme688Data& mean, Bme688Data& newest, Bme688Samples& n);
     // Any task: start BSEC again from `state` at the next step. False, and
     // nothing done, for a state learned at another rate.
     bool restartWith(const BsecState& state);
@@ -111,6 +115,7 @@ private:
     mutable std::mutex lock_;
     Bme688Data  latest_ = {};
     uint32_t    latestAtMs_ = 0;
+    Bme688Mean  mean_;
     bool        haveLatest_ = false;
     BsecState   current_ = {};
     bool        haveCurrent_ = false;
@@ -137,6 +142,16 @@ public:
         uint32_t atMs = 0;
         return runner_.latest(out, atMs) &&
                nowMs - atMs <= kFreshCycles * 1000u * runner_.sampleS();
+    }
+    // With no cycle since the last reading, as at a sample every 5 minutes,
+    // the newest cycle stands while it is fresh, and counts for none.
+    bool fetchMean(uint32_t nowMs, Bme688Data& mean, Bme688Data& newest,
+                   Bme688Samples& n) override {
+        if (runner_.takeMean(mean, newest, n)) return true;
+        if (!fetchData(nowMs, mean)) return false;
+        newest = mean;
+        n = Bme688Samples{};
+        return true;
     }
     uint8_t chipId() override { return 0x61; }
 

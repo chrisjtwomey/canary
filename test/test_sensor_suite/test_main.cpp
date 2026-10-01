@@ -3,6 +3,7 @@
 // mocks, which is what proves the seam is real: the production sequence is
 // the code under test, not a copy of it.
 #include <unity.h>
+#include <vector>
 
 #include "sensors/SensorSuite.h"
 #include "sensors/mock/EnvModel.h"
@@ -37,6 +38,18 @@ public:
     }
     bool getAutomaticSelfCalibration(bool& on) override { on = true; return true; }
     bool getTemperatureOffset(float& degC) override { degC = 4.0f; return true; }
+};
+
+// Keeps each measurement the suite takes from it.
+class RecordingScd41 : public MockScd41 {
+public:
+    explicit RecordingScd41(EnvModel& room) : MockScd41(room) {}
+    std::vector<Scd41Data> taken;
+    bool readMeasurement(uint32_t nowMs, Scd41Data& out) override {
+        if (!MockScd41::readMeasurement(nowMs, out)) return false;
+        taken.push_back(out);
+        return true;
+    }
 };
 
 // Not a mock of the real part: just enough of the interface to prove the
@@ -413,6 +426,48 @@ void test_the_scd41_warm_up_is_a_setting_and_0_keeps_every_reading() {
     TEST_ASSERT_TRUE(suite->sample(room->epoch()).scd41WarmedUp);
 }
 
+void test_a_reading_holds_the_mean_of_the_scd41s_measurements_since_the_last() {
+    RecordingScd41 part(*room);
+    SensorSuite s(*clk, *shtc3, part, *pm, *bme);
+    s.begin();
+    clk->advance(SensorSuite::kScd41WarmupMs);
+    s.sample(room->epoch());
+    part.taken.clear();
+    for (int i = 0; i < 60; ++i) {
+        clk->advance(1000);
+        s.poll();
+    }
+    Readings r = s.sample(room->epoch());
+    TEST_ASSERT_TRUE(r.scd41Valid);
+    TEST_ASSERT_TRUE_MESSAGE(r.scd41Samples >= 11, "one every 5 s for a minute");
+    TEST_ASSERT_EQUAL_UINT16(part.taken.size(), r.scd41Samples);
+    double co2 = 0, tempC = 0;
+    for (const Scd41Data& d : part.taken) {
+        co2 += d.co2Ppm;
+        tempC += d.tempC;
+    }
+    TEST_ASSERT_EQUAL_UINT16((uint16_t)(co2 / part.taken.size() + 0.5), r.scd41.co2Ppm);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, (float)(tempC / part.taken.size()), r.scd41.tempC);
+    TEST_ASSERT_TRUE(r.scd41WarmedUp);
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(part.taken.back().co2Ppm, s.newest().scd41.co2Ppm,
+                                     "the light judges the newest measurement");
+}
+
+void test_during_the_warm_up_no_scd41_temperature_counts() {
+    RecordingScd41 part(*room);
+    SensorSuite s(*clk, *shtc3, part, *pm, *bme);
+    s.setScd41WarmupS(600);
+    s.begin();
+    for (int i = 0; i < 60; ++i) {
+        clk->advance(1000);
+        s.poll();
+    }
+    Readings r = s.sample(room->epoch());
+    TEST_ASSERT_TRUE(r.scd41Valid);
+    TEST_ASSERT_FALSE(r.scd41WarmedUp);
+    TEST_ASSERT_EQUAL_UINT16(part.taken.size(), r.scd41Samples);
+}
+
 void test_low_power_shtc3_waits_its_shorter_conversion() {
     suite->begin();
     settle();
@@ -475,6 +530,8 @@ int main(int, char**) {
     RUN_TEST(test_sample_skips_pm_during_the_fan_warm_up);
     RUN_TEST(test_sample_retries_a_corrupt_pm_frame);
     RUN_TEST(test_a_damaged_pm_frame_keeps_its_bytes);
+    RUN_TEST(test_a_reading_holds_the_mean_of_the_scd41s_measurements_since_the_last);
+    RUN_TEST(test_during_the_warm_up_no_scd41_temperature_counts);
     RUN_TEST(test_each_pm_read_of_a_sample_is_kept_for_the_log);
     RUN_TEST(test_a_sample_without_co2_says_why);
     RUN_TEST(test_health_counts_a_bad_pm_frame);

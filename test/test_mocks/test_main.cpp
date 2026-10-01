@@ -320,6 +320,10 @@ void test_json_matches_readings_md() {
     r.pm = {4, 6, 8, 4, 6, 8, 900, 250, 40, 4, 1, 0, 0x97, 0}; r.pmValid = true;
     r.bme688 = {22.8f, 1011.2f, 40.2f, 132000.0f, true, true, 63.4f, 2, true, 58.2f, 2, true};
     r.bme688Valid = true;
+    r.scd41Samples = 60;
+    r.bme688Samples = 100;
+    r.iaqSamples = 92;
+    r.staticIaqSamples = 92;
     char buf[640];
     size_t n = readingsToJson(r, "canary-dock", buf, sizeof(buf));
     TEST_ASSERT_TRUE(n > 0);
@@ -330,6 +334,7 @@ void test_json_matches_readings_md() {
         ",\"gas_ohm\":132000,\"iaq\":63,\"iaq_accuracy\":2,\"static_iaq\":58,\"static_iaq_accuracy\":2"
         ",\"pressure_hpa\":1011.2"
         ",\"scd41\":{\"temp_c\":25.2,\"rh_pct\":36.0},\"bme688\":{\"temp_c\":22.8,\"rh_pct\":40.2}"
+        ",\"samples\":{\"scd41\":60,\"bme688\":100,\"iaq\":92,\"static_iaq\":92}"
         ",\"valid\":{\"temp_humidity\":true,\"co2\":true,\"particulates\":true"
         ",\"pressure\":true,\"gas\":true}}";
     TEST_ASSERT_EQUAL_STRING(want, buf);

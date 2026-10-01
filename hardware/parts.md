@@ -148,7 +148,7 @@ T = −45 + 175 × word/65535; RH = 100 × word/65535.
 
 ### How the dock runs it
 
-- **Periodic measurement (5 s)**, 15 mA on average. The dock reads the latest value at each slot. Low-power periodic (30 s) would average 3.2 mA.
+- **Periodic measurement (5 s)**, 15 mA on average. The dock takes each measurement as it comes, and a reading holds their mean. Low-power periodic (30 s) would average 3.2 mA.
 - ASC works in both periodic modes, and needs ≥ 3 min of ~400 ppm fresh air each week. It does **not** work in power-cycled single-shot mode. `dock.scd41.self_calibration` turns it on or off.
 - The dock gives the SCD41 the BME688's pressure (`set_ambient_pressure`) at each reading.
 - `dock.scd41.temperature_offset_c` sets the temperature offset. Find it in the finished enclosure after 15 min of thermal equilibrium: `offset_new = T_scd − T_shtc3 + offset_prev`.

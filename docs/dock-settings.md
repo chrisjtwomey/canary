@@ -39,8 +39,9 @@ Each setting takes effect as soon as it can.
 - **BSEC's sample rate:** every 3 s, or every 5 minutes, which is the default. Bosch gives a configuration for each
   rate, and the state that BSEC learns at one rate is no use at the other. So each saved copy says its rate, the
   dock restores only a copy at its own rate, and a change of rate starts BSEC again from nothing. At 5 minutes, Bosch
-  counts the BME688's self-heating as negligible, and a reading has the newest cycle, which can be up to 5 minutes
-  old.
+  counts the BME688's self-heating as negligible, and a reading has the mean of the cycles since the last one: at
+  5 minutes, one cycle or none. With none, the reading repeats the newest cycle, up to 15 minutes old, and its
+  `samples.bme688` is 0. At 3 s, about 100 cycles a reading.
 - **The LED's schedule** (`dock.led.schedule`), the hours that it is on. The answer says whether the next slot is
   outside those hours. So the LED goes dark at the pre-warm before the first slot past the end, and comes back at the
   pre-warm before the first slot in the hours again. With no schedule, the LED is on all day. It is a window of its
