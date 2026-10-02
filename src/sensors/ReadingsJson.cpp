@@ -44,11 +44,19 @@ size_t readingsToJson(const Readings& r, const char* device, char* buf, size_t l
         if (!add(",\"iaq\":%.0f,\"iaq_accuracy\":%.0f", r.bme688.iaq,
                  (double)r.bme688.iaqAccuracy)) goto fail;
     }
+    if (gasTrusted && r.bme688.hasStaticIaq) {
+        if (!add(",\"static_iaq\":%.0f,\"static_iaq_accuracy\":%.0f", r.bme688.staticIaq,
+                 (double)r.bme688.staticIaqAccuracy)) goto fail;
+    }
     if (r.bme688Valid && !add(",\"pressure_hpa\":%.1f", r.bme688.pressureHpa, 0.0)) goto fail;
     if (r.scd41Valid && r.scd41WarmedUp) {
         if (!add(",\"scd41\":{\"temp_c\":%.1f,\"rh_pct\":%.1f}", r.scd41.tempC, r.scd41.rhPct)) goto fail;
     }
     if (r.bme688Valid && !add(",\"bme688\":{\"temp_c\":%.1f,\"rh_pct\":%.1f}", r.bme688.tempC, r.bme688.rhPct)) goto fail;
+    if (r.scd41Samples || r.bme688Samples) {
+        if (!addI(",\"samples\":{\"scd41\":%lu,\"bme688\":%lu", r.scd41Samples, r.bme688Samples)) goto fail;
+        if (!addI(",\"iaq\":%lu,\"static_iaq\":%lu}", r.iaqSamples, r.staticIaqSamples)) goto fail;
+    }
 
     {
         int k = snprintf(buf + pos, len - pos,

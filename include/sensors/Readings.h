@@ -34,6 +34,11 @@ struct Bme688Data {
     float    iaq;          // 0–500, when hasIaq
     uint8_t  iaqAccuracy;  // 0–3, when hasIaq
     bool     hasIaq;       // the index came with this reading; false without BSEC
+    // BSEC's static index, which Bosch recommends for a device that stays in
+    // one place: it does not stretch its scale to the last few days' air.
+    float    staticIaq;          // 0–500, when hasStaticIaq
+    uint8_t  staticIaqAccuracy;  // 0–3, when hasStaticIaq
+    bool     hasStaticIaq;
 };
 
 struct Readings {
@@ -48,6 +53,13 @@ struct Readings {
     // How long the PM fan had run when the particle reading was taken, in
     // seconds; 0 when nobody measured it.
     uint16_t   pmWarmupS;
+    // How many samples each mean holds, over the interval before ts: the
+    // SCD41's CO2, the BME688's cycles, and of those the cycles each index
+    // counted (Bme688Mean).
+    uint16_t   scd41Samples;
+    uint16_t   bme688Samples;
+    uint16_t   iaqSamples;
+    uint16_t   staticIaqSamples;
 };
 
 // Encode to the JSON in docs/readings.md. Returns the length written, or 0

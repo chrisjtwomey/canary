@@ -69,8 +69,8 @@ wiring. First do the [setup](../CONTRIBUTING.md#setup).
 
 ### BSEC
 
-- `iaq` and `iaq_accuracy` come from BSEC, Bosch's closed-source library. It runs in its own task, and takes a
-  sample every `dock.bsec.sample_s`: 300 s by default, or 3 s.
+- `static_iaq` and `iaq`, each with its accuracy, come from BSEC, Bosch's closed-source library. It runs in its
+  own task, and takes a sample every `dock.bsec.sample_s`: 300 s by default, or 3 s.
 - The accuracy starts at 0. With a sample every 3 s, it got to 3 in about 40 minutes on the bench.
 - BSEC saves what it has learned to NVS when the accuracy first gets to 3, and every 6 hours after that. It also
   takes a copy each minute, and the dock sends the newest copy to the server after each batch of readings. After a

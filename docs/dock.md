@@ -12,8 +12,9 @@ setup:  80 MHz; light sleep on; wifi; the settings from NVS; I2C; BSEC; sensors.
 loop:   once a second, light-sleeping between passes
         until known   GET /about           every 30 s, for the server's time
         before a slot GET /board-settings  the settings, applied (dock-settings.md); a recalibration; a stopped sensor started again
-        each slot     queue a reading      a fresh sample, PM included, with the dock's own status, into PSRAM
-        every pass    POST /sensor-readings       the oldest 100 in the queue as one batch, once the time is known
+        each slot     queue a reading      the SCD41 and BME688 means, a fresh SHTC3 and PM sample, the dock's own status, into PSRAM
+        every pass    the SCD41            its measurement, when one is ready, for the next reading's mean
+                      POST /sensor-readings       the oldest 100 in the queue as one batch, once the time is known
                       POST /calibration    BSEC's newest copy of its state, after each batch
         continuous    the PM fan and the status LED
 BSEC:   a FreeRTOS task of its own; its state goes to NVS when accuracy first reaches 3, and every six hours after
@@ -81,11 +82,20 @@ On the server:
   The `dock` and `dock-mock` environments differ only in `-DUSE_MOCK_SENSORS`.
 - **`SensorSuite::sample()`** follows the datasheets:
   1. Wake the SHTC3, measure, wait 13 ms, read, and put it back to sleep.
-  2. Run one BME688 forced cycle, then give its pressure to the SCD41, so that the CO₂ conversion is correct.
-  3. Take the value that the SCD41's periodic mode has ready.
+  2. Take the mean of the BME688's cycles since the last reading, then give its pressure to the SCD41, so that the
+     CO₂ conversion is correct. With BSEC the cycles are BSEC's own; without it the suite runs one forced cycle.
+  3. Take the SCD41's measurement if one is ready, and the mean of those `poll()` took since the last reading. The
+     part makes one every 5 s and keeps only the last, so the dock calls `poll()` every second, and the part is never
+     asked twice for the same measurement.
   4. Read a PM frame, only after the fan's 30 s warm-up. Read once more after a read that fails or is damaged.
   The suite keeps why the SCD41 gave no CO₂, and what each PM read met with its 32 bytes, and the dock logs them
   ([boards.md](boards.md)).
+- **A reading holds the means of the SCD41's and the BME688's samples since the last reading**, so that a value covers
+  the whole 5 or 30 minutes, not one moment of them. Each value counts only its good samples: the SCD41's
+  temperature and humidity after its warm-up, the gas resistance from a heater at its target, each index at accuracy
+  3 (`Bme688Mean`). A value with no good sample is the newest one. `samples` in the reading gives the counts
+  ([readings.md](readings.md)). The status light judges the newest samples (`SensorSuite::newest()`), so an alert
+  does not wait for a mean.
 - **A reading has no `scd41` temperature and humidity during the SCD41's warm-up after each start.** The warm-up is
   `dock.scd41.warmup_s`, 3 minutes by default; 0 keeps every value. A start is a dock start, a change to the part's
   settings, or a recalibration. After a start the part's temperature reads high by about half its offset, and its
@@ -97,8 +107,9 @@ On the server:
 - **The clock is injected** (`IClock`), because the waits are real: `ArduinoClock` on the device, a fake in the
   tests. `ArduinoClock` waits until the millisecond clock has moved on, not for one `::delay()`. While the chip
   light-sleeps, a delay can return up to 51 ms early, and a read before a conversion ends fails.
-- **A sample takes about 150 ms**, nearly all of it the BME688's heater, once a slot. `::delay()` yields on the
-  ESP32, so Wi-Fi keeps running. The interfaces already return false when a part is not ready, so `sample()` can
+- **A sample takes about 150 ms** without BSEC, nearly all of it the BME688's heater, once a slot. With BSEC the
+  suite runs no cycle of its own, and `poll()` adds one short I²C read a second. `::delay()` yields on the ESP32, so
+  Wi-Fi keeps running. The interfaces already return false when a part is not ready, so `sample()` can
   become a state machine without a change to the drivers.
 - **The bus is injected too** (`II2cBus`). The command sequences, the CRCs and the conversions are where a driver
   goes wrong, and a host test cannot drive `Wire`. `ArduinoI2cBus` wraps the `Wire` instance that the dock starts on
@@ -108,5 +119,6 @@ On the server:
   mistake gives a number that looks correct. So Bosch's C API does that arithmetic (`lib/bme68x`, v4.4.8,
   BSD-3-Clause). It reaches the bus through function pointers, so it sits behind `II2cBus` too, and it builds for
   the host tests.
-- **BSEC** gives the IAQ. It drives the BME688 through the same driver, from a task of its own. `BsecBme688` gives
-  `SensorSuite` the newest cycle that BSEC ran, so the sampling sequence is the same with BSEC as without it.
+- **BSEC** gives the two indexes, static and not. It drives the BME688 through the same driver, from a task of its
+  own. `BsecBme688` gives `SensorSuite` the mean of the cycles that BSEC ran since the last reading, so the sampling
+  sequence is the same with BSEC as without it.

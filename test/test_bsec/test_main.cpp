@@ -71,6 +71,9 @@ public:
         result.hasIaq = true;
         result.iaq = 42.0f;
         result.iaqAccuracy = accuracy;
+        result.hasStaticIaq = true;
+        result.staticIaq = 37.0f;
+        result.staticIaqAccuracy = accuracy;
         return kOk;
     }
 };
@@ -249,6 +252,9 @@ void test_a_step_runs_the_cycle_bsec_asks_for_and_keeps_the_index() {
     TEST_ASSERT_TRUE(d.hasIaq);
     TEST_ASSERT_EQUAL_FLOAT(42.0f, d.iaq);
     TEST_ASSERT_EQUAL_UINT8(1, d.iaqAccuracy);
+    TEST_ASSERT_TRUE(d.hasStaticIaq);
+    TEST_ASSERT_EQUAL_FLOAT(37.0f, d.staticIaq);
+    TEST_ASSERT_EQUAL_UINT8(1, d.staticIaqAccuracy);
     TEST_ASSERT_FLOAT_WITHIN(0.1f, 1010.0f, d.pressureHpa);
     TEST_ASSERT_UINT32_WITHIN_MESSAGE(250, 3000, wait, "BSEC asks again in 3 s, less the cycle");
 }
@@ -376,6 +382,26 @@ void test_the_suite_sees_the_newest_cycle_while_it_is_fresh() {
                               "a reading BSEC has not renewed is not a reading");
 }
 
+void test_the_suite_gets_the_mean_of_the_cycles_since_its_last_reading() {
+    BsecBme688 adapter(*runner);
+    runner->begin();
+    bsec->accuracy = 3;
+    runFor(9000);
+    Bme688Data mean, newest;
+    Bme688Samples n = {};
+    TEST_ASSERT_TRUE(adapter.fetchMean(clk->now, mean, newest, n));
+    TEST_ASSERT_TRUE_MESSAGE(n.cycles >= 3, "a cycle every 3 s");
+    TEST_ASSERT_EQUAL_UINT16(n.cycles, n.iaq);
+    TEST_ASSERT_EQUAL_UINT16(n.cycles, n.staticIaq);
+    TEST_ASSERT_EQUAL_FLOAT(42.0f, mean.iaq);
+    TEST_ASSERT_EQUAL_FLOAT(37.0f, mean.staticIaq);
+
+    TEST_ASSERT_TRUE_MESSAGE(adapter.fetchMean(clk->now, mean, newest, n),
+                             "with no cycle since, the newest stands while it is fresh");
+    TEST_ASSERT_EQUAL_UINT16(0, n.cycles);
+    TEST_ASSERT_FALSE(adapter.fetchMean(clk->now + 3 * 3000 + 1, mean, newest, n));
+}
+
 // ─── The sample rate ─────────────────────────────────────────────────────
 
 void test_bsec_starts_at_the_rate_set_before_begin() {
@@ -468,6 +494,7 @@ int main(int, char**) {
     RUN_TEST(test_the_state_is_saved_when_accuracy_reaches_3_then_every_six_hours);
     RUN_TEST(test_a_restart_with_the_servers_copy_waits_for_the_next_step);
     RUN_TEST(test_the_suite_sees_the_newest_cycle_while_it_is_fresh);
+    RUN_TEST(test_the_suite_gets_the_mean_of_the_cycles_since_its_last_reading);
     RUN_TEST(test_bsec_starts_at_the_rate_set_before_begin);
     RUN_TEST(test_a_stored_state_from_the_other_rate_is_not_used);
     RUN_TEST(test_a_new_rate_starts_bsec_again_from_nothing_at_the_next_step);

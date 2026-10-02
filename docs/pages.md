@@ -113,6 +113,8 @@ The Settings page, `/web/config`:
   temperature. The trace pages and `/web/explore` draw the comfortable settings as their guides.
 - The pages show the pressure at sea level, as forecasts give it, from `site.altitude_m`. The pressure as measured
   stays under `pressure_station_hpa`.
+- The pages show BSEC's static IAQ (`static_iaq`), which Bosch recommends for a device that stays in one place. The
+  other index, `iaq`, stretches its scale to the last few days' air, so small changes in a quiet room swing it.
 - The pages show the IAQ only at accuracy 3, BSEC's highest. Below it they say "Calibrating.", and the charts leave
   those readings out. Bosch rates the index at its best only at 3; below it, the index moves with BSEC's
   calibration as much as with the air. The store keeps every reading as the dock posted it. This and the sea-level

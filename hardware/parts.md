@@ -148,7 +148,7 @@ T = −45 + 175 × word/65535; RH = 100 × word/65535.
 
 ### How the dock runs it
 
-- **Periodic measurement (5 s)**, 15 mA on average. The dock reads the latest value at each slot. Low-power periodic (30 s) would average 3.2 mA.
+- **Periodic measurement (5 s)**, 15 mA on average. The dock takes each measurement as it comes, and a reading holds their mean. Low-power periodic (30 s) would average 3.2 mA.
 - ASC works in both periodic modes, and needs ≥ 3 min of ~400 ppm fresh air each week. It does **not** work in power-cycled single-shot mode. `dock.scd41.self_calibration` turns it on or off.
 - The dock gives the SCD41 the BME688's pressure (`set_ambient_pressure`) at each reading.
 - `dock.scd41.temperature_offset_c` sets the temperature offset. Find it in the finished enclosure after 15 min of thermal equilibrium: `offset_new = T_scd − T_shtc3 + offset_prev`.
@@ -275,7 +275,7 @@ Chip ID 0xD0 = 0x61; variant 0xF0 = 0x01. Set osrs_h (0x72), then osrs_t/osrs_p 
 - Sample rates: **LP 3 s** (0.9 mA) or **ULP 300 s** (0.09 mA). Calibration: accuracy 0 for ~5 min (LP) / ~20 min (ULP), then hours to reach 3; needs both clean and polluted air exposure.
 - **State blob 238 bytes** must be saved and restored or calibration restarts. Config blob (~1.9 kB, pick the 3.3 V / 3 s or 300 s / 4 d or 28 d variant) is re-applied each boot. BSEC needs a monotonic clock (`Bsec2::begin` takes a millis function).
 - The dock keeps BSEC's state in RAM, and saves it to NVS every 6 hours ([docs/boards.md](../docs/boards.md#bsec)). Most BSEC failures reported on forums are in deep-sleep setups. The dock uses light sleep, which keeps RAM.
-- The firmware links BSEC2 1.10.2610's `libalgobsec` without Bosch's Arduino wrapper, whose sources need a second copy of the BME68x API; `scripts/bsec.py` adds the headers, the config blobs and the binary. It uses `bme688_sel_33v_3s_4d` or `bme688_sel_33v_300s_4d`, to match `dock.bsec.sample_s`, subscribes to the IAQ outputs and to raw pressure at that rate, and runs in a FreeRTOS task of its own. Without an output that needs pressure, BSEC asks for no pressure conversion, the BME688 skips it, and the reading comes out near 659 hPa. The Arduino package has no BME688 configuration named for IAQ, but `sel` gives an index from the first sample. At 3 s it reached accuracy 1 in about 4 minutes and 3 in about 40 *(bench)*. Restarted from the state in NVS, it is back at accuracy 3 within 3 minutes *(bench)*.
+- The firmware links BSEC2 1.10.2610's `libalgobsec` without Bosch's Arduino wrapper, whose sources need a second copy of the BME68x API; `scripts/bsec.py` adds the headers, the config blobs and the binary. It uses `bme688_sel_33v_3s_4d` or `bme688_sel_33v_300s_4d`, to match `dock.bsec.sample_s`, subscribes to the IAQ outputs and to raw pressure at that rate, posts the IAQ and the static IAQ, and runs in a FreeRTOS task of its own. Without an output that needs pressure, BSEC asks for no pressure conversion, the BME688 skips it, and the reading comes out near 659 hPa. The Arduino package has no BME688 configuration named for IAQ, but `sel` gives an index from the first sample. At 3 s it reached accuracy 1 in about 4 minutes and 3 in about 40 *(bench)*. Restarted from the state in NVS, it is back at accuracy 3 within 3 minutes *(bench)*.
 - BSEC's header gives its pressure input in Pa, but Bosch's own BSEC2 wrapper passes hPa, and so does the firmware. BSEC took 1019 hPa without an error and kept giving an index *(bench)*.
 
 ### Self-heating

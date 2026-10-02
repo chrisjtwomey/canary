@@ -219,18 +219,18 @@ class TestAir:
     def test_index_hero_scale_and_spark(self, data, tz):
         latest = data["latest"]
         soup, specs = render(AirPage("air", tz=tz, width=WIDTH, height=HEIGHT), data)
-        assert text(soup, "#iaq .value") == f"{latest['iaq']:.0f}"
-        assert text(soup, ".verdict") == iaq_verdict(latest["iaq"])
+        assert text(soup, "#iaq .value") == f"{latest['static_iaq']:.0f}"
+        assert text(soup, ".verdict") == iaq_verdict(latest["static_iaq"])
         assert "accuracy high, 3 of 3" in text(soup, ".detail")
         spark, scale = specs
-        assert spark["kind"] == "sparkline" and spark["points"][-1] == [latest["ts"], latest["iaq"]]
+        assert spark["kind"] == "sparkline" and spark["points"][-1] == [latest["ts"], latest["static_iaq"]]
         assert spark["gaps"] == []
-        assert scale["kind"] == "scale" and scale["value"] == latest["iaq"]
+        assert scale["kind"] == "scale" and scale["value"] == latest["static_iaq"]
         assert [z["label"] for z in scale["zones"]] == [
             "excellent", "good", "light", "moderate", "heavy", "severe", "extreme"]
 
     def test_without_an_index_the_gas_resistance_is_the_hero(self, data, tz):
-        latest = {k: v for k, v in data["latest"].items() if k not in ("iaq", "iaq_accuracy")}
+        latest = {k: v for k, v in data["latest"].items() if k not in ("iaq", "iaq_accuracy", "static_iaq", "static_iaq_accuracy")}
         soup, specs = render(AirPage("air", tz=tz, width=WIDTH, height=HEIGHT), dict(data, latest=latest))
         assert text(soup, "#iaq .value") == f"{latest['gas_ohm'] / 1000:.0f}"
         assert text(soup, "#iaq .unit") == "kΩ"
@@ -239,14 +239,14 @@ class TestAir:
         assert specs[1]["value"] is None
 
     def test_heater_cold(self, data, tz):
-        latest = {k: v for k, v in data["latest"].items() if k not in ("iaq", "iaq_accuracy", "gas_ohm")}
+        latest = {k: v for k, v in data["latest"].items() if k not in ("iaq", "iaq_accuracy", "static_iaq", "static_iaq_accuracy", "gas_ohm")}
         latest["valid"] = dict(data["latest"]["valid"], gas=False)
         soup, _ = render(AirPage("air", tz=tz, width=WIDTH, height=HEIGHT), dict(data, latest=latest))
         assert text(soup, "#iaq .value") == "—"
         assert text(soup, "#iaq .cold-tag") == "warming up"
 
     def test_an_index_below_high_accuracy_says_calibrating(self, data, tz):
-        latest = without_uncalibrated_iaq(dict(data["latest"], iaq_accuracy=1))
+        latest = without_uncalibrated_iaq(dict(data["latest"], static_iaq_accuracy=1))
         soup, specs = render(AirPage("air", tz=tz, width=WIDTH, height=HEIGHT), dict(data, latest=latest))
         assert text(soup, "#iaq .value") == "—" and text(soup, "#iaq .unit") == "IAQ"
         assert text(soup, "#iaq .cold-tag") == "calibrating"
@@ -259,7 +259,7 @@ class TestAir:
     def test_a_held_back_stretch_is_a_gap_in_the_spark(self, data, tz):
         end = data["latest"]["ts"]
         hole = (end - 5 * 3600, end - 3 * 3600)
-        history = [without_uncalibrated_iaq(dict(d, iaq_accuracy=1)) if hole[0] <= d["ts"] <= hole[1] else d
+        history = [without_uncalibrated_iaq(dict(d, static_iaq_accuracy=1)) if hole[0] <= d["ts"] <= hole[1] else d
                    for d in data["history_24h"]]
         _, (spark, _) = render(AirPage("air", tz=tz, width=WIDTH, height=HEIGHT), dict(data, history_24h=history))
         (gap,) = spark["gaps"]
@@ -269,7 +269,7 @@ class TestAir:
 
 class TestAirPool:
     def test_trace_and_delta_say_calibrating_below_high_accuracy(self, data72, tz):
-        latest = without_uncalibrated_iaq(dict(data72["latest"], iaq_accuracy=2))
+        latest = without_uncalibrated_iaq(dict(data72["latest"], static_iaq_accuracy=2))
         soup, specs = render(TracePage("air-trace", IAQ, tz=tz, width=WIDTH, height=HEIGHT),
                              dict(data72, latest=latest))
         assert text(soup, "#now .value") == "—" and text(soup, "#now .cold-tag") == "calibrating"
@@ -277,12 +277,12 @@ class TestAirPool:
         assert specs[0]["now"] is None
         soup, specs = render(DeltaPage("air-delta", IAQ, tz=tz, width=WIDTH, height=HEIGHT),
                              {"latest": latest, "history_24h": data72["history_72h"]})
-        assert text(soup, "#delta-iaq .value") == "—" and text(soup, "#delta-iaq .cold-tag") == "calibrating"
-        assert text(soup, "#rate-iaq") == "Calibrating."
+        assert text(soup, "#delta-static_iaq .value") == "—" and text(soup, "#delta-static_iaq .cold-tag") == "calibrating"
+        assert text(soup, "#rate-static_iaq") == "Calibrating."
         assert specs[0]["value"] is None
 
     def test_a_cold_heater_still_says_warming_up(self, data72, tz):
-        latest = {k: v for k, v in data72["latest"].items() if k not in ("iaq", "iaq_accuracy", "gas_ohm")}
+        latest = {k: v for k, v in data72["latest"].items() if k not in ("iaq", "iaq_accuracy", "static_iaq", "static_iaq_accuracy", "gas_ohm")}
         latest["valid"] = dict(data72["latest"]["valid"], gas=False)
         soup, _ = render(TracePage("air-trace", IAQ, tz=tz, width=WIDTH, height=HEIGHT),
                          dict(data72, latest=latest))
@@ -290,7 +290,7 @@ class TestAirPool:
 
     def test_the_trace_has_a_gap_where_the_index_was_held_back(self, data72, tz):
         end = data72["latest"]["ts"]
-        history = [without_uncalibrated_iaq(dict(d, iaq_accuracy=1)) if end - 30 * 3600 <= d["ts"] <= end - 20 * 3600
+        history = [without_uncalibrated_iaq(dict(d, static_iaq_accuracy=1)) if end - 30 * 3600 <= d["ts"] <= end - 20 * 3600
                    else d for d in data72["history_72h"]]
         _, (trace,) = render(TracePage("air-trace", IAQ, tz=tz, width=WIDTH, height=HEIGHT),
                              dict(data72, history_72h=history))
@@ -810,7 +810,7 @@ class TestAbsentSensor:
 
     def test_air(self, data, tz):
         latest = {k: v for k, v in data["latest"].items()
-                  if k not in ("iaq", "iaq_accuracy", "gas_ohm")}
+                  if k not in ("iaq", "iaq_accuracy", "static_iaq", "static_iaq_accuracy", "gas_ohm")}
         latest["valid"] = dict(data["latest"]["valid"], gas=False)
         soup, _ = render(AirPage("air", tz=tz, width=WIDTH, height=HEIGHT),
                          dict(data, latest=latest, status=absent("bme688")))

@@ -49,8 +49,17 @@ public:
 
     // One reading set, stamped with `epoch`. Sensors that fail or are not
     // ready leave their `*Valid` flag false rather than filling in stale or
-    // invented numbers.
+    // invented numbers. The SCD41's and the BME688's values are the means of
+    // their samples since the last reading set (docs/dock.md).
     Readings sample(uint32_t epoch);
+
+    // Takes the SCD41's measurement when it has one ready. It makes one every
+    // 5 s and keeps only the last, so the dock calls this every second.
+    void poll();
+
+    // The last reading set with the newest SCD41 and BME688 samples in place
+    // of the means, for the status light.
+    const Readings& newest() const { return newest_; }
 
     // The SCD41's temperature offset and self-calibration, set at each start,
     // since the part keeps them only until a power cycle. A change while it
@@ -148,6 +157,8 @@ private:
     void retry(SensorState& s, StartFn start);
     void track(SensorState& s, bool due, bool valid);
 
+    ReadFault pollScd41();
+
     void sampleShtc3(Readings& r);
     void sampleBme688(Readings& r);
     void sampleScd41(Readings& r);
@@ -186,6 +197,16 @@ private:
     uint32_t    scd41MeasuringSinceMs_ = 0;
     uint32_t    scd41WarmupMs_ = kScd41WarmupMs;
     ReadFault   scd41Fault_ = ReadFault::None;
+    // The SCD41's measurements since the last reading set. Its temperature
+    // and humidity count only once the part has warmed up.
+    struct Scd41Sums {
+        uint32_t   co2 = 0;
+        double     tempC = 0, rhPct = 0;
+        uint16_t   co2N = 0, warmN = 0;
+        Scd41Data  newest = {};
+    };
+    Scd41Sums   scd41Sums_;
+    Readings    newest_ = {};
     ReadFault   pmReads_[kPmReadAttempts] = {};
     uint8_t     pmFrames_[kPmReadAttempts][32] = {};
     uint8_t     pmReadCount_ = 0;

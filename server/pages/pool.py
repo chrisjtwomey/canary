@@ -78,10 +78,12 @@ CO2 = Metric("co2_ppm", "Carbon dioxide", "ppm", fmt_int, "co2", 0.25, 40, 120,
 PM25 = Metric("pm2_5", "Fine dust", "µg/m³", fmt_int, "particulates", 0.25, 3, 15,
               ((15, "WHO guideline"),), 30, pm25_verdict, pm_meaning,
               floor=0, ceil=20, pad=5, cold_tag="fan warming up", sensor="pmsa003i")
-IAQ = Metric("iaq", "Air quality", "IAQ", _f0, "gas", 0.25, 8, 25,
+# BSEC's static index, which Bosch recommends for a device that stays in one
+# place: the other stretches its scale to the last few days' air.
+IAQ = Metric("static_iaq", "Air quality", "IAQ", _f0, "gas", 0.25, 8, 25,
              ((50, "good"), (150, "stale")), 100, iaq_verdict, iaq_meaning,
              floor=0, ceil=200, pad=20, cold_tag="heater warming up", sensor="bme688",
-             accuracy_key="iaq_accuracy")
+             accuracy_key="static_iaq_accuracy")
 PRESSURE = Metric("pressure_hpa", "Barometer", "hPa", _f1, "pressure", 1, 0.6, 1.2,
                   ((980, "rain"), (1000, "change"), (1015, "fair"), (1030, "very dry")), 15,
                   lambda v: barometer_word(v) + ".", pressure_meaning, pad=3, cold_tag="no reading",

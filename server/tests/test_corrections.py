@@ -35,6 +35,14 @@ def test_an_index_without_its_accuracy_is_held_back():
     assert without_uncalibrated_iaq({"ts": 1, "iaq": 85}) == {"ts": 1}
 
 
+def test_each_index_is_held_back_by_its_own_accuracy():
+    doc = {"ts": 1, "iaq": 190, "iaq_accuracy": 1, "static_iaq": 70, "static_iaq_accuracy": 3}
+    assert without_uncalibrated_iaq(doc) == {"ts": 1, "iaq_accuracy": 1, "static_iaq": 70,
+                                             "static_iaq_accuracy": 3}
+    doc = {"ts": 1, "static_iaq": 70, "static_iaq_accuracy": 2}
+    assert without_uncalibrated_iaq(doc) == {"ts": 1, "static_iaq_accuracy": 2}
+
+
 def test_the_source_and_the_history_hold_back_the_same_readings():
     docs = [{"ts": 0, "iaq": 60, "iaq_accuracy": 3}, {"ts": 1, "iaq": 190, "iaq_accuracy": 1}]
     inner = StaticSource(latest=docs[1], history_24h=docs)

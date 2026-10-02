@@ -3,11 +3,12 @@
 // A TinyS3 with the four sensors on their own regulator. Mains powered and
 // always online: it connects once, and on each of the server's slots takes a
 // reading and queues it, with its own status beside it. Between passes of its
-// loop, once a second, it light-sleeps with Wi-Fi kept. It reads the sensors
-// at no other time. Before each slot it gets ready for it: it asks the server
-// for its settings and applies any change, runs a recalibration the server
-// asks for, and starts again a sensor that gave nothing at the last slot, so
-// it has settled by this one. The server names the slots, every five minutes
+// loop, once a second, it light-sleeps with Wi-Fi kept. Each pass also takes
+// the SCD41's measurement when one is ready, so a reading holds their mean; it
+// reads the other sensors at no other time. Before each slot it gets ready for
+// it: it asks the server for its settings and applies any change, runs a
+// recalibration the server asks for, and starts again a sensor that gave
+// nothing at the last slot, so it has settled by this one. The server names the slots, every five minutes
 // and every half hour overnight, and the time: the dock has no clock and asks
 // for none elsewhere. The queue is in PSRAM, and each pass of the loop posts
 // the oldest hundred of it to the server's /sensor-readings as one batch.
@@ -227,10 +228,10 @@ static void fillBsecStatus(ClientStatus& s) {
 
 // The state as of BSEC's last copy, as the calibration block, and when BSEC
 // took it.
-static size_t calibrationBlock(char* buf, size_t len, uint32_t& savedEpoch) {
+static size_t calibrationBlock(char* buf, size_t len, uint32_t& takenAt) {
     BsecState state;
     if (!bsecRunner.current(state)) return 0;
-    savedEpoch = state.savedEpoch;
+    takenAt = state.savedEpoch;
     return calibrationJson(state.blob, state.len, state.accuracy, state.savedEpoch, state.sampleS,
                            buf, len);
 }
@@ -476,8 +477,9 @@ static void saveRecalibrated() {
 
 // Each setting where it takes effect. Unchanged ones cost nothing, so this
 // runs on every answer.
-// The latest reading, which the light's air and calibration triggers are
-// judged from, and whether a recalibration waits for the SCD41.
+// The newest samples of the last reading, which the light's air and
+// calibration triggers are judged from, and whether a recalibration waits for
+// the SCD41.
 static Readings latestReading = {};
 static bool     scd41Recalibrating = false;
 
@@ -765,9 +767,9 @@ static void queueReading(Readings& r, uint32_t nowMs) {
 // last one sent: about one a batch. A copy it refuses is not sent again.
 static void sendCalibration() {
     if (!calibrationURL[0]) return;
-    uint32_t saved = 0;
-    if (!calibrationBlock(calibration, sizeof(calibration), saved) || !saved ||
-        saved == calibrationSent) {
+    uint32_t takenAt = 0;
+    if (!calibrationBlock(calibration, sizeof(calibration), takenAt) || !takenAt ||
+        takenAt == calibrationSent) {
         return;
     }
     char device[48];
@@ -780,11 +782,11 @@ static void sendCalibration() {
     heardFrom(rsp, millis(), false);
     switch (postResult(code)) {
         case POSTED:
-            calibrationSent = saved;
-            logf(LOG_INFO, "[bsec] state saved at %lu sent (%d)", (unsigned long)saved, code);
+            calibrationSent = takenAt;
+            logf(LOG_INFO, "[bsec] state from %lu sent (%d)", (unsigned long)takenAt, code);
             break;
         case REFUSED:
-            calibrationSent = saved;
+            calibrationSent = takenAt;
             logf(LOG_ERROR, "[bsec] the server refused the state (%d)", code);
             break;
         case TRY_LATER:
@@ -974,7 +976,7 @@ static void sampleWhenDue(uint32_t nowMs) {
     Readings r = sampleSensors(nowMs);
     postTimer.taken(nowMs);
     prewarmed = false;
-    latestReading = r;
+    latestReading = sensors.newest();
     judgeReading();
     queueReading(r, nowMs);
 }
@@ -1053,6 +1055,7 @@ void loop() {
     askForTime(nowMs);
     prewarmWhenDue(nowMs);
     driveFan(nowMs);
+    sensors.poll();
     sampleWhenDue(nowMs);
     sendQueued();
     backlogged = queue->count() >= kBackloggedAt;

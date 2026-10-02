@@ -30,10 +30,14 @@ The dock posts one document for each reading:
   "gas_ohm": 132000,
   "iaq": 63,
   "iaq_accuracy": 2,
+  "static_iaq": 58,
+  "static_iaq_accuracy": 2,
   "pressure_hpa": 1011.2,
 
   "scd41":  { "temp_c": 25.2, "rh_pct": 36.0 },
   "bme688": { "temp_c": 22.8, "rh_pct": 40.2 },
+
+  "samples": { "scd41": 60, "bme688": 100, "iaq": 92, "static_iaq": 92 },
 
   "valid": { "temp_humidity": true, "co2": true, "particulates": true, "pressure": true, "gas": true }
 }
@@ -48,13 +52,17 @@ The dock posts one document for each reading:
 | `pc_*` | PMSA003I | Count per 0.1 L | Particles larger than 0.3 … 10 µm |
 | `pm_warmup_s` | The dock | s | How long the PM fan had run when the particle reading was taken. Only with the particles. |
 | `gas_ohm` | BME688 | Ω | The raw resistance of the heated plate. Lower means more VOC. |
-| `iaq`, `iaq_accuracy` | BME688, through BSEC | 0–500, 0–3 | Not there until BSEC has made an index. The pages show the index only at accuracy 3 ([pages.md](pages.md)). The mock always sends them, at 3. |
+| `iaq`, `iaq_accuracy` | BME688, through BSEC | 0–500, 0–3 | BSEC's index for a device that moves: it stretches its scale to the last few days' air. Not there until BSEC has made an index. Kept to compare with `static_iaq`; no page shows it. The server's mock sends it at accuracy 3. |
+| `static_iaq`, `static_iaq_accuracy` | BME688, through BSEC | 0–500, 0–3 | BSEC's index for a device that stays in one place, which Bosch recommends for one (BME688 datasheet, table 20). Not there until BSEC has made an index. The pages show it, and only at accuracy 3 ([pages.md](pages.md)). Both mocks send the same value and accuracy as `iaq`. |
 | `pressure_hpa` | BME688 | hPa | There each time the chip answered, even on a cold plate |
 | `scd41.*`, `bme688.*` | Those sensors | °C, % | Their own temperature and humidity, which read warm. Kept to tune the offsets, not to show. `scd41` is not there during the SCD41's warm-up after each start, 3 minutes by default ([the sensor code](dock.md#the-sensor-code)). |
+| `samples` | The dock | Counts | How many samples each mean holds: `scd41` the SCD41's measurements, `bme688` the BME688's cycles, and of those, `iaq` and `static_iaq` the cycles that each index counted, those at accuracy 3. `bme688` is 0 when no cycle ran since the last reading, as can happen with a BSEC sample every 5 minutes: its values then repeat the newest cycle. Not there when both counts are 0. |
 | `client` | The firmware | Object | The board's own state ([below](#the-client-object)) |
 | `health` | The dock | Object | How its sensors are ([below](#the-health-object)) |
 | `valid.*` | The firmware | Bool | False when that measurement cannot be trusted this time |
 
+- The SCD41's and the BME688's values are the means of their samples over the interval before `ts`: 5 minutes by
+  day, 30 at night ([the sensor code](dock.md#the-sensor-code)). The SHTC3 and the PMSA003I measure once a reading.
 - Integers are integers. Floats (temperature, humidity, pressure) have one decimal.
 - A key never changes its meaning. A new sensor adds new keys.
 
@@ -75,7 +83,7 @@ with no CO₂ value ready either, looks like this:
              "pressure": true, "gas": false } }
 ```
 
-It has no `gas_ohm` and no `iaq`, but it has `pressure_hpa`.
+It has no `gas_ohm`, no `iaq` and no `static_iaq`, but it has `pressure_hpa`.
 
 ## The `client` object
 
@@ -137,7 +145,7 @@ Diagnostics pages show it.
 | `sensors.*` | Which parts run. A flag goes false when its part stops giving readings, and true again when a restart brings it back. `valid.*` says which values are good now. |
 | `fan_warmup_s` | How long the PM fan runs before each reading. 0 when it runs all the time. |
 | `backlog` | How many readings waited in the queue when this one was taken; about how many the queue holds when full, at the size of the newest (0 before the first); and where they wait: `psram`, or `ram` when the board has no PSRAM to spare. |
-| `bsec` | BSEC's own state: whether it runs; whether it took a saved state when it started; the accuracy of its index; how many of its samples were late; when it last saved its state this boot (0 for not yet); and the seconds between its samples, 3 or 300. |
+| `bsec` | BSEC's own state: whether it runs; whether it took a saved state when it started; the accuracy of `iaq`, not of `static_iaq`; how many of its samples were late; when it last saved its state this boot (0 for not yet); and the seconds between its samples, 3 or 300. |
 | `settings` | The version of the settings that the dock runs, and the keys it refused ([dock-settings.md](dock-settings.md)). |
 | `recalibrated` | The last recalibration that the dock ran: the id that the server gave it, and the correction that the SCD41 made. An `id` of 0 means none yet. |
 | `light` | What the status LED shows: the trigger ([led.md](led.md)), or `updating` or `dark`. |
