@@ -65,7 +65,8 @@ wiring. First do the [setup](../CONTRIBUTING.md#setup).
   read 2: good`: at info level when the second read was good, as a warning when it was not. Each damaged frame
   then logs its 32 bytes, 16 to a line, so that a line queued while the broker is away keeps them whole:
   `[pmsa003i] read 1 0-15: 424d001c …`. A frame torn by the module's own update holds parts of two frames and
-  keeps its start; a noisy wire changes single bits anywhere.
+  keeps its start; a noisy wire changes single bits anywhere. The usual kind is a third: the module stops
+  sending partway through the read, so the frame keeps its start and reads `FF` from that byte on.
 
 ### BSEC
 

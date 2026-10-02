@@ -171,7 +171,7 @@ Each dock document also carries how its sensors are, as opposed to what they mea
 | Key | What it is |
 |---|---|
 | `restarts` | How many times the dock started a sensor again after it stopped answering |
-| `checksum_failures` | The answers that arrived damaged: a PMSA003I frame with a bad start, length or checksum, and an SHTC3 or SCD41 word with a bad CRC. A good bus never makes one, so a rising count shows a loose or noisy wire before a sensor goes missing. |
+| `checksum_failures` | The answers that arrived damaged: a PMSA003I frame with a bad start, length or checksum, and an SHTC3 or SCD41 word with a bad CRC. The PMSA003I damages a few frames a day by itself: it stops sending partway through a read, and the second read is good. A PMSA003I count that rises faster than that, or any SHTC3 or SCD41 CRC failure, shows a loose or noisy wire before a sensor goes missing. |
 | `bme688` | The last reading: whether the gas conversion took place, whether the heater reached its target, and the heater's target and time. Without both flags, the gas resistance and the index made from it are noise. `valid.gas` only says that one of them failed. Not there when the last sample had no BME688 reading. |
 | `scd41` | What the part said at its last start: its serial number, whether its self-calibration is on, and its temperature offset. Also the last pressure that the dock gave it. The part answers these only while idle, so the dock asks before it starts to measure. |
 | `pmsa003i` | The version and error bytes of the last frame |
