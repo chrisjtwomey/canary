@@ -196,7 +196,7 @@
       var reset = field && field.querySelector('.reset');
       if (reset) reset.hidden = atDefault(el);
     });
-    // A group's one reset, as the comfort boxes have: shown while any of its
+    // A group's one reset, as the Comfort group has: shown while any of its
     // fields differs from its default.
     all('.reset-group').forEach(function (button) {
       button.hidden = all('[data-default]', button.closest('.fields')).every(atDefault);

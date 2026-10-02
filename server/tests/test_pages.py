@@ -5,7 +5,7 @@ import re
 import pytest
 from bs4 import BeautifulSoup
 
-from metrics import Comfort, co2_verdict, comfort_verdict, fmt_int
+from metrics import Comfort, co2_verdict, comfort_verdict, fmt_int, rh_along_dew_point, temp_along_feel
 from tests.html import attr, one
 from pages.breathe import BreathePage
 from pages.comfort import ComfortPage
@@ -105,19 +105,34 @@ class TestComfort:
 
         (chart,) = specs
         assert chart["kind"] == "comfort" and chart["canvas"] == "#comfort-chart"
-        assert [z["t"] for z in chart["zones"]] == [[17.0, 26.0], [19.0, 24.0]]
+        lines = {line["text"]: line["points"] for line in chart["lines"]}
+        assert list(lines) == ["cool", "warm", "humid", "dry"]
+        # Each temperature edge is its setting at 50 %, and runs from the
+        # acceptable dry edge to the acceptable humid one.
+        assert [19.0, 50] in lines["cool"] and [24.0, 50] in lines["warm"]
+        assert lines["cool"][0] == [temp_along_feel(19.0, 30.0), 30.0]
+        assert lines["cool"][-1][1] == pytest.approx(rh_along_dew_point(65.0, 21.5, lines["cool"][-1][0]),
+                                                     abs=0.05)
+        # The humid edge is its setting at 21.5 C; the dry edge runs from the
+        # cold edge to the hot one.
+        assert [21.5, 60.0] in lines["humid"]
+        assert lines["dry"] == [[temp_along_feel(17.0, 35.0), 35.0], [temp_along_feel(26.0, 35.0), 35.0]]
+        assert chart["area"][0] == [temp_along_feel(19.0, 35.0), 35.0]
+        assert chart["area"][-1] == [temp_along_feel(24.0, 35.0), 35.0]
         assert chart["now"] == [latest["temp_c"], latest["rh_pct"]]
         assert 30 <= len(chart["trail"]) <= 40
         for t, rh in chart["trail"]:
             assert 10 < t < 35 and 0 <= rh <= 100
 
-    def test_a_person_s_edges_set_the_verdict_and_the_zones(self, data, tz):
+    def test_a_person_s_edges_set_the_verdict_and_the_lines(self, data, tz):
         warmer = Comfort(temp=(24.0, 26.0), acceptable_temp=(20.0, 28.0))
         latest = dict(data["latest"], temp_c=21.2, rh_pct=50)
         page = ComfortPage("comfort", comfort=warmer, tz=tz, width=WIDTH, height=HEIGHT)
         soup, (chart,) = render(page, dict(data, latest=latest))
         assert text(soup, ".verdict") == "Cool."
-        assert [z["t"] for z in chart["zones"]] == [[20.0, 28.0], [24.0, 26.0]]
+        lines = {line["text"]: line["points"] for line in chart["lines"]}
+        assert [24.0, 50] in lines["cool"] and [26.0, 50] in lines["warm"]
+        assert lines["dry"] == [[temp_along_feel(20.0, 35.0), 35.0], [temp_along_feel(28.0, 35.0), 35.0]]
 
     def test_cold_sensor(self, data, tz):
         latest = {k: v for k, v in data["latest"].items() if k not in ("temp_c", "rh_pct")}

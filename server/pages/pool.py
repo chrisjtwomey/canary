@@ -57,7 +57,7 @@ def _f0(v):
 
 
 def comfort_metrics(c: Comfort) -> tuple[Metric, Metric]:
-    """Temperature and humidity, with words and guides at ``c``'s inner box."""
+    """Temperature and humidity, with words and guides at ``c``'s comfortable edges."""
     rh = replace(_RH, guides=((c.rh[0], "dry"), (c.rh[1], "humid")),
                  level_words=lambda v: rh_words(v, c), meaning=lambda r, v: rh_meaning(r, v, c))
     temp = replace(_TEMP, guides=((c.temp[0], "cool"), (c.temp[1], "warm")), second=rh,

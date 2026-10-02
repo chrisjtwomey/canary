@@ -5,6 +5,7 @@ tested without a browser.
 """
 from __future__ import annotations
 
+import functools
 import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta, tzinfo
@@ -12,9 +13,13 @@ from datetime import datetime, timedelta, tzinfo
 from markupsafe import Markup
 
 
+# The Magnus formula's constants, as the mock uses them for the reverse.
+MAGNUS_A, MAGNUS_B = 17.62, 243.12
+
+
 def dew_point_c(temp_c: float, rh_pct: float) -> float:
     """Magnus formula with the constants the mock uses for the reverse."""
-    a, b = 17.62, 243.12
+    a, b = MAGNUS_A, MAGNUS_B
     rh = max(0.1, min(100.0, rh_pct))
     g = a * temp_c / (b + temp_c) + math.log(rh / 100.0)
     return b * g / (a - g)
@@ -40,10 +45,13 @@ def co2_verdict(ppm: float) -> str:
 
 @dataclass(frozen=True)
 class Comfort:
-    """The comfort chart's two boxes, from config.yaml's comfort block, as
-    (from, to) in C and in %: the comfortable box inside the acceptable one.
-    Each measurement has five bands: inside the inner box, between the boxes
-    on either side, and beyond the outer box on either side. A value is
+    """The comfort chart's edges, from config.yaml's comfort block, as
+    (from, to) in C and in %: the comfortable ranges inside the acceptable
+    ones. Each measurement has five bands: inside the comfortable range,
+    between the two ranges on either side, and beyond the acceptable range
+    on either side. A temperature edge is its setting at 50 % and leans with
+    humidity; a humid edge is its setting at the comfortable range's middle
+    temperature and follows a dew point; a dry edge is level. A value is
     judged as the pages show it, to 0.1 C and to 1 %, so a number never sits
     beside the word of the band next to it: 60.3 % shows as 60 %, inside
     an edge at 60."""
@@ -52,11 +60,104 @@ class Comfort:
     acceptable_temp: tuple[float, float] = (17.0, 26.0)
     acceptable_rh: tuple[float, float] = (30.0, 65.0)
 
-    def temp_band(self, t: float) -> str:
-        return _band(float(f"{t:.1f}"), self.temp, self.acceptable_temp, TEMP_BANDS)
+    @property
+    def centre_c(self) -> float:
+        """The comfortable range's middle temperature, where each humid edge
+        is the % that its setting says."""
+        return (self.temp[0] + self.temp[1]) / 2
 
-    def rh_band(self, rh: float) -> str:
-        return _band(float(f"{rh:.0f}"), self.rh, self.acceptable_rh, RH_BANDS)
+    def humid_above(self, t: float) -> tuple[float, float]:
+        """The humid edges at ``t``: the comfortable one and the acceptable
+        one. Each follows a dew point, so it falls as the air warms."""
+        return (rh_along_dew_point(self.rh[1], self.centre_c, t),
+                rh_along_dew_point(self.acceptable_rh[1], self.centre_c, t))
+
+    def temp_edges(self, rh: float) -> tuple[tuple[float, float], tuple[float, float]]:
+        """The temperature edges at ``rh``: the comfortable (from, to) and the
+        acceptable (from, to). Humid air feels a little warmer, so each edge
+        is lower where the air is more humid."""
+        return (tuple(temp_along_feel(e, rh) for e in self.temp),
+                tuple(temp_along_feel(e, rh) for e in self.acceptable_temp))
+
+    def temp_band(self, t: float, rh: float | None = None) -> str:
+        """The temperature band; at 50 % without ``rh``."""
+        shown = float(f"{t:.1f}")
+        if rh is None:
+            return _band(shown, self.temp, self.acceptable_temp, TEMP_BANDS)
+        inner, outer = self.temp_edges(float(f"{rh:.0f}"))
+        return _band(shown, inner, outer, TEMP_BANDS)
+
+    def rh_band(self, rh: float, t: float | None = None) -> str:
+        """The humidity band; at the centre temperature without ``t``."""
+        shown = float(f"{rh:.0f}")
+        if t is None:
+            return _band(shown, self.rh, self.acceptable_rh, RH_BANDS)
+        inner, outer = self.humid_above(float(f"{t:.1f}"))
+        return _band(shown, (self.rh[0], inner), (self.acceptable_rh[0], outer), RH_BANDS)
+
+
+def rh_along_dew_point(rh_at: float, at_c: float, t: float) -> float:
+    """The relative humidity at ``t`` of the air that holds ``rh_at`` % at
+    ``at_c``: the same water, so the same dew point. ASHRAE 55 sets its
+    humidity limit this way, as water in the air, not as a percentage."""
+    return rh_at * math.exp(MAGNUS_A * at_c / (MAGNUS_B + at_c) - MAGNUS_A * t / (MAGNUS_B + t))
+
+
+# The person the temperature edges are for: sitting at a desk (1.1 met), in
+# trousers, a long-sleeved shirt and a jumper (1.0 clo), in still air.
+SITTING_MET, JUMPER_CLO, STILL_AIR_M_S = 1.1, 1.0, 0.1
+# The humidity at which a temperature edge is its setting.
+FEEL_RH = 50.0
+
+
+def pmv(ta: float, rh: float, met: float = SITTING_MET, clo: float = JUMPER_CLO) -> float:
+    """ISO 7730's predicted mean vote: how warm a person feels, from -3 cold
+    to +3 hot, in air at ``ta`` C and ``rh`` %, with walls at the air's
+    temperature."""
+    pa = rh * 10 * math.exp(16.6536 - 4030.183 / (ta + 235))
+    icl = 0.155 * clo
+    m = met * 58.15
+    fcl = 1 + 1.29 * icl if icl <= 0.078 else 1.05 + 0.645 * icl
+    hcf = 12.1 * math.sqrt(STILL_AIR_M_S)
+    taa = ta + 273
+    tcla = taa + (35.5 - ta) / (3.5 * icl + 0.1)
+    p1 = icl * fcl
+    p2, p3, p4 = p1 * 3.96, p1 * 100, p1 * taa
+    p5 = 308.7 - 0.028 * m + p2 * (taa / 100) ** 4
+    # The clothing's surface temperature, by the standard's iteration.
+    xn, xf = tcla / 100, tcla / 50
+    hc = hcf
+    for _ in range(150):
+        if abs(xn - xf) <= 0.00015:
+            break
+        xf = (xf + xn) / 2
+        hc = max(hcf, 2.38 * abs(100 * xf - taa) ** 0.25)
+        xn = (p5 + p4 * hc - p2 * xf ** 4) / (100 + p3 * hc)
+    tcl = 100 * xn - 273
+    loss = (3.05e-3 * (5733 - 6.99 * m - pa)
+            + (0.42 * (m - 58.15) if m > 58.15 else 0)
+            + 1.7e-5 * m * (5867 - pa)
+            + 0.0014 * m * (34 - ta)
+            + 3.96 * fcl * (xn ** 4 - (taa / 100) ** 4)
+            + fcl * hc * (tcl - ta))
+    return (0.303 * math.exp(-0.036 * m) + 0.028) * (m - loss)
+
+
+@functools.lru_cache(maxsize=4096)
+def temp_along_feel(temp_at: float, rh: float) -> float:
+    """The temperature at ``rh`` % that feels as ``temp_at`` does at 50 %:
+    the same PMV, to 0.01 C. The pages judge a temperature against it."""
+    if rh == FEEL_RH:
+        return temp_at
+    target = pmv(temp_at, FEEL_RH)
+    lo, hi = temp_at - 15, temp_at + 15
+    for _ in range(40):
+        mid = (lo + hi) / 2
+        if pmv(mid, rh) < target:
+            lo = mid
+        else:
+            hi = mid
+    return round((lo + hi) / 2, 2)
 
 
 # Each measurement's bands, low to high.
@@ -93,7 +194,7 @@ VERDICTS = {
 
 
 def comfort_verdict(temp_c: float, rh_pct: float, comfort: Comfort = COMFORT) -> str:
-    return VERDICTS[comfort.temp_band(temp_c)][RH_BANDS.index(comfort.rh_band(rh_pct))]
+    return VERDICTS[comfort.temp_band(temp_c, rh_pct)][RH_BANDS.index(comfort.rh_band(rh_pct, temp_c))]
 
 
 def thin(history: list[dict], step_s: int) -> list[dict]:

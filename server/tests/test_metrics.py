@@ -3,8 +3,8 @@ from datetime import datetime
 import pytest
 
 from metrics import (RH_BANDS, TEMP_BANDS, VERDICTS, Comfort, co2_verdict, comfort_verdict, dew_point_c,
-                     extremes, fmt_int, fmt_stamp, gaps, hour_ticks, night_spans, rh_meaning, rh_words,
-                     series, temp_meaning, temp_words, thin, y_range)
+                     extremes, fmt_int, fmt_stamp, gaps, hour_ticks, night_spans, pmv, rh_meaning, rh_words,
+                     series, temp_along_feel, temp_meaning, temp_words, thin, y_range)
 from tests.conftest import AT, TZ
 
 
@@ -26,32 +26,66 @@ def test_co2_bands(ppm, words):
     assert co2_verdict(ppm) == words
 
 
-# With the default boxes: comfortable 19-24 C and 35-60 %, acceptable
-# 17-26 C and 30-65 %.
+# With the default edges: comfortable 19-24 C and 35-60 %, acceptable
+# 17-26 C and 30-65 %, each temperature edge leaning from its setting at
+# 50 %, each humid edge following its dew point from 21.5 C.
 @pytest.mark.parametrize("t, rh, words", [
     (21.0, 45.0, "Comfortable."),
     (25.0, 45.0, "Warm."),
-    (25.0, 62.0, "Warm and humid."),
+    (25.0, 50.0, "Warm and humid."),
     (18.0, 33.0, "Cool and dry."),
     (21.0, 62.0, "Muggy."),
     (21.0, 70.0, "Very humid."),
     (21.0, 33.0, "Dry."),
     (21.0, 25.0, "Very dry."),
     (16.0, 45.0, "Cold."),
-    (16.0, 62.0, "Cold and damp."),
-    (16.0, 70.0, "Dank."),
-    (18.0, 70.0, "Cool and damp."),
-    (27.0, 62.0, "Hot and humid."),
-    (27.0, 70.0, "Sweltering."),
+    (16.0, 88.0, "Cold and damp."),
+    (16.0, 95.0, "Dank."),
+    (18.0, 78.0, "Cool and damp."),
+    (27.0, 45.0, "Hot and humid."),
+    (27.0, 50.0, "Sweltering."),
     (27.0, 25.0, "Hot and very dry."),
 ])
 def test_comfort_wording(t, rh, words):
     assert comfort_verdict(t, rh) == words
 
 
+def test_a_humid_edge_falls_as_the_air_warms():
+    c = Comfort()
+    assert [round(v, 1) for v in c.humid_above(19.0)] == [70.0, 75.9]
+    assert [round(v, 1) for v in c.humid_above(21.5)] == [60.0, 65.0]
+    assert [round(v, 1) for v in c.humid_above(24.0)] == [51.6, 55.9]
+
+
+# Examples from ISO 7730, Annex D, with the walls at the air's temperature.
+@pytest.mark.parametrize("ta, rh, met, clo, vote", [
+    (22.0, 60.0, 1.2, 0.5, -0.75), (27.0, 60.0, 1.2, 0.5, 0.77),
+    (22.0, 60.0, 1.6, 0.5, 0.05), (27.0, 60.0, 1.6, 0.5, 1.17),
+])
+def test_pmv_matches_the_standard(ta, rh, met, clo, vote):
+    assert round(pmv(ta, rh, met, clo), 2) == vote
+
+
+def test_a_temperature_edge_is_its_setting_at_50_percent_and_lower_where_humid():
+    c = Comfort()
+    assert c.temp_edges(50) == ((19.0, 24.0), (17.0, 26.0))
+    assert c.temp_edges(20) == ((19.7, 24.93), (17.6, 27.04))
+    assert c.temp_edges(90) == ((18.15, 22.9), (16.27, 24.78))
+    assert temp_along_feel(22.5, 63) < temp_along_feel(22.5, 62)
+
+
+@pytest.mark.parametrize("t, rh, band", [
+    (19.5, 50, "comfortable"), (19.5, 20, "cool"),
+    (23.2, 50, "comfortable"), (23.2, 90, "warm"),
+    (16.5, 90, "cool"), (16.5, 50, "cold"),
+])
+def test_humidity_moves_a_temperature_across_an_edge(t, rh, band):
+    assert Comfort().temp_band(t, rh) == band
+
+
 @pytest.mark.parametrize("t, rh, words", [
-    (21.0, 60.3, "Comfortable."), (21.0, 60.6, "Muggy."),
-    (24.04, 45.0, "Comfortable."), (24.06, 45.0, "Warm."),
+    (21.5, 60.3, "Comfortable."), (21.5, 60.6, "Muggy."),
+    (24.04, 50.0, "Comfortable."), (24.06, 50.0, "Warm."),
 ])
 def test_a_value_is_judged_as_the_page_shows_it(t, rh, words):
     assert comfort_verdict(t, rh) == words
@@ -67,9 +101,9 @@ def test_every_pair_of_bands_has_a_sentence():
 WARMER = Comfort(temp=(24.0, 26.0), acceptable_temp=(20.0, 28.0))
 
 
-@pytest.mark.parametrize("t, words", [(19.5, "Cold."), (21.2, "Cool."), (24.0, "Comfortable."),
+@pytest.mark.parametrize("t, words", [(19.5, "Cold."), (21.2, "Cool."), (24.5, "Comfortable."),
                                       (26.5, "Warm."), (28.5, "Hot.")])
-def test_the_boxes_set_the_words(t, words):
+def test_the_edges_set_the_words(t, words):
     assert temp_words(t, WARMER) == words
     assert comfort_verdict(t, 45, WARMER) == words
 

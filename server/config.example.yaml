@@ -95,15 +95,15 @@ dock:               # what the dock does between readings; it takes a change bef
 site:
   altitude_m: 10    # pressure is reduced to sea level, as forecasts quote it
 
-comfort:            # the Comfort page's two boxes, and the words for the room
-  # temp_from: 19     # C; Cool below it
-  # temp_to: 24       # C; Warm above it
-  # acceptable_temp_from: 17  # C; Cold below it
-  # acceptable_temp_to: 26    # C; Hot above it
+comfort:            # the Comfort page's edges, and the words for the room
+  # temp_from: 19     # C at 50 %, lower where more humid; Cool below it
+  # temp_to: 24       # C at 50 %; Warm above it
+  # acceptable_temp_from: 17  # C at 50 %; Cold below it
+  # acceptable_temp_to: 26    # C at 50 %; Hot above it
   # rh_from: 35       # %; Dry below it
-  # rh_to: 60         # %; Humid above it
+  # rh_to: 60         # % midway between temp_from and temp_to, lower where warmer; Humid above it
   # acceptable_rh_from: 30    # %; Very dry below it
-  # acceptable_rh_to: 65      # %; Very humid above it
+  # acceptable_rh_to: 65      # % midway between temp_from and temp_to; Very humid above it
 
 client:             # what the board runs, not what this server does
   firmware:         # server-driven updates; the board flashes itself

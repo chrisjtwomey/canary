@@ -67,8 +67,7 @@ VISUAL_CAPTIONS = {
             "Drag the fan band's left edge; past the start, the fan never stops.",
     "start": "Each dot is a reading after the sensor starts; open dots have CO₂ only. "
              "Drag the band's edge to change the warm-up.",
-    "comfort": "Inside the inner box the pages say Comfortable. The outer box is still "
-               "acceptable. Drag an edge to resize a box, or the dot to move both.",
+    "comfort": "",
     "disk": "",
     "led": "What the light showed at the dock's last sync, until you change or click a "
            "pattern. Its size follows Brightness.",
@@ -470,7 +469,7 @@ def _field(a: Airium, f: cf.Field, view: View, images: list[str], heading: str,
 
 
 # The comfort group's fields as ranges: a tab for temperature and one for
-# humidity, each with the comfortable box's range and the acceptable one's.
+# humidity, each with the comfortable range and the acceptable one.
 COMFORT_AXES = (("Temperature", "temp", "°C"), ("Humidity", "rh", "%"))
 COMFORT_BOXES = (("Comfortable", ""), ("Acceptable", "acceptable_"))
 

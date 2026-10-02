@@ -44,12 +44,14 @@ The Settings page, `/web/config`:
   SCD41's is 3 minutes. The group's drawing marks it with a dashed line, "recommended", and a line under the field
   warns while the value is below it. A shorter warm-up is still saved, because it can be the right choice for a
   dock on a battery. `Field.cautions` and `config.js` apply the same rule.
-- The Server tab's Comfort group sets the Comfort page's two boxes (the `comfort` block). Its drawing is the Comfort
-  page's chart, with the room's last 6 hours from `GET /history`. Each edge drags, temperature in 0.5 °C steps and
-  humidity in 1 % steps, and the dot at the inner box's centre moves both boxes. Beside it, the reading now and the
-  sentence the Comfort page would give it change as the boxes do, so a person can match the words to how the room
-  feels. The fields sit under two tabs, Temperature and Humidity, each a Comfortable and an Acceptable range, with
-  one **Reset to defaults**.
+- The Server tab's Comfort group sets the Comfort page's edges (the `comfort` block). Its drawing is the Comfort
+  page's chart, with the room's last 6 hours from `GET /history`. Each comfortable edge drags, temperature in 0.5 °C
+  steps and humidity in 1 % steps, and the dot at the comfortable ranges' centre moves every edge. The acceptable
+  edges have no line, so only their fields set them. Beside the drawing, the reading now and the sentence the
+  Comfort page would give it change as the edges do, so a person can match the words to how the room feels.
+  `sheet.js` has its own copy of the comfort maths in `metrics.py`, so the sentence is the page's own. The fields
+  sit under two tabs, Temperature and Humidity, each a Comfortable and an Acceptable range, with one **Reset to
+  defaults**.
 - A **Reset** puts a default back without an input event, so `config.js` asks the drawings to redraw. Without that, a
   drawing kept a dragged value.
 - **Check** tests an edit, as the server tests the file at start.
@@ -85,13 +87,30 @@ The Settings page, `/web/config`:
 - A trace page shows the value now, with three days behind it and the thresholds as dashed lines. A delta page shows
   the change over a short window, where the value was, and what such a change usually means. Both are in
   `pages/pool.py` (`TracePage`, `DeltaPage`), and a `Metric` spec drives them.
-- The Comfort page's words come from its two boxes, which `comfort` in `config.yaml` sets (`metrics.Comfort`). What
-  is comfortable depends on the person, so the boxes are settings. The defaults are 19–24 °C and 35–60 % inside,
-  17–26 °C and 30–65 % outside. Each measurement has five bands: Cold, Cool, Comfortable, Warm, Hot, and Very dry,
-  Dry, Comfortable, Humid, Very humid. The verdict for a pair of bands is a table, `metrics.VERDICTS`, with words a
-  person would use, such as "Muggy." for a comfortable temperature that is humid, "Cold and damp.", "Dank." and
-  "Sweltering.". A value is judged as the page shows it, to 0.1 °C and to 1 %, so a number never sits beside the
-  word of the next band. The trace pages and `/web/explore` draw the inner box's edges as their guides.
+- The Comfort page's words come from its edges, which `comfort` in `config.yaml` sets (`metrics.Comfort`). What is
+  comfortable depends on the person, so the edges are settings: for each measurement, a comfortable range inside an
+  acceptable one. The defaults are 19–24 °C and 35–60 % comfortable, 17–26 °C and 30–65 % acceptable. Each
+  measurement has five bands: Cold, Cool, Comfortable, Warm, Hot, and Very dry, Dry, Comfortable, Humid, Very humid.
+  The verdict for a pair of bands is a table, `metrics.VERDICTS`, with words a person would use, such as "Muggy."
+  for a comfortable temperature that is humid, "Cold and damp.", "Dank." and "Sweltering.". A value is judged as
+  the page shows it, to 0.1 °C and to 1 %, so a number never sits beside the word of the next band.
+- The edges bend, because how warm air feels depends on its humidity, and how humid it feels depends on its
+  temperature:
+  - A temperature edge is its setting at 50 %, and lies lower where the air is more humid: along it, ISO 7730's
+    predicted mean vote stays the same for a person sitting at a desk in a jumper (`metrics.pmv`). The cool edge
+    runs from 19.7 °C at 20 % to 18.2 °C at 90 %. In this model humid air feels a little warmer; it has no "damp
+    cold". 50 % is where a setting reads as one plain temperature.
+  - A humid edge is its setting at the comfortable range's middle temperature, and follows that dew point: the same
+    water in the air, as ASHRAE 55 sets its humidity limit.
+  - A dry edge is level, as neither standard sets a lower limit.
+  - A humid edge falls as the air warms, so the server refuses one that is below its dry edge where the warm edge
+    meets the dry edge: there the area would close up.
+- The chart hatches the comfortable area and dashes its four edges. Each edge runs on to where its acceptable edges
+  are, which have no line of their own, so the chart shows one area and the ends of the lines show the rest. Each
+  edge's word sits on a white card outside the area, at the place along it farthest from the last 6 hours of
+  readings, so the card covers neither a line nor the readings.
+- A temperature alone, as the Temperature trace page has it, is judged at 50 %, and a humidity alone at the middle
+  temperature. The trace pages and `/web/explore` draw the comfortable settings as their guides.
 - The pages show the pressure at sea level, as forecasts give it, from `site.altitude_m`. The pressure as measured
   stays under `pressure_station_hpa`.
 - The pages show the IAQ only at accuracy 3, BSEC's highest. Below it they say "Calibrating.", and the charts leave

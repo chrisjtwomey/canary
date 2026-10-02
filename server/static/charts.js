@@ -159,19 +159,60 @@
     if (s.now) marker(c, X(s.now[0]), Y(s.now[1]));
   }
 
+  // A word on a white card beside an edge, at whichever of its places
+  // [t, rh, t2, rh2] is farthest from every pixel point in `seen`, upright,
+  // and on the `out` side of the edge, so the card hides neither the edge
+  // nor the hatching. X and Y map the places to pixels.
+  function edgeWord(ctx, l, X, Y, seen, size) {
+    var at = l.at.map(function (p) {
+      return [X(p[0]), Y(p[1]), Math.atan2(Y(p[3]) - Y(p[1]), X(p[2]) - X(p[0]))];
+    });
+    var best = at[Math.floor(at.length / 2)], far = -1;
+    if (seen.length) at.forEach(function (p) {
+      var d = Math.min.apply(null, seen.map(function (q) { return Math.hypot(p[0] - q[0], p[1] - q[1]); }));
+      if (d > far) { far = d; best = p; }
+    });
+    var ang = best[2];
+    if (ang > Math.PI / 2) ang -= Math.PI;
+    if (ang <= -Math.PI / 2) ang += Math.PI;
+    // The card's side: along the edge's normal, whichever way points out.
+    var side = -Math.sin(ang) * l.out[0] - Math.cos(ang) * l.out[1] >= 0 ? 1 : -1;
+    ctx.save();
+    ctx.translate(best[0], best[1]);
+    ctx.rotate(ang);
+    ctx.font = 'italic 500 ' + size + 'px ' + FONT;
+    var w = ctx.measureText(l.text).width + size, h = size * 1.5, off = side * (h / 2 + 4);
+    ctx.fillStyle = G[7];
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(-w / 2, off - h / 2, w, h, 6); else ctx.rect(-w / 2, off - h / 2, w, h);
+    ctx.fill();
+    label(ctx, l.text, 0, off + size * 0.35, { size: size, italic: true, color: G[1], align: 'center' });
+    ctx.restore();
+  }
+
   function comfort(canvas, s) {
     var c = prepare(canvas);
     var m = { l: 60, r: 20, t: 20, b: 50 };
     var X = linear(s.x.min, s.x.max, m.l, c.w - m.r);
     var Y = linear(s.y.min, s.y.max, c.h - m.b, m.t);
+    function px(pts) { return pts.map(function (p) { return [X(p[0]), Y(p[1])]; }); }
 
-    s.zones.forEach(function (z) {
-      var x0 = X(z.t[0]), x1 = X(z.t[1]), y0 = Y(z.rh[1]), y1 = Y(z.rh[0]);
-      c.rc.rectangle(x0, y0, x1 - x0, y1 - y0, {
-        fill: z.color, fillStyle: 'hachure', hachureGap: z.gap, hachureAngle: 45,
-        fillWeight: 1, stroke: z.color, strokeWidth: 1.5, roughness: 1.6, bowing: 1.2
-      });
+    // The comfortable area hatched light, then its four edges dashed as the
+    // trace pages' guides. Each edge runs on to where its acceptable edges
+    // are, and the plot's frame cuts any that runs off it.
+    c.rc.polygon(px(s.area), { stroke: 'none', fill: G[5], fillStyle: 'hachure', hachureGap: 13,
+                               hachureAngle: 45, fillWeight: 1, roughness: 1.6, bowing: 1.2 });
+    c.ctx.save();
+    c.ctx.beginPath();
+    c.ctx.rect(m.l, m.t, c.w - m.l - m.r, c.h - m.t - m.b);
+    c.ctx.clip();
+    s.lines.forEach(function (l) {
+      c.rc.curve(px(l.points), { stroke: G[2], strokeWidth: 2.2, strokeLineDash: [9, 8], roughness: 0.8,
+                                 bowing: 0.5 });
     });
+    c.ctx.restore();
+    var seen = px(s.trail.concat(s.now ? [s.now] : []));
+    s.lines.forEach(function (l) { edgeWord(c.ctx, l, X, Y, seen, 17); });
 
     c.rc.line(m.l, m.t, m.l, c.h - m.b, { stroke: G[2], strokeWidth: 2, roughness: 0.8 });
     c.rc.line(m.l, c.h - m.b, c.w - m.r, c.h - m.b, { stroke: G[2], strokeWidth: 2, roughness: 0.8 });

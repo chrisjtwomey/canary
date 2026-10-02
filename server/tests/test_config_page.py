@@ -643,7 +643,7 @@ def test_the_fine_dust_section_holds_the_fan_and_its_strip(dock_client):
     assert section.select_one("canvas[data-visual=slot]") is not None
 
 
-def test_the_comfort_section_holds_its_boxes_drawing_and_the_room_now(dock_client):
+def test_the_comfort_section_holds_its_drawing_and_the_room_now(dock_client):
     panel = one(soup_of(dock_client.get("/web/config")), "#panel-server")
     section = one(panel, '[data-field="comfort.temp_from"]').find_parent(class_="section")
     verdicts = json.loads(attr(one(section, "canvas[data-visual=comfort]"), "data-verdicts"))

@@ -2,7 +2,7 @@
    hand-drawn look the pages have: a day of syncs or page changes as a
    dial, the time before one sync as a strip, the minutes after the SCD41
    starts as another, the image with its drawn area as a panel, the
-   Comfort page's two boxes, the space the stores take on the disk, and
+   Comfort page's edges, the space the stores take on the disk, and
    the status light playing one of its looks. All but the disk and the
    light are drawn from the settings form's inputs, and dragging one
    writes the inputs, so the form stays what a save sends. A locked input, such as an offline
@@ -932,25 +932,166 @@
     });
   }
 
-  // ── The comfort chart: the Comfort page's two boxes ──────────────
-  // Temperature across, humidity up, as on the Comfort page. Each edge of
-  // either box drags, the inner box staying inside the outer one, and the
-  // dot at the inner box's centre moves the two together. The inner box
-  // moves alone only by its fields. The room's last six hours
-  // trail to its reading now, and the words beside the chart are what the
-  // Comfort page would say of it with the boxes as drawn.
+  // ── The comfort chart: the Comfort page's four edges ─────────────
+  // Temperature across, humidity up, as on the Comfort page: the
+  // comfortable area hatched, and its four edges dashed, each running on to
+  // where its acceptable edges are. Each comfortable edge drags, and the
+  // dot at the area's centre moves every edge together. The acceptable
+  // edges have no line, so only their fields set them. The room's last six
+  // hours trail to its reading now, and the words beside the chart are what
+  // the Comfort page would say of it with the edges as drawn.
   var BOXES = [
     { temp: ['comfort.temp_from', 'comfort.temp_to'], rh: ['comfort.rh_from', 'comfort.rh_to'] },
     { temp: ['comfort.acceptable_temp_from', 'comfort.acceptable_temp_to'],
       rh: ['comfort.acceptable_rh_from', 'comfort.acceptable_rh_to'] }
   ];
-  var TEMP_SPAN = [14, 30], RH_SPAN = [20, 80];
+  var TEMP_SPAN = [14, 30], RH_SPAN = [20, 90];
   // A drag moves an edge in half degrees, and in whole percent: the
   // humidity sensor is good to about 2 %.
   var STEP = { temp: 0.5, rh: 1 };
 
   function snap(v, axis) {
     return Math.round(v / STEP[axis]) * STEP[axis];
+  }
+
+  // A humid edge follows a dew point, as metrics.rh_along_dew_point has it:
+  // its setting is the % at the comfortable range's middle temperature.
+  var MAGNUS_A = 17.62, MAGNUS_B = 243.12;
+  function alongDew(rhAt, atC, t) {
+    return rhAt * Math.exp(MAGNUS_A * atC / (MAGNUS_B + atC) - MAGNUS_A * t / (MAGNUS_B + t));
+  }
+  function centreC() {
+    var a = box(0);
+    return (a.temp[0] + a.temp[1]) / 2;
+  }
+  function humidAt(i, t) {
+    return alongDew(box(i).rh[1], centreC(), t);
+  }
+
+  // ISO 7730's predicted mean vote, as metrics.pmv has it, for the person
+  // metrics names: sitting, in a jumper, in still air.
+  function pmv(ta, rh) {
+    var pa = rh * 10 * Math.exp(16.6536 - 4030.183 / (ta + 235));
+    var icl = 0.155 * 1.0, m = 1.1 * 58.15;
+    var fcl = icl <= 0.078 ? 1 + 1.29 * icl : 1.05 + 0.645 * icl;
+    var hcf = 12.1 * Math.sqrt(0.1), taa = ta + 273;
+    var tcla = taa + (35.5 - ta) / (3.5 * icl + 0.1);
+    var p1 = icl * fcl, p2 = p1 * 3.96, p3 = p1 * 100, p4 = p1 * taa;
+    var p5 = 308.7 - 0.028 * m + p2 * Math.pow(taa / 100, 4);
+    var xn = tcla / 100, xf = tcla / 50, hc = hcf;
+    for (var i = 0; i < 150 && Math.abs(xn - xf) > 0.00015; i++) {
+      xf = (xf + xn) / 2;
+      hc = Math.max(hcf, 2.38 * Math.pow(Math.abs(100 * xf - taa), 0.25));
+      xn = (p5 + p4 * hc - p2 * Math.pow(xf, 4)) / (100 + p3 * hc);
+    }
+    var tcl = 100 * xn - 273;
+    var loss = 3.05e-3 * (5733 - 6.99 * m - pa) + (m > 58.15 ? 0.42 * (m - 58.15) : 0) +
+               1.7e-5 * m * (5867 - pa) + 0.0014 * m * (34 - ta) +
+               3.96 * fcl * (Math.pow(xn, 4) - Math.pow(taa / 100, 4)) + fcl * hc * (tcl - ta);
+    return (0.303 * Math.exp(-0.036 * m) + 0.028) * (m - loss);
+  }
+
+  // The temperature at rh % that feels as tempAt does at 50 %, to 0.01 C,
+  // as metrics.temp_along_feel has it: a temperature edge at rh.
+  function alongFeel(tempAt, rh) {
+    if (rh === 50) return tempAt;
+    var target = pmv(tempAt, 50), lo = tempAt - 15, hi = tempAt + 15;
+    for (var i = 0; i < 40; i++) {
+      var mid = (lo + hi) / 2;
+      if (pmv(mid, rh) < target) lo = mid; else hi = mid;
+    }
+    return Math.round((lo + hi) / 2 * 100) / 100;
+  }
+
+  // The setting whose temperature edge passes through t at rh %: edges lie
+  // close to parallel, so each step moves the setting by what it misses by.
+  function settingThrough(t, rh) {
+    var s = t;
+    for (var i = 0; i < 3; i++) s += t - alongFeel(s, rh);
+    return s;
+  }
+
+  // The % where the temperature edge set at tempAt meets the humid edge set
+  // at rhAt, as pages/comfort.py finds it.
+  function meet(tempAt, rhAt) {
+    var c = centreC(), lo = 0, hi = 100;
+    if (hi <= alongDew(rhAt, c, alongFeel(tempAt, hi))) return hi;
+    for (var i = 0; i < 30; i++) {
+      var mid = (lo + hi) / 2;
+      if (mid < alongDew(rhAt, c, alongFeel(tempAt, mid))) lo = mid; else hi = mid;
+    }
+    return (lo + hi) / 2;
+  }
+
+  // A temperature edge from rh0 up to rh1 %, and a humid edge from t0 to
+  // t1 C, as [t, rh] points.
+  function tempLine(tempAt, rh0, rh1) {
+    var pts = [[alongFeel(tempAt, rh0), rh0]];
+    for (var rh = Math.floor(rh0 / 5 + 1) * 5; rh < rh1; rh += 5) pts.push([alongFeel(tempAt, rh), rh]);
+    pts.push([alongFeel(tempAt, rh1), rh1]);
+    return pts;
+  }
+  function humidLine(rhAt, t0, t1) {
+    var c = centreC(), pts = [[t0, alongDew(rhAt, c, t0)]];
+    for (var t = Math.floor(t0 * 2 + 1) / 2; t < t1; t += 0.5) pts.push([t, alongDew(rhAt, c, t)]);
+    pts.push([t1, alongDew(rhAt, c, t1)]);
+    return pts;
+  }
+
+  function complete() {
+    var a = box(0), b = box(1);
+    return !isNaN(a.temp[0] + a.temp[1] + a.rh[0] + a.rh[1] + b.temp[0] + b.temp[1] + b.rh[0] + b.rh[1]);
+  }
+
+  // Where along its side of the area an edge's word may go, as
+  // pages/comfort.py's PLACES.
+  var PLACES = [0.2, 0.35, 0.5, 0.65, 0.8];
+
+  // The four comfortable edges, as pages/comfort.py's comfort_lines gives
+  // them: each to where its acceptable edges are, with five places for its
+  // word on the area's side and the way out from the area.
+  function edges() {
+    var a = box(0), b = box(1), c = centreC(), dry = a.rh[0], wet = a.rh[1];
+    var top0 = meet(a.temp[0], wet), top1 = meet(a.temp[1], wet);
+    var h0 = alongFeel(a.temp[0], top0), h1 = alongFeel(a.temp[1], top1);
+    function up(tempAt) {
+      var top = meet(tempAt, wet);
+      return PLACES.map(function (f) {
+        var rh = dry + f * (top - dry);
+        return [alongFeel(tempAt, rh), rh, alongFeel(tempAt, rh + 1), rh + 1];
+      });
+    }
+    function across(rhOf, t0, t1) {
+      return PLACES.map(function (f) {
+        var t = t0 + f * (t1 - t0);
+        return [t, rhOf(t), t + 0.5, rhOf(t + 0.5)];
+      });
+    }
+    function humid(t) { return alongDew(wet, c, t); }
+    function level() { return dry; }
+    return [
+      { text: 'cool', key: BOXES[0].temp[0], axis: 'temp', out: [-1, 0],
+        points: tempLine(a.temp[0], b.rh[0], meet(a.temp[0], b.rh[1])), at: up(a.temp[0]) },
+      { text: 'warm', key: BOXES[0].temp[1], axis: 'temp', out: [1, 0],
+        points: tempLine(a.temp[1], b.rh[0], meet(a.temp[1], b.rh[1])), at: up(a.temp[1]) },
+      { text: 'humid', key: BOXES[0].rh[1], axis: 'rh', out: [0, 1],
+        points: humidLine(wet, alongFeel(b.temp[0], meet(b.temp[0], wet)),
+                          alongFeel(b.temp[1], meet(b.temp[1], wet))),
+        at: across(humid, h0, h1) },
+      { text: 'dry', key: BOXES[0].rh[0], axis: 'rh', out: [0, -1],
+        points: [[alongFeel(b.temp[0], dry), dry], [alongFeel(b.temp[1], dry), dry]],
+        at: across(level, alongFeel(a.temp[0], dry), alongFeel(a.temp[1], dry)) }
+    ];
+  }
+
+  // The comfortable area's outline: up the cool edge, along the humid edge,
+  // down the warm edge.
+  function area() {
+    var a = box(0), dry = a.rh[0], wet = a.rh[1];
+    var top0 = meet(a.temp[0], wet), top1 = meet(a.temp[1], wet);
+    return tempLine(a.temp[0], dry, top0)
+      .concat(humidLine(wet, alongFeel(a.temp[0], top0), alongFeel(a.temp[1], top1)).slice(1, -1))
+      .concat(tempLine(a.temp[1], dry, top1).reverse());
   }
 
   function real(name) {
@@ -964,8 +1105,8 @@
     return { temp: b.temp.map(real), rh: b.rh.map(real) };
   }
 
-  // A value's band, low to high: beyond the outer box, between the boxes,
-  // or inside the inner one, as metrics.Comfort counts them.
+  // A value's band, low to high: beyond the acceptable range, between the
+  // ranges, or inside the comfortable one, as metrics.Comfort counts them.
   function band(v, inner, outer, names) {
     if (v < outer[0]) return names[0];
     if (v < inner[0]) return names[1];
@@ -977,8 +1118,10 @@
   // The Comfort page's sentence, from metrics.VERDICTS on the canvas.
   function comfortWords(t, rh, table) {
     var inner = box(0), outer = box(1);
-    var row = table.words[band(t, inner.temp, outer.temp, table.temp)];
-    return row[table.rh.indexOf(band(rh, inner.rh, outer.rh, table.rh))];
+    function at(e) { return alongFeel(e, rh); }
+    var row = table.words[band(t, inner.temp.map(at), outer.temp.map(at), table.temp)];
+    var wet = band(rh, [inner.rh[0], humidAt(0, t)], [outer.rh[0], humidAt(1, t)], table.rh);
+    return row[table.rh.indexOf(wet)];
   }
 
   function ComfortChart(canvas) {
@@ -1023,23 +1166,30 @@
     var p = prepare(this.canvas);
     if (!p.w) return;
     var g = this.geometry();
-    [[1, 13, G[5]], [0, 6, G[3]]].forEach(function (z) {
-      var b = box(z[0]);
-      if ([b.temp[0], b.temp[1], b.rh[0], b.rh[1]].some(isNaN)) return;
-      var x0 = g.x.at(b.temp[0]), x1 = g.x.at(b.temp[1]);
-      var y0 = g.y.at(b.rh[1]), y1 = g.y.at(b.rh[0]);
-      p.rc.rectangle(x0, y0, x1 - x0, y1 - y0, {
-        fill: z[2], fillStyle: 'hachure', hachureGap: z[1], hachureAngle: 45, fillWeight: 1,
-        stroke: z[2], strokeWidth: 1.5, roughness: 1.2
+    function px(pts) { return pts.map(function (q) { return [g.x.at(q[0]), g.y.at(q[1])]; }); }
+    var lines = complete() ? edges() : [];
+    // As the Comfort page draws them: the area hatched light, the edges
+    // dashed, cut at the plot's frame.
+    if (lines.length) {
+      p.rc.polygon(px(area()), { stroke: 'none', fill: G[5], fillStyle: 'hachure', hachureGap: 7,
+                                 hachureAngle: 45, fillWeight: 1, roughness: 1.2 });
+      p.ctx.save();
+      p.ctx.beginPath();
+      p.ctx.rect(g.m.l, g.m.t, g.w - g.m.l - g.m.r, g.h - g.m.t - g.m.b);
+      p.ctx.clip();
+      lines.forEach(function (l) {
+        p.rc.curve(px(l.points), { stroke: G[2], strokeWidth: 1.6, strokeLineDash: [6, 5], roughness: 0.8,
+                                   bowing: 0.5 });
       });
-    });
+      p.ctx.restore();
+    }
     var axisY = g.h - g.m.b;
     p.rc.line(g.m.l, g.m.t, g.m.l, axisY, { stroke: G[2], strokeWidth: 1.6, roughness: 0.8 });
     p.rc.line(g.m.l, axisY, g.w - g.m.r, axisY, { stroke: G[2], strokeWidth: 1.6, roughness: 0.8 });
     [16, 20, 24, 28].forEach(function (t) {
       text(p.ctx, t + '°', g.x.at(t), axisY + 16, { size: 13, color: G[2] });
     });
-    [30, 50, 70].forEach(function (v) {
+    [30, 50, 70, 90].forEach(function (v) {
       text(p.ctx, v + '%', g.m.l - 8, g.y.at(v), { size: 13, color: G[2], align: 'right' });
     });
 
@@ -1054,6 +1204,7 @@
       var last = this.trail[n - 1];
       p.rc.circle(g.x.at(last[0]), g.y.at(last[1]), 22, { stroke: G[0], strokeWidth: 1.5, roughness: 1 });
     }
+    this.edgeWords(p, g, lines);
     var dot = this.dot();
     if (dot) {
       p.ctx.save();
@@ -1069,7 +1220,40 @@
     this.words();
   };
 
-  // The reading now, and the Comfort page's words for it with these boxes.
+  // Each edge's word on a white card on the far side of the edge from the
+  // area, at its place farthest from the room's last hours, as the Comfort
+  // page writes them.
+  ComfortChart.prototype.edgeWords = function (p, g, lines) {
+    var seen = this.trail.map(function (q) { return [g.x.at(q[0]), g.y.at(q[1])]; });
+    p.ctx.font = 'italic 500 12px ' + FONT;
+    lines.forEach(function (l) {
+      var at = l.at.map(function (q) {
+        var x0 = g.x.at(q[0]), y0 = g.y.at(q[1]);
+        return [x0, y0, Math.atan2(g.y.at(q[3]) - y0, g.x.at(q[2]) - x0)];
+      });
+      var best = at[2], far = -1;
+      if (seen.length) at.forEach(function (q) {
+        var d = Math.min.apply(null, seen.map(function (s) { return Math.hypot(q[0] - s[0], q[1] - s[1]); }));
+        if (d > far) { far = d; best = q; }
+      });
+      var ang = best[2];
+      if (ang > Math.PI / 2) ang -= Math.PI;
+      if (ang <= -Math.PI / 2) ang += Math.PI;
+      var side = -Math.sin(ang) * l.out[0] - Math.cos(ang) * l.out[1] >= 0 ? 1 : -1;
+      var cw = p.ctx.measureText(l.text).width + 10, off = side * 13;
+      p.ctx.save();
+      p.ctx.translate(best[0], best[1]);
+      p.ctx.rotate(ang);
+      p.ctx.fillStyle = G[7];
+      p.ctx.beginPath();
+      if (p.ctx.roundRect) p.ctx.roundRect(-cw / 2, off - 9, cw, 18, 4); else p.ctx.rect(-cw / 2, off - 9, cw, 18);
+      p.ctx.fill();
+      text(p.ctx, l.text, 0, off, { size: 12, italic: true, color: G[1] });
+      p.ctx.restore();
+    });
+  };
+
+  // The reading now, and the Comfort page's words for it with these edges.
   ComfortChart.prototype.words = function () {
     if (!this.now) return;
     var last = this.trail[this.trail.length - 1];
@@ -1086,31 +1270,26 @@
                                        this.verdicts);
   };
 
-  // The edge under a point: the nearest of each box's four. Where an inner
-  // edge lies on an outer one, the side pressed from decides: from inside
-  // the inner box its edge, from outside it the outer box's.
+  // The comfortable edge under a point: the nearest within 9 pixels, along
+  // the part of it that is drawn.
   ComfortChart.prototype.edgeAt = function (x, y) {
-    var g = this.geometry(), best = null;
-    var a = box(0);
-    var inside = x > g.x.at(a.temp[0]) && x < g.x.at(a.temp[1]) &&
-                 y > g.y.at(a.rh[1]) && y < g.y.at(a.rh[0]);
-    BOXES.forEach(function (keys, i) {
-      var b = box(i);
-      var x0 = g.x.at(b.temp[0]), x1 = g.x.at(b.temp[1]);
-      var y0 = g.y.at(b.rh[1]), y1 = g.y.at(b.rh[0]);
-      var inY = y > y0 - 8 && y < y1 + 8, inX = x > x0 - 8 && x < x1 + 8;
-      var side = (i === 0) === inside ? 0 : 0.5;
-      [[keys.temp[0], 'temp', Math.abs(x - x0), inY], [keys.temp[1], 'temp', Math.abs(x - x1), inY],
-       [keys.rh[0], 'rh', Math.abs(y - y1), inX], [keys.rh[1], 'rh', Math.abs(y - y0), inX]]
-        .forEach(function (e) {
-          var d = e[2] + side;
-          if (e[3] && e[2] <= 9 && (!best || d < best.d)) best = { key: e[0], axis: e[1], d: d };
-        });
+    if (!complete()) return null;
+    var g = this.geometry(), best = null, t = g.x.of(x), rh = g.y.of(y);
+    edges().forEach(function (l) {
+      var first = l.points[0], end = l.points[l.points.length - 1], d;
+      if (l.axis === 'temp') {
+        if (y > g.y.at(first[1]) + 8 || y < g.y.at(end[1]) - 8) return;
+        d = Math.abs(x - g.x.at(alongFeel(real(l.key), rh)));
+      } else {
+        if (x < g.x.at(first[0]) - 8 || x > g.x.at(end[0]) + 8) return;
+        d = Math.abs(y - g.y.at(l.text === 'humid' ? humidAt(0, t) : real(l.key)));
+      }
+      if (d <= 9 && (!best || d < best.d)) best = { key: l.key, axis: l.axis, d: d };
     });
     return best;
   };
 
-  // The dot that moves both boxes: at the inner box's centre.
+  // The dot that moves every edge: at the comfortable ranges' centre.
   ComfortChart.prototype.dot = function () {
     var g = this.geometry(), a = box(0);
     if (isNaN(a.temp[0] + a.temp[1] + a.rh[0] + a.rh[1])) return null;
@@ -1137,7 +1316,7 @@
     e.preventDefault();
   };
 
-  // The dot moves both boxes whole, in steps, within the chart.
+  // The dot moves every edge, in steps, within the chart.
   ComfortChart.prototype.moveBox = function (x, y) {
     var g = this.geometry(), f = this.drag.from;
     var by = { temp: snap(g.x.of(x) - g.x.of(f.x), 'temp'), rh: snap(g.y.of(y) - g.y.of(f.y), 'rh') };
@@ -1152,8 +1331,9 @@
     });
   };
 
-  // An edge moves in steps, between the edges either side. With
-  // nothing held, the pointer shows what a press would take.
+  // An edge moves in steps, between its acceptable edge and the comfortable
+  // edge opposite. With nothing held, the pointer shows what a press would
+  // take.
   ComfortChart.prototype.move = function (e) {
     var r = this.canvas.getBoundingClientRect(), g = this.geometry();
     var x = e.clientX - r.left, y = e.clientY - r.top;
@@ -1168,13 +1348,24 @@
       return;
     }
     var key = this.drag.key, axis = this.drag.axis;
-    var v = snap(axis === 'temp' ? g.x.of(e.clientX - r.left) : g.y.of(e.clientY - r.top), axis);
-    var inner = BOXES[0][axis], outer = BOXES[1][axis], span = axis === 'temp' ? TEMP_SPAN : RH_SPAN;
+    var inner = BOXES[0][axis], outer = BOXES[1][axis];
+    var t = g.x.of(x), rh = g.y.of(y);
+    // A temperature edge is set by the setting whose edge passes under the
+    // pointer; the humid edge by the dew point under the pointer, as the %
+    // it gives at the middle temperature.
+    var v = axis === 'temp' ? settingThrough(t, rh)
+      : key === inner[1] ? alongDew(rh, t, centreC()) : rh;
+    v = snap(v, axis);
     var limits = {};
     limits[inner[0]] = [real(outer[0]), real(inner[1]) - STEP[axis]];
     limits[inner[1]] = [real(inner[0]) + STEP[axis], real(outer[1])];
-    limits[outer[0]] = [span[0], real(inner[0])];
-    limits[outer[1]] = [real(inner[1]), span[1]];
+    if (key === inner[1] && axis === 'rh') {
+      // Above the dry edge where the warm edge meets it, where the humid
+      // edge is lowest.
+      var a = box(0);
+      limits[key][0] = Math.max(limits[key][0],
+        Math.ceil((a.rh[0] + 1) / alongDew(1, centreC(), alongFeel(a.temp[1], a.rh[0]))));
+    }
     set(key, Math.max(limits[key][0], Math.min(limits[key][1], v)));
   };
 

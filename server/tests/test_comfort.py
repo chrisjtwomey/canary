@@ -1,4 +1,4 @@
-"""The Comfort page's two boxes: config.yaml's comfort block, the guides they
+"""The Comfort page's edges: config.yaml's comfort block, the guides they
 draw, and the drawing that sets them on the Settings page."""
 import pytest
 from epd_server.config import ConfigError
@@ -12,7 +12,7 @@ from web import HistoryQuery
 WARMER = Comfort(temp=(24.0, 26.0), acceptable_temp=(20.0, 28.0))
 
 
-def test_without_a_comfort_block_the_boxes_are_the_defaults():
+def test_without_a_comfort_block_the_edges_are_the_defaults():
     assert load_comfort({}) == Comfort((19, 24), (35, 60), (17, 26), (30, 65))
 
 
@@ -29,13 +29,16 @@ def test_a_comfort_block_sets_the_edges_it_names():
     ({"acceptable_temp_from": 20}, "comfort.acceptable_temp_from must be at or below comfort.temp_from"),
     ({"rh_to": 70}, "comfort.acceptable_rh_to must be at or above comfort.rh_to"),
     ({"temp_from": "cool"}, "comfort.temp_from must be a number"),
+    ({"rh_to": 40}, "comfort.rh_to must be higher: at comfort.temp_to its edge is below comfort.rh_from"),
+    # The warm edge leans out to 24.45 C at 35 %, where 41 % at 21.5 C is 34.9 %.
+    ({"rh_to": 41}, "comfort.rh_to must be higher: at comfort.temp_to its edge is below comfort.rh_from"),
 ])
-def test_boxes_that_cannot_work_are_refused(block, words):
+def test_edges_that_cannot_work_are_refused(block, words):
     with pytest.raises(ConfigError, match=f"^{words}$"):
         load_comfort({"comfort": block})
 
 
-def test_the_traces_draw_the_inner_box():
+def test_the_traces_draw_the_comfortable_edges():
     temp, rh = comfort_metrics(WARMER)
     assert temp.guides == ((24.0, "cool"), (26.0, "warm"))
     assert rh.guides == ((35.0, "dry"), (60.0, "humid"))
@@ -47,3 +50,4 @@ def test_the_explorer_draws_a_person_s_edges():
                            comfort=WARMER)
     guides = history.answer({"metric": "temperature"})["spec"]["guides"]
     assert [(g["y"], g["label"]) for g in guides] == [(24.0, "cool"), (26.0, "warm")]
+

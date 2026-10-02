@@ -31,7 +31,7 @@ from board_logs import LogsQuery
 from config_page import config_blueprint
 from display_settings import DISPLAY, DisplaySync, display_version
 from dock_settings import DOCK, BoardSettings, DockSettings, load_dock_settings
-from metrics import COMFORT, Comfort
+from metrics import COMFORT, Comfort, temp_along_feel
 from off_hours import OffHoursSchedule, splash_when_off
 from pages.air import AirPage
 from pages.breathe import BreathePage
@@ -233,13 +233,14 @@ class Settings:
 
 
 def load_comfort(config: dict) -> Comfort:
-    """The comfort block's two boxes, each edge left out taking its default:
-    ``temp_from`` and ``temp_to`` in C, ``rh_from`` and ``rh_to`` in %, and
-    the same four with ``acceptable_`` before them for the outer box.
+    """The comfort block's edges, each left out taking its default:
+    ``temp_from`` and ``temp_to`` in C, ``rh_from`` and ``rh_to`` in %, for
+    the comfortable ranges, and the same four with ``acceptable_`` before
+    them for the acceptable ranges.
 
     Raises:
-        ConfigError: an edge that is not a number, a box that ends where it
-            starts or before, or an inner box outside the outer one.
+        ConfigError: an edge that is not a number, a range that ends where it
+            starts or before, or a comfortable range outside its acceptable one.
     """
     boxes = {}
     for box in ("temp", "rh", "acceptable_temp", "acceptable_rh"):
@@ -259,6 +260,14 @@ def load_comfort(config: dict) -> Comfort:
             raise ConfigError(f"comfort.{outer}_from must be at or below comfort.{inner}_from")
         if getattr(c, outer)[1] < getattr(c, inner)[1]:
             raise ConfigError(f"comfort.{outer}_to must be at or above comfort.{inner}_to")
+    # A humid edge falls as the air warms; it must clear its dry edge at the
+    # warm side too, where the warm edge meets the dry one.
+    for which, (prefix, temps, dry) in enumerate((("", c.temp, c.rh[0]),
+                                                  ("acceptable_", c.acceptable_temp,
+                                                   c.acceptable_rh[0]))):
+        if c.humid_above(temp_along_feel(temps[1], dry))[which] <= dry:
+            raise ConfigError(f"comfort.{prefix}rh_to must be higher: at "
+                              f"comfort.{prefix}temp_to its edge is below comfort.{prefix}rh_from")
     return c
 
 
