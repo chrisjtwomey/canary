@@ -164,6 +164,8 @@ public:
         out.savedEpoch = prefs.getULong("saved", 0);
         // A copy saved without its rate is from before there was a choice: 3 s.
         out.sampleS = prefs.getUShort("rate", IBsec::kLpSampleS);
+        // And one without its history is from Bosch's 4-day configuration.
+        out.historyDays = prefs.getUChar("days", 4);
         prefs.end();
         return out.len > 0;
     }
@@ -174,6 +176,7 @@ public:
         prefs.putUChar("accuracy", state.accuracy);
         prefs.putULong("saved", state.savedEpoch);
         prefs.putUShort("rate", state.sampleS);
+        prefs.putUChar("days", state.historyDays);
         prefs.end();
         return ok;
     }
@@ -208,6 +211,9 @@ static void startBsec() {
     } else {
         if (bsec.restored) {
             logf(LOG_INFO, "[bsec] start: NVS state (accuracy %u)", (unsigned)nvsState.accuracy);
+        } else if (nvsState.len > 0) {
+            logf(LOG_INFO, "[bsec] start: NVS state learned at %u s with %u days of history; starting from nothing",
+                 (unsigned)nvsState.sampleS, (unsigned)nvsState.historyDays);
         } else {
             log(LOG_INFO, "[bsec] start: no saved state");
         }
@@ -233,7 +239,7 @@ static size_t calibrationBlock(char* buf, size_t len, uint32_t& takenAt) {
     if (!bsecRunner.current(state)) return 0;
     takenAt = state.savedEpoch;
     return calibrationJson(state.blob, state.len, state.accuracy, state.savedEpoch, state.sampleS,
-                           buf, len);
+                           state.historyDays, buf, len);
 }
 
 // Asked once a boot, after the server has taken a batch of readings, so a failed
@@ -245,13 +251,13 @@ static void restoreFromServer() {
     askedServerForState = true;
 
     const uint16_t rate = bsecRunner.sampleS();
-    char url[380];
-    snprintf(url, sizeof(url), "%s?device=%s&before=%lu&sample_s=%u", calibrationURL, CLIENT_NAME,
-             (unsigned long)bootEpoch, (unsigned)rate);
+    char url[400];
+    snprintf(url, sizeof(url), "%s?device=%s&before=%lu&sample_s=%u&history_days=%u", calibrationURL,
+             CLIENT_NAME, (unsigned long)bootEpoch, (unsigned)rate, (unsigned)IBsec::kHistoryDays);
     int32_t size = 1024;
     uint8_t* answer = downloadFile(url, clientUserAgent(CLIENT_NAME), &size, nullptr);
-    // A copy from the other rate is no use to BSEC, so it counts as none.
-    const SavedCopy ours = {nvsState.len > 0 && nvsState.sampleS == rate, nvsState.accuracy,
+    // A copy BSEC cannot start from counts as none.
+    const SavedCopy ours = {nvsState.len > 0 && learnedFor(nvsState, rate), nvsState.accuracy,
                             nvsState.savedEpoch};
     char why[80];
     if (!answer) {
@@ -269,8 +275,9 @@ static void restoreFromServer() {
 
     BsecState theirs = {};
     if (!parseBme688Calibration(text, theirs.blob, sizeof(theirs.blob), theirs.len,
-                                theirs.accuracy, theirs.savedEpoch, theirs.sampleS) ||
-        theirs.sampleS != rate) {
+                                theirs.accuracy, theirs.savedEpoch, theirs.sampleS,
+                                theirs.historyDays) ||
+        !learnedFor(theirs, rate)) {
         logf(LOG_WARNING, "[bsec] state: %s selected (server state unreadable)",
              ours.present ? "NVS" : "none");
         return;
@@ -587,9 +594,8 @@ static char     withClient[FileBacklog::kMaxDoc + sizeof(clientJson) + 32];
 static char     body[sizeof(withClient) + sizeof(healthJsonBuf) + 16];
 static char     ipText[16];
 
-// BSEC's state as base64 is about 380 bytes of calibration block.
-static char     calibration[400];
-static char     calibrationBody[400 + 64];
+static char     calibration[kMaxCalibrationJson];
+static char     calibrationBody[kMaxCalibrationJson + 64];
 // The save time of the copy the server last took; 0 for none this boot.
 static uint32_t calibrationSent = 0;
 

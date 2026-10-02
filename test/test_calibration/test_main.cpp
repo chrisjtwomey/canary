@@ -59,12 +59,21 @@ void test_base64_writes_nothing_it_cannot_finish() {
 void test_calibration_block_matches_readings_md() {
     const uint8_t state[3] = {'f', 'o', 'o'};
     char buf[128];
-    const size_t n = calibrationJson(state, 3, 3, 1757443200, 300, buf, sizeof(buf));
-    TEST_ASSERT_EQUAL_STRING("{\"bme688\":{\"state\":\"Zm9v\",\"accuracy\":3,\"saved\":1757443200,\"sample_s\":300}}", buf);
+    const size_t n = calibrationJson(state, 3, 3, 1757443200, 300, 28, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("{\"bme688\":{\"state\":\"Zm9v\",\"accuracy\":3,\"saved\":1757443200,"
+                             "\"sample_s\":300,\"history_days\":28}}", buf);
     TEST_ASSERT_EQUAL_UINT(strlen(buf), n);
     char tiny[30];
-    TEST_ASSERT_EQUAL_UINT(0, calibrationJson(state, 3, 3, 1757443200, 300, tiny, sizeof(tiny)));
+    TEST_ASSERT_EQUAL_UINT(0, calibrationJson(state, 3, 3, 1757443200, 300, 28, tiny, sizeof(tiny)));
     TEST_ASSERT_EQUAL_STRING("", tiny);
+}
+
+void test_the_largest_block_fits_its_bound() {
+    uint8_t state[238];
+    memset(state, 0xFF, sizeof(state));
+    char buf[kMaxCalibrationJson];
+    TEST_ASSERT_EQUAL_UINT(kMaxCalibrationJson - 1,
+                           calibrationJson(state, sizeof(state), 3, 0xFFFFFFFFul, 300, 28, buf, sizeof(buf)));
 }
 
 void test_a_member_is_spliced_before_the_closing_brace() {
@@ -81,40 +90,55 @@ void test_a_member_is_spliced_before_the_closing_brace() {
 void test_the_servers_answer_is_decoded() {
     uint8_t state[238];
     uint32_t len = 0, saved = 0;
-    uint8_t accuracy = 0;
+    uint8_t accuracy = 0, days = 0;
     uint16_t rate = 0;
     TEST_ASSERT_TRUE(parseBme688Calibration(
         "{\"bme688\": {\"accuracy\": 3, \"saved\": 1757443200, \"sample_s\": 300,"
-        " \"state\": \"Zm9vYmFy\"}}",
-        state, sizeof(state), len, accuracy, saved, rate));
+        " \"history_days\": 28, \"state\": \"Zm9vYmFy\"}}",
+        state, sizeof(state), len, accuracy, saved, rate, days));
     TEST_ASSERT_EQUAL_UINT16(300, rate);
+    TEST_ASSERT_EQUAL_UINT8(28, days);
     TEST_ASSERT_EQUAL_UINT32(6, len);
     TEST_ASSERT_EQUAL_MEMORY("foobar", state, 6);
     TEST_ASSERT_EQUAL_UINT8(3, accuracy);
     TEST_ASSERT_EQUAL_UINT32(1757443200, saved);
 }
 
+void test_an_answer_without_its_history_is_from_the_4_day_configuration() {
+    uint8_t state[8];
+    uint32_t len = 0, saved = 0;
+    uint8_t accuracy = 0, days = 0;
+    uint16_t rate = 0;
+    TEST_ASSERT_TRUE(parseBme688Calibration(
+        "{\"bme688\":{\"state\":\"Zm9v\",\"accuracy\":3,\"saved\":1,\"sample_s\":3}}",
+        state, sizeof(state), len, accuracy, saved, rate, days));
+    TEST_ASSERT_EQUAL_UINT8(4, days);
+    TEST_ASSERT_FALSE_MESSAGE(parseBme688Calibration(
+        "{\"bme688\":{\"state\":\"Zm9v\",\"accuracy\":3,\"saved\":1,\"sample_s\":3,\"history_days\":\"x\"}}",
+        state, sizeof(state), len, accuracy, saved, rate, days), "a history that is not a number");
+}
+
 void test_an_answer_without_a_usable_bme688_entry_is_refused() {
     uint8_t state[4];
     uint32_t len = 0, saved = 0;
-    uint8_t accuracy = 0;
+    uint8_t accuracy = 0, days = 0;
     uint16_t rate = 0;
-    TEST_ASSERT_FALSE(parseBme688Calibration("{}", state, sizeof(state), len, accuracy, saved, rate));
+    TEST_ASSERT_FALSE(parseBme688Calibration("{}", state, sizeof(state), len, accuracy, saved, rate, days));
     TEST_ASSERT_FALSE(parseBme688Calibration("{\"scd41\":{\"offset\":1.5}}", state, sizeof(state),
-                                             len, accuracy, saved, rate));
+                                             len, accuracy, saved, rate, days));
     TEST_ASSERT_FALSE_MESSAGE(
         parseBme688Calibration("{\"bme688\":{\"state\":\"Zm9vYmFy\",\"accuracy\":3,\"saved\":1,\"sample_s\":3}}",
-                               state, sizeof(state), len, accuracy, saved, rate),
+                               state, sizeof(state), len, accuracy, saved, rate, days),
         "six bytes do not fit in four");
     TEST_ASSERT_FALSE_MESSAGE(
         parseBme688Calibration("{\"bme688\":{\"state\":\"Zg==\",\"accuracy\":7,\"saved\":1,\"sample_s\":3}}",
-                               state, sizeof(state), len, accuracy, saved, rate),
+                               state, sizeof(state), len, accuracy, saved, rate, days),
         "accuracy runs 0 to 3");
     TEST_ASSERT_FALSE(parseBme688Calibration("{\"bme688\":{\"state\":\"Zg==\",\"saved\":1}}", state,
-                                             sizeof(state), len, accuracy, saved, rate));
+                                             sizeof(state), len, accuracy, saved, rate, days));
     TEST_ASSERT_FALSE_MESSAGE(
         parseBme688Calibration("{\"bme688\":{\"state\":\"Zg==\",\"accuracy\":3,\"saved\":1}}",
-                               state, sizeof(state), len, accuracy, saved, rate),
+                               state, sizeof(state), len, accuracy, saved, rate, days),
         "a copy that does not say its rate cannot be matched to BSEC's");
 }
 
@@ -182,8 +206,10 @@ int main(int, char**) {
     RUN_TEST(test_base64_carries_a_whole_state_blob_there_and_back);
     RUN_TEST(test_base64_writes_nothing_it_cannot_finish);
     RUN_TEST(test_calibration_block_matches_readings_md);
+    RUN_TEST(test_the_largest_block_fits_its_bound);
     RUN_TEST(test_a_member_is_spliced_before_the_closing_brace);
     RUN_TEST(test_the_servers_answer_is_decoded);
+    RUN_TEST(test_an_answer_without_its_history_is_from_the_4_day_configuration);
     RUN_TEST(test_an_answer_without_a_usable_bme688_entry_is_refused);
     RUN_TEST(test_the_servers_copy_wins_when_nvs_has_none);
     RUN_TEST(test_there_is_nothing_to_weigh_without_a_server_copy);

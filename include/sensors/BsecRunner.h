@@ -15,7 +15,13 @@ struct BsecState {
     uint8_t  accuracy;     // the IAQ accuracy when it was taken, 0-3
     uint32_t savedEpoch;   // UTC seconds when it was taken; 0 before the server set the clock
     uint16_t sampleS;      // the rate it was learned at; useless at the other
+    uint8_t  historyDays;  // the history of the configuration it was learned with
 };
+
+// Whether BSEC can start from `state` at a sample every `sampleS`.
+inline bool learnedFor(const BsecState& state, uint16_t sampleS) {
+    return state.sampleS == sampleS && state.historyDays == IBsec::kHistoryDays;
+}
 
 // Where the state waits between boots: NVS on the board.
 class IBsecStateStore {
@@ -48,7 +54,7 @@ public:
         : bsec_(bsec), bme_(bme), clock_(clock), store_(store), epoch_(epoch) {}
 
     // Start the sensor and BSEC, from the stored state when there is one
-    // learned at this rate. Runs before the task does. `stored` gets the state
+    // learned for this rate. Runs before the task does. `stored` gets the state
     // that was loaded, so the loop can weigh it against the server's copy.
     bool begin(BsecState* stored = nullptr);
     uint32_t step();
@@ -67,7 +73,7 @@ public:
     // them, and the counts. False when no cycle has run since.
     bool takeMean(Bme688Data& mean, Bme688Data& newest, Bme688Samples& n);
     // Any task: start BSEC again from `state` at the next step. False, and
-    // nothing done, for a state learned at another rate.
+    // nothing done, for a state not learned for this rate.
     bool restartWith(const BsecState& state);
     // Any task: the state as of the last copy. False before the first.
     bool current(BsecState& out) const;

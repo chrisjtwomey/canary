@@ -17,7 +17,7 @@ from typing import Any, Callable, Iterable, Iterator
 from epd_server.logs import LEVELS
 from epd_server.store import key
 
-from sources.calibration import MAX_ACCURACY, SAMPLE_S, SENSORS
+from sources.calibration import HISTORY_DAYS, MAX_ACCURACY, SAMPLE_S, SENSORS
 
 # Rows read, written or asked about in one go. Three key columns a row keeps
 # the question about a batch under any SQLite's limit on how many values it takes.
@@ -72,7 +72,11 @@ def _calibration_row(doc: Any) -> tuple:
     rate = doc.get("sample_s", SAMPLE_S[0])
     if isinstance(rate, bool) or rate not in SAMPLE_S:
         raise ValueError("sample_s must be 3 or 300")
-    return device, sensor, saved, accuracy, state, rate
+    # And one exported before the 28-day configuration holds 4-day copies.
+    days = doc.get("history_days", HISTORY_DAYS[0])
+    if isinstance(days, bool) or days not in HISTORY_DAYS:
+        raise ValueError("history_days must be 4 or 28")
+    return device, sensor, saved, accuracy, state, rate, days
 
 
 def _logs_row(doc: Any) -> tuple:
@@ -107,9 +111,10 @@ class Kind:
 KINDS = {
     "readings": Kind("readings", ("doc",), "ts", ("device", "ts"),
                      ("device", "ts", "doc"), _readings_row, "ts"),
-    "calibration": Kind("calibration", ("device", "sensor", "saved", "accuracy", "state", "sample_s"),
+    "calibration": Kind("calibration",
+                        ("device", "sensor", "saved", "accuracy", "state", "sample_s", "history_days"),
                         "saved", ("device", "sensor", "saved"),
-                        ("device", "sensor", "saved", "accuracy", "state", "sample_s"),
+                        ("device", "sensor", "saved", "accuracy", "state", "sample_s", "history_days"),
                         _calibration_row, "saved"),
     "logs": Kind("lines", ("board", "received", "level", "text"), "id",
                  ("board", "received", "text"), ("board", "received", "level", "text"), _logs_row,

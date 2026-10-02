@@ -4,12 +4,14 @@ The dock posts ``{"device": ..., "calibration": {...}}`` to /calibration
 after each batch of readings, with BSEC's newest copy; the block is keyed by
 sensor.
 Only the BME688 has learned state the board can back up: BSEC's, as base64,
-with the IAQ accuracy, the time the copy was taken and the seconds between
-BSEC's samples, since a copy learned at one rate is no use at another. This
-keeps every copy for ``keep_days``, and answers the board's
-``GET /calibration?device=&before=&sample_s=`` with the newest copy at that
-rate taken before that time, preferring one that reached accuracy 3. The
-board asks with its boot time, so it never gets back a copy it made since.
+with the IAQ accuracy, the time the copy was taken, the seconds between
+BSEC's samples and the days of history its configuration keeps, since a copy
+learned with one configuration is no use with another. This keeps every copy
+for ``keep_days``, and answers the board's
+``GET /calibration?device=&before=&sample_s=&history_days=`` with the newest
+copy for that configuration taken before that time, preferring one that
+reached accuracy 3. The board asks with its boot time, so it never gets back
+a copy it made since.
 
 It also keeps the recalibrations asked of a board, each with the time it
 was asked as its id, until a newer one takes its place.
@@ -30,6 +32,7 @@ _SCHEMA = (
     " accuracy INTEGER NOT NULL,"
     " state TEXT NOT NULL,"
     " sample_s INTEGER NOT NULL DEFAULT 3,"
+    " history_days INTEGER NOT NULL DEFAULT 4,"
     " PRIMARY KEY (device, sensor, saved))",
     "CREATE TABLE IF NOT EXISTS requests ("
     " id INTEGER PRIMARY KEY,"
@@ -39,20 +42,24 @@ _SCHEMA = (
 )
 
 # The sensors whose state the board sends, the highest accuracy BSEC reports,
-# and BSEC's two rates, in seconds between samples.
+# BSEC's two rates, in seconds between samples, and the days of history of
+# Bosch's two configurations at each rate. A board sends no history_days
+# before it runs the 28-day one.
 SENSORS = ("bme688",)
 MAX_ACCURACY = 3
 SAMPLE_S = (3, 300)
+HISTORY_DAYS = (4, 28)
 
 
-def _copy(entry) -> tuple[str, int, int, int] | None:
-    """``(state, accuracy, saved, sample_s)`` from one sensor's entry, or None
+def _copy(entry) -> tuple[str, int, int, int, int] | None:
+    """``(state, accuracy, saved, sample_s, history_days)`` from one sensor's entry, or None
     when it is not a usable copy. One taken before the board's clock was set
     has no age to weigh against another, so it is not kept."""
     if not isinstance(entry, dict):
         return None
     state, accuracy, saved = entry.get("state"), entry.get("accuracy"), entry.get("saved")
     rate = entry.get("sample_s")
+    days = entry.get("history_days", HISTORY_DAYS[0])
     if not isinstance(state, str) or not state:
         return None
     if isinstance(accuracy, bool) or not isinstance(accuracy, int) or not 0 <= accuracy <= MAX_ACCURACY:
@@ -61,7 +68,9 @@ def _copy(entry) -> tuple[str, int, int, int] | None:
         return None
     if isinstance(rate, bool) or rate not in SAMPLE_S:
         return None
-    return state, accuracy, saved, rate
+    if isinstance(days, bool) or days not in HISTORY_DAYS:
+        return None
+    return state, accuracy, saved, rate, days
 
 
 class CalibrationStore:
@@ -83,6 +92,10 @@ class CalibrationStore:
                 # Every copy kept before BSEC had a choice of rate was at 3 s.
                 self._db.execute("ALTER TABLE calibration"
                                  " ADD COLUMN sample_s INTEGER NOT NULL DEFAULT 3")
+            if "history_days" not in columns:
+                # Every copy kept before then was learned with the 4-day one.
+                self._db.execute("ALTER TABLE calibration"
+                                 " ADD COLUMN history_days INTEGER NOT NULL DEFAULT 4")
 
     def add(self, device: str, block: Mapping) -> int:
         """Keep each usable copy in ``block``, and delete those older than
@@ -92,33 +105,35 @@ class CalibrationStore:
         for sensor in SENSORS:
             copy = _copy(block.get(sensor))
             if copy is not None:
-                state, accuracy, saved, rate = copy
-                rows.append((device, sensor, saved, accuracy, state, rate))
+                state, accuracy, saved, rate, days = copy
+                rows.append((device, sensor, saved, accuracy, state, rate, days))
         with self._lock, self._db:
             self._db.executemany(
                 "INSERT OR REPLACE INTO calibration"
-                " (device, sensor, saved, accuracy, state, sample_s) VALUES (?, ?, ?, ?, ?, ?)",
+                " (device, sensor, saved, accuracy, state, sample_s, history_days)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)",
                 rows)
             if self.keep_days:
                 self._db.execute("DELETE FROM calibration WHERE saved < ?",
                                  (int(self.now() - self.keep_days * 86400),))
         return len(rows)
 
-    def lookup(self, device: str, before: int, sample_s: int) -> dict | None:
-        """Each sensor's newest copy at ``sample_s`` taken before ``before``,
-        one at accuracy 3 first, in the shape of the block the board sends.
-        None when there is none."""
+    def lookup(self, device: str, before: int, sample_s: int, history_days: int) -> dict | None:
+        """Each sensor's newest copy at ``sample_s`` and ``history_days``
+        taken before ``before``, one at accuracy 3 first, in the shape of the
+        block the board sends. None when there is none."""
         answer = {}
         with self._lock:
             for sensor in SENSORS:
                 row = self._db.execute(
                     "SELECT state, accuracy, saved FROM calibration"
                     " WHERE device = ? AND sensor = ? AND saved < ? AND sample_s = ?"
+                    " AND history_days = ?"
                     " ORDER BY accuracy >= ? DESC, saved DESC LIMIT 1",
-                    (device, sensor, before, sample_s, MAX_ACCURACY)).fetchone()
+                    (device, sensor, before, sample_s, history_days, MAX_ACCURACY)).fetchone()
                 if row:
                     answer[sensor] = {"state": row[0], "accuracy": row[1], "saved": row[2],
-                                      "sample_s": sample_s}
+                                      "sample_s": sample_s, "history_days": history_days}
         return answer or None
 
     def accept(self, docs: list[dict]) -> None:
@@ -137,8 +152,8 @@ class CalibrationStore:
             self.add(doc["device"], doc["calibration"])
 
     def answer(self, args: Mapping[str, str]) -> dict | None:
-        """The GET /calibration handler, with ``device``, ``before`` and
-        ``sample_s`` from the query string."""
+        """The GET /calibration handler, with ``device``, ``before``,
+        ``sample_s`` and ``history_days`` from the query string."""
         device = args.get("device")
         if not device:
             raise ValueError("device is required")
@@ -152,7 +167,13 @@ class CalibrationStore:
             rate = 0
         if rate not in SAMPLE_S:
             raise ValueError(f"sample_s must be one of {', '.join(map(str, SAMPLE_S))}")
-        return self.lookup(device, before, rate)
+        try:
+            days = int(args.get("history_days", HISTORY_DAYS[0]))
+        except ValueError:
+            days = 0
+        if days not in HISTORY_DAYS:
+            raise ValueError(f"history_days must be one of {', '.join(map(str, HISTORY_DAYS))}")
+        return self.lookup(device, before, rate, days)
 
     def request(self, device: str, sensor: str, ppm: int, at: int) -> int:
         """Ask ``device`` to recalibrate ``sensor`` to ``ppm``. Returns the

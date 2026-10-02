@@ -19,7 +19,7 @@ int64_t BsecRunner::nowMs64() {
 // nothing, and a copy of it from the server would fail the same way.
 bool BsecRunner::startBsec(const BsecState* state) {
     const uint16_t rate = sampleS();
-    bool fromState = state != nullptr && state->len > 0 && state->sampleS == rate;
+    bool fromState = state != nullptr && state->len > 0 && learnedFor(*state, rate);
     started_ = false;
     {
         std::lock_guard<std::mutex> guard(lock_);
@@ -60,7 +60,7 @@ bool BsecRunner::begin(BsecState* stored) {
 
 bool BsecRunner::restartWith(const BsecState& state) {
     std::lock_guard<std::mutex> guard(lock_);
-    if (state.sampleS != sampleS_) return false;
+    if (!learnedFor(state, sampleS_)) return false;
     pending_ = state;
     restartPending_ = true;
     freshPending_ = false;
@@ -192,6 +192,7 @@ void BsecRunner::copyState(uint32_t nowMs) {
     copy.savedEpoch = epoch_ ? epoch_() : 0;
     std::lock_guard<std::mutex> guard(lock_);
     copy.sampleS = sampleS_;
+    copy.historyDays = IBsec::kHistoryDays;
     copy.accuracy = status_.accuracy;
     current_ = copy;
     haveCurrent_ = true;

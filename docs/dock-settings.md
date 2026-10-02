@@ -37,8 +37,9 @@ Each setting takes effect as soon as it can.
   setting is written to the part's EEPROM.
 - **The SCD41's warm-up** takes effect at the next reading. It does not stop the part.
 - **BSEC's sample rate:** every 3 s, or every 5 minutes, which is the default. Bosch gives a configuration for each
-  rate, and the state that BSEC learns at one rate is no use at the other. So each saved copy says its rate, the
-  dock restores only a copy at its own rate, and a change of rate starts BSEC again from nothing. At 5 minutes, Bosch
+  rate, and the state that BSEC learns at one rate is no use at the other. So each saved copy says its rate and its
+  history ([boards.md](boards.md#bsec)), the dock restores only a copy at its own rate and history, and a change of
+  rate starts BSEC again from nothing. At 5 minutes, Bosch
   counts the BME688's self-heating as negligible, and a reading has the mean of the cycles since the last one: at
   5 minutes, one cycle or none. With none, the reading repeats the newest cycle, up to 15 minutes old, and its
   `samples.bme688` is 0. At 3 s, about 100 cycles a reading.

@@ -164,9 +164,11 @@ void tearDown() {
 }
 
 static BsecState stateOf(std::initializer_list<uint8_t> bytes, uint8_t accuracy, uint32_t saved,
-                         uint16_t sampleS = IBsec::kLpSampleS) {
+                         uint16_t sampleS = IBsec::kLpSampleS,
+                         uint8_t historyDays = IBsec::kHistoryDays) {
     BsecState s = {};
     s.sampleS = sampleS;
+    s.historyDays = historyDays;
     for (uint8_t b : bytes) s.blob[s.len++] = b;
     s.accuracy = accuracy;
     s.savedEpoch = saved;
@@ -325,6 +327,7 @@ void test_the_state_is_copied_each_minute_with_its_accuracy_and_time() {
     TEST_ASSERT_TRUE(runner->current(s));
     TEST_ASSERT_EQUAL_UINT32(10, s.len);
     TEST_ASSERT_EQUAL_UINT8(2, s.accuracy);
+    TEST_ASSERT_EQUAL_UINT8(IBsec::kHistoryDays, s.historyDays);
     TEST_ASSERT_EQUAL_UINT32_MESSAGE(0, s.savedEpoch, "the clock is not set yet");
 
     fakeEpoch = 1757443200;
@@ -458,6 +461,22 @@ void test_a_copy_from_the_other_rate_is_refused() {
     TEST_ASSERT_EQUAL_STRING("", bsec->calls.c_str());
 }
 
+// ─── The history ─────────────────────────────────────────────────────────
+
+void test_a_stored_state_from_the_4_day_history_is_not_used() {
+    store->has = true;
+    store->stored = stateOf({1, 2, 3}, 3, 1000, IBsec::kLpSampleS, 4);
+    runner->begin();
+    TEST_ASSERT_EQUAL_STRING("init subscribe ", bsec->calls.c_str());
+    TEST_ASSERT_FALSE(runner->status().restored);
+}
+
+void test_a_copy_from_the_4_day_history_is_refused() {
+    runner->begin();
+    TEST_ASSERT_FALSE(runner->restartWith(stateOf({9, 9}, 3, 2000, IBsec::kLpSampleS, 4)));
+    TEST_ASSERT_TRUE(runner->restartWith(stateOf({9, 9}, 3, 2000)));
+}
+
 void test_at_300_s_a_cycle_stays_fresh_for_three_cycles() {
     BsecBme688 adapter(*runner);
     Bme688Data d;
@@ -500,6 +519,8 @@ int main(int, char**) {
     RUN_TEST(test_a_new_rate_starts_bsec_again_from_nothing_at_the_next_step);
     RUN_TEST(test_the_same_rate_again_or_an_unknown_one_changes_nothing);
     RUN_TEST(test_a_copy_from_the_other_rate_is_refused);
+    RUN_TEST(test_a_stored_state_from_the_4_day_history_is_not_used);
+    RUN_TEST(test_a_copy_from_the_4_day_history_is_refused);
     RUN_TEST(test_at_300_s_a_cycle_stays_fresh_for_three_cycles);
     RUN_TEST(test_at_300_s_bsec_is_asked_again_after_300_s);
     return UNITY_END();

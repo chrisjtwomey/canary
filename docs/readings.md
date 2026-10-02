@@ -232,7 +232,7 @@ batch of readings that the server takes, the dock posts the newest copy to `POST
 { "device": "canary-dock",
   "calibration": {
     "bme688": { "state": "<320 characters of base64>", "accuracy": 3, "saved": 1757443200,
-                "sample_s": 300 } } }
+                "sample_s": 300, "history_days": 28 } } }
 ```
 
 | Key | What it is |
@@ -241,20 +241,23 @@ batch of readings that the server takes, the dock posts the newest copy to `POST
 | `accuracy` | The IAQ accuracy when the copy was taken |
 | `saved` | When the copy was taken, in UTC seconds. A copy taken before the clock was set is not sent. |
 | `sample_s` | The rate at which BSEC learned it. A state is no use to BSEC at the other rate. |
+| `history_days` | The days of history in the configuration that BSEC learned it with: 28. A state is no use to BSEC with the other configuration, Bosch's 4-day one. A copy without it is a 4-day copy. |
 
 - The block is keyed by sensor, so that other sensors can join it. Only the BME688 has a learned state that the
   board can back up.
 - A copy that the server refuses is not sent again. A copy that the server could not take for now goes after the
   next batch that it takes.
 - The calibration store keeps the block for each source kind. It keeps each copy for `calibration.keep_days`.
-- `GET /calibration?device=<device>&before=<epoch>&sample_s=<3 or 300>` gives the newest copy at that rate taken
-  before that time, a copy at accuracy 3 first, or a 404. Copies kept before BSEC had a choice of rate count as 3 s.
+- `GET /calibration?device=<device>&before=<epoch>&sample_s=<3 or 300>&history_days=<4 or 28>` gives the newest
+  copy at that rate and history taken before that time, a copy at accuracy 3 first, or a 404. Copies kept before
+  BSEC had a choice of rate count as 3 s. Copies kept, and requests made, without a history count as 4 days.
 
-After a boot, once the server has taken a batch, the dock asks for the server's copy at BSEC's rate:
-`GET /calibration?device=<device>&before=<boot time>&sample_s=<rate>`.
+After a boot, once the server has taken a batch, the dock asks for the server's copy at BSEC's rate and history:
+`GET /calibration?device=<device>&before=<boot time>&sample_s=<rate>&history_days=28`.
 
 - It starts BSEC again on that copy when it is better than the copy from NVS: more accurate, or as accurate and more
   than an hour newer.
-- A copy from NVS at the other rate counts as none.
+- A copy from NVS at the other rate, or with the 4-day history, counts as none. BSEC then starts from nothing, and
+  the log says so: `[bsec] start: NVS state learned at 3 s with 4 days of history; starting from nothing`.
 - When the settings change the rate, BSEC starts again from nothing at the new rate, and the dock asks the server
   once more.

@@ -29,7 +29,8 @@ struct BsecResult {
 //
 // BSEC samples every kLpSampleS or every kUlpSampleS seconds. Each rate has a
 // configuration of its own, and a state learned at one is no use at the
-// other.
+// other. Bosch ships each with a 4-day or a 28-day history; this uses
+// kHistoryDays, and a state learned with the other is no use either.
 class IBsec {
 public:
     virtual ~IBsec() {}
@@ -49,6 +50,7 @@ public:
     static const uint32_t kMaxState = 238;    // BSEC_MAX_STATE_BLOB_SIZE
     static const uint16_t kLpSampleS = 3;
     static const uint16_t kUlpSampleS = 300;
+    static const uint8_t  kHistoryDays = 28;
     static bool knownRate(uint16_t sampleS) {
         return sampleS == kLpSampleS || sampleS == kUlpSampleS;
     }

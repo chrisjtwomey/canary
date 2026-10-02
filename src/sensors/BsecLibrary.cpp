@@ -9,14 +9,15 @@
 namespace {
 
 // Bosch's configurations for a BME688 on 3.3 V, one for each rate, each with
-// a four-day calibration window, compiled in the way Bosch's own examples do
-// it.
+// the 28-day history of IBsec::kHistoryDays, compiled in the way Bosch's own
+// examples do it.
 const uint8_t kLpConfig[] = {
-#include "bme688/bme688_sel_33v_3s_4d/bsec_selectivity.txt"
+#include "bme688/bme688_sel_33v_3s_28d/bsec_selectivity.txt"
 };
 const uint8_t kUlpConfig[] = {
-#include "bme688/bme688_sel_33v_300s_4d/bsec_selectivity.txt"
+#include "bme688/bme688_sel_33v_300s_28d/bsec_selectivity.txt"
 };
+static_assert(IBsec::kHistoryDays == 28, "the configurations above are Bosch's 28-day ones");
 
 // What Bosch's wrapper sets aside for an instance; init() checks that the
 // binary agrees.
