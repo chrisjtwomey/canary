@@ -3,9 +3,8 @@ from __future__ import annotations
 
 from airium import Airium
 
-from metrics import (ACCEPTABLE_RH, ACCEPTABLE_T, COMFORT_RH, COMFORT_T, NO_SENSOR_TAG,
-                     NO_SENSOR_VERDICT, abs_humidity_g_m3, comfort_verdict, dew_point_c, fmt_stamp,
-                     sensor_absent, thin)
+from metrics import (COMFORT, NO_SENSOR_TAG, NO_SENSOR_VERDICT, Comfort, abs_humidity_g_m3,
+                     comfort_verdict, dew_point_c, fmt_stamp, sensor_absent, thin)
 from pages.base import EnvPage
 
 TRAIL_HOURS = 6
@@ -17,6 +16,10 @@ class ComfortPage(EnvPage):
     stylesheet = "comfort.css"
     css_class = "comfort"
     requires = ("latest", "history_24h", "status")
+
+    def __init__(self, name: str, comfort: Comfort = COMFORT, **kwargs):
+        super().__init__(name, **kwargs)
+        self.comfort = comfort
 
     def body(self, a: Airium, **data) -> None:
         latest: dict = data["latest"]
@@ -51,7 +54,7 @@ class ComfortPage(EnvPage):
                 a.div(klass="detail", _t=(
                     f"Dew point {dew_point_c(temp, rh):.1f}°, "
                     f"vapour {abs_humidity_g_m3(temp, rh):.1f} g/m³."))
-                verdict = comfort_verdict(temp, rh)
+                verdict = comfort_verdict(temp, rh, self.comfort)
             extra = self.extra_detail(latest, history_24h)
             if extra:
                 a.div(klass="detail", _t=extra)
@@ -71,14 +74,16 @@ class ComfortPage(EnvPage):
         temp = latest.get("temp_c")
         rh = latest.get("rh_pct")
         now = [temp, rh] if latest.get("valid", {}).get("temp_humidity") and temp is not None and rh is not None else None
+        c = self.comfort
         return [{
             "kind": "comfort",
             "canvas": "#comfort-chart",
             "x": {"min": 14, "max": 30},
             "y": {"min": 20, "max": 80},
             "zones": [
-                {"t": list(ACCEPTABLE_T), "rh": list(ACCEPTABLE_RH), "gap": 13, "color": "#b6b6b6"},
-                {"t": list(COMFORT_T), "rh": list(COMFORT_RH), "gap": 6, "color": "#6d6d6d"},
+                {"t": list(c.acceptable_temp), "rh": list(c.acceptable_rh), "gap": 13,
+                 "color": "#b6b6b6"},
+                {"t": list(c.temp), "rh": list(c.rh), "gap": 6, "color": "#6d6d6d"},
             ],
             "xticks": [16, 20, 24, 28],
             "yticks": [30, 50, 70],

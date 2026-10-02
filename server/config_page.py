@@ -30,7 +30,7 @@ import os
 import shutil
 import time
 import zoneinfo
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Any, Callable
 
@@ -44,6 +44,7 @@ import dock_settings as ds
 from about import config_version
 from display_settings import DisplaySync
 from html_doc import Html
+from metrics import RH_BANDS, TEMP_BANDS, VERDICTS
 from pages.base import EnvPage
 from metrics import age_span
 from transfer import Corrupt, Held, Overlap, Transfer
@@ -66,6 +67,8 @@ VISUAL_CAPTIONS = {
             "Drag the fan band's left edge; past the start, the fan never stops.",
     "start": "Each dot is a reading after the sensor starts; open dots have CO₂ only. "
              "Drag the band's edge to change the warm-up.",
+    "comfort": "Inside the inner box the pages say Comfortable. The outer box is still "
+               "acceptable. Drag an edge to resize a box, or the dot to move both.",
     "disk": "",
     "led": "What the light showed at the dock's last sync, until you change or click a "
            "pattern. Its size follows Brightness.",
@@ -351,7 +354,8 @@ def _rows(a: Airium, f: cf.Field, view: View, images: list[str], heading: str,
                 a.p(klass="help", _t=f.help)
 
 
-def _control(a: Airium, f: cf.Field, view: View, env: str | None, locked: bool) -> None:
+def _control(a: Airium, f: cf.Field, view: View, env: str | None, locked: bool,
+             aria_label: str = "") -> None:
     value = view.values.get(f.key, "")
     if env is not None and f.scale != 1 and env.strip().isdigit():
         env = cf.input_text(f, int(env))
@@ -389,6 +393,8 @@ def _control(a: Airium, f: cf.Field, view: View, env: str | None, locked: bool) 
             a.span(klass="state", **{"aria-hidden": "true"})
         else:
             attrs: dict[str, Any] = {"value": env if env is not None else value}
+            if aria_label:
+                attrs["aria-label"] = aria_label
             if f.hint:
                 attrs["placeholder"] = f.hint
             if f.kind in ("int", "number"):
@@ -461,6 +467,49 @@ def _field(a: Airium, f: cf.Field, view: View, images: list[str], heading: str,
             a.p(klass="env", _t=f"Set by the environment variable {f.env_name}")
         if error:
             a.p(klass="error", id="e-" + _id(f.key)[2:], _t=error)
+
+
+# The comfort group's fields as ranges: a tab for temperature and one for
+# humidity, each with the comfortable box's range and the acceptable one's.
+COMFORT_AXES = (("Temperature", "temp", "°C"), ("Humidity", "rh", "%"))
+COMFORT_BOXES = (("Comfortable", ""), ("Acceptable", "acceptable_"))
+
+
+def _comfort_ranges(a: Airium, g: cf.Group, view: View, locked: bool) -> None:
+    """Each box's two edges on each axis as one range, under a tab per axis,
+    and one reset for all eight. config.js runs the tabs, and shows the reset
+    while any edge differs from its default. Without scripts both axes show,
+    each under its name."""
+    by_key = {f.key: f for f in g.fields}
+    with a.div(klass="ranges"):
+        with a.div(klass="subtabs", role="tablist", **{"aria-label": "Measurement"}):
+            for i, (words, axis, _) in enumerate(COMFORT_AXES):
+                a.button(type="button", role="tab", klass="subtab", id=f"comfort-tab-{axis}",
+                         _t=words, **{"data-axis": axis, "aria-controls": f"comfort-{axis}",
+                                      "aria-selected": "true" if i == 0 else "false"})
+        for words, axis, unit in COMFORT_AXES:
+            with a.div(klass="range-panel", id=f"comfort-{axis}", role="tabpanel",
+                       **{"data-axis": axis, "aria-labelledby": f"comfort-tab-{axis}"}):
+                a.p(klass="panel-name", _t=words)
+                for box_words, prefix in COMFORT_BOXES:
+                    with a.div(klass="range-row"):
+                        a.span(klass="name", _t=box_words)
+                        with a.div(klass="range"):
+                            for n, end in enumerate(("from", "to")):
+                                if n:
+                                    a.span(klass="dash", _t="–")
+                                f = by_key[f"comfort.{prefix}{axis}_{end}"]
+                                error = view.errors.get(f.key)
+                                with a.div(klass="field" + (" invalid" if error else ""),
+                                           **{"data-field": f.key}):
+                                    _control(a, replace(f, unit=""), view, f.env_value(), locked,
+                                             aria_label=f.label)
+                                    if error:
+                                        a.p(klass="error", id="e-" + _id(f.key)[2:], _t=error)
+                            a.span(klass="unit", _t=unit)
+    at_default = all(view.values.get(f.key) == view.defaults.get(f.key) for f in g.fields)
+    a.button(type="button", klass="reset-group", _t="Reset to defaults",
+             **({"hidden": "hidden"} if at_default or locked else {}))
 
 
 def _bytes(count: int) -> str:
@@ -787,6 +836,11 @@ def _group(a: Airium, g: cf.Group, view: View, images: list[str], locked: bool,
             if g.visual == "disk":
                 marks["data-disk"] = json.dumps(_disk_data(view.held, view.disk),
                                                 separators=(",", ":"))
+            if g.visual == "comfort":
+                # The Comfort page's sentences, so the live text says what it would.
+                marks["data-verdicts"] = json.dumps(
+                    {"temp": TEMP_BANDS, "rh": RH_BANDS, "words": VERDICTS},
+                    separators=(",", ":"))
             with a.div(klass="visual"):
                 if g.visual == "led":
                     # A dot sheet.js lights as the dock would, and the look it plays:
@@ -800,13 +854,25 @@ def _group(a: Airium, g: cf.Group, view: View, images: list[str], locked: bool,
                     a.canvas(id="-".join(["visual", g.visual, *key.split(".")]) if key
                              else f"visual-{g.visual}",
                              **{"data-visual": g.visual, "aria-hidden": "true"}, **marks)
+                    if g.visual == "comfort":
+                        # The room now, and its words with the boxes as drawn; sheet.js fills it.
+                        with a.div(klass="comfort-now", id="comfort-now", **{"aria-live": "polite"}):
+                            with a.div(klass="now-line"):
+                                a.span(klass="now-temp", _t="—")
+                                a.span(klass="unit", _t="°C")
+                            with a.div(klass="now-line"):
+                                a.span(klass="now-rh", _t="—")
+                                a.span(klass="unit", _t="%")
+                            a.div(klass="verdict", _t="")
                 caption = g.caption or VISUAL_CAPTIONS[g.visual]
                 if caption:
                     a.p(klass="caption", _t=caption)
         with a.div(klass="fields"):
             if stored:
                 _contents(a, g.store, view)
-            for when, fields in _runs(g.fields, sheet):
+            if g.visual == "comfort":
+                _comfort_ranges(a, g, view, locked)
+            for when, fields in [] if g.visual == "comfort" else _runs(g.fields, sheet):
                 boxed = when and len(fields) > 1
                 with a.div(klass="subsection", **{"data-when": when}) if boxed else _nothing():
                     for f in fields:

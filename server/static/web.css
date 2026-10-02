@@ -901,6 +901,142 @@ html:not(.js) .panel.sheet .content {
 
 /* The disk and the files on it, as wide as the lines below; sheet.js
    sets the height the key needs. */
+/* The comfort chart, with the room now and its words beside it, then the
+   eight edges' fields. */
+.panel.sheet .content.visual-comfort {
+  display: grid;
+  grid-template-columns: minmax(0, 520px) minmax(0, 1fr);
+  gap: 16px 36px;
+  align-items: start;
+}
+
+.panel.sheet .visual-comfort .visual {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 130px;
+  gap: 0 16px;
+  align-items: center;
+}
+
+.panel.sheet .visual-comfort .visual canvas {
+  height: 280px;
+}
+
+.panel.sheet .visual-comfort .visual .caption {
+  grid-column: 1 / -1;
+}
+
+/* The comfort boxes' edges as ranges: a tab for each measurement, with the
+   comfortable box's range and the acceptable one's under it. Without
+   scripts the tabs go and each panel shows its name. */
+.subtabs {
+  display: flex;
+  gap: 0 22px;
+  margin-bottom: 14px;
+  border-bottom: 2px solid var(--ink-faint);
+}
+
+.subtab {
+  margin-bottom: -2px;
+  padding: 4px 0 6px;
+  font: inherit;
+  font-size: 15px;
+  color: var(--ink-soft);
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.subtab:hover {
+  color: var(--ink);
+}
+
+.subtab[aria-selected="true"] {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+
+.subtab:focus-visible {
+  outline: 2px solid var(--ink-mid);
+  outline-offset: 2px;
+}
+
+html:not(.js) .subtabs,
+html.js .range-panel .panel-name {
+  display: none;
+}
+
+.range-panel .panel-name {
+  margin: 10px 0 6px;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-mid);
+}
+
+.range-row {
+  display: grid;
+  grid-template-columns: 7.5em auto;
+  align-items: center;
+  gap: 0 14px;
+  margin-bottom: 10px;
+}
+
+.ranges .range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.panel.sheet .ranges .field {
+  display: block;
+}
+
+.panel.sheet .ranges input[type="number"] {
+  width: 4.2em;
+}
+
+.ranges .dash,
+.ranges .unit {
+  color: var(--ink-mid);
+}
+
+.reset-group {
+  margin-top: 14px;
+  font: inherit;
+  font-size: 13px;
+  font-style: italic;
+  padding: 0;
+  color: var(--ink-soft);
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--ink-faint);
+  cursor: pointer;
+}
+
+.reset-group:hover {
+  color: var(--ink);
+  border-bottom-color: var(--ink-mid);
+}
+
+.comfort-now .now-line {
+  font-size: 32px;
+  line-height: 1.15;
+}
+
+.comfort-now .unit {
+  margin-left: 4px;
+  font-size: 14px;
+  color: var(--ink-mid);
+}
+
+.comfort-now .verdict {
+  margin-top: 10px;
+  font-size: 20px;
+  font-style: italic;
+  line-height: 1.2;
+}
+
 .panel.sheet .visual-disk .visual {
   max-width: 560px;
 }
@@ -1025,7 +1161,8 @@ html:not(.js) .panel.sheet .content {
 @media (max-width: 699px) {
   .panel.sheet .section,
   .panel.sheet .content.visual-dial,
-  .panel.sheet .content.visual-panel {
+  .panel.sheet .content.visual-panel,
+  .panel.sheet .content.visual-comfort {
     grid-template-columns: minmax(0, 1fr);
   }
 

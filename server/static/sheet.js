@@ -1,11 +1,11 @@
 /* The drawings on the Config page's sheet tabs, with rough.js for the
    hand-drawn look the pages have: a day of syncs or page changes as a
    dial, the time before one sync as a strip, the minutes after the SCD41
-   starts as another, the image with its drawn
-   area as a panel, the space the stores take on the disk, and the status
-   light playing one of its looks. The first four are drawn from the
-   settings form's inputs, and dragging one writes the inputs, so the
-   form stays what a save sends. A locked input, such as an offline
+   starts as another, the image with its drawn area as a panel, the
+   Comfort page's two boxes, the space the stores take on the disk, and
+   the status light playing one of its looks. All but the disk and the
+   light are drawn from the settings form's inputs, and dragging one
+   writes the inputs, so the form stays what a save sends. A locked input, such as an offline
    dock's, cannot be dragged. The position grid sets the drawn area's two
    alignments the same way. */
 (function () {
@@ -932,6 +932,252 @@
     });
   }
 
+  // ── The comfort chart: the Comfort page's two boxes ──────────────
+  // Temperature across, humidity up, as on the Comfort page. Each edge of
+  // either box drags, the inner box staying inside the outer one, and the
+  // dot at the inner box's centre moves the two together. The inner box
+  // moves alone only by its fields. The room's last six hours
+  // trail to its reading now, and the words beside the chart are what the
+  // Comfort page would say of it with the boxes as drawn.
+  var BOXES = [
+    { temp: ['comfort.temp_from', 'comfort.temp_to'], rh: ['comfort.rh_from', 'comfort.rh_to'] },
+    { temp: ['comfort.acceptable_temp_from', 'comfort.acceptable_temp_to'],
+      rh: ['comfort.acceptable_rh_from', 'comfort.acceptable_rh_to'] }
+  ];
+  var TEMP_SPAN = [14, 30], RH_SPAN = [20, 80];
+  // A drag moves an edge in half degrees, and in whole percent: the
+  // humidity sensor is good to about 2 %.
+  var STEP = { temp: 0.5, rh: 1 };
+
+  function snap(v, axis) {
+    return Math.round(v / STEP[axis]) * STEP[axis];
+  }
+
+  function real(name) {
+    var el = input(name);
+    if (!el) return NaN;
+    return parseFloat(el.value || el.getAttribute('data-default') || '');
+  }
+
+  function box(i) {
+    var b = BOXES[i];
+    return { temp: b.temp.map(real), rh: b.rh.map(real) };
+  }
+
+  // A value's band, low to high: beyond the outer box, between the boxes,
+  // or inside the inner one, as metrics.Comfort counts them.
+  function band(v, inner, outer, names) {
+    if (v < outer[0]) return names[0];
+    if (v < inner[0]) return names[1];
+    if (v > outer[1]) return names[4];
+    if (v > inner[1]) return names[3];
+    return names[2];
+  }
+
+  // The Comfort page's sentence, from metrics.VERDICTS on the canvas.
+  function comfortWords(t, rh, table) {
+    var inner = box(0), outer = box(1);
+    var row = table.words[band(t, inner.temp, outer.temp, table.temp)];
+    return row[table.rh.indexOf(band(rh, inner.rh, outer.rh, table.rh))];
+  }
+
+  function ComfortChart(canvas) {
+    this.canvas = canvas;
+    this.drag = null;
+    this.trail = [];
+    this.now = document.getElementById('comfort-now');
+    this.verdicts = JSON.parse(canvas.getAttribute('data-verdicts') || 'null');
+    var self = this;
+    canvas.addEventListener('pointerdown', function (e) { self.down(e); });
+    canvas.addEventListener('pointermove', function (e) { self.move(e); });
+    canvas.addEventListener('pointerup', function () { self.drag = null; });
+    canvas.addEventListener('pointercancel', function () { self.drag = null; });
+    canvas.addEventListener('pointerleave', function () { if (!self.drag) canvas.style.cursor = ''; });
+    // The server's /history: temperature, with humidity as its second line.
+    fetch('../history?metric=temperature&span=21600').then(function (r) {
+      return r.ok ? r.json() : null;
+    }).then(function (h) {
+      if (!h) return;
+      var rh = {};
+      (h.spec.points2 || []).forEach(function (p) { rh[p[0]] = p[1]; });
+      self.trail = h.spec.points.filter(function (p) { return rh[p[0]] !== undefined; })
+        .map(function (p) { return [p[1], rh[p[0]]]; });
+      self.draw();
+    }).catch(function () {});
+  }
+
+  ComfortChart.prototype.geometry = function () {
+    var r = this.canvas.getBoundingClientRect();
+    var m = { l: 42, r: 10, t: 10, b: 30 };
+    function scale(span, a, b) {
+      return {
+        at: function (v) { return a + (v - span[0]) / (span[1] - span[0]) * (b - a); },
+        of: function (px) { return span[0] + (px - a) / (b - a) * (span[1] - span[0]); }
+      };
+    }
+    return { m: m, w: r.width, h: r.height,
+             x: scale(TEMP_SPAN, m.l, r.width - m.r), y: scale(RH_SPAN, r.height - m.b, m.t) };
+  };
+
+  ComfortChart.prototype.draw = function () {
+    var p = prepare(this.canvas);
+    if (!p.w) return;
+    var g = this.geometry();
+    [[1, 13, G[5]], [0, 6, G[3]]].forEach(function (z) {
+      var b = box(z[0]);
+      if ([b.temp[0], b.temp[1], b.rh[0], b.rh[1]].some(isNaN)) return;
+      var x0 = g.x.at(b.temp[0]), x1 = g.x.at(b.temp[1]);
+      var y0 = g.y.at(b.rh[1]), y1 = g.y.at(b.rh[0]);
+      p.rc.rectangle(x0, y0, x1 - x0, y1 - y0, {
+        fill: z[2], fillStyle: 'hachure', hachureGap: z[1], hachureAngle: 45, fillWeight: 1,
+        stroke: z[2], strokeWidth: 1.5, roughness: 1.2
+      });
+    });
+    var axisY = g.h - g.m.b;
+    p.rc.line(g.m.l, g.m.t, g.m.l, axisY, { stroke: G[2], strokeWidth: 1.6, roughness: 0.8 });
+    p.rc.line(g.m.l, axisY, g.w - g.m.r, axisY, { stroke: G[2], strokeWidth: 1.6, roughness: 0.8 });
+    [16, 20, 24, 28].forEach(function (t) {
+      text(p.ctx, t + '°', g.x.at(t), axisY + 16, { size: 13, color: G[2] });
+    });
+    [30, 50, 70].forEach(function (v) {
+      text(p.ctx, v + '%', g.m.l - 8, g.y.at(v), { size: 13, color: G[2], align: 'right' });
+    });
+
+    var n = this.trail.length;
+    this.trail.forEach(function (pt, i) {
+      p.ctx.fillStyle = i === n - 1 ? G[0] : G[5 - Math.round(3 * i / Math.max(1, n - 1))];
+      p.ctx.beginPath();
+      p.ctx.arc(g.x.at(pt[0]), g.y.at(pt[1]), i === n - 1 ? 5 : 3, 0, 2 * Math.PI);
+      p.ctx.fill();
+    });
+    if (n) {
+      var last = this.trail[n - 1];
+      p.rc.circle(g.x.at(last[0]), g.y.at(last[1]), 22, { stroke: G[0], strokeWidth: 1.5, roughness: 1 });
+    }
+    var dot = this.dot();
+    if (dot) {
+      p.ctx.save();
+      p.ctx.fillStyle = G[1];
+      p.ctx.strokeStyle = G[7];
+      p.ctx.lineWidth = 2;
+      p.ctx.beginPath();
+      p.ctx.arc(dot.x, dot.y, 6, 0, 2 * Math.PI);
+      p.ctx.fill();
+      p.ctx.stroke();
+      p.ctx.restore();
+    }
+    this.words();
+  };
+
+  // The reading now, and the Comfort page's words for it with these boxes.
+  ComfortChart.prototype.words = function () {
+    if (!this.now) return;
+    var last = this.trail[this.trail.length - 1];
+    var t = this.now.querySelector('.now-temp'), rh = this.now.querySelector('.now-rh');
+    var verdict = this.now.querySelector('.verdict');
+    if (!last || !this.verdicts) {
+      verdict.textContent = last ? '' : 'No reading yet.';
+      return;
+    }
+    // Judged as shown, as the Comfort page judges it.
+    t.textContent = last[0].toFixed(1);
+    rh.textContent = last[1].toFixed(0);
+    verdict.textContent = comfortWords(parseFloat(t.textContent), parseFloat(rh.textContent),
+                                       this.verdicts);
+  };
+
+  // The edge under a point: the nearest of each box's four. Where an inner
+  // edge lies on an outer one, the side pressed from decides: from inside
+  // the inner box its edge, from outside it the outer box's.
+  ComfortChart.prototype.edgeAt = function (x, y) {
+    var g = this.geometry(), best = null;
+    var a = box(0);
+    var inside = x > g.x.at(a.temp[0]) && x < g.x.at(a.temp[1]) &&
+                 y > g.y.at(a.rh[1]) && y < g.y.at(a.rh[0]);
+    BOXES.forEach(function (keys, i) {
+      var b = box(i);
+      var x0 = g.x.at(b.temp[0]), x1 = g.x.at(b.temp[1]);
+      var y0 = g.y.at(b.rh[1]), y1 = g.y.at(b.rh[0]);
+      var inY = y > y0 - 8 && y < y1 + 8, inX = x > x0 - 8 && x < x1 + 8;
+      var side = (i === 0) === inside ? 0 : 0.5;
+      [[keys.temp[0], 'temp', Math.abs(x - x0), inY], [keys.temp[1], 'temp', Math.abs(x - x1), inY],
+       [keys.rh[0], 'rh', Math.abs(y - y1), inX], [keys.rh[1], 'rh', Math.abs(y - y0), inX]]
+        .forEach(function (e) {
+          var d = e[2] + side;
+          if (e[3] && e[2] <= 9 && (!best || d < best.d)) best = { key: e[0], axis: e[1], d: d };
+        });
+    });
+    return best;
+  };
+
+  // The dot that moves both boxes: at the inner box's centre.
+  ComfortChart.prototype.dot = function () {
+    var g = this.geometry(), a = box(0);
+    if (isNaN(a.temp[0] + a.temp[1] + a.rh[0] + a.rh[1])) return null;
+    return { x: g.x.at((a.temp[0] + a.temp[1]) / 2), y: g.y.at((a.rh[0] + a.rh[1]) / 2) };
+  };
+
+  // What a press at a point takes hold of: the dot, else an edge.
+  ComfortChart.prototype.handleAt = function (x, y) {
+    var dot = this.dot();
+    if (dot && Math.abs(x - dot.x) <= 9 && Math.abs(y - dot.y) <= 9) return { both: true };
+    return this.edgeAt(x, y);
+  };
+
+  ComfortChart.prototype.down = function (e) {
+    var r = this.canvas.getBoundingClientRect();
+    var x = e.clientX - r.left, y = e.clientY - r.top;
+    var hold = this.handleAt(x, y);
+    if (!hold) return;
+    var keys = hold.key ? [hold.key] : BOXES[0].temp.concat(BOXES[0].rh, BOXES[1].temp, BOXES[1].rh);
+    if (keys.some(locked)) return;
+    if (!hold.key) hold.from = { x: x, y: y, inner: box(0), outer: box(1) };
+    this.drag = hold;
+    this.canvas.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  };
+
+  // The dot moves both boxes whole, in steps, within the chart.
+  ComfortChart.prototype.moveBox = function (x, y) {
+    var g = this.geometry(), f = this.drag.from;
+    var by = { temp: snap(g.x.of(x) - g.x.of(f.x), 'temp'), rh: snap(g.y.of(y) - g.y.of(f.y), 'rh') };
+    ['temp', 'rh'].forEach(function (axis) {
+      var span = axis === 'temp' ? TEMP_SPAN : RH_SPAN;
+      var d = Math.max(span[0] - f.outer[axis][0], Math.min(span[1] - f.outer[axis][1], by[axis]));
+      var inner = BOXES[0][axis], outer = BOXES[1][axis];
+      // Outer edge, inner edge, inner edge, outer edge, leading side first.
+      var steps = [[outer, f.outer, 1], [inner, f.inner, 1], [inner, f.inner, 0], [outer, f.outer, 0]];
+      if (d < 0) steps = steps.map(function (st) { return [st[0], st[1], 1 - st[2]]; });
+      steps.forEach(function (st) { set(st[0][st[2]], st[1][axis][st[2]] + d); });
+    });
+  };
+
+  // An edge moves in steps, between the edges either side. With
+  // nothing held, the pointer shows what a press would take.
+  ComfortChart.prototype.move = function (e) {
+    var r = this.canvas.getBoundingClientRect(), g = this.geometry();
+    var x = e.clientX - r.left, y = e.clientY - r.top;
+    if (!this.drag) {
+      var hold = this.handleAt(x, y);
+      this.canvas.style.cursor = !hold ? '' : !hold.key ? 'move'
+        : hold.axis === 'temp' ? 'ew-resize' : 'ns-resize';
+      return;
+    }
+    if (!this.drag.key) {
+      this.moveBox(x, y);
+      return;
+    }
+    var key = this.drag.key, axis = this.drag.axis;
+    var v = snap(axis === 'temp' ? g.x.of(e.clientX - r.left) : g.y.of(e.clientY - r.top), axis);
+    var inner = BOXES[0][axis], outer = BOXES[1][axis], span = axis === 'temp' ? TEMP_SPAN : RH_SPAN;
+    var limits = {};
+    limits[inner[0]] = [real(outer[0]), real(inner[1]) - STEP[axis]];
+    limits[inner[1]] = [real(inner[0]) + STEP[axis], real(outer[1])];
+    limits[outer[0]] = [span[0], real(inner[0])];
+    limits[outer[1]] = [real(inner[1]), span[1]];
+    set(key, Math.max(limits[key][0], Math.min(limits[key][1], v)));
+  };
+
   // ── Wiring ───────────────────────────────────────────────────────
   var drawings = [];
   document.querySelectorAll('canvas[data-visual]').forEach(function (canvas) {
@@ -941,6 +1187,7 @@
     if (kind === 'start') drawings.push(new Start(canvas));
     if (kind === 'panel') drawings.push(new Panel(canvas));
     if (kind === 'disk') drawings.push(new Disk(canvas));
+    if (kind === 'comfort') drawings.push(new ComfortChart(canvas));
   });
   var ledPreview = document.querySelector('[data-visual="led"]');
   if (ledPreview) LedPreview(ledPreview);

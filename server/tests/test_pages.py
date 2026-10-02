@@ -5,7 +5,7 @@ import re
 import pytest
 from bs4 import BeautifulSoup
 
-from metrics import co2_verdict, comfort_verdict, fmt_int
+from metrics import Comfort, co2_verdict, comfort_verdict, fmt_int
 from tests.html import attr, one
 from pages.breathe import BreathePage
 from pages.comfort import ComfortPage
@@ -110,6 +110,14 @@ class TestComfort:
         assert 30 <= len(chart["trail"]) <= 40
         for t, rh in chart["trail"]:
             assert 10 < t < 35 and 0 <= rh <= 100
+
+    def test_a_person_s_edges_set_the_verdict_and_the_zones(self, data, tz):
+        warmer = Comfort(temp=(24.0, 26.0), acceptable_temp=(20.0, 28.0))
+        latest = dict(data["latest"], temp_c=21.2, rh_pct=50)
+        page = ComfortPage("comfort", comfort=warmer, tz=tz, width=WIDTH, height=HEIGHT)
+        soup, (chart,) = render(page, dict(data, latest=latest))
+        assert text(soup, ".verdict") == "Cool."
+        assert [z["t"] for z in chart["zones"]] == [[20.0, 28.0], [24.0, 26.0]]
 
     def test_cold_sensor(self, data, tz):
         latest = {k: v for k, v in data["latest"].items() if k not in ("temp_c", "rh_pct")}

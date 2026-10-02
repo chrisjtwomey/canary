@@ -31,6 +31,7 @@ from board_logs import LogsQuery
 from config_page import config_blueprint
 from display_settings import DISPLAY, DisplaySync, display_version
 from dock_settings import DOCK, BoardSettings, DockSettings, load_dock_settings
+from metrics import COMFORT, Comfort
 from off_hours import OffHoursSchedule, splash_when_off
 from pages.air import AirPage
 from pages.breathe import BreathePage
@@ -38,7 +39,7 @@ from pages.comfort import ComfortPage
 from pages.day import DayPage
 from pages.diagnostics import DiagnosticsPage, DiagnosticsTracePage, HealthTracePage
 from pages.dust import DustPage
-from pages.pool import CO2, IAQ, PM25, PRESSURE, TEMP, DeltaPage, TracePage
+from pages.pool import CO2, IAQ, PM25, PRESSURE, DeltaPage, TracePage, comfort_metrics
 from pages.splash import SplashPage, logo_svg
 from schedule import DEFAULT_DISPLAY_SYNC_S, DEFAULT_DOCK_WEEK, DEFAULT_PAGE_WEEK
 from sources.calibration import CalibrationStore
@@ -65,12 +66,13 @@ FIRMWARE_PRODUCTS = ("canary-display", "canary-dock")
 HISTORY_HOURS = (24, 72)
 
 
-def make_pages(tz, **geometry) -> list:
+def make_pages(tz, comfort: Comfort = COMFORT, **geometry) -> list:
     """Every page the server can serve. Which ones show, and in what order,
     is the display block's business; see config.example.yaml."""
+    temp, _ = comfort_metrics(comfort)
     pages = [
         BreathePage("breathe", tz=tz, **geometry),
-        ComfortPage("comfort", tz=tz, **geometry),
+        ComfortPage("comfort", comfort=comfort, tz=tz, **geometry),
         DustPage("dust", tz=tz, **geometry),
         AirPage("air", tz=tz, **geometry),
         DayPage("day", tz=tz, **geometry),
@@ -78,7 +80,7 @@ def make_pages(tz, **geometry) -> list:
         DiagnosticsTracePage("diagnostics-trace", tz=tz, **geometry),
         HealthTracePage("health-trace", tz=tz, **geometry),
     ]
-    for stem, metric in (("co2", CO2), ("comfort", TEMP), ("dust", PM25), ("air", IAQ),
+    for stem, metric in (("co2", CO2), ("comfort", temp), ("dust", PM25), ("air", IAQ),
                          ("barometer", PRESSURE)):
         pages.append(TracePage(f"{stem}-trace", metric, tz=tz, **geometry))
         pages.append(DeltaPage(f"{stem}-delta", metric, tz=tz, **geometry))
@@ -219,6 +221,7 @@ class Settings:
     logs_path: str
     logs_days: float
     altitude_m: float
+    comfort: Comfort
     dock_sync: Week
     display_sync: Week
     dock: DockSettings
@@ -227,6 +230,36 @@ class Settings:
     def syncs(self) -> dict[str, Week]:
         """Each board's sync schedule, by the name it states."""
         return {DOCK: self.dock_sync, DISPLAY: self.display_sync}
+
+
+def load_comfort(config: dict) -> Comfort:
+    """The comfort block's two boxes, each edge left out taking its default:
+    ``temp_from`` and ``temp_to`` in C, ``rh_from`` and ``rh_to`` in %, and
+    the same four with ``acceptable_`` before them for the outer box.
+
+    Raises:
+        ConfigError: an edge that is not a number, a box that ends where it
+            starts or before, or an inner box outside the outer one.
+    """
+    boxes = {}
+    for box in ("temp", "rh", "acceptable_temp", "acceptable_rh"):
+        edges = []
+        for end, default in zip(("from", "to"), getattr(COMFORT, box)):
+            key = f"{box}_{end}"
+            value = get_prop_by_keys(config, "comfort", key, default=default)
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ConfigError(f"comfort.{key} must be a number")
+            edges.append(float(value))
+        if edges[0] >= edges[1]:
+            raise ConfigError(f"comfort.{box}_to must be above comfort.{box}_from")
+        boxes[box] = tuple(edges)
+    c = Comfort(**boxes)
+    for inner, outer in (("temp", "acceptable_temp"), ("rh", "acceptable_rh")):
+        if getattr(c, outer)[0] > getattr(c, inner)[0]:
+            raise ConfigError(f"comfort.{outer}_from must be at or below comfort.{inner}_from")
+        if getattr(c, outer)[1] < getattr(c, inner)[1]:
+            raise ConfigError(f"comfort.{outer}_to must be at or above comfort.{inner}_to")
+    return c
 
 
 def epd_config(config: dict) -> dict:
@@ -277,6 +310,7 @@ def load_settings(config: dict) -> Settings:
         logs_path=str(get_prop_by_keys(config, "logs", "path", default="data/board-logs.db")),
         logs_days=float(get_prop_by_keys(config, "logs", "keep_days", default=7)),
         altitude_m=float(get_prop_by_keys(config, "site", "altitude_m", default=0)),
+        comfort=load_comfort(config),
         dock_sync=make_dock_sync(config, core.server.timezone),
         display_sync=make_display_sync(config, core.server.timezone),
         dock=load_dock_settings(config),
@@ -384,12 +418,13 @@ def main():
     about = About(version, core.firmware,
                   syncs={"dock": settings.dock_sync, "display": settings.display_sync},
                   config=running)
-    pages = make_pages(tz, **core.image.page_kwargs())
+    pages = make_pages(tz, settings.comfort, **core.image.page_kwargs())
     # Served to the display, not listed: no page set or menu shows it.
     splash = SplashPage(logo_svg(), **core.image.page_kwargs())
     schedule = OffHoursSchedule(core.server.schedule, splash.png_filename)
     between = make_between(settings.seed, clock, store)
-    history = HistoryQuery(make_history(between, settings.altitude_m), tz, now=clock)
+    history = HistoryQuery(make_history(between, settings.altitude_m), tz, now=clock,
+                           comfort=settings.comfort)
     readings = ReadingsQuery(between, now=clock)
     status = StatusSource(reports)
     board_logs = LogStore(store_file(settings.logs_path), keep_days=settings.logs_days)

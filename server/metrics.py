@@ -6,6 +6,7 @@ tested without a browser.
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from datetime import datetime, timedelta, tzinfo
 
 from markupsafe import Markup
@@ -37,24 +38,62 @@ def co2_verdict(ppm: float) -> str:
     return "Stale. Air the room."
 
 
-COMFORT_T = (19.0, 24.0)
-COMFORT_RH = (35.0, 60.0)
-ACCEPTABLE_T = (17.0, 26.0)
-ACCEPTABLE_RH = (30.0, 65.0)
+@dataclass(frozen=True)
+class Comfort:
+    """The comfort chart's two boxes, from config.yaml's comfort block, as
+    (from, to) in C and in %: the comfortable box inside the acceptable one.
+    Each measurement has five bands: inside the inner box, between the boxes
+    on either side, and beyond the outer box on either side. A value is
+    judged as the pages show it, to 0.1 C and to 1 %, so a number never sits
+    beside the word of the band next to it: 60.3 % shows as 60 %, inside
+    an edge at 60."""
+    temp: tuple[float, float] = (19.0, 24.0)
+    rh: tuple[float, float] = (35.0, 60.0)
+    acceptable_temp: tuple[float, float] = (17.0, 26.0)
+    acceptable_rh: tuple[float, float] = (30.0, 65.0)
+
+    def temp_band(self, t: float) -> str:
+        return _band(float(f"{t:.1f}"), self.temp, self.acceptable_temp, TEMP_BANDS)
+
+    def rh_band(self, rh: float) -> str:
+        return _band(float(f"{rh:.0f}"), self.rh, self.acceptable_rh, RH_BANDS)
 
 
-def comfort_verdict(temp_c: float, rh_pct: float) -> str:
-    warm = temp_c > COMFORT_T[1]
-    cool = temp_c < COMFORT_T[0]
-    humid = rh_pct > COMFORT_RH[1]
-    dry = rh_pct < COMFORT_RH[0]
-    if not (warm or cool or humid or dry):
-        return "Comfortable."
-    first = "Warm" if warm else "Cool" if cool else ""
-    second = "humid" if humid else "dry" if dry else ""
-    if first and second:
-        return f"{first} and {second}."
-    return (first or second.capitalize()) + "."
+# Each measurement's bands, low to high.
+TEMP_BANDS = ("cold", "cool", "comfortable", "warm", "hot")
+RH_BANDS = ("very dry", "dry", "comfortable", "humid", "very humid")
+
+
+def _band(v: float, inner: tuple[float, float], outer: tuple[float, float],
+          names: tuple[str, ...]) -> str:
+    if v < outer[0]:
+        return names[0]
+    if v < inner[0]:
+        return names[1]
+    if v > outer[1]:
+        return names[4]
+    if v > inner[1]:
+        return names[3]
+    return names[2]
+
+
+COMFORT = Comfort()
+
+# What the Comfort page says, by temperature band (rows) and humidity band
+# (columns, as RH_BANDS orders them). The Settings page's live text reads
+# this table too.
+VERDICTS = {
+    "cold": ("Cold and very dry.", "Cold and dry.", "Cold.", "Cold and damp.", "Dank."),
+    "cool": ("Cool and very dry.", "Cool and dry.", "Cool.", "Cool and damp.", "Cool and damp."),
+    "comfortable": ("Very dry.", "Dry.", "Comfortable.", "Muggy.", "Very humid."),
+    "warm": ("Warm and very dry.", "Warm and dry.", "Warm.", "Warm and humid.",
+             "Warm and very humid."),
+    "hot": ("Hot and very dry.", "Hot and dry.", "Hot.", "Hot and humid.", "Sweltering."),
+}
+
+
+def comfort_verdict(temp_c: float, rh_pct: float, comfort: Comfort = COMFORT) -> str:
+    return VERDICTS[comfort.temp_band(temp_c)][RH_BANDS.index(comfort.rh_band(rh_pct))]
 
 
 def thin(history: list[dict], step_s: int) -> list[dict]:
@@ -444,30 +483,30 @@ def co2_meaning(rate: str, ppm: float) -> str:
     )
 
 
-def temp_meaning(rate: str, t: float) -> str:
+def temp_meaning(rate: str, t: float, comfort: Comfort = COMFORT) -> str:
     return {
         "rising fast": "Warming quickly. Sun on the room, or the heating just came on.",
         "rising": "Warming up.",
         "falling": "Cooling. The heating is off.",
         "falling fast": "Cooling fast. A window or a door is open.",
     }.get(rate) or (
-        "Warm and staying warm." if t > COMFORT_T[1]
-        else "Cool and staying cool." if t < COMFORT_T[0]
-        else "Holding comfortably."
+        "Holding comfortably." if (band := comfort.temp_band(t)) == "comfortable"
+        else f"{band.capitalize()} and staying {band}."
     )
 
 
-def rh_meaning(rate: str, rh: float) -> str:
+def rh_meaning(rate: str, rh: float, comfort: Comfort = COMFORT) -> str:
     return {
         "rising fast": "Steam. Cooking, a shower, or clothes drying.",
         "rising": "Getting damper. Moisture builds faster than it leaves.",
         "falling": "Drying out.",
         "falling fast": "Drying quickly. A window is open, or the heating is on.",
-    }.get(rate) or (
-        "Damp and staying damp. Watch the windows for condensation." if rh > COMFORT_RH[1]
-        else "Dry. Skin and throats notice this." if rh < COMFORT_RH[0]
-        else "Holding comfortably."
-    )
+    }.get(rate) or {
+        "very humid": "Very damp and staying so. Watch for condensation and mould.",
+        "humid": "Damp and staying damp. Watch the windows for condensation.",
+        "dry": "Dry. Skin and throats notice this.",
+        "very dry": "Very dry. Eyes, skin and throats notice this.",
+    }.get(comfort.rh_band(rh), "Holding comfortably.")
 
 
 def pm_meaning(rate: str, ug: float) -> str:
@@ -495,20 +534,12 @@ def iaq_meaning(rate: str, iaq: float) -> str:
     )
 
 
-def temp_words(t: float) -> str:
-    if t > COMFORT_T[1]:
-        return "Warm."
-    if t < COMFORT_T[0]:
-        return "Cool."
-    return "Comfortable."
+def temp_words(t: float, comfort: Comfort = COMFORT) -> str:
+    return comfort.temp_band(t).capitalize() + "."
 
 
-def rh_words(rh: float) -> str:
-    if rh > COMFORT_RH[1]:
-        return "Humid."
-    if rh < COMFORT_RH[0]:
-        return "Dry."
-    return "Comfortable."
+def rh_words(rh: float, comfort: Comfort = COMFORT) -> str:
+    return comfort.rh_band(rh).capitalize() + "."
 
 
 # ── Altitude ──────────────────────────────────────────────────────────────

@@ -112,8 +112,8 @@ server/
                                the pages see: sea-level pressure, and no IAQ below accuracy 3
   pages/                       Breathe, Comfort, Dust, Air, Day, the Diagnostics pages, the trace and delta pages, and
                                the splash screen with its logo
-  metrics.py                   derived values and wording
-  static/                      CSS, fonts, charts.js; web.css, browse.js, explore.js and config.js for /web/
+  metrics.py                   derived values and wording; the comfort boxes and their words
+  static/                      CSS, fonts, charts.js; web.css, browse.js, explore.js, config.js and sheet.js for /web/
   config.example.yaml
 hardware/                      the boards, the desk enclosure and how to build it (hardware/README.md)
 docs/                          these docs, and the developer guides that CONTRIBUTING points to

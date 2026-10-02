@@ -643,6 +643,26 @@ def test_the_fine_dust_section_holds_the_fan_and_its_strip(dock_client):
     assert section.select_one("canvas[data-visual=slot]") is not None
 
 
+def test_the_comfort_section_holds_its_boxes_drawing_and_the_room_now(dock_client):
+    panel = one(soup_of(dock_client.get("/web/config")), "#panel-server")
+    section = one(panel, '[data-field="comfort.temp_from"]').find_parent(class_="section")
+    verdicts = json.loads(attr(one(section, "canvas[data-visual=comfort]"), "data-verdicts"))
+    assert verdicts["words"]["hot"][verdicts["rh"].index("very humid")] == "Sweltering."
+    now = one(section, "#comfort-now")
+    assert now.select_one(".now-temp") and now.select_one(".now-rh") and now.select_one(".verdict")
+    assert [attr(i, "name") for i in section.select("input[type=number]")] == [
+        "comfort.temp_from", "comfort.temp_to", "comfort.acceptable_temp_from",
+        "comfort.acceptable_temp_to", "comfort.rh_from", "comfort.rh_to",
+        "comfort.acceptable_rh_from", "comfort.acceptable_rh_to"]
+    grid = one(section, ".ranges")
+    assert [b.get_text() for b in grid.select(".subtabs [role=tab]")] == ["Temperature", "Humidity"]
+    assert [[n.get_text() for n in p.select(".range-row .name")] for p in grid.select(".range-panel")] \
+        == [["Comfortable", "Acceptable"], ["Comfortable", "Acceptable"]]
+    assert attr(one(grid, 'input[name="comfort.temp_from"]'), "aria-label") == \
+        "Comfortable temperature from"
+    assert one(section, ".reset-group").has_attr("hidden")
+
+
 def test_the_co2_section_holds_its_warm_up_and_its_strip(dock_client):
     panel = one(soup_of(dock_client.get("/web/config")), "#panel-dock")
     field = one(panel, '[data-field="dock.scd41.warmup_s"]')

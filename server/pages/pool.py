@@ -6,15 +6,16 @@ the value stood before, and what such a change usually means.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from typing import Callable
 
 from airium import Airium
 
-from metrics import (CALIBRATING_TAG, CALIBRATING_VERDICT, NO_SENSOR_TAG, NO_SENSOR_VERDICT,
-                     barometer_word, change_over, classify_rate, co2_meaning, co2_verdict, extremes,
-                     fmt_hm, fmt_int, fmt_stamp, gaps, iaq_meaning, iaq_verdict, pm25_verdict,
+from metrics import (CALIBRATING_TAG, CALIBRATING_VERDICT, COMFORT, NO_SENSOR_TAG,
+                     NO_SENSOR_VERDICT, Comfort, barometer_word, change_over, classify_rate,
+                     co2_meaning, co2_verdict, extremes, fmt_hm, fmt_int, fmt_stamp, gaps,
+                     iaq_meaning, iaq_verdict, pm25_verdict,
                      pm_meaning, pressure_meaning, rate_words, rh_meaning, rh_words, sensor_absent,
                      series, temp_meaning, temp_words, value_at)
 from pages.base import EnvPage
@@ -55,13 +56,22 @@ def _f0(v):
     return f"{v:.0f}"
 
 
+def comfort_metrics(c: Comfort) -> tuple[Metric, Metric]:
+    """Temperature and humidity, with words and guides at ``c``'s inner box."""
+    rh = replace(_RH, guides=((c.rh[0], "dry"), (c.rh[1], "humid")),
+                 level_words=lambda v: rh_words(v, c), meaning=lambda r, v: rh_meaning(r, v, c))
+    temp = replace(_TEMP, guides=((c.temp[0], "cool"), (c.temp[1], "warm")), second=rh,
+                   level_words=lambda v: temp_words(v, c), meaning=lambda r, v: temp_meaning(r, v, c))
+    return temp, rh
+
+
 # The delta windows are short: a room changes in minutes. Pressure gets an
 # hour, since it moves in hours. slow and fast are changes over that window.
-RH = Metric("rh_pct", "Humidity", "%", _f0, "temp_humidity", 0.25, 3, 8,
-            ((35, "dry"), (60, "humid")), 20, rh_words, rh_meaning, pad=5, sensor="shtc3")
-TEMP = Metric("temp_c", "Temperature", "°C", _f1, "temp_humidity", 0.25, 0.3, 0.8,
-              ((19, "cool"), (24, "warm")), 5, temp_words, temp_meaning, pad=1, second=RH,
-              sensor="shtc3")
+_RH = Metric("rh_pct", "Humidity", "%", _f0, "temp_humidity", 0.25, 3, 8,
+             (), 20, rh_words, rh_meaning, pad=5, sensor="shtc3")
+_TEMP = Metric("temp_c", "Temperature", "°C", _f1, "temp_humidity", 0.25, 0.3, 0.8,
+               (), 5, temp_words, temp_meaning, pad=1, sensor="shtc3")
+TEMP, RH = comfort_metrics(COMFORT)
 CO2 = Metric("co2_ppm", "Carbon dioxide", "ppm", fmt_int, "co2", 0.25, 40, 120,
              ((700, "fresh"), (1000, "stuffy")), 400, co2_verdict, co2_meaning,
              floor=400, ceil=1200, pad=50, sensor="scd41")

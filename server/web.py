@@ -33,17 +33,24 @@ from flask import Blueprint, jsonify, request, send_from_directory
 from markupsafe import Markup
 
 from html_doc import Html
-from metrics import extremes, gaps, hour_ticks
+from metrics import COMFORT, Comfort, extremes, gaps, hour_ticks
 from pages.base import HTML_DIR, EnvPage
 from pages.diagnostics import DiagnosticsPage, DiagnosticsTracePage, HealthTracePage
-from pages.pool import (CO2, IAQ, PM25, PRESSURE, RH, TEMP, DeltaPage, Metric, TracePage,
+from pages.pool import (CO2, IAQ, PM25, PRESSURE, DeltaPage, Metric, TracePage, comfort_metrics,
                         trace_points, value_range, value_ticks, weekday_axis)
 from sources.readings import epoch_arg
 from version import server_version
 
-# The explorer's measurements, by the name its URL gives them.
-MEASURES: dict[str, Metric] = {"co2": CO2, "temperature": TEMP, "humidity": RH, "dust": PM25,
-                               "air": IAQ, "barometer": PRESSURE}
+
+def measures(comfort: Comfort = COMFORT) -> dict[str, Metric]:
+    """The explorer's measurements, by the name its URL gives them."""
+    temp, rh = comfort_metrics(comfort)
+    return {"co2": CO2, "temperature": temp, "humidity": rh, "dust": PM25, "air": IAQ,
+            "barometer": PRESSURE}
+
+
+# Their names and titles, which no setting changes.
+MEASURES = measures()
 # The windows the explorer offers, in hours.
 WINDOWS = ((6, "6 h"), (24, "24 h"), (72, "3 days"), (168, "7 days"), (720, "30 days"))
 MIN_SPAN_S = 3600
@@ -393,13 +400,15 @@ class HistoryQuery:
     Args:
         between: the readings from one epoch to another, oldest first.
         tz: the zone the axis and the words are in.
+        comfort: the edges for temperature's and humidity's guides.
     """
 
     def __init__(self, between: Callable[[int, int], list[dict]], tz,
-                 now: Callable[[], float] = time.time):
+                 now: Callable[[], float] = time.time, comfort: Comfort = COMFORT):
         self.between = between
         self.tz = tz
         self.now = now
+        self.measures = measures(comfort)
 
     def answer(self, args: dict) -> dict:
         """The chart and its words for ``args``: ``metric``, one of MEASURES;
@@ -415,9 +424,9 @@ class HistoryQuery:
                 a window that ends before it starts.
         """
         stem = args.get("metric") or "co2"
-        m = MEASURES.get(stem)
+        m = self.measures.get(stem)
         if m is None:
-            raise ValueError(f"metric must be one of {', '.join(MEASURES)}")
+            raise ValueError(f"metric must be one of {', '.join(self.measures)}")
         now = int(self.now())
         end = epoch_arg(args, "to", now)
         start = epoch_arg(args, "from", end - epoch_arg(args, "span", 86400))

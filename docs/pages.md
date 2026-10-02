@@ -44,6 +44,14 @@ The Settings page, `/web/config`:
   SCD41's is 3 minutes. The group's drawing marks it with a dashed line, "recommended", and a line under the field
   warns while the value is below it. A shorter warm-up is still saved, because it can be the right choice for a
   dock on a battery. `Field.cautions` and `config.js` apply the same rule.
+- The Server tab's Comfort group sets the Comfort page's two boxes (the `comfort` block). Its drawing is the Comfort
+  page's chart, with the room's last 6 hours from `GET /history`. Each edge drags, temperature in 0.5 °C steps and
+  humidity in 1 % steps, and the dot at the inner box's centre moves both boxes. Beside it, the reading now and the
+  sentence the Comfort page would give it change as the boxes do, so a person can match the words to how the room
+  feels. The fields sit under two tabs, Temperature and Humidity, each a Comfortable and an Acceptable range, with
+  one **Reset to defaults**.
+- A **Reset** puts a default back without an input event, so `config.js` asks the drawings to redraw. Without that, a
+  drawing kept a dragged value.
 - **Check** tests an edit, as the server tests the file at start.
 - **Save and restart** lists the changes, keeps the old file as `config.yaml.bak`, writes the new file and
   restarts the server. **Restore** puts the `.bak` back.
@@ -77,6 +85,13 @@ The Settings page, `/web/config`:
 - A trace page shows the value now, with three days behind it and the thresholds as dashed lines. A delta page shows
   the change over a short window, where the value was, and what such a change usually means. Both are in
   `pages/pool.py` (`TracePage`, `DeltaPage`), and a `Metric` spec drives them.
+- The Comfort page's words come from its two boxes, which `comfort` in `config.yaml` sets (`metrics.Comfort`). What
+  is comfortable depends on the person, so the boxes are settings. The defaults are 19–24 °C and 35–60 % inside,
+  17–26 °C and 30–65 % outside. Each measurement has five bands: Cold, Cool, Comfortable, Warm, Hot, and Very dry,
+  Dry, Comfortable, Humid, Very humid. The verdict for a pair of bands is a table, `metrics.VERDICTS`, with words a
+  person would use, such as "Muggy." for a comfortable temperature that is humid, "Cold and damp.", "Dank." and
+  "Sweltering.". A value is judged as the page shows it, to 0.1 °C and to 1 %, so a number never sits beside the
+  word of the next band. The trace pages and `/web/explore` draw the inner box's edges as their guides.
 - The pages show the pressure at sea level, as forecasts give it, from `site.altitude_m`. The pressure as measured
   stays under `pressure_station_hpa`.
 - The pages show the IAQ only at accuracy 3, BSEC's highest. Below it they say "Calibrating.", and the charts leave

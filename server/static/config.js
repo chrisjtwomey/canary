@@ -156,27 +156,76 @@
     }
   }
 
+  // ── Sub-tabs: the comfort ranges, one measurement at a time ──────
+  all('.subtabs').forEach(function (bar) {
+    var buttons = all('[role=tab]', bar), scope = bar.parentNode;
+    function show(axis, focus) {
+      buttons.forEach(function (b) {
+        var on = b.getAttribute('data-axis') === axis;
+        b.setAttribute('aria-selected', on ? 'true' : 'false');
+        b.tabIndex = on ? 0 : -1;
+        if (on && focus) b.focus();
+      });
+      all('.range-panel', scope).forEach(function (p) { p.hidden = p.getAttribute('data-axis') !== axis; });
+    }
+    buttons.forEach(function (b, i) {
+      b.addEventListener('click', function () { show(b.getAttribute('data-axis')); });
+      b.addEventListener('keydown', function (e) {
+        var step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+        if (!step) return;
+        e.preventDefault();
+        show(buttons[(i + step + buttons.length) % buttons.length].getAttribute('data-axis'), true);
+      });
+    });
+    // A field with a problem opens on its tab; so does one a drawing edits.
+    var bad = scope.querySelector('.range-panel .invalid');
+    show((bad ? bad.closest('.range-panel') : buttons[0]).getAttribute('data-axis'));
+    scope.addEventListener('input', function (e) {
+      var panel = e.target.closest('.range-panel');
+      if (panel && panel.hidden) show(panel.getAttribute('data-axis'));
+    });
+  });
+
+  function atDefault(el) {
+    return valueOf(el) === el.getAttribute('data-default') || el.disabled;
+  }
+
   function markDefaults() {
     all('[data-default]').forEach(function (el) {
       var field = el.closest('.field');
       var reset = field && field.querySelector('.reset');
-      if (reset) reset.hidden = valueOf(el) === el.getAttribute('data-default') || el.disabled;
+      if (reset) reset.hidden = atDefault(el);
     });
+    // A group's one reset, as the comfort boxes have: shown while any of its
+    // fields differs from its default.
+    all('.reset-group').forEach(function (button) {
+      button.hidden = all('[data-default]', button.closest('.fields')).every(atDefault);
+    });
+  }
+
+  // Putting a default back is no input event, so the drawings are asked to
+  // redraw, as for an import.
+  function putBack(fields) {
+    fields.forEach(function (el) { setValue(el, el.getAttribute('data-default')); });
+    edited();
+    if (fields.length) fields[0].dispatchEvent(new Event('redraw', { bubbles: true }));
   }
 
   document.addEventListener('click', function (e) {
     var reset = e.target.closest('.reset');
-    if (!reset) return;
-    var el = reset.closest('.field').querySelector('[data-default]');
-    setValue(el, el.getAttribute('data-default'));
-    edited();
+    if (reset) putBack([reset.closest('.field').querySelector('[data-default]')]);
+    var group = e.target.closest('.reset-group');
+    if (group) {
+      putBack(all('[data-default]', group.closest('.fields')).filter(function (el) {
+        return !el.disabled;
+      }));
+    }
   });
 
   document.addEventListener('focusout', function (e) {
     var el = e.target;
     if (!el.matches || !el.matches('input[data-default]') || el.value.trim() !== '') return;
-    setValue(el, el.getAttribute('data-default'));
-    edited();
+    putBack([el]);
   });
 
   function whens() {
