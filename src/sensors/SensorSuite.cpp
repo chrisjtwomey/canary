@@ -186,7 +186,17 @@ void SensorSuite::sampleBme688(Readings& r) {
 }
 
 void SensorSuite::poll() {
-    if (scd41State_.running) pollScd41();
+    if (scd41State_.running) noteScd41Poll(pollScd41());
+}
+
+void SensorSuite::noteScd41Poll(ReadFault fault) {
+    if (fault == ReadFault::NoAnswer || fault == ReadFault::BadChecksum) {
+        if (!scd41FailedPolls_) scd41PollFault_ = fault;
+        if (scd41FailedPolls_ < UINT16_MAX) ++scd41FailedPolls_;
+        return;
+    }
+    if (scd41FailedPolls_) scd41LastFailedRun_ = scd41FailedPolls_;
+    scd41FailedPolls_ = 0;
 }
 
 // None when it took a measurement.
@@ -229,6 +239,7 @@ void SensorSuite::sampleScd41(Readings& r) {
         }
     }
     const ReadFault last = pollScd41();
+    noteScd41Poll(last);
     const Scd41Sums sums = scd41Sums_;
     scd41Sums_ = Scd41Sums();
     if (!sums.co2N) {

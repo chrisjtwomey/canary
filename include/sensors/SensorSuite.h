@@ -78,6 +78,13 @@ public:
     // Why the last sample has no CO2: None when it has one, or when the
     // SCD41 is stopped.
     ReadFault scd41Fault() const { return scd41Fault_; }
+    // The SCD41 polls in a row, up to the last, that met NoAnswer or
+    // BadChecksum, and what the first of them met. A poll that the part
+    // answers, with or without data ready, ends the run.
+    uint16_t scd41FailedPolls() const { return scd41FailedPolls_; }
+    ReadFault scd41PollFault() const { return scd41PollFault_; }
+    // How many polls failed in the last run that has ended.
+    uint16_t scd41LastFailedRun() const { return scd41LastFailedRun_; }
     // Each particle read of the last sample, first to last: None for a good
     // frame. There are none during the fan's warm-up.
     uint8_t pmReadCount() const { return pmReadCount_; }
@@ -158,6 +165,7 @@ private:
     void track(SensorState& s, bool due, bool valid);
 
     ReadFault pollScd41();
+    void noteScd41Poll(ReadFault fault);
 
     void sampleShtc3(Readings& r);
     void sampleBme688(Readings& r);
@@ -197,6 +205,8 @@ private:
     uint32_t    scd41MeasuringSinceMs_ = 0;
     uint32_t    scd41WarmupMs_ = kScd41WarmupMs;
     ReadFault   scd41Fault_ = ReadFault::None;
+    uint16_t    scd41FailedPolls_ = 0, scd41LastFailedRun_ = 0;
+    ReadFault   scd41PollFault_ = ReadFault::None;
     // The SCD41's measurements since the last reading set. Its temperature
     // and humidity count only once the part has warmed up.
     struct Scd41Sums {
