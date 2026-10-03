@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from airium import Airium
 
-from metrics import (CALIBRATING_TAG, CALIBRATING_VERDICT, IAQ_ACCURACY, IAQ_ZONES, NO_SENSOR_TAG,
-                     NO_SENSOR_VERDICT, fmt_stamp, gaps, hour_ticks, iaq_verdict, sensor_absent,
+from metrics import (CALIBRATING_TAG, CALIBRATING_VERDICT, IAQ_ACCURACY, IAQ_CALIBRATED_ACCURACY, IAQ_ZONES,
+                     NO_SENSOR_TAG, NO_SENSOR_VERDICT, fmt_stamp, gaps, hour_ticks, iaq_verdict, sensor_absent,
                      series, y_range)
 from pages.base import EnvPage
 from pages.pool import IAQ
@@ -37,7 +37,8 @@ class AirPage(EnvPage):
         iaq = latest.get(IAQ.key) if valid else None
         gas = latest.get("gas_ohm") if valid else None
         accuracy = latest.get(IAQ.accuracy_key) if valid else None
-        calibrating = iaq is None and accuracy is not None
+        held_back = iaq is None and accuracy is not None
+        calibrating = accuracy is not None and accuracy < IAQ_CALIBRATED_ACCURACY
 
         a.div(klass="title label", _t="Air quality")
         a.div(klass="stamp", _t=fmt_stamp(latest["ts"], self.tz))
@@ -46,7 +47,7 @@ class AirPage(EnvPage):
             if iaq is not None:
                 a.span(klass="value", _t=f"{iaq:.0f}")
                 a.span(klass="unit", _t="IAQ")
-            elif gas is not None and not calibrating:
+            elif gas is not None and not held_back:
                 a.span(klass="value", _t=f"{gas / 1000:.0f}")
                 a.span(klass="unit", _t="kΩ")
             else:
@@ -59,7 +60,7 @@ class AirPage(EnvPage):
 
         if iaq is not None:
             a.div(klass="verdict", _t=iaq_verdict(iaq))
-        elif calibrating:
+        elif held_back:
             a.div(klass="verdict", _t=CALIBRATING_VERDICT)
         elif gas is not None:
             a.div(klass="verdict", _t="No index yet.")

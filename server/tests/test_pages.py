@@ -245,7 +245,7 @@ class TestAir:
         assert text(soup, "#iaq .value") == "—"
         assert text(soup, "#iaq .cold-tag") == "warming up"
 
-    def test_an_index_below_high_accuracy_says_calibrating(self, data, tz):
+    def test_an_index_below_accuracy_2_says_calibrating(self, data, tz):
         latest = without_uncalibrated_iaq(dict(data["latest"], static_iaq_accuracy=1))
         soup, specs = render(AirPage("air", tz=tz, width=WIDTH, height=HEIGHT), dict(data, latest=latest))
         assert text(soup, "#iaq .value") == "—" and text(soup, "#iaq .unit") == "IAQ"
@@ -255,6 +255,16 @@ class TestAir:
             f"Gas resistance {latest['gas_ohm'] / 1000:.0f} kΩ. Index accuracy low, 1 of 3.")
         spark, scale = specs
         assert spark["now"] is None and scale["value"] is None
+
+    def test_an_index_at_accuracy_2_shows_with_a_calibrating_tag(self, data, tz):
+        latest = without_uncalibrated_iaq(dict(data["latest"], static_iaq=62, static_iaq_accuracy=2))
+        soup, specs = render(AirPage("air", tz=tz, width=WIDTH, height=HEIGHT), dict(data, latest=latest))
+        assert text(soup, "#iaq .value") == "62" and "cold" in soup.select_one("#iaq")["class"]
+        assert text(soup, "#iaq .cold-tag") == "calibrating"
+        assert text(soup, ".verdict") == iaq_verdict(62)
+        assert text(soup, ".detail").endswith("Index accuracy medium, 2 of 3.")
+        spark, scale = specs
+        assert spark["now"][1] == 62 and scale["value"] == 62
 
     def test_a_held_back_stretch_is_a_gap_in_the_spark(self, data, tz):
         end = data["latest"]["ts"]
@@ -268,8 +278,8 @@ class TestAir:
 
 
 class TestAirPool:
-    def test_trace_and_delta_say_calibrating_below_high_accuracy(self, data72, tz):
-        latest = without_uncalibrated_iaq(dict(data72["latest"], static_iaq_accuracy=2))
+    def test_trace_and_delta_say_calibrating_below_accuracy_2(self, data72, tz):
+        latest = without_uncalibrated_iaq(dict(data72["latest"], static_iaq_accuracy=1))
         soup, specs = render(TracePage("air-trace", IAQ, tz=tz, width=WIDTH, height=HEIGHT),
                              dict(data72, latest=latest))
         assert text(soup, "#now .value") == "—" and text(soup, "#now .cold-tag") == "calibrating"
@@ -280,6 +290,30 @@ class TestAirPool:
         assert text(soup, "#delta-static_iaq .value") == "—" and text(soup, "#delta-static_iaq .cold-tag") == "calibrating"
         assert text(soup, "#rate-static_iaq") == "Calibrating."
         assert specs[0]["value"] is None
+
+    def test_trace_and_delta_show_an_index_at_accuracy_2_with_a_calibrating_tag(self, data72, tz):
+        latest = without_uncalibrated_iaq(dict(data72["latest"], static_iaq=62, static_iaq_accuracy=2))
+        soup, specs = render(TracePage("air-trace", IAQ, tz=tz, width=WIDTH, height=HEIGHT),
+                             dict(data72, latest=latest))
+        assert text(soup, "#now .value") == "62" and "cold" in soup.select_one("#now")["class"]
+        assert text(soup, "#now .cold-tag") == "calibrating"
+        assert text(soup, ".verdict") == IAQ.level_words(62)
+        assert specs[0]["now"][1] == 62
+        soup, specs = render(DeltaPage("air-delta", IAQ, tz=tz, width=WIDTH, height=HEIGHT),
+                             {"latest": latest, "history_24h": data72["history_72h"]})
+        assert "cold" in soup.select_one("#delta-static_iaq")["class"]
+        assert text(soup, "#delta-static_iaq .cold-tag") == "calibrating"
+        assert text(soup, "#delta-static_iaq .value") != "—"
+        assert text(soup, "#rate-static_iaq") != "Calibrating."
+        assert specs[0]["value"] == 62
+
+    def test_the_trace_draws_readings_at_accuracy_2(self, data72, tz):
+        end = data72["latest"]["ts"]
+        history = [without_uncalibrated_iaq(dict(d, static_iaq_accuracy=2)) if end - 30 * 3600 <= d["ts"] <= end - 20 * 3600
+                   else d for d in data72["history_72h"]]
+        _, (trace,) = render(TracePage("air-trace", IAQ, tz=tz, width=WIDTH, height=HEIGHT),
+                             dict(data72, history_72h=history))
+        assert trace["gaps"] == []
 
     def test_a_cold_heater_still_says_warming_up(self, data72, tz):
         latest = {k: v for k, v in data72["latest"].items() if k not in ("iaq", "iaq_accuracy", "static_iaq", "static_iaq_accuracy", "gas_ohm")}

@@ -12,8 +12,8 @@ from typing import Callable
 
 from airium import Airium
 
-from metrics import (CALIBRATING_TAG, CALIBRATING_VERDICT, COMFORT, NO_SENSOR_TAG,
-                     NO_SENSOR_VERDICT, Comfort, barometer_word, change_over, classify_rate,
+from metrics import (CALIBRATING_TAG, CALIBRATING_VERDICT, COMFORT, IAQ_CALIBRATED_ACCURACY,
+                     NO_SENSOR_TAG, NO_SENSOR_VERDICT, Comfort, barometer_word, change_over, classify_rate,
                      co2_meaning, co2_verdict, extremes, fmt_hm, fmt_int, fmt_stamp, gaps,
                      iaq_meaning, iaq_verdict, pm25_verdict,
                      pm_meaning, pressure_meaning, rate_words, rh_meaning, rh_words, sensor_absent,
@@ -41,7 +41,7 @@ class Metric:
     second: "Metric | None" = None   # drawn lighter beside this one on the trace
     cold_tag: str = "warming up"
     sensor: str = ""                 # its key in the board's client.sensors block
-    accuracy_key: str = ""           # its accuracy's key, for a value held back until accurate
+    accuracy_key: str = ""           # its accuracy's key, for a value held back or tagged until accurate
 
     @property
     def decimals(self) -> int:
@@ -95,27 +95,37 @@ def _valid(latest: dict, m: Metric) -> bool:
 
 
 def _calibrating(latest: dict, m: Metric) -> bool:
-    """The sensor reads, but its value is held back until it is accurate."""
-    return bool(m.accuracy_key) and latest.get(m.accuracy_key) is not None and latest.get(m.key) is None
+    """The sensor reads, but its value is below its highest accuracy: held
+    back, or shown with a tag (sources.corrections)."""
+    accuracy = latest.get(m.accuracy_key) if m.accuracy_key else None
+    return accuracy is not None and accuracy < IAQ_CALIBRATED_ACCURACY
 
 
 def _cold_words(m: Metric, absent: bool, latest: dict) -> tuple[str, str]:
     """The tag beside the dash, and the verdict, when there is no valid reading."""
     if absent:
         return NO_SENSOR_TAG, NO_SENSOR_VERDICT
-    if _calibrating(latest, m):
+    if _calibrating(latest, m) and latest.get(m.key) is None:
         return CALIBRATING_TAG, CALIBRATING_VERDICT
     return m.cold_tag, "Warming up."
 
 
+def _hero_tag(latest: dict, m: Metric, absent: bool) -> str | None:
+    """The tag beside the hero's number: why there is none, or that it is
+    still calibrating. None for a number at its highest accuracy."""
+    if not _valid(latest, m):
+        return _cold_words(m, absent, latest)[0]
+    return CALIBRATING_TAG if _calibrating(latest, m) else None
+
+
 def _hero(a: Airium, latest: dict, m: Metric, id: str, absent: bool) -> None:
     v = latest.get(m.key)
-    ok = _valid(latest, m)
-    with a.div(klass="hero" + ("" if ok else " cold"), id=id):
+    tag = _hero_tag(latest, m, absent)
+    with a.div(klass="hero" + (" cold" if tag else ""), id=id):
         a.span(klass="value", _t=m.fmt(v) if v is not None else "—")
         a.span(klass="unit", _t=m.unit)
-        if not ok:
-            a.span(klass="cold-tag", _t=_cold_words(m, absent, latest)[0])
+        if tag:
+            a.span(klass="cold-tag", _t=tag)
 
 
 def _window_words(hours: float) -> str:
@@ -260,11 +270,12 @@ class DeltaPage(EnvPage):
         rate = classify_rate(delta, m.slow, m.fast)
         decimals = m.decimals
         shown = round(delta, decimals) + 0.0 if delta is not None else None   # no "-0"
-        with a.div(klass="hero" + ("" if ok else " cold"), id=f"delta-{m.key}"):
+        tag = _hero_tag(latest, m, absent)
+        with a.div(klass="hero" + (" cold" if tag else ""), id=f"delta-{m.key}"):
             a.span(klass="value", _t=f"{shown:+.{decimals}f}" if shown is not None else "—")
             a.span(klass="unit", _t=f"{m.unit} in {_window_words(m.window_h)}")
-            if not ok:
-                a.span(klass="cold-tag", _t=_cold_words(m, absent, latest)[0])
+            if tag:
+                a.span(klass="cold-tag", _t=tag)
         a.div(klass="verdict", _t=rate_words(rate) if ok else _cold_words(m, absent, latest)[1],
               id=f"rate-{m.key}")
         if ok:

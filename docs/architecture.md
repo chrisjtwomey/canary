@@ -109,7 +109,7 @@ server/
   dock_settings.py             the dock block and GET /board-settings (dock-settings.md)
   display_settings.py          whether the display runs the saved display and image blocks (schedules.md)
   sources/                     the mock room, readings ingest, calibration store, device status, the corrections
-                               the pages see: sea-level pressure, and no IAQ below accuracy 3
+                               the pages see: sea-level pressure, and no IAQ below accuracy 2
   pages/                       Breathe, Comfort, Dust, Air, Day, the Diagnostics pages, the trace and delta pages, and
                                the splash screen with its logo
   metrics.py                   derived values and wording; the comfort edges, ISO 7730's PMV, and their words

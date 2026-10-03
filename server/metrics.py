@@ -332,8 +332,10 @@ IAQ_WORDS = {
     "extreme": "Extremely polluted.",
 }
 IAQ_ACCURACY = ("calibrating", "low", "medium", "high")
-# What a page shows while the index waits for high accuracy
-# (sources.corrections).
+# Bosch rates the index at its best only at accuracy 3 (BME688 datasheet,
+# Table 3). Below it a page tags the index, or says it is calibrating where
+# sources.corrections held the index back.
+IAQ_CALIBRATED_ACCURACY = 3
 CALIBRATING_TAG = "calibrating"
 CALIBRATING_VERDICT = "Calibrating."
 

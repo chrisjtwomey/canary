@@ -20,15 +20,16 @@ def test_zero_altitude_leaves_the_pressure_as_measured():
     assert CorrectedSource(inner, 0).datasets()["latest"]() == {"ts": 1, "pressure_hpa": 1000.0}
 
 
-def test_an_index_below_high_accuracy_is_held_back_and_its_accuracy_kept():
-    for accuracy in (0, 1, 2):
+def test_an_index_below_accuracy_2_is_held_back_and_its_accuracy_kept():
+    for accuracy in (0, 1):
         doc = {"ts": 1, "iaq": 200, "iaq_accuracy": accuracy, "gas_ohm": 720000}
         assert without_uncalibrated_iaq(doc) == {"ts": 1, "iaq_accuracy": accuracy, "gas_ohm": 720000}
 
 
-def test_an_index_at_high_accuracy_is_kept():
-    doc = {"ts": 1, "iaq": 85, "iaq_accuracy": 3}
-    assert without_uncalibrated_iaq(doc) is doc
+def test_an_index_at_accuracy_2_or_3_is_kept():
+    for accuracy in (2, 3):
+        doc = {"ts": 1, "iaq": 85, "iaq_accuracy": accuracy}
+        assert without_uncalibrated_iaq(doc) is doc
 
 
 def test_an_index_without_its_accuracy_is_held_back():
@@ -39,8 +40,8 @@ def test_each_index_is_held_back_by_its_own_accuracy():
     doc = {"ts": 1, "iaq": 190, "iaq_accuracy": 1, "static_iaq": 70, "static_iaq_accuracy": 3}
     assert without_uncalibrated_iaq(doc) == {"ts": 1, "iaq_accuracy": 1, "static_iaq": 70,
                                              "static_iaq_accuracy": 3}
-    doc = {"ts": 1, "static_iaq": 70, "static_iaq_accuracy": 2}
-    assert without_uncalibrated_iaq(doc) == {"ts": 1, "static_iaq_accuracy": 2}
+    doc = {"ts": 1, "static_iaq": 70, "static_iaq_accuracy": 1}
+    assert without_uncalibrated_iaq(doc) == {"ts": 1, "static_iaq_accuracy": 1}
 
 
 def test_the_source_and_the_history_hold_back_the_same_readings():

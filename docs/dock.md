@@ -63,7 +63,7 @@ On the server:
 - The store's key is the device and `ts`. So the same document posted twice is stored once, however the requests
   were batched, and the route is safe to repeat.
 - `IngestSource` gives the store to the pages as the datasets `latest`, `history_24h` and `history_72h`, and
-  `CorrectedSource` reduces the pressure to sea level and holds back an IAQ below accuracy 3 ([pages.md](pages.md)).
+  `CorrectedSource` reduces the pressure to sea level and holds back an IAQ below accuracy 2 ([pages.md](pages.md)).
   With `source.kind: mock`, `MockReadingsSource` gives the simulated room under the same names. The Diagnostics
   pages read `status`.
 - The fields (`co2_ppm`, `pm2_5`, `iaq`, `temp_c` ...) are CANARY's own. The kit stores a timestamped JSON

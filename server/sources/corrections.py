@@ -7,10 +7,9 @@ from epd_server.source import DataSource, Fetcher
 
 from metrics import sea_level_hpa
 
-# Bosch rates the index at its best only at accuracy 3 (BME688 datasheet,
-# Table 3). Below it, the index moves with BSEC's calibration as much as with
-# the air.
-IAQ_MIN_ACCURACY = 3
+# Below accuracy 2 the index moves with BSEC's calibration as much as with the
+# air. At 2 the pages show it marked as calibrating (IAQ_CALIBRATED_ACCURACY).
+IAQ_MIN_ACCURACY = 2
 # Each index BSEC gives, with the key of its accuracy.
 IAQ_KEYS = (("iaq", "iaq_accuracy"), ("static_iaq", "static_iaq_accuracy"))
 
@@ -40,7 +39,7 @@ def without_uncalibrated_iaq(doc: dict) -> dict:
 
 def correct(doc: dict, altitude_m: float) -> dict:
     """``doc`` as the pages see it: the pressure at sea level, and the index
-    only at high accuracy."""
+    only from IAQ_MIN_ACCURACY."""
     return without_uncalibrated_iaq(to_sea_level(doc, altitude_m))
 
 

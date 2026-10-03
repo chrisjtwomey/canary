@@ -115,10 +115,13 @@ The Settings page, `/web/config`:
   stays under `pressure_station_hpa`.
 - The pages show BSEC's static IAQ (`static_iaq`), which Bosch recommends for a device that stays in one place. The
   other index, `iaq`, stretches its scale to the last few days' air, so small changes in a quiet room swing it.
-- The pages show the IAQ only at accuracy 3, BSEC's highest. Below it they say "Calibrating.", and the charts leave
-  those readings out. Bosch rates the index at its best only at 3; below it, the index moves with BSEC's
-  calibration as much as with the air. The store keeps every reading as the dock posted it. This and the sea-level
-  pressure are in `sources/corrections.py`.
+- The pages show the IAQ from accuracy 2. Bosch rates the index at its best only at 3 (`IAQ_CALIBRATED_ACCURACY`
+  in `metrics.py`), so at 2 the number is grey with the tag "calibrating", beside the normal verdict, and the charts
+  draw it like any other reading. Dips below 3 are short, and in them the index still follows the air. Below 2
+  (`IAQ_MIN_ACCURACY` in `sources/corrections.py`), the index moves with BSEC's calibration as much as with the
+  air: the pages show "—" and "Calibrating.", and the charts leave those readings out. The status light and the
+  dock's mean still count only accuracy 3 ([led.md](led.md), [dock.md](dock.md)). The store keeps every reading as
+  the dock posted it. This and the sea-level pressure are in `sources/corrections.py`.
 - A line chart breaks its line where no reading falls for more than 45 minutes, and shades that stretch light grey,
   as the Day page shades the nights. The shading shows when nothing was measured, or nothing was accurate, without
   drawing a path that no reading supports. The dock reads every 30 minutes at night, so a normal night is no gap; a
