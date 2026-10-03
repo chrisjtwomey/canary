@@ -904,6 +904,21 @@ static void logSensorChanges() {
     }
 }
 
+// The first failed SCD41 poll of a run, and the poll that ends the run. The
+// dock polls every second, so a part that stops answering logs two lines,
+// not one a second.
+static void logScd41Polls() {
+    static uint16_t failedBefore = 0;
+    const uint16_t failed = sensors.scd41FailedPolls();
+    if (failed && !failedBefore) {
+        logf(LOG_INFO, "[scd41] poll: %s", SensorSuite::readFaultName(sensors.scd41PollFault()));
+    } else if (!failed && failedBefore) {
+        logf(LOG_INFO, "[scd41] polls answered again after %u failed",
+             (unsigned)sensors.scd41LastFailedRun());
+    }
+    failedBefore = failed;
+}
+
 // Why this reading has no CO2, and what each particle read met when one
 // was damaged, with the bytes of each damaged frame.
 static void logReadFaults() {
@@ -971,6 +986,7 @@ static Readings sampleSensors(uint32_t nowMs) {
     const uint32_t epoch = epochAt(nowMs);
     advanceSimulation(epoch);
     Readings r = sensors.sample(epoch);
+    logScd41Polls();
     logReadFaults();
     logSensorChanges();
     return r;
@@ -1062,6 +1078,7 @@ void loop() {
     prewarmWhenDue(nowMs);
     driveFan(nowMs);
     sensors.poll();
+    logScd41Polls();
     sampleWhenDue(nowMs);
     sendQueued();
     backlogged = queue->count() >= kBackloggedAt;

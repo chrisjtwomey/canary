@@ -258,6 +258,41 @@ void test_a_sample_without_co2_says_why() {
     }
 }
 
+void test_a_run_of_failed_scd41_polls_is_kept_until_the_part_answers() {
+    FaultyScd41 part(*room);
+    SensorSuite s(*clk, *shtc3, part, *pm, *bme);
+    s.begin();
+    settle();
+    s.poll();
+    TEST_ASSERT_EQUAL_UINT16(0, s.scd41FailedPolls());
+    part.fault = FaultyScd41::NO_ANSWER;
+    for (int i = 0; i < 3; ++i) {
+        clk->advance(1000);
+        s.poll();
+    }
+    part.fault = FaultyScd41::BAD_CRC;
+    clk->advance(1000);
+    s.poll();
+    TEST_ASSERT_EQUAL_UINT16(4, s.scd41FailedPolls());
+    TEST_ASSERT_TRUE_MESSAGE(SensorSuite::ReadFault::NoAnswer == s.scd41PollFault(),
+                             "what the run's first poll met");
+    part.fault = FaultyScd41::NOT_READY;               // an answer, without data
+    clk->advance(1000);
+    s.poll();
+    TEST_ASSERT_EQUAL_UINT16(0, s.scd41FailedPolls());
+    TEST_ASSERT_EQUAL_UINT16(4, s.scd41LastFailedRun());
+}
+
+void test_the_readings_own_scd41_poll_counts_in_the_run() {
+    FaultyScd41 part(*room);
+    SensorSuite s(*clk, *shtc3, part, *pm, *bme);
+    s.begin();
+    settle();
+    part.fault = FaultyScd41::NO_ANSWER;
+    s.sample(room->epoch());
+    TEST_ASSERT_EQUAL_UINT16(1, s.scd41FailedPolls());
+}
+
 void test_health_counts_a_bad_pm_frame() {
     FlakyPm flaky;
     SensorSuite s(*clk, *shtc3, *scd41, flaky, *bme);
@@ -534,6 +569,8 @@ int main(int, char**) {
     RUN_TEST(test_during_the_warm_up_no_scd41_temperature_counts);
     RUN_TEST(test_each_pm_read_of_a_sample_is_kept_for_the_log);
     RUN_TEST(test_a_sample_without_co2_says_why);
+    RUN_TEST(test_a_run_of_failed_scd41_polls_is_kept_until_the_part_answers);
+    RUN_TEST(test_the_readings_own_scd41_poll_counts_in_the_run);
     RUN_TEST(test_health_counts_a_bad_pm_frame);
     RUN_TEST(test_health_holds_the_scd41_settings_from_its_start_and_the_bme688s_last_state);
     RUN_TEST(test_health_holds_each_sensors_settings);

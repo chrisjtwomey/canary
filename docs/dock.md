@@ -88,8 +88,9 @@ On the server:
      part makes one every 5 s and keeps only the last, so the dock calls `poll()` every second, and the part is never
      asked twice for the same measurement.
   4. Read a PM frame, only after the fan's 30 s warm-up. Read once more after a read that fails or is damaged.
-  The suite keeps why the SCD41 gave no CO₂, and what each PM read met with its 32 bytes, and the dock logs them
-  ([boards.md](boards.md)).
+  A failed poll loses no measurement: the part keeps it, and the next poll reads it. The suite keeps why the SCD41
+  gave no CO₂, each run of polls that it did not answer, and what each PM read met with its 32 bytes, and the dock
+  logs them ([boards.md](boards.md)).
 - **A reading holds the means of the SCD41's and the BME688's samples since the last reading**, so that a value covers
   the whole 5 or 30 minutes, not one moment of them. Each value counts only its good samples: the SCD41's
   temperature and humidity after its warm-up, the gas resistance from a heater at its target, each index at accuracy
