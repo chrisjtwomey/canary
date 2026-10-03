@@ -106,6 +106,8 @@ server/
   board_logs.py                what each board logs over MQTT, for the Logs view
   schedule.py                  the dock's reading slots (schedules.md)
   off_hours.py                 the splash screen while the page schedule is off (schedules.md)
+  after_reading.py             each page made after the dock's reading at its slot, and the display's wake after
+                               that (schedules.md)
   dock_settings.py             the dock block and GET /board-settings (dock-settings.md)
   display_settings.py          whether the display runs the saved display and image blocks (schedules.md)
   sources/                     the mock room, readings ingest, calibration store, device status, the corrections

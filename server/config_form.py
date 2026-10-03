@@ -148,7 +148,8 @@ TABS: tuple[Tab, ...] = (
         )),
         Group("Pages", about="When the server draws each page", fields=(
             Field("server.regen_lead_seconds", "Pre-render",
-                  "How long before each page change the server renders the page.", "int", 120,
+                  "How long the server has to draw each page. The page changes this long plus 10 seconds "
+                  "after its time, so that it shows the reading taken then.", "int", 120,
                   unit="seconds", minimum=0),
         )),
         Group("Location", about="Where the device is, for its local time and sea-level pressure", fields=(

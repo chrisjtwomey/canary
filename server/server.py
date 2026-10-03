@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import logging
+import math
 import os
 import sys
 import threading
@@ -27,6 +28,7 @@ from epd_server.source import CompositeSource, IngestSource
 from epd_server.timeranges import TimeRanges, Week, check_interval
 
 from about import About, config_version
+from after_reading import AfterReadingSchedule
 from board_logs import LogsQuery
 from config_page import config_blueprint
 from display_settings import DISPLAY, DisplaySync, display_version
@@ -132,12 +134,25 @@ def make_silence(syncs: dict[str, Week]) -> Callable[[str, float], float]:
     return silence
 
 
-def make_next_sync(syncs: dict[str, Week]) -> Callable[[str, float], int | None]:
+PageWake = Callable[[float], tuple[float, float]]
+
+
+def make_next_sync(syncs: dict[str, Week],
+                   page_wake: PageWake | None = None) -> Callable[[str, float], int | None]:
     """The seconds until a board's next sync slot; None for a board with no
-    schedule, or no slot in it."""
+    schedule, or no slot in it. A display sync that falls between a page's
+    slot and its wake (``page_wake``: AfterReadingSchedule.page_wake) moves to
+    that wake, which posts the display's state anyway, so the display wakes
+    once."""
     def next_sync(device: str, now: float) -> int | None:
         sync = syncs.get(device)
-        return sync.seconds_until_next(now) if sync else None
+        seconds = sync.seconds_until_next(now) if sync else None
+        if seconds is None or device != DISPLAY or page_wake is None:
+            return seconds
+        wake, after_slot = page_wake(now)
+        if 0 <= wake - (now + seconds) <= after_slot:
+            return max(1, math.ceil(wake - now))
+        return seconds
     return next_sync
 
 
@@ -147,10 +162,11 @@ def make_next_sync(syncs: dict[str, Week]) -> Callable[[str, float], int | None]
 SLOT_EARLY_S = 5
 
 
-def make_sensor_poll(syncs: dict[str, Week]) -> Callable[[float, str | None], int | None]:
+def make_sensor_poll(syncs: dict[str, Week],
+                     page_wake: PageWake | None = None) -> Callable[[float, str | None], int | None]:
     """The Canary-Next-Sensor-Poll-Seconds each board gets: its own next sync,
     or the one after it when the post is up to SLOT_EARLY_S before a slot."""
-    next_sync = make_next_sync(syncs)
+    next_sync = make_next_sync(syncs, page_wake)
 
     def poll(now: float, name: str | None) -> int | None:
         if not name:
@@ -408,11 +424,15 @@ def main():
         clock = lambda: pinned  # noqa: E731
         log.info("clock pinned to %s", args.at)
 
+    # Served to the display, not listed: no page set or menu shows it.
+    splash = SplashPage(logo_svg(), **core.image.page_kwargs())
+    off_hours = OffHoursSchedule(core.server.schedule, splash.png_filename)
+    schedule = AfterReadingSchedule(off_hours, core.server.regen_lead_seconds)
     status_store = ReadingsStore(store_file(settings.status_path))
     display_settings = display_version(config)
     reports = DeviceReports(store=status_store, keep_days=settings.status_days,
                             silence=make_silence(settings.syncs),
-                            next_sync=make_next_sync(settings.syncs),
+                            next_sync=make_next_sync(settings.syncs, schedule.page_wake),
                             stamps={DISPLAY: display_settings})
     log.info("board reports in %s, %d held", status_store.path, status_store.count())
     store = None
@@ -428,9 +448,6 @@ def main():
                   syncs={"dock": settings.dock_sync, "display": settings.display_sync},
                   config=running)
     pages = make_pages(tz, settings.comfort, **core.image.page_kwargs())
-    # Served to the display, not listed: no page set or menu shows it.
-    splash = SplashPage(logo_svg(), **core.image.page_kwargs())
-    schedule = OffHoursSchedule(core.server.schedule, splash.png_filename)
     between = make_between(settings.seed, clock, store)
     history = HistoryQuery(make_history(between, settings.altitude_m), tz, now=clock,
                            comfort=settings.comfort)
@@ -461,13 +478,13 @@ def main():
             header_prefix="Canary",
             server_version=about.version,
             version_gate=True,
-            sensor_poll=make_sensor_poll(settings.syncs),
+            sensor_poll=make_sensor_poll(settings.syncs, schedule.page_wake),
             on_refused=reports.refused,
         )
     except ValueError as exc:
         log.error(str(exc))
         sys.exit(1)
-    splash_when_off(server.app, schedule, [p.name for p in pages], splash.name, clock)
+    splash_when_off(server.app, off_hours, [p.name for p in pages], splash.name, clock)
     server.app.register_blueprint(web_blueprint(pages, source, logging_on=core.mqtt.enabled))
     stores = {
         "sensor-readings": Transfer("sensor-readings", store_file(settings.store_path)),

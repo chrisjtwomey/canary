@@ -21,6 +21,11 @@ images, and a `schedule` of `type: times` or `type: timeranges`. CANARY uses `ti
 - **By default** the page changes every 300 s all day, every day, on :00, :05 ... on the wall clock.
 - **A slot** is a local time in a range that is on, whose seconds past midnight are a multiple of the range's
   interval.
+- **The page is made after the dock's reading at its slot.** The dock reads at its own slots, often the same minutes,
+  and posts about 1.5 s after. So the server makes each page 10 s after its slot (`READING_WAIT_S`), and the display
+  wakes `server.regen_lead_seconds` (Pre-render) after that: with a pre-render of 10 s, the page changes 20 s after
+  its slot and shows the reading from that slot. A page made before its slot would show the reading from the slot
+  before, up to 5 minutes old. The splash's wake moves the same way (`server/after_reading.py`).
 - epd's `TimeRanges` finds the slot by stepping through the minutes, and asking for each minute which range it is in.
   This is because some clocks change at 01:00: in spring that hour does not happen, and in autumn it happens twice.
 - The page's turn through the pools is counted over the week, from the slots of the days before. So it continues
@@ -57,7 +62,9 @@ The Display tab of `/web/config` edits the week beside a dial of the day:
   page that it fetches. The Display tab sets it in minutes.
 - Each board gets its own next slot in `Canary-Next-Sensor-Poll-Seconds`, by the name it gives in `Canary-Device`,
   with the same 5 s rule as the dock.
-- The display posts its state at each wake. It also wakes for a sync that comes before its next page.
+- The display posts its state at each wake. It also wakes for a sync that comes before its next page. A sync that
+  falls between a page's slot and the page's wake moves to that wake, so the display wakes once for both
+  (`make_next_sync` in `server/server.py`).
 - The display holds none of the `display` and `image` settings: the server picks each page, and the time to the
   next wake, from them. So the display runs a saved change from the answer to its next sync.
 - The server keeps the version for it: a hash of those two blocks, taken at the server's start. It puts the
