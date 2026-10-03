@@ -129,8 +129,8 @@
     var out = [];
     if (!s.ranges.length) return out;
     for (var m = 0; m < DAY_MIN; m++) {
-      var step = rangeAt(s.ranges, m).every;
-      if (step > 0 && (m * 60) % step === 0) out.push(m);
+      var r = rangeAt(s.ranges, m);
+      if (r.every > 0 && ((m - r.start) * 60) % r.every === 0) out.push(m);
     }
     return out;
   }

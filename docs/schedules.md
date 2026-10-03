@@ -19,8 +19,9 @@ images, and a `schedule` of `type: times` or `type: timeranges`. CANARY uses `ti
 - **A day stands alone.** Before its first start, its own last range runs, not the range of the day before. So a
   group's dial shows all that happens on its days.
 - **By default** the page changes every 300 s all day, every day, on :00, :05 ... on the wall clock.
-- **A slot** is a local time in a range that is on, whose seconds past midnight are a multiple of the range's
-  interval.
+- **A slot** is a local time in a range that is on, a whole number of the range's intervals from its start. So a
+  range has a slot at its start: from 08:30 every 20 minutes gives 08:30, 08:50, 09:10. A range that starts on the
+  hour, with an interval that divides the hour, keeps to :00, :05 ... on the wall clock.
 - epd's `TimeRanges` finds the slot by stepping through the minutes, and asking for each minute which range it is in.
   This is because some clocks change at 01:00: in spring that hour does not happen, and in autumn it happens twice.
 - The page's turn through the pools is counted over the week, from the slots of the days before. So it continues
