@@ -31,7 +31,7 @@ wiring. First do the [setup](../CONTRIBUTING.md#setup).
 
 - The log shows the boot banner, the User-Agent and the Wi-Fi join. Then it shows `downloading file at URL ...`,
   `drawing image from buffer` and `next refresh in N s`.
-- It shows a new page every 5 minutes on the clock (:00, :05 ...).
+- By default it shows a new page every 5 minutes on the clock (:00, :05 ...) ([schedules.md](schedules.md)).
 - When a fetch fails, the last page stays on the panel, and each new try waits longer (`back-off step N`).
 - `kRotation` in `src/main.cpp` is 0: the board as it comes, with the USB-C port on the right. For a board turned
   180°, set it to 2.

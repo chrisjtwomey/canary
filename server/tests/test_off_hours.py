@@ -40,8 +40,9 @@ def test_after_the_splash_the_next_page_comes_when_they_turn_on():
 
 
 def test_a_day_turns_off_by_its_own_ranges():
-    # Saturday runs its own last range until 01:00, so Friday night carries on.
-    assert schedule().next_wake(now=at(2, 23, 50)) == (at(3, 0, 0), "breathe.png")
+    # Saturday runs its own last range until 01:00, so Friday night carries on,
+    # at that range's slots: 20 minutes apart from 08:30.
+    assert schedule().next_wake(now=at(2, 23, 50)) == (at(3, 0, 10), "breathe.png")
     assert schedule().next_wake(now=at(3, 0, 50)) == (at(3, 1, 0), "splash.png")
 
 

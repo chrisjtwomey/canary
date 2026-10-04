@@ -23,8 +23,8 @@ display:
   schedule:
     type: timeranges
     week:           # when the page changes, in server.timezone: each day is in one group, and
-                    # each range runs until the next starts that day, slots on the wall clock
-                    # (:00, :05 ...); every: 0 is off
+                    # each range runs until the next starts that day, slots a whole number of
+                    # intervals from its start (:00, :05 ... from 00:00); every: 0 is off
       - days: [mon, tue, wed, thu, fri, sat, sun]
         ranges:
           - {from: "00:00", every: 300}
@@ -53,7 +53,7 @@ calibration:        # sensor state the dock backs up after each batch of reading
 dock:               # what the dock does between readings; it takes a change before its next one
   sync:             # when it takes a reading and syncs, in server.timezone
     week:           # each day is in one group, and each range runs until the next starts that
-                    # day, slots on the wall clock (:00, :05 ...); every: 0 is off
+                    # day, slots a whole number of intervals from its start; every: 0 is off
       - days: [mon, tue, wed, thu, fri, sat, sun]
         ranges:
           - {from: "01:00", every: 1800}
