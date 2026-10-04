@@ -697,16 +697,6 @@ static void openQueue() {
 }
 
 
-// Mains power and no schedule to keep, so there is nothing to do but wait
-// for the network to come back.
-static void connectNetworkForever() {
-    while (configureWiFi(config.wifiSSID, config.wifiPass, config.wifiRetries) != ESP_OK) {
-        log(LOG_ERROR, "wifi connect timeout; trying again in 30 s");
-        delay(30000);
-    }
-    logf(LOG_INFO, "wifi: %s, %d dBm", WiFi.localIP().toString().c_str(), (int)WiFi.RSSI());
-}
-
 static ClientStatus clientStatus(uint32_t nowMs) {
     strncpy(ipText, WiFi.localIP().toString().c_str(), sizeof(ipText) - 1);
     ClientStatus s = {};
@@ -802,8 +792,8 @@ static void sendCalibration() {
 }
 
 // A freshly written image is on trial until the server takes a batch from
-// it. The board is on mains, so failing that three times in a row is the
-// image's fault, and the one before it comes back.
+// it. The board is on mains, so failing three times in a row, to join Wi-Fi
+// or to post, is the image's fault, and the one before it comes back.
 static bool     onTrial = false;
 static int      trialFailures = 0;
 static const int kTrialFailureLimit = 3;
@@ -818,6 +808,17 @@ static void trialPosted() {
 static void trialFailed(const char* why) {
     if (!onTrial || ++trialFailures < kTrialFailureLimit) return;
     otaRollback(why);   // reboots into the previous image
+}
+
+// Mains power and no schedule to keep, so there is nothing to do but wait
+// for the network to come back, unless an image on trial fails to join.
+static void waitForNetwork() {
+    while (configureWiFi(config.wifiSSID, config.wifiPass, config.wifiRetries) != ESP_OK) {
+        trialFailed("wifi connect timeout");
+        log(LOG_ERROR, "wifi connect timeout; trying again in 30 s");
+        delay(30000);
+    }
+    logf(LOG_INFO, "wifi: %s, %d dBm", WiFi.localIP().toString().c_str(), (int)WiFi.RSSI());
 }
 
 static void updateProgress(int done, int total) {
@@ -1029,7 +1030,7 @@ void setup() {
     onTrial = otaTrialPending();
     if (onTrial) logf(LOG_NOTICE, "trial boot of %s", CLIENT_VERSION);
     config = loadConfig(builtInSettings());
-    connectNetworkForever();
+    waitForNetwork();
     static char mqttTopic[128];
     if (config.mqttEnabled && mqttSettingsAreSet(config.mqttBroker) &&
         boardLogTopic(config.mqttPrefix, CLIENT_NAME, mqttTopic, sizeof(mqttTopic))) {

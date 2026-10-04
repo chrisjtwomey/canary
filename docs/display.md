@@ -24,7 +24,8 @@ each wake:  board.begin(); wifi
 - **RTC memory** holds what must outlast the sleep: the wake plan, the next URL and the counts. A real start clears
   it.
 - **Two things keep the display awake:** a wait under 10 s, which costs less than a wake, and a newly written image,
-  which the bootloader takes back unless a page proves it.
+  which the bootloader takes back unless a page proves it. Three failures in a row, to join Wi-Fi or to fetch a
+  page, roll it back.
 - **Its report.** The display reports its uptime and its reset reason from its last real start. So the Diagnostics
   page does not count a wake as a restart.
 

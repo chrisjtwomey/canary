@@ -104,22 +104,24 @@ static void sleepUntil(uint32_t at) {
     sleep((time_t)at);
 }
 
-// A freshly written image waits awake for the network, since proving itself
-// is all it may do. Any other wake sleeps between tries.
-static void connectNetworkOrSleep() {
-    while (connectNetwork(config) != ESP_OK) {
-        logf(LOG_ERROR, "wifi connect timeout; trying again in %u s", kWifiRetryS);
-        if (!onTrial) sleepUntil(epochNow() + kWifiRetryS);
-        delay(kWifiRetryS * 1000);
-    }
-}
-
 // A new image that cannot complete a cycle is not worth keeping. Mains
 // power means a failure here is the image's fault, not a flat battery.
 static void abandonTrialAfterRepeatedFailures(const char* why) {
     if (!onTrial) return;
     if (++trialFailures < kTrialFailureLimit) return;
     otaRollback(why);   // reboots into the previous image
+}
+
+// A freshly written image waits awake for the network, since proving itself
+// is all it may do, and each failed join counts towards giving it up. Any
+// other wake sleeps between tries.
+static void connectNetworkOrSleep() {
+    while (connectNetwork(config) != ESP_OK) {
+        abandonTrialAfterRepeatedFailures("wifi connect timeout");
+        logf(LOG_ERROR, "wifi connect timeout; trying again in %u s", kWifiRetryS);
+        if (!onTrial) sleepUntil(epochNow() + kWifiRetryS);
+        delay(kWifiRetryS * 1000);
+    }
 }
 
 // Count the failure, arm the next try, and give up on an image on trial.

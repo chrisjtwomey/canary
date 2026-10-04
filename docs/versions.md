@@ -61,7 +61,7 @@ The boards follow the server's version.
   the restart empties the queue. The exception is a 409: the server will not take that queue until the dock runs
   another version, so the dock takes the image and loses the readings.
 - While the image is written, the LED shows Updating ([led.md](led.md)).
-- The new image starts on trial. The first batch that the server takes confirms it. Three failures in a row roll it
-  back, and the dock then refuses that version.
+- The new image starts on trial. The first batch that the server takes confirms it. Three failures in a row, to join
+  Wi-Fi or to post, roll it back, and the dock then refuses that version.
 
 **The display** draws a notice, then takes the update ([display.md](display.md#notices)).

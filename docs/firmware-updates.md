@@ -33,6 +33,7 @@ checkout reports what `git describe` gives, for example `v0.6.2-5-gab12cd4`, so 
 | To see | Do this | What happens |
 |---|---|---|
 | A rollback | Before the build, set `serverURL` in `src/defaults.cpp` to `http://192.0.2.1:8080/breathe.png`. That address never answers. | The board takes the image, fails 3 times, and starts the previous image again. It then refuses that version: `firmware <version> is offered again; this board rolled back from it`. |
+| A rollback when Wi-Fi fails | Before the build, set `wifiPass` in `src/defaults.cpp` to a wrong password. | The board takes the image and fails to join Wi-Fi 3 times, about 1.5 minutes. It starts the previous image again, which stores its own password again, and refuses that version. |
 | A board go back to the server's line | Flash an image of a later tag over USB. Leave an older image in the folder. | The server offers the older image, and logs that the board went back to it. |
 
 - To try a refused version again, commit again, or erase the board: `pio run -e esp32 -t erase`, or `-e dock` in
