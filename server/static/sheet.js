@@ -130,7 +130,8 @@
     if (!s.ranges.length) return out;
     for (var m = 0; m < DAY_MIN; m++) {
       var r = rangeAt(s.ranges, m);
-      if (r.every > 0 && ((m - r.start) * 60) % r.every === 0) out.push(m);
+      var sinceStart = (m - r.start + DAY_MIN) % DAY_MIN;
+      if (r.every > 0 && (sinceStart * 60) % r.every === 0) out.push(m);
     }
     return out;
   }
