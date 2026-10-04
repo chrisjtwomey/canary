@@ -24,9 +24,9 @@ images, and a `schedule` of `type: times` or `type: timeranges`. CANARY uses `ti
   hour, with an interval that divides the hour, keeps to :00, :05 ... on the wall clock.
 - **The page is made after the dock's reading at its slot.** The dock reads at its own slots, often the same minutes,
   and posts about 1.5 s after. So the server makes each page 10 s after its slot (`READING_WAIT_S`), and the display
-  wakes `server.regen_lead_seconds` (Pre-render) after that: with a pre-render of 10 s, the page changes 20 s after
-  its slot and shows the reading from that slot. A page made before its slot would show the reading from the slot
-  before, up to 5 minutes old. The splash's wake moves the same way (`server/after_reading.py`).
+  wakes `server.regen_lead_seconds` (Drawing time) after that: with a drawing time of 10 s, the page changes 20 s
+  after its slot and shows the reading from that slot. A page made before its slot would show the reading from the
+  slot before, up to 5 minutes old. The splash's wake moves the same way (`server/after_reading.py`).
 - epd's `TimeRanges` finds the slot by stepping through the minutes, and asking for each minute which range it is in.
   This is because some clocks change at 01:00: in spring that hour does not happen, and in autumn it happens twice.
 - The page's turn through the pools is counted over the week, from the slots of the days before. So it continues
