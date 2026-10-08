@@ -28,6 +28,10 @@ with what `git describe` gives for the commit that CI tested:
 - At start, the builder builds the display's and the dock's firmware of its own version into the server's firmware
   folder, as `canary-display/<version>.bin` and `canary-dock/<version>.bin`. Then it waits. Its container log shows
   each build.
+- Beside each image, the builder keeps `<version>.merged.bin`: the same firmware with its bootloader and partition
+  table, which the install page writes over USB. It copies the merged image first, so the install page always has
+  the version that the boards are offered. When a version's merged image is missing, the builder builds that
+  version again.
 - The builder keeps the older images in the folder. A server offers the image that its version calls for, and that
   can be an older one.
 - Run the builder beside a server of the same tag. A pair on `latest` moves the boards with every push, because a
