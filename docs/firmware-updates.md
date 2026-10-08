@@ -13,7 +13,9 @@ checkout reports what `git describe` gives, for example `v0.6.2-5-gab12cd4`, so 
    mkdir -p server/firmware/canary-display server/firmware/canary-dock
    ```
 
-2. Flash each board once over USB, so that it stores your Wi-Fi and the server's address.
+2. Flash each board once over USB, so that it stores your Wi-Fi and the server's address: with PlatformIO and
+   `src/defaults.cpp` ([boards.md](boards.md)), or from the server's install page
+   ([README.md](../README.md#2-install-each-boards-firmware)).
 3. Commit a change. Then build each board, and copy its image into the folder under its version:
 
    ```sh
@@ -23,6 +25,8 @@ checkout reports what `git describe` gives, for example `v0.6.2-5-gab12cd4`, so 
    ```
 
 - The file name must be the `CLIENT_VERSION` that the build prints.
+- The install page offers a version only with its merged image beside it. To install a build from the page, copy
+  `.pio/build/<env>/firmware.factory.bin` in as `$v.merged.bin` too, as the firmware builder does.
 - Commit before each build. A tree with uncommitted changes builds `...-dirty`. Two builds of one commit have the
   same version, and the server does not offer a board the version that it already has.
 - The display takes the image after its next page. The dock takes it after a post that empties its queue, and its

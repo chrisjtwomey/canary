@@ -96,7 +96,7 @@ Do all of it on the bench, away from the printed parts.
 8. Dry-fit: lower board, strips and wires into the cradle, legs first. Each strip rests on its ledge and its two
    end blocks, with the joints hanging in the channel. Lead the wires out at the cradle's ends.
 9. Lift it out, glue the ledges and end blocks — away from the legs — put it back and press it down.
-10. Leave slack in every wire, so the board still lifts straight off the strips to be flashed.
+10. Leave slack in every wire, so the board still lifts straight off the strips for an install over USB.
 
 **Leave the four end legs bare.** They clear the cradle's end blocks by 0.28 mm.
 
@@ -272,7 +272,7 @@ letters, and a line under the letters that holds them together.
 
 ![Built](images/step-12-finished.png)
 
-The server must run, and both boards must have their first flash:
+The server must run, and both boards must have their first install:
 [README.md, steps 1 and 2](../README.md#build-one). Every page and every later firmware then comes from the server.
 
 1. Plug one USB-C cable into the dock. It powers both halves.

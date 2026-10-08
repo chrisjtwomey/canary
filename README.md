@@ -37,7 +37,7 @@ You need:
 - The parts in [hardware/bom.md](hardware/bom.md). They cost about €220.
 - A 3D printer with a 0.4 mm and a 0.2 mm nozzle, and a soldering iron.
 - A computer that is always on, with Docker, on the same network as the device.
-- [PlatformIO](https://platformio.org/install) on the computer that you flash the boards from.
+- A computer with a USB port and Chrome, Edge, Opera or Firefox, for the first install on each board.
 
 ### 1. Run the server
 
@@ -46,65 +46,47 @@ On the computer that is always on:
 ```sh
 git clone https://github.com/chrisjtwomey/canary.git
 cd canary
-cp server/config.example.yaml server/config.yaml
-mkdir -p server/firmware
+./setup.sh
 ```
 
-Set these keys in `server/config.yaml`:
-
-| Key | Value | Why |
-|---|---|---|
-| `source.kind` | `store` | The pages show your readings. `mock` shows a simulated room. |
-| `client.firmware.enabled` | `true` | The boards take new firmware from the server. |
-| `server.timezone` | Your time zone, for example `Europe/London` | The pages and the schedules use it. |
-| `site.altitude_m` | Your altitude in metres | The pages show the pressure at sea level. |
-
-Then start it:
-
-```sh
-docker compose up -d
-```
-
-- The containers run as user 1000. That user must be able to write `server/config.yaml` and `server/firmware/`.
+- `setup.sh` writes `server/config.yaml` for a real install: the pages show your readings, the boards take new
+  firmware from the server, and the time zone and the server's address are this computer's. It asks nothing, and
+  it keeps a config that exists, so you can run it again at any time. Then it starts the containers.
+- The second container builds the firmware for both boards. Its first build takes some minutes.
+  To build again, restart the server with `docker compose restart`. `docker compose logs -f firmware-builder`
+  shows the build.
+- `http://<server>:8080/web/` shows the pages, and `/web/config` is the Settings page. Set your altitude there, in
+  the Server tab, so that the pages show the pressure at sea level. **It has no login: anyone on your network can
+  change the settings.**
 - The readings, board reports, board logs, calibration copies and the HTTPS certificate go in the `canary-data`
   volume. They stay when Docker recreates the container.
-- The second container builds the firmware for both boards. Its first build takes some minutes.
-  `docker compose logs -f firmware-builder` shows it.
-- `http://<server>:8080/web/` shows the pages, and `/web/config` is the Settings page. **It has no login:
-  anyone on your network can change the settings.**
 - The images follow this repo's `main` branch. Your boards take each new version.
 
-### 2. Flash each board once
+### 2. Install each board's firmware
 
-The first flash stores your Wi-Fi and the server's address on the board. After that, each board takes its
-firmware from the server.
+The first install puts the firmware and your network settings on a board, over USB. After that, each board takes
+its firmware from the server.
 
-Flash both boards before you build the device. The dock's USB-C socket carries power only. To flash the dock
+Install both boards before you build the device. The dock's USB-C socket carries power only. To install the dock
 later, you must open it and lift the TinyS3 off its strips.
 
-```sh
-git clone https://github.com/chrisjtwomey/canary.git   # skip this if step 1 ran on this computer
-cd canary
-cp src/defaults.example.cpp src/defaults.cpp
-```
+1. On a computer with a USB port, open `https://<server>:8443/web/install` in Chrome, Edge, Opera or Firefox.
+   `setup.sh` prints the address. Your browser warns about the certificate first: select Advanced, then continue.
+2. Enter your Wi-Fi name and password. Each saves when you leave its field. Change the server address if the
+   boards reach the server by another name.
+3. Connect a board with a USB cable, then select Install beside it. After the install the page checks that the
+   board joins your Wi-Fi and reaches the server.
 
-In `src/defaults.cpp`, set `wifiSSID`, `wifiPass`, and `serverURL` to `http://<server>:8080/breathe.png`.
+- A board's Install button appears once the server has built its firmware.
+- Firefox asks to install an add-on for the site first, and it cannot install from an IP address: open the page by
+  the server's name.
+- Safari cannot install firmware. From a terminal on macOS or Linux, the same install is
+  `curl -O http://<server>:8080/install-firmware.sh`, then `sh install-firmware.sh dock` or
+  `sh install-firmware.sh display`.
+- Behind a reverse proxy that has its own certificate, set the HTTPS port to 0 in Settings and open the page
+  through the proxy.
 
-Connect the Inkplate by USB, then:
-
-```sh
-pio run -e esp32 -t upload
-```
-
-Connect the TinyS3 by USB, then:
-
-```sh
-PLATFORMIO_CORE_DIR=~/.platformio-canary-dock pio run -e dock -t upload
-```
-
-- The dock builds in a PlatformIO folder of its own. Its first build takes about 6 minutes, and the folder grows
-  to about 7 GB.
-- `pio device monitor` shows a board's log.
+To build and flash the boards with PlatformIO instead, as for development, see [docs/boards.md](docs/boards.md).
 
 ### 3. Build it
 
