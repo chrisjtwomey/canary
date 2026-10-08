@@ -93,8 +93,8 @@ The install page, `/web/install`:
   `server.py`): they change only what an install writes. So **Restore** on the Settings page goes back one field
   change. From the first key until its save is done, the Install buttons are off, so an install never writes a
   value the server does not have. `install-form.js` then writes fresh values from `/web/install/config` into the
-  page, which epd's script reads at each install; it opens the page again only when the boards' rows appear or go,
-  as the last missing value is filled in or one is taken out.
+  page and tells epd's script, which then names what is missing and turns the Install buttons on or off. The rows
+  and the sketch show from the start, so the page never reloads for a save.
 - The boards' MQTT broker defaults to the MQTT tab's Broker, because the two are most often the same name. The
   server gives the boards that one too, when `client.mqtt_host` is unset (`broker.py`). A broker at `localhost`,
   `127.x`, `::1` or `0.0.0.0` is the server's own machine, which no board can reach, so the field then stays empty.

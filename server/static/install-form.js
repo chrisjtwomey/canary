@@ -1,8 +1,8 @@
 /* The install page's network settings. Each saves when a person leaves its
    field, through /web/config as the Settings page saves; these take effect
    without a restart. An install writes what the server has saved, so the
-   Install buttons wait from the first key until the save is done. Show and
-   Reset work as config.js has them. */
+   Install buttons wait from the first key until the save is done and the
+   page's values are renewed. Show and Reset work as config.js has them. */
 (function () {
   'use strict';
 
@@ -25,9 +25,11 @@
     });
   }
 
-  function installs(on) {
+  // epd's install.js turns the Install buttons back on once the page's
+  // values are renewed and nothing is missing.
+  function holdInstalls() {
     document.querySelectorAll('#install .boards button').forEach(function (button) {
-      button.disabled = !on;
+      button.disabled = true;
     });
   }
 
@@ -53,17 +55,14 @@
     });
   }
 
-  // The page's values for epd's install.js, as the server now has them. The
-  // board rows appear only once nothing is missing, so the page opens again
-  // when that changes.
+  // The page's values for epd's install.js, as the server now has them. It
+  // then names what is missing, if anything, and sets the Install buttons.
   function renew() {
     return fetch('install/config', { cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (config) {
-        var element = document.getElementById('install-config');
-        var before = JSON.parse(element.textContent);
-        element.textContent = JSON.stringify(config);
-        if ((before.missing.length === 0) !== (config.missing.length === 0)) location.reload();
+        document.getElementById('install-config').textContent = JSON.stringify(config);
+        document.getElementById('install').dispatchEvent(new Event('install:refresh'));
       });
   }
 
@@ -118,13 +117,13 @@
           input.setAttribute('data-initial', input.value);
         });
         say('');
-        return renew().then(function () { installs(!edited()); });
+        if (!edited()) return renew();
       })
       .catch(function () { say('Cannot reach the server. Check that it is running.'); });
   }
 
   function save() {
-    installs(false);
+    holdInstalls();
     pending = pending.then(saveNow);
   }
 
@@ -134,7 +133,7 @@
     save();
   });
   form.addEventListener('input', function () {
-    installs(false);
+    holdInstalls();
     resets();
   });
 
