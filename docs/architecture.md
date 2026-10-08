@@ -95,8 +95,10 @@ src/validate/main.cpp          the bench routine
 lib/bme68x/                    Bosch's BME68x API
 scripts/                       bsec.py, dock_core.py, gfxfont.py, notices.py, version.py
 test/                          host tests, native env
+setup.sh                       the first start: runs docker-compose.yml's setup service, then starts the stack
 server/
   server.py                    config, sources, pages, DisplayServer(...).run()
+  setup.py                     the setup service: config.yaml from the example, set for a real install, and firmware/
   about.py  version.py         GET /about, and what this server calls itself
   web.py  html_doc.py          /web/: the pages in a browser, the explorer, and GET /history
   install_page.py              /web/install: epd's install page in this site's layout, with the boards' network

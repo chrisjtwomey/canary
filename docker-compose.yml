@@ -37,6 +37,16 @@ services:
       # The PlatformIO toolchain, downloaded by the first build.
       - platformio:/platformio
 
+  # Writes server/config.yaml and server/firmware for a first start, as root,
+  # so the host needs no sudo. setup.sh runs it; `docker compose up` does not.
+  setup:
+    image: ghcr.io/chrisjtwomey/canary-server:latest
+    profiles: [setup]
+    user: "0:0"
+    volumes:
+      - ./server:/setup
+    command: ["python", "setup.py", "/setup"]
+
 volumes:
   canary-data:
   platformio:
