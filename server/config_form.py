@@ -26,6 +26,7 @@ from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 from ruamel.yaml.tokens import CommentToken
 
 import dock_settings as ds
+from broker import board_broker
 from epd_server.timeranges import DAYS, MAX_RANGES
 from schedule import DEFAULT_DISPLAY_SYNC_S, DEFAULT_DOCK_WEEK, DEFAULT_PAGE_WEEK
 
@@ -46,11 +47,13 @@ class Field:
     environment variable. ``recommended`` is the value to keep, which the
     group's drawing marks; below it, ``caution`` shows under the field. With
     ``zero_means_always``, 0 is not below it: the fan's 0 keeps it on.
+    ``refused`` is what the field says when the server's check refuses its
+    value, in place of the check's own words, which name config keys.
     """
     key: str
     label: str
     help: str = ""
-    kind: str = "text"      # text zone int number bool choice stops time window pools order week looks
+    kind: str = "text"      # text password zone int number bool choice stops time window pools order week looks
     default: Any = None
     hint: str = ""
     choices: tuple[tuple[str, str], ...] = ()
@@ -65,6 +68,7 @@ class Field:
     recommended: float | None = None
     caution: str = ""
     zero_means_always: bool = False
+    refused: str = ""
 
     def cautions(self, value: Any) -> bool:
         """Whether ``value``, as the form or the file holds it, is below the recommended one."""
@@ -144,7 +148,14 @@ POOR_AIR_HELP = "Above this, the status light shows its Alert pattern."
 TABS: tuple[Tab, ...] = (
     Tab("server", "Server", (
         Group("Network", about="Where the boards and browsers reach the server", fields=(
+            Field("client.server_url", "Server address",
+                  "Boards get this address when installing firmware.", "text",
+                  hint="http://canary.local:8080",
+                  refused="Enter it as http://host:port, with nothing after the port."),
             Field("server.port", "Port", "", "int", 8080, minimum=1, maximum=65535),
+            Field("server.https_port", "HTTPS port", "For the install page. 0 = off.", "int", 8443,
+                  minimum=0, maximum=65535,
+                  refused="Port and HTTPS port cannot be the same."),
         )),
         Group("Pages", about="When the server draws each page", fields=(
             Field("server.regen_lead_seconds", "Drawing time", "", "int", 120,
@@ -317,6 +328,16 @@ TABS: tuple[Tab, ...] = (
             Field("client.firmware.dir", "Folder", "Where the firmware builder puts new images.", "text",
                   "firmware",
                   when="client.firmware.enabled=true"),
+        )),
+        Group("Install", about="What boards get when installing firmware", fields=(
+            Field("client.wifi.ssid", "Wi-Fi name", "", "text",
+                  refused="Too long. A Wi-Fi name has at most 32 characters."),
+            Field("client.wifi.password", "Wi-Fi password", "8 to 63 characters.", "password",
+                  refused="Enter 8 to 63 characters."),
+            Field("client.mqtt_host", "MQTT broker",
+                  "The server's broker, unless boards reach it by another name.", "text",
+                  lambda cfg: board_broker(effective(cfg, "mqtt.host")), when="mqtt.enabled=true",
+                  refused="Enter the name or address alone. The port is on the MQTT tab."),
         )),
     ), sheet=True),
     Tab("mqtt", "MQTT", (
@@ -736,11 +757,14 @@ def parse(f: Field, raw: Any) -> Any:
         return _parse_week(raw)
     if f.kind == "looks":
         return _parse_looks(raw)
-    raw = str(raw).strip()
+    entered = str(raw)
+    raw = entered.strip()
     if f.kind in ("bool", "window"):
         return raw == "true"
     if raw == "":
         return None
+    if f.kind == "password":
+        return entered
     if f.kind == "int":
         try:
             v = int(raw)
@@ -1099,8 +1123,8 @@ def apply(text: str, form) -> Edit:
     """config.yaml as ``text`` with the values ``form`` posts, and what they change.
 
     A field the form leaves out stays as it is, and so does one an
-    environment variable sets. An empty field takes its key out, bar the
-    token, which stays until the YAML tab takes it out.
+    environment variable sets. An empty field takes its key out, unless the
+    file holds the key empty already.
 
     Raises:
         FormError: the file cannot be edited this way, or the edit would not
@@ -1162,7 +1186,7 @@ def apply(text: str, form) -> Edit:
         else:
             cur = lookup(cfg, f.path)
             if value is None:
-                if cur is not MISSING:
+                if cur is not MISSING and cur != "":
                     take(f.key)
             elif not _same(cur, value) and not (cur is MISSING
                                                  and _same(default_of(f, cfg), value)):

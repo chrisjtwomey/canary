@@ -404,7 +404,8 @@ def _control(a: Airium, f: cf.Field, view: View, env: str | None, locked: bool,
                 if f.maximum is not None:
                     attrs["max"] = f"{f.maximum:g}"
             elif f.kind != "time":
-                attrs.update(type="text", spellcheck="false", autocomplete="off")
+                attrs.update(type="password" if f.kind == "password" else "text",
+                             spellcheck="false", autocomplete="off")
                 if f.kind == "zone":
                     attrs["list"] = "zones"
                 if f.kind == "order":
@@ -450,6 +451,9 @@ def _field(a: Airium, f: cf.Field, view: View, images: list[str], heading: str,
                     a.label(klass="name", for_=_id(f.key), _t=f.label)
                 if f.key in view.defaults and env is None and not locked:
                     _reset_button(a, f, view)
+                if f.kind == "password":
+                    a.button(type="button", klass="reveal", _t="Show",
+                             **{"aria-controls": _id(f.key)})
             if sheet:
                 a.span(klass="leader", **{"aria-hidden": "true"})
             _control(a, f, view, env, locked)
@@ -1232,7 +1236,10 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
             if mode == "form":
                 key, tab = cf.locate(problem)
                 if key:
-                    view.errors[key] = problem
+                    f = cf.BY_KEY[key]
+                    if f.refused:
+                        problem = f"{cf.name_of(f.path)}: {f.refused}"
+                    view.errors[key] = f.refused or problem
                 view.tab = tab or view.tab
             return refuse(problem)
 

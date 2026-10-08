@@ -212,6 +212,13 @@
   }
 
   document.addEventListener('click', function (e) {
+    var reveal = e.target.closest('.reveal');
+    if (reveal) {
+      var secret = document.getElementById(reveal.getAttribute('aria-controls'));
+      var hidden = secret.type === 'password';
+      secret.type = hidden ? 'text' : 'password';
+      reveal.textContent = hidden ? 'Hide' : 'Show';
+    }
     var reset = e.target.closest('.reset');
     if (reset) putBack([reset.closest('.field').querySelector('[data-default]')]);
     var group = e.target.closest('.reset-group');

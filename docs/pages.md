@@ -52,6 +52,19 @@ The Settings page, `/web/config`:
   `sheet.js` has its own copy of the comfort maths in `metrics.py`, so the sentence is the page's own. The fields
   sit under two tabs, Temperature and Humidity, each a Comfortable and an Acceptable range, with one **Reset to
   defaults**.
+- What a board gets when its firmware is installed sits in two places. The Server tab's Network group holds the
+  Server address, beside the ports, because it is how the boards reach this server. The Firmware tab's Install
+  group holds the Wi-Fi name, the Wi-Fi password and the MQTT broker.
+- The boards' MQTT broker defaults to the MQTT tab's Broker, because the two are most often the same name. The
+  server gives the boards that one too, when `client.mqtt_host` is unset (`broker.py`). A broker at `localhost`,
+  `127.x`, `::1` or `0.0.0.0` is the server's own machine, which no board can reach, so the field then stays empty.
+- The Wi-Fi password is a password input, with **Show** beside its label, as **Reset** sits. It is kept as typed,
+  spaces included. The YAML tab and the board settings file still hold it in plain text: the dots only keep it off
+  the screen.
+- A field with `refused` text shows that text when the server's check refuses its value, in place of the check's
+  own words, which name config keys. The check still decides what is wrong.
+- An empty field takes its key out of the file, unless the file holds the key empty already: the example config
+  holds the Server address and the Wi-Fi keys empty, and an unchanged form changes nothing.
 - A **Reset** puts a default back without an input event, so `config.js` asks the drawings to redraw. Without that, a
   drawing kept a dragged value.
 - **Check** tests an edit, as the server tests the file at start.

@@ -112,7 +112,7 @@ client:             # what the board runs, not what this server does
   wifi:
     ssid: ""
     password: ""    # 8 to 63 characters
-  mqtt_host: ""     # the MQTT broker, while mqtt.enabled
+  # mqtt_host: broker.lan  # the MQTT broker, when the boards reach it by another name than mqtt.host
   firmware:         # server-driven updates; the board flashes itself
     enabled: false
     dir: firmware   # canary-display/ and canary-dock/, each with <version>.bin and

@@ -962,6 +962,7 @@ html:not(.js) .panel.sheet .content {
 }
 
 html:not(.js) .subtabs,
+html:not(.js) .field .reveal,
 html.js .range-panel .panel-name {
   display: none;
 }
@@ -1234,7 +1235,8 @@ html.js .range-panel .panel-name {
   margin-bottom: 0;
 }
 
-.field .reset {
+.field .reset,
+.field .reveal {
   font: inherit;
   font-size: 13px;
   font-style: italic;
@@ -1246,7 +1248,8 @@ html.js .range-panel .panel-name {
   cursor: pointer;
 }
 
-.field .reset:hover {
+.field .reset:hover,
+.field .reveal:hover {
   color: var(--ink);
   border-bottom-color: var(--ink-mid);
 }

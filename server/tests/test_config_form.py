@@ -402,10 +402,17 @@ def test_a_fields_default_is_what_the_server_takes_without_the_key(f):
 @pytest.mark.parametrize("key, base", [
     ("image.innerWidth", BASE), ("image.innerHeight", BASE),
     ("display.schedule.order", BASE),
+    ("client.mqtt_host", _with(BASE, ("mqtt", "host"), "broker.lan")),
+    ("client.mqtt_host", _with(BASE, ("mqtt", "host"), "localhost")),
 ])
 def test_a_default_worked_out_from_the_config_is_what_the_server_takes(key, base):
     f = cf.BY_KEY[key]
     assert _settings(_with(base, f.path, cf.default_of(f, base))) == _settings(base)
+
+
+def test_a_password_is_kept_as_entered():
+    assert cf.parse(cf.BY_KEY["client.wifi.password"], " pass word ") == " pass word "
+    assert cf.parse(cf.BY_KEY["client.wifi.password"], "   ") is None
 
 
 def test_an_unset_field_shows_its_default_as_its_value():

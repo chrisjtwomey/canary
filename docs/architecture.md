@@ -105,6 +105,7 @@ server/
   transfer.py                  a store out to a file and back in, and what it holds, for the Storage tab
   board_logs.py                what each board logs over MQTT, for the Logs view
   schedule.py                  the dock's reading slots (schedules.md)
+  broker.py                    the MQTT broker the boards get when config.yaml names none for them
   off_hours.py                 the splash screen while the page schedule is off (schedules.md)
   after_reading.py             each page made after the dock's reading at its slot, and the display's wake after
                                that (schedules.md)

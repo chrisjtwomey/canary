@@ -30,6 +30,7 @@ from epd_server.timeranges import TimeRanges, Week, check_interval
 
 from about import About, config_version
 from after_reading import AfterReadingSchedule
+from broker import board_broker
 from board_logs import LogsQuery
 from config_page import config_blueprint
 from display_settings import DISPLAY, DisplaySync, display_version
@@ -331,6 +332,9 @@ def load_settings(config: dict) -> Settings:
     if not core.firmware.products:
         core = dataclasses.replace(core, firmware=dataclasses.replace(
             core.firmware, products=FIRMWARE_PRODUCTS))
+    if not core.network.mqtt_host:
+        core = dataclasses.replace(core, network=dataclasses.replace(
+            core.network, mqtt_host=board_broker(core.mqtt.host)))
     return Settings(
         core=core,
         kind=kind,

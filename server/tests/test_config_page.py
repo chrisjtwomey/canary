@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup
 from epd_server import ReadingsStore
 from flask import Flask
 
+import config_form as cf
 from about import config_version
 from config_page import _bytes, _contents_parts, _since, config_blueprint
 from transfer import Corrupt, Held, Overlap, Transfer
@@ -145,6 +146,34 @@ def test_a_problem_the_server_finds_is_shown_at_the_field_it_names(client, path,
     assert "radon.png" in one(page, '[data-field="display.pools"] .error').get_text()
     assert attr(one(page, "nav.tabs"), "data-open") == "display"
     assert open(path).read() == WITH_DISPLAY
+
+
+@pytest.mark.parametrize("change, key, name", [
+    ({"client__server_url": "canary.local:8080"}, "client.server_url", "Server · Server address"),
+    ({"server__https_port": "8080"}, "server.https_port", "Server · HTTPS port"),
+    ({"client__wifi__ssid": "x" * 33}, "client.wifi.ssid", "Firmware · Wi-Fi name"),
+    ({"client__wifi__password": "short"}, "client.wifi.password", "Firmware · Wi-Fi password"),
+    ({"client__mqtt_host": "broker.lan:1883"}, "client.mqtt_host", "Firmware · MQTT broker"),
+])
+def test_a_refusal_the_field_words_itself_names_no_config_key(client, path, change, key, name):
+    write(path, WITH_DISPLAY)
+    soup = soup_of(client.get("/web/config"))
+    rsp = client.post("/web/config", data={**posted(soup, **change), "action": "check"})
+    assert rsp.status_code == 400
+    page = soup_of(rsp)
+    refused = cf.BY_KEY[key].refused
+    assert one(page, f'[data-field="{key}"] .error').get_text().strip() == refused
+    assert f"{name}: {refused}" in page.get_text()
+    assert open(path).read() == WITH_DISPLAY
+
+
+def test_the_wifi_password_is_hidden_with_a_button_to_show_it(client, path):
+    write(path, GOOD + "client:\n  wifi:\n    password: \"pass word\"\n")
+    page = soup_of(client.get("/web/config"))
+    field = one(page, "#f-client-wifi-password")
+    assert (attr(field, "type"), attr(field, "value")) == ("password", "pass word")
+    button = one(page, '[data-field="client.wifi.password"] button.reveal')
+    assert (button.get_text(), attr(button, "aria-controls")) == ("Show", "f-client-wifi-password")
 
 
 def test_review_lists_the_changes_and_writes_nothing(client, path, restarts):
