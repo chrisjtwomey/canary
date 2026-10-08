@@ -21,9 +21,10 @@ mismatch gives no error, so both come from this repo.
 
 - `GET /about` answers with the same version and clock, the firmware on offer, the library's version and each
   board's sync schedule. The dock asks it every 30 s until it knows the time.
-- `server.config` in it is the version of the `config.yaml` the server started on: the first 8 hex digits of the
+- `server.config` in it is the version of the `config.yaml` the server runs on: the first 8 hex digits of the
   SHA-1 of the file's text. A save on the Settings page answers with the new file's version, and the page waits for
-  `/about` to name it ([pages.md](pages.md)).
+  `/about` to name it ([pages.md](pages.md)). A save of the install page's settings alone takes effect without a
+  restart, and the server names the new version at once.
 - The server's version is CANARY's own, from `git describe` when the image is built. It is not the version of the
   `epd-server` package: that package is a library that the server is built with, and the two change separately.
 

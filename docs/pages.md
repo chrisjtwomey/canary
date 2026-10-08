@@ -33,6 +33,7 @@ While the server runs:
 | `http://localhost:8080/web/` | Every page, built from the readings when you ask. It reloads each minute. The arrow keys move between pages. |
 | `/web/explore` | One measurement over a time window. Drag to move in time. Scroll or pinch to zoom. |
 | `/web/config` | `config.yaml` as a form, in tabs. |
+| `/web/install` | Installs a board's firmware and network settings over USB. |
 
 The Settings page, `/web/config`:
 
@@ -52,19 +53,14 @@ The Settings page, `/web/config`:
   `sheet.js` has its own copy of the comfort maths in `metrics.py`, so the sentence is the page's own. The fields
   sit under two tabs, Temperature and Humidity, each a Comfortable and an Acceptable range, with one **Reset to
   defaults**.
-- What a board gets when its firmware is installed sits in two places. The Server tab's Network group holds the
-  Server address, beside the ports, because it is how the boards reach this server. The Firmware tab's Install
-  group holds the Wi-Fi name, the Wi-Fi password and the MQTT broker.
-- The boards' MQTT broker defaults to the MQTT tab's Broker, because the two are most often the same name. The
-  server gives the boards that one too, when `client.mqtt_host` is unset (`broker.py`). A broker at `localhost`,
-  `127.x`, `::1` or `0.0.0.0` is the server's own machine, which no board can reach, so the field then stays empty.
-- The Wi-Fi password is a password input, with **Show** beside its label, as **Reset** sits. It is kept as typed,
-  spaces included. The YAML tab and the board settings file still hold it in plain text: the dots only keep it off
-  the screen.
+- What a board gets when its firmware is installed is not on this page but on the install page, below: nothing
+  else uses it, and here a change looks as if it reaches the boards, which it does not. The HTTPS port stays in
+  the Server tab's Network group, since the install page cannot open without it.
 - A field with `refused` text shows that text when the server's check refuses its value, in place of the check's
   own words, which name config keys. The check still decides what is wrong.
 - An empty field takes its key out of the file, unless the file holds the key empty already: the example config
-  holds the Server address and the Wi-Fi keys empty, and an unchanged form changes nothing.
+  holds the Server address and the Wi-Fi keys empty, and a save from the install page that leaves them so changes
+  nothing.
 - A **Reset** puts a default back without an input event, so `config.js` asks the drawings to redraw. Without that, a
   drawing kept a dragged value.
 - **Check** tests an edit, as the server tests the file at start.
@@ -81,6 +77,36 @@ The Settings page, `/web/config`:
 - The Storage tab downloads each store as a file, one JSON document a line, and takes such a file back. An upload
   adds what is missing, and asks before it replaces a document.
 - The page has no login.
+
+The install page, `/web/install`:
+
+- It is epd's install page drawn in this site's layout: `install_page.py` puts the menu bar round epd's
+  `install.js`, and the config that `DisplayServer.install_config(root="../", network_here=True)` gives it. epd
+  serves its own plain page at `/install` as well, and sends a person here for a missing setting, as
+  `install-firmware.sh` does (`install_url`). Both pages need HTTPS, or `localhost`: a page opened over plain HTTP
+  links to the HTTPS port.
+- Above the boards it holds what a board gets at an install: the Server address, the Wi-Fi name, the Wi-Fi
+  password and, while the boards log over MQTT, the MQTT broker (`config_form.INSTALL_FIELDS`). They sit where they
+  take effect: a change reaches a board only when its firmware is installed again.
+- Each field saves when a person leaves it, through `/web/config`, which checks it and keeps the old file as for
+  any setting. A save that changes only these keys takes effect at once, without a restart (`take_network` in
+  `server.py`): they change only what an install writes. So **Restore** on the Settings page goes back one field
+  change. From the first key until its save is done, the Install buttons are off, so an install never writes a
+  value the server does not have. `install-form.js` then writes fresh values from `/web/install/config` into the
+  page, which epd's script reads at each install; it opens the page again only when the boards' rows appear or go,
+  as the last missing value is filled in or one is taken out.
+- The boards' MQTT broker defaults to the MQTT tab's Broker, because the two are most often the same name. The
+  server gives the boards that one too, when `client.mqtt_host` is unset (`broker.py`). A broker at `localhost`,
+  `127.x`, `::1` or `0.0.0.0` is the server's own machine, which no board can reach, so the field then stays empty.
+- The Wi-Fi password is a password input, with **Show** beside its label, as **Reset** sits. It is kept as typed,
+  spaces included. The YAML tab and the board settings file still hold it in plain text: the dots only keep it off
+  the screen.
+- A sketch of the device shows which board is which, because the two names alone do not say which part of the
+  device each one is. `install-sketch.js` draws it with rough.js, as the charts are drawn, traced from
+  `hardware/images/device.png`. Beside the list, a leader runs from each row to its part: level, then one bend to
+  45 degrees, as a diagram's callout does. The display's ends on its USB port. Beside the list the sketch starts
+  level with the fields, in the space beside them. On a narrow screen it sits above the list with each part
+  named, because a leader would cross the rows.
 
 ## The pages and the pools
 

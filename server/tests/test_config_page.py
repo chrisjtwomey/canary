@@ -148,32 +148,66 @@ def test_a_problem_the_server_finds_is_shown_at_the_field_it_names(client, path,
     assert open(path).read() == WITH_DISPLAY
 
 
-@pytest.mark.parametrize("change, key, name", [
-    ({"client__server_url": "canary.local:8080"}, "client.server_url", "Server · Server address"),
-    ({"server__https_port": "8080"}, "server.https_port", "Server · HTTPS port"),
-    ({"client__wifi__ssid": "x" * 33}, "client.wifi.ssid", "Firmware · Wi-Fi name"),
-    ({"client__wifi__password": "short"}, "client.wifi.password", "Firmware · Wi-Fi password"),
-    ({"client__mqtt_host": "broker.lan:1883"}, "client.mqtt_host", "Firmware · MQTT broker"),
-])
-def test_a_refusal_the_field_words_itself_names_no_config_key(client, path, change, key, name):
+def test_a_refusal_the_field_words_itself_names_no_config_key(client, path):
     write(path, WITH_DISPLAY)
     soup = soup_of(client.get("/web/config"))
-    rsp = client.post("/web/config", data={**posted(soup, **change), "action": "check"})
+    rsp = client.post("/web/config", data={**posted(soup, server__https_port="8080"),
+                                           "action": "check"})
     assert rsp.status_code == 400
     page = soup_of(rsp)
-    refused = cf.BY_KEY[key].refused
-    assert one(page, f'[data-field="{key}"] .error').get_text().strip() == refused
-    assert f"{name}: {refused}" in page.get_text()
+    refused = cf.BY_KEY["server.https_port"].refused
+    assert one(page, '[data-field="server.https_port"] .error').get_text().strip() == refused
+    assert f"Server · HTTPS port: {refused}" in page.get_text()
     assert open(path).read() == WITH_DISPLAY
 
 
-def test_the_wifi_password_is_hidden_with_a_button_to_show_it(client, path):
-    write(path, GOOD + "client:\n  wifi:\n    password: \"pass word\"\n")
-    page = soup_of(client.get("/web/config"))
-    field = one(page, "#f-client-wifi-password")
-    assert (attr(field, "type"), attr(field, "value")) == ("password", "pass word")
-    button = one(page, '[data-field="client.wifi.password"] button.reveal')
-    assert (button.get_text(), attr(button, "aria-controls")) == ("Show", "f-client-wifi-password")
+@pytest.mark.parametrize("key, value", [
+    ("client.server_url", "canary.local:8080"),
+    ("client.wifi.ssid", "x" * 33),
+    ("client.wifi.password", "short"),
+    ("client.mqtt_host", "broker.lan:1883"),
+])
+def test_a_refused_install_setting_is_named_with_its_field_for_the_install_page(client, path,
+                                                                                 key, value):
+    write(path, WITH_DISPLAY)
+    rsp = client.post("/web/config", data={"mode": "form", key: value, "action": "save"},
+                      headers={"Accept": "application/json"})
+    assert rsp.status_code == 400
+    f = cf.BY_KEY[key]
+    assert rsp.get_json() == {"problem": f"Install · {f.label}: {f.refused}",
+                              "field": key, "error": f.refused}
+    assert open(path).read() == WITH_DISPLAY
+
+
+def test_a_save_of_install_settings_alone_is_taken_without_a_restart(path, restarts, tz):
+    taken = []
+    app = Flask(__name__)
+    app.register_blueprint(config_blueprint(make_pages(tz, width=1280, height=720), path,
+                                            check_config, lambda: restarts.append(1),
+                                            take_network=taken.append))
+    client = app.test_client()
+    json_ = {"Accept": "application/json"}
+
+    rsp = client.post("/web/config", data={"mode": "form", "client.wifi.ssid": "Home",
+                                           "action": "save"}, headers=json_)
+
+    assert rsp.get_json() == {"saved": True, "config": config_version(open(path).read()),
+                              "restarted": False}
+    assert taken == [open(path).read()] and restarts == []
+
+    rsp = client.post("/web/config", data={"mode": "form", "client.wifi.ssid": "Home 2",
+                                           "server.port": "9090", "action": "save"},
+                      headers=json_)
+
+    assert rsp.get_json()["saved"] and "restarted" not in rsp.get_json()
+    assert len(taken) == 1 and restarts == [1]
+
+
+def test_the_settings_page_leaves_the_install_settings_to_the_install_page(client, path):
+    write(path, WITH_DISPLAY)
+    soup = soup_of(client.get("/web/config"))
+    for f in cf.INSTALL_FIELDS:
+        assert not soup.select(f'[data-field="{f.key}"]')
 
 
 def test_review_lists_the_changes_and_writes_nothing(client, path, restarts):

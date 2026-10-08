@@ -148,10 +148,6 @@ POOR_AIR_HELP = "Above this, the status light shows its Alert pattern."
 TABS: tuple[Tab, ...] = (
     Tab("server", "Server", (
         Group("Network", about="Where the boards and browsers reach the server", fields=(
-            Field("client.server_url", "Server address",
-                  "Boards get this address when installing firmware.", "text",
-                  hint="http://canary.local:8080",
-                  refused="Enter it as http://host:port, with nothing after the port."),
             Field("server.port", "Port", "", "int", 8080, minimum=1, maximum=65535),
             Field("server.https_port", "HTTPS port", "For the install page. 0 = off.", "int", 8443,
                   minimum=0, maximum=65535,
@@ -329,16 +325,6 @@ TABS: tuple[Tab, ...] = (
                   "firmware",
                   when="client.firmware.enabled=true"),
         )),
-        Group("Install", about="What boards get when installing firmware", fields=(
-            Field("client.wifi.ssid", "Wi-Fi name", "", "text",
-                  refused="Too long. A Wi-Fi name has at most 32 characters."),
-            Field("client.wifi.password", "Wi-Fi password", "8 to 63 characters.", "password",
-                  refused="Enter 8 to 63 characters."),
-            Field("client.mqtt_host", "MQTT broker",
-                  "The server's broker, unless boards reach it by another name.", "text",
-                  lambda cfg: board_broker(effective(cfg, "mqtt.host")), when="mqtt.enabled=true",
-                  refused="Enter the name or address alone. The port is on the MQTT tab."),
-        )),
     ), sheet=True),
     Tab("mqtt", "MQTT", (
         Group("Board logs", about="What the boards log over MQTT, kept for the Logs page", fields=(
@@ -352,7 +338,27 @@ TABS: tuple[Tab, ...] = (
     ), sheet=True),
 )
 
-FIELDS: tuple[Field, ...] = tuple(f for t in TABS for f in t.fields)
+# The settings the install page holds, not the Settings page: boards get them
+# only when their firmware is installed, so they sit where that happens.
+INSTALL_TITLE = "Install"
+INSTALL_FIELDS: tuple[Field, ...] = (
+    Field("client.server_url", "Server address",
+          "Boards get this address when installing firmware.", "text",
+          hint="http://canary.local:8080",
+          refused="Enter it as http://host:port, with nothing after the port."),
+    Field("client.wifi.ssid", "Wi-Fi name", "", "text",
+          refused="Too long. A Wi-Fi name has at most 32 characters."),
+    Field("client.wifi.password", "Wi-Fi password", "8 to 63 characters.", "password",
+          refused="Enter 8 to 63 characters."),
+    Field("client.mqtt_host", "MQTT broker",
+          "The server's broker, unless boards reach it by another name.", "text",
+          lambda cfg: board_broker(effective(cfg, "mqtt.host")), when="mqtt.enabled=true",
+          refused="Enter the name or address alone. The port is on the MQTT tab."),
+)
+
+INSTALL_KEYS = frozenset(f.key for f in INSTALL_FIELDS)
+
+FIELDS: tuple[Field, ...] = tuple(f for t in TABS for f in t.fields) + INSTALL_FIELDS
 BY_KEY: dict[str, Field] = {f.key: f for f in FIELDS}
 TAB_OF: dict[str, str] = {f.key: t.name for t in TABS for f in t.fields}
 
@@ -1280,7 +1286,7 @@ def locate(message: str) -> tuple[str | None, str | None]:
     head = tuple(message.split(" ", 1)[0].rstrip(":,.").split("."))
     f = field_at(head)
     if f is not None:
-        return f.key, TAB_OF[f.key]
+        return f.key, TAB_OF.get(f.key)
     for n in range(len(head), 0, -1):
         for t in TABS:
             if any(f.path[:n] == head[:n] for f in t.fields):
@@ -1292,6 +1298,8 @@ def name_of(path: tuple) -> str:
     f = field_at(path)
     if f is None:
         return ".".join(path)
+    if f.key not in TAB_OF:
+        return " · ".join([INSTALL_TITLE, f.label, *path[len(f.path):]])
     tab = next(t for t in TABS if t.name == TAB_OF[f.key])
     group = next(g for g in tab.groups if f in g.fields)
     name = f.long or f.label

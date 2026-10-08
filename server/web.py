@@ -187,7 +187,8 @@ def menu_bar(a: Airium, pages: list[EnvPage], browse_href: str, current: str) ->
                 a.span(klass="version", id="server-version", title="Server version",
                        _t=own_version())
             with a.div(klass="views"):
-                for view, words in (("explore", "Explore"), ("logs", "Logs"), ("config", "Settings")):
+                for view, words in (("explore", "Explore"), ("logs", "Logs"), ("install", "Install"),
+                                    ("config", "Settings")):
                     extra = {"aria-current": "page"} if current == view else {}
                     a.a(klass=f"{view}-link", href=view, _t=words, **extra)
         with a.div(klass="here"):

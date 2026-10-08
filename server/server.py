@@ -35,6 +35,7 @@ from board_logs import LogsQuery
 from config_page import config_blueprint
 from display_settings import DISPLAY, DisplaySync, display_version
 from dock_settings import DOCK, BoardSettings, DockSettings, load_dock_settings
+from install_page import install_blueprint
 from metrics import COMFORT, Comfort, temp_along_feel
 from off_hours import OffHoursSchedule, splash_when_off
 from pages.air import AirPage
@@ -494,6 +495,7 @@ def main():
             network=core.network,
             install_boards=INSTALL_BOARDS,
             settings_url="web/config",
+            install_url="web/install",
             header_prefix="Canary",
             server_version=about.version,
             version_gate=True,
@@ -505,16 +507,24 @@ def main():
         sys.exit(1)
     splash_when_off(server.app, off_hours, [p.name for p in pages], splash.name, clock)
     server.app.register_blueprint(web_blueprint(pages, source, logging_on=core.mqtt.enabled))
+    server.app.register_blueprint(install_blueprint(
+        pages, config_path, lambda: server.install_config(root="../", network_here=True)))
     stores = {
         "sensor-readings": Transfer("sensor-readings", store_file(settings.store_path)),
         "board-reports": Transfer("board-reports", status_store.path),
         "calibration": Transfer("calibration", calibration.path, "calibration"),
         "board-logs": Transfer("board-logs", board_logs.path, "logs"),
     }
-    server.app.register_blueprint(config_blueprint(pages, os.path.join(cwd, "config.yaml"),
+
+    def take_network(written: str) -> None:
+        server.network = load_settings(load_yaml(config_path)).core.network
+        about.config = config_version(written)
+
+    server.app.register_blueprint(config_blueprint(pages, config_path,
                                                    check_config, restart_soon, stores,
                                                    dock=board_settings, display=display_sync,
-                                                   boards=reports.device))
+                                                   boards=reports.device,
+                                                   take_network=take_network))
 
     if args.once or args.only:
         server.regenerate(only=args.only)

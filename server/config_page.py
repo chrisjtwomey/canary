@@ -1038,7 +1038,8 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
                      stores: dict[str, Transfer] | None = None,
                      dock: ds.BoardSettings | None = None,
                      display: DisplaySync | None = None,
-                     boards: Callable[[str], dict | None] | None = None) -> Blueprint:
+                     boards: Callable[[str], dict | None] | None = None,
+                     take_network: Callable[[str], None] | None = None) -> Blueprint:
     """The /web/config routes for the file at ``path``.
 
     Args:
@@ -1053,6 +1054,9 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
             Display tab says of them.
         boards: what the server knows of a board, as DeviceReports.device
             gives it, for the size the display reports.
+        take_network: takes a saved file whose changes are all to the
+            install page's settings, in place of a restart: they change only
+            what an install writes, so the server can take them as it runs.
     """
     bp = Blueprint("config", __name__, url_prefix="/web/config")
     stores = stores or {}
@@ -1186,9 +1190,10 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
 
         wants_json = action == "review" or "application/json" in request.headers.get("Accept", "")
 
-        def refuse(problem: str, status: int = 400):
+        def refuse(problem: str, status: int = 400, key: str | None = None):
             if wants_json:
-                return jsonify(problem=problem), status
+                at = {"field": key, "error": view.errors[key]} if key in view.errors else {}
+                return jsonify(problem=problem, **at), status
             view.problem = problem
             return page(view, status)
 
@@ -1225,8 +1230,8 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
             if edit.errors:
                 view.errors = edit.errors
                 key = next(f.key for f in cf.FIELDS if f.key in edit.errors)
-                view.tab = cf.TAB_OF[key]
-                return refuse(f"{cf.name_of(cf.BY_KEY[key].path)}: {edit.errors[key]}")
+                view.tab = cf.TAB_OF.get(key, view.tab)
+                return refuse(f"{cf.name_of(cf.BY_KEY[key].path)}: {edit.errors[key]}", key=key)
             text = edit.text
 
         try:
@@ -1241,6 +1246,7 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
                         problem = f"{cf.name_of(f.path)}: {f.refused}"
                     view.errors[key] = f.refused or problem
                 view.tab = tab or view.tab
+                return refuse(problem, key=key)
             return refuse(problem)
 
         if action == "review":
@@ -1264,6 +1270,11 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
             written = save(path, text)
         except OSError as exc:
             return refuse(f"Save failed: {exc.strerror}.", 500)
+        if take_network is not None and mode == "form" and set(edit.changed) <= cf.INSTALL_KEYS:
+            take_network(written)
+            if wants_json:
+                return jsonify(saved=True, config=config_version(written), restarted=False)
+            return redirect("install", 303)
         restart()
         if wants_json:
             return jsonify(saved=True, config=config_version(written))
