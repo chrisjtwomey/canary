@@ -3,6 +3,7 @@
 
 server:
   port: 8080
+  https_port: 8443  # the install page needs HTTPS; 0 behind a reverse proxy with a certificate
   timezone: Europe/Dublin
   regen_lead_seconds: 60
 
@@ -106,10 +107,17 @@ comfort:            # the Comfort page's edges, and the words for the room
   # acceptable_rh_to: 65      # % midway between temp_from and temp_to; Very humid above it
 
 client:             # what the board runs, not what this server does
+  # What the install page writes to a board with its firmware: the network as the board sees it.
+  server_url: ""    # this server, as http://host:port
+  wifi:
+    ssid: ""
+    password: ""    # 8 to 63 characters
+  mqtt_host: ""     # the MQTT broker, while mqtt.enabled
   firmware:         # server-driven updates; the board flashes itself
     enabled: false
-    dir: firmware   # canary-display/ and canary-dock/, each of <version>.bin; every board is
-                    # offered the newest its product has that works with this server's version
+    dir: firmware   # canary-display/ and canary-dock/, each with <version>.bin and
+                    # <version>.merged.bin; every board is offered the newest its product has
+                    # that works with this server's version
 
 mqtt:               # each board logs to <prefix>/<board>; the Logs view shows them
   enabled: false

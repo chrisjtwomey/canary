@@ -4,13 +4,17 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
+      # HTTPS, for the install page. The page links to it by this number, so
+      # keep the same number on both sides.
+      - "8443:8443"
     volumes:
       # Without it the image runs its example config, the simulated room.
       # README.md, "Run the server", says which keys a deployment sets. Writable,
       # so /web/config can save it: the container's user (uid 1000) must be
       # able to write the host file. Mount it :ro to allow checks only.
       - ./server/config.yaml:/app/config.yaml
-      # The four stores: readings, board reports, board logs and calibration.
+      # The four stores: readings, board reports, board logs and calibration,
+      # and the HTTPS port's certificate.
       # A named volume, not a host path: the container runs as uid 1000 and
       # could not write to a directory the host owns.
       - canary-data:/app/data

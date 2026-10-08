@@ -27,14 +27,14 @@ RUN pip install --upgrade pip setuptools wheel && pip install -r requirements.tx
 COPY . /app
 # The example config makes the image runnable as it is; mount a real
 # /app/config.yaml to replace it. /app/data holds the four stores, where
-# their paths point by default, and /app/firmware the OTA images: mount a
-# volume on each to keep them.
+# their paths point by default, and the HTTPS port's certificate;
+# /app/firmware holds the OTA images. Mount a volume on each to keep them.
 RUN mkdir -p /app/data /app/firmware \
     && cp config.example.yaml config.yaml \
     && chown -R app:app /app
 
 USER app
-EXPOSE 8080
+EXPOSE 8080 8443
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["python", "server.py"]

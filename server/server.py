@@ -23,6 +23,7 @@ from epd_server import DisplayServer, LogStore, ReadingsStore, align_process_tim
 from epd_server.config import (ConfigError, CoreConfig, get_prop_by_keys, load_core_config,
                                load_yaml)
 from epd_server.firmware import is_clean_tag
+from epd_server.install import InstallBoard
 from epd_server.scheduling import TimeRangesSchedule
 from epd_server.source import CompositeSource, IngestSource
 from epd_server.timeranges import TimeRanges, Week, check_interval
@@ -64,6 +65,15 @@ SOURCE_KINDS = ("mock", "store")
 # The two boards, each with its images in a subdirectory of the firmware
 # directory named after it.
 FIRMWARE_PRODUCTS = ("canary-display", "canary-dock")
+# The boards the install page offers, each with the USB vendor of its port:
+# the display's CH340C, and the dock's ESP32-S3 itself.
+INSTALL_BOARDS = (
+    InstallBoard("canary-display", "Display", "ESP32", (0x1A86,)),
+    InstallBoard("canary-dock", "Dock", "ESP32-S3", (0x303A,)),
+)
+# The HTTPS port's self-signed certificate, in the data volume, so that a
+# browser that has accepted it keeps it across a redeploy.
+CERTIFICATE_DIR = os.path.join(cwd, "data", "certificate")
 # The history windows the pages ask for, as history_24h and history_72h.
 HISTORY_HOURS = (24, 72)
 
@@ -466,6 +476,8 @@ def main():
             tz=tz,
             regen_lead_seconds=core.server.regen_lead_seconds,
             port=core.server.port,
+            https_port=core.server.https_port,
+            certificate_dir=CERTIFICATE_DIR,
             mqtt=core.mqtt,
             mqtt_client_id="canary-server",
             client_logs=board_logs,
@@ -475,6 +487,9 @@ def main():
                      "history": history.answer, "sensor-readings": readings.answer,
                      "status": lambda args: status.status(), "logs": logs.answer},
             firmware=core.firmware,
+            network=core.network,
+            install_boards=INSTALL_BOARDS,
+            settings_url="web/config",
             header_prefix="Canary",
             server_version=about.version,
             version_gate=True,

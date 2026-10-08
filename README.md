@@ -66,8 +66,8 @@ docker compose up -d
 ```
 
 - The containers run as user 1000. That user must be able to write `server/config.yaml` and `server/firmware/`.
-- The readings, board reports, board logs and calibration copies go in the `canary-data` volume. They stay when
-  Docker recreates the container.
+- The readings, board reports, board logs, calibration copies and the HTTPS certificate go in the `canary-data`
+  volume. They stay when Docker recreates the container.
 - The second container builds the firmware for both boards. Its first build takes some minutes.
   `docker compose logs -f firmware-builder` shows it.
 - `http://<server>:8080/web/` shows the pages, and `/web/config` is the Settings page. **It has no login:
