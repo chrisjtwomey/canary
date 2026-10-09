@@ -524,3 +524,37 @@ def test_the_edit_reads_back_as_pyyaml_reads_it():
 def test_a_field_named_by_its_place_on_the_page_has_its_full_name_in_messages():
     assert cf.name_of(("dock", "led", "schedule", "from")) == "Dock · Schedule from"
     assert cf.name_of(("dock", "sync", "week")) == "Dock · Sync schedule"
+
+
+TWICE_AT_THE_TOP = "calibration:\n  keep_days: 3\nsite:\n  altitude_m: 10\ncalibration:\n  keep_days: 7\n"
+
+
+@pytest.mark.parametrize("text, words", [
+    (TWICE_AT_THE_TOP,
+     "calibration appears twice, on lines 1 and 5. Delete one: the server uses line 5."),
+    ("dock:\n  led:\n    brightness: 30\n  pm:\n    fan_warmup_s: 35\n  led:\n    brightness: 50\n",
+     "led appears twice, on lines 2 and 6. Delete one: the server uses line 6."),
+    ("dock:\n  sync:\n    week:\n      - days: [mon]\n        # a note\n        days: [tue]\n",
+     "days appears twice, on lines 4 and 6. Delete one: the server uses line 6."),
+])
+def test_a_key_written_twice_is_refused_with_both_lines(text, words):
+    assert yaml.safe_load(text) is not None    # the server would start on it
+    with pytest.raises(ValueError) as exc:
+        check_config(text)
+    assert str(exc.value) == words
+
+
+def test_one_key_in_two_sections_is_not_written_twice():
+    assert cf.twice("server:\n  port: 8080\nmqtt:\n  port: 1883\n") is None
+    assert cf.twice(EXAMPLE) is None
+
+
+def test_text_that_is_not_yaml_is_left_to_the_yaml_check():
+    assert cf.twice("server: [") is None
+
+
+def test_the_form_names_a_key_written_twice_and_the_tab_to_fix_it_in():
+    with pytest.raises(cf.FormError) as exc:
+        cf.apply(TWICE_AT_THE_TOP, as_posted(TWICE_AT_THE_TOP, server__port="8081"))
+    assert str(exc.value) == ("calibration appears twice, on lines 1 and 5. "
+                              "Delete one in the YAML tab: the server uses line 5.")

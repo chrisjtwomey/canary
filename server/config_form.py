@@ -21,6 +21,7 @@ from typing import Any, Iterable
 import yaml
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
+from ruamel.yaml.constructor import DuplicateKeyError
 from ruamel.yaml.error import CommentMark
 from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 from ruamel.yaml.tokens import CommentToken
@@ -388,6 +389,50 @@ def read(text: str) -> dict:
     if not isinstance(cfg, dict):
         raise FormError("Top level is not a mapping. Fix it in the YAML tab.")
     return cfg
+
+
+_DUPLICATE = re.compile(r'found duplicate key "(.*?)" with value')
+
+
+def twice(text: str, where: str = "") -> str | None:
+    """What to say when ``text`` writes a key twice in one mapping, or None.
+
+    PyYAML, and so the server, takes the second copy and drops the first
+    without a word, so the person must choose which one to keep.
+    """
+    try:
+        YAML().load(text)
+    except DuplicateKeyError as exc:
+        return _twice_words(exc, text.splitlines(), where)
+    except Exception:  # noqa: BLE001 - any other fault is the YAML check's to report
+        return None
+    return None
+
+
+def _twice_words(exc: DuplicateKeyError, lines: list[str], where: str) -> str:
+    match = _DUPLICATE.search(exc.problem or "")
+    key = match.group(1) if match else "A key"
+    second = exc.problem_mark.line + 1
+    first = _first_copy(lines, key, exc.problem_mark.line, exc.problem_mark.column)
+    at = f"on lines {first} and {second}" if first else f"the second time on line {second}"
+    return f"{key} appears twice, {at}. Delete one{where}: the server uses line {second}."
+
+
+def _first_copy(lines: list[str], key: str, line: int, column: int) -> int | None:
+    """The 1-based line of ``key``'s first copy in the mapping whose second
+    copy is at ``line`` and ``column``, as far as block style shows it."""
+    copy = re.compile(r"""["']?""" + re.escape(key) + r"""["']?\s*:""")
+    for n in range(line - 1, -1, -1):
+        text = lines[n]
+        body = text.lstrip(" -")
+        if not body or body.startswith("#"):
+            continue
+        at = len(text) - len(body)
+        if at < column:
+            return None
+        if at == column and copy.match(body):
+            return n + 1
+    return None
 
 
 def lookup(cfg: Any, path: Iterable) -> Any:
@@ -959,6 +1004,8 @@ class Doc:
             self.ind, self.offset = _indents(text)
             try:
                 root = _yaml(self.ind, self.offset).load(text)
+            except DuplicateKeyError as exc:
+                raise FormError(_twice_words(exc, text.splitlines(), " in the YAML tab")) from None
             except Exception:  # noqa: BLE001 - any ruamel failure means the form cannot edit it
                 raise FormError("Not valid YAML. Fix it in the YAML tab.") from None
         else:

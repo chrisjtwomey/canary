@@ -288,6 +288,8 @@ def test_check_of_the_file_as_it_is_offers_no_save(client, path, restarts):
     (UNKNOWN_PAGE, "radon.png"),
     ("source:\n  kind: bogus\n", "bogus"),
     ("site:\n  altitude_m: [1]\n", ""),
+    ("server:\n  timezone: Europe/Dublin\nserver:\n  port: 8080\n",
+     "server appears twice, on lines 1 and 3. Delete one: the server uses line 3."),
 ])
 def test_a_config_the_server_would_refuse_is_not_saved(client, path, restarts, text, words):
     rsp = client.post("/web/config", data={"text": text, "action": "save"})
@@ -361,6 +363,14 @@ def test_a_field_an_environment_variable_sets_is_locked_and_says_so(client, monk
     port = one(soup, "#f-server-port")
     assert attr(port, "disabled") == "disabled" and attr(port, "value") == "7070"
     assert "SERVER_PORT" in one(soup, '[data-field="server.port"] .env').get_text()
+
+
+def test_a_file_with_a_key_written_twice_opens_on_the_yaml_tab_with_the_problem(client, path):
+    write(path, "server:\n  timezone: Europe/Dublin\nserver:\n  port: 8080\n")
+    soup = soup_of(client.get("/web/config"))
+    assert one(soup, "#unreadable").get_text() == (
+        "server appears twice, on lines 1 and 3. Delete one: the server uses line 3.")
+    assert [attr(t, "data-tab") for t in soup.select("nav.tabs a")] == ["yaml"]
 
 
 def test_text_from_the_file_is_escaped(client, path):

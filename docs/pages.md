@@ -63,7 +63,11 @@ The Settings page, `/web/config`:
   nothing.
 - A **Reset** puts a default back without an input event, so `config.js` asks the drawings to redraw. Without that, a
   drawing kept a dragged value.
-- **Check** tests an edit, as the server tests the file at start.
+- **Check** tests an edit, as the server tests the file at start. Check and Save also refuse a key written twice
+  in one mapping, naming the key and both lines: "calibration appears twice, on lines 1 and 5. Delete one: the
+  server uses line 5." The server starts on such a file, but it takes the second copy and drops the first without
+  a word, so the person must choose. The page opens a file like that on the YAML tab with those words; the form
+  tabs say to delete one in the YAML tab.
 - **Save and restart** lists the changes, keeps the old file as `config.yaml.bak`, writes the new file and
   restarts the server. **Restore** puts the `.bak` back.
 - The page opens again when `GET /about` names the version of the file it saved ([versions.md](versions.md)). A

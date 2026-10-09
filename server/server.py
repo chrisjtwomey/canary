@@ -32,6 +32,7 @@ from about import About, config_version
 from after_reading import AfterReadingSchedule
 from broker import board_broker
 from board_logs import LogsQuery
+from config_form import twice
 from config_page import config_blueprint
 from display_settings import DISPLAY, DisplaySync, display_version
 from dock_settings import DOCK, BoardSettings, DockSettings, load_dock_settings
@@ -358,17 +359,22 @@ def load_settings(config: dict) -> Settings:
 
 
 def check_config(text: str) -> None:
-    """Refuse ``text``, with the problem, unless the server would start on it.
+    """Refuse ``text``, with the problem, unless the server would start on it
+    as written.
 
     Raises:
-        ValueError: the text is not YAML, or load_settings refuses it. Any
-            error load_settings meets is a refusal, since the same error at
-            start would stop the server.
+        ValueError: the text is not YAML, writes a key twice, or load_settings
+            refuses it. Any error load_settings meets is a refusal, since the
+            same error at start would stop the server. A key written twice
+            would start, but the server would drop its first copy unseen.
     """
     try:
         config = yaml.safe_load(text)
     except yaml.YAMLError as exc:
         raise ValueError(f"It is not YAML: {exc}") from None
+    doubled = twice(text)
+    if doubled:
+        raise ValueError(doubled)
     if config is None:
         config = {}
     if not isinstance(config, dict):

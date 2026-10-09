@@ -184,11 +184,17 @@ def file_view(text: str) -> View:
     try:
         cfg = cf.read(text)
     except cf.FormError as exc:
-        values = cf.shown({})
-        return View(text, text, values, dict(values), tab=YAML_TAB,
-                    unreadable=str(exc))
+        return _unreadable(text, str(exc))
+    doubled = cf.twice(text)
+    if doubled:
+        return _unreadable(text, doubled)
     values = cf.shown(cfg)
     return View(text, text, values, dict(values), cf.defaults(cfg))
+
+
+def _unreadable(text: str, problem: str) -> View:
+    values = cf.shown({})
+    return View(text, text, values, dict(values), tab=YAML_TAB, unreadable=problem)
 
 
 def _id(key: str) -> str:
