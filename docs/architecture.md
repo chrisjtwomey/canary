@@ -83,7 +83,8 @@ include/sensors/  src/sensors/
   SensorValidation                              the bench routine's checks
   mock/                                         EnvModel, LaggedValue and the four mocks
 include/net/  src/net/         Backlog, BoardSettings, Calibration, ClientStatus, ResetReason, ServerClock, Stamp, Url
-include/dock/                  StatusLed (led.md), FanWindow and PostTimer: when the fan runs and the next reading falls
+include/dock/                  StatusLed (led.md), FanWindow and PostTimer: when the fan runs and the next reading falls;
+                               Trial: when a new image is rolled back (versions.md)
 include/display/               when the display wakes, what it does after a fetch, and the notices it draws (display.md)
 src/notice.cpp                 the notices, with the facts only the display knows at run time
 src/splash.cpp                 the splash screen, and the update's progress bar under it

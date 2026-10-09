@@ -41,6 +41,7 @@
 #include "dock/LightTriggers.h"
 #include "dock/PostTimer.h"
 #include "dock/StatusLed.h"
+#include "dock/Trial.h"
 #include "net/Backlog.h"
 #include "net/BoardSettings.h"
 #include "net/Calibration.h"
@@ -660,6 +661,17 @@ static void heardFrom(const PageResponse& rsp, uint32_t atMs, bool schedule) {
          (unsigned)stamped);
 }
 
+static Trial trial;
+
+static void trialPosted() {
+    if (trial.pending()) otaConfirm();   // also frees the idle slot for the next update
+    trial.passed();
+}
+
+static void trialFailed(const char* why) {
+    if (trial.failed()) otaRollback(why);   // reboots into the previous image
+}
+
 // Until the clock is known, GET /about every 30 s. Nothing is posted before:
 // a reading must go out with its time.
 static const uint32_t kAskForTimeEveryMs = 30000;
@@ -675,6 +687,11 @@ static void askForTime(uint32_t nowMs) {
     int32_t size = 2048;
     free(downloadFile(aboutURL, clientUserAgent(CLIENT_NAME), &size, &rsp));
     heardFrom(rsp, millis(), false);
+    if (rsp.serverEpoch) {
+        trial.succeeded();
+    } else {
+        trialFailed("no time from the server");
+    }
 }
 
 static void openQueue() {
@@ -791,25 +808,6 @@ static void sendCalibration() {
     }
 }
 
-// A freshly written image is on trial until the server takes a batch from
-// it. The board is on mains, so failing three times in a row, to join Wi-Fi
-// or to post, is the image's fault, and the one before it comes back.
-static bool     onTrial = false;
-static int      trialFailures = 0;
-static const int kTrialFailureLimit = 3;
-
-static void trialPosted() {
-    trialFailures = 0;
-    if (!onTrial) return;
-    otaConfirm();   // also frees the idle slot for the next update
-    onTrial = false;
-}
-
-static void trialFailed(const char* why) {
-    if (!onTrial || ++trialFailures < kTrialFailureLimit) return;
-    otaRollback(why);   // reboots into the previous image
-}
-
 // Mains power and no schedule to keep, so there is nothing to do but wait
 // for the network to come back, unless an image on trial fails to join.
 static void waitForNetwork() {
@@ -818,6 +816,7 @@ static void waitForNetwork() {
         log(LOG_ERROR, "wifi connect timeout; trying again in 30 s");
         delay(30000);
     }
+    trial.succeeded();
     logf(LOG_INFO, "wifi: %s, %d dBm", WiFi.localIP().toString().c_str(), (int)WiFi.RSSI());
 }
 
@@ -830,7 +829,7 @@ static void updateProgress(int done, int total) {
 // empties the queue: unless the server is refusing them for this board's
 // version, when nothing will drain it and the update is what fixes that.
 static void takeOffer(const PageResponse& rsp, bool refusedForVersion) {
-    if (onTrial) return;
+    if (trial.pending()) return;
     if (queue->count() > 0 && !refusedForVersion) return;
     const char* rejected = otaRejectedVersion();
     if (updateRefusedBefore(rsp.firmwareVersion, rejected)) {
@@ -1027,8 +1026,8 @@ void setup() {
     }
 
     startLed();
-    onTrial = otaTrialPending();
-    if (onTrial) logf(LOG_NOTICE, "trial boot of %s", CLIENT_VERSION);
+    trial.begin(otaTrialPending());
+    if (trial.pending()) logf(LOG_NOTICE, "trial boot of %s", CLIENT_VERSION);
     config = loadConfig(builtInSettings());
     waitForNetwork();
     static char mqttTopic[128];

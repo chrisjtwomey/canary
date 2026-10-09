@@ -44,7 +44,8 @@ The dock has no clock, and does not ask NTP.
   ([schedules.md](schedules.md#the-docks-schedule)).
 - Until the first response, the dock asks `GET /about` every 30 s. It queues its readings with their uptime, and
   stamps them when the time arrives. So a dock that starts while the server is down keeps what it measured, with
-  the correct times.
+  the correct times. The exception is a new image on trial: three asks in a row that bring no time roll it back
+  ([versions.md](versions.md)).
 
 ## The readings queue
 

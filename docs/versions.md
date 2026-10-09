@@ -63,6 +63,9 @@ The boards follow the server's version.
   another version, so the dock takes the image and loses the readings.
 - While the image is written, the LED shows Updating ([led.md](led.md)).
 - The new image starts on trial. The first batch that the server takes confirms it. Three failures in a row, to join
-  Wi-Fi or to post, roll it back, and the dock then refuses that version.
+  Wi-Fi, to get the server's time or to post, roll it back, and the dock then refuses that version. A success at
+  any of these starts the count again, so failures of different kinds do not add up. A server that does not answer
+  rolls the image back in just over a minute, because the dock asks for the time every 30 s. A server that is down for
+  longer than that while an update starts costs that version, which the dock then refuses.
 
 **The display** draws a notice, then takes the update ([display.md](display.md#notices)).
