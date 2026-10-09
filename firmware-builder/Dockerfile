@@ -4,6 +4,7 @@
 # docker-compose.yml.
 FROM python:3.13-slim-bookworm
 
+# git: the dock's IDF build fetches a component from a git source.
 RUN apt-get update && apt-get install --no-install-recommends -y \
         ca-certificates git tini \
     && rm -rf /var/lib/apt/lists/*
