@@ -105,9 +105,10 @@ server/
   install_page.py              /web/install: epd's install page in this site's layout, with the boards' network
                                settings above the boards
   config_page.py               /web/config: config.yaml as a form in tabs, checked, saved, and restarted on;
-                               whether each board runs the saved settings
+                               whether each board runs the saved settings; the access token and the boards' keys
   config_form.py               the form's fields, and how a filled-in form edits config.yaml
-  login.py                     the sign-in: the password, its cookie, the token for scripts, and the Origin check
+  login.py                     the sign-in: the password, its cookie, the token for scripts, and the Origin check;
+                               the boards' keys are epd's BoardKeys, turned on with the password in server.py
   transfer.py                  a store out to a file and back in, and what it holds, for the Storage tab
   board_logs.py                what each board logs over MQTT, for the Logs view
   schedule.py                  the dock's reading slots (schedules.md)

@@ -14,6 +14,9 @@ the server.
                               ppm at its next reading; no action, no restart
                          mode=token: a new access token in place of the old;
                               no restart
+                         mode=board: board=<name> and action=approve, its new
+                              key in place of the old; reject, the new key
+                              dropped; forget, both dropped; no restart
                          then action=check: whether that would start the server
                               action=review: the same, and what it changes, as JSON
                               action=save: the same check, then the old file kept
@@ -37,6 +40,7 @@ from datetime import datetime
 from typing import Any, Callable
 
 from airium import Airium
+from epd_server.board_keys import Board, BoardKeys
 from epd_server.timeranges import MAX_RANGES
 from flask import Blueprint, Response, abort, jsonify, redirect, request
 from markupsafe import Markup
@@ -728,6 +732,44 @@ TOKEN_USE = "Lets other apps read your data. They cannot change settings."
 TOKEN_REPLACED = "Token replaced. Update each app that uses the old one."
 REPLACE_TITLE = "Replace the token?"
 REPLACE_LEAD = "Apps that use the old one lose access."
+NO_BOARD_KEY = "No key yet. The board asks for one at its next post."
+FORGET_TITLE = "Forget the board's key?"
+FORGET_LEAD = "The board asks for a new key at its next post, and waits for your approval."
+
+
+def _approved_words(b: Board) -> str:
+    assert b.approved is not None
+    return f"Key {b.approved.id}, approved {_when(datetime.fromtimestamp(b.approved.at))}."
+
+
+def _pending_words(b: Board) -> str:
+    assert b.pending is not None
+    return (f"New key {b.pending.id}, asked for {_when(datetime.fromtimestamp(b.pending.at))}. "
+            "Approve it only if the board's log shows the same key.")
+
+
+def _board_key(a: Airium, name: str, b: Board, sheet: bool) -> None:
+    """One board's key: the one it signs with, the one waiting for approval,
+    and the buttons for each. Forget asks first, so it has a form of its own."""
+    with a.div(klass="field wide board-key", id=f"board-{b.device}"):
+        with a.div(klass="head"):
+            a.span(klass="name", _t=name)
+        if sheet:
+            a.span(klass="leader", **{"aria-hidden": "true"})
+        with a.div(klass="control"):
+            if b.pending is not None:
+                for action, words in (("approve", "Approve"), ("reject", "Reject")):
+                    a.button(type="submit", klass="button", form=f"board-{b.device}-form",
+                             name="action", value=action, _t=words)
+            if b.approved is not None:
+                a.button(type="submit", klass="button", form=f"forget-{b.device}-form",
+                         _t="Forget")
+        if b.approved is not None:
+            a.p(klass="help", _t=_approved_words(b))
+        if b.pending is not None:
+            a.p(klass="help pending", _t=_pending_words(b))
+        if b.approved is None and b.pending is None:
+            a.p(klass="help", _t=NO_BOARD_KEY)
 
 
 def _sign_in(a: Airium, state: SignInState, sheet: bool = False) -> None:
@@ -750,6 +792,8 @@ def _sign_in(a: Airium, state: SignInState, sheet: bool = False) -> None:
         a.input(type="password", klass="token-value", id="access-token", value=state.token,
                 readonly="readonly", spellcheck="false", autocomplete="off")
         a.p(klass="help", _t=TOKEN_REPLACED if state.replaced else TOKEN_USE)
+    for name, b in state.boards:
+        _board_key(a, name, b, sheet)
 
 
 def _changes_table(a: Airium, changes: list[dict]) -> None:
@@ -1015,6 +1059,17 @@ def config_html(pages: list[EnvPage], view: View, writable: bool,
                         with a.form(method="post", action="config", id="token-form",
                                     **{"data-dialog": "replace-token"}):
                             a.input(type="hidden", name="mode", value="token")
+                        for _, b in view.sign_in.boards:
+                            with a.form(method="post", action="config",
+                                        id=f"board-{b.device}-form"):
+                                a.input(type="hidden", name="mode", value="board")
+                                a.input(type="hidden", name="board", value=b.device)
+                            with a.form(method="post", action="config",
+                                        id=f"forget-{b.device}-form",
+                                        **{"data-dialog": "forget-board"}):
+                                a.input(type="hidden", name="mode", value="board")
+                                a.input(type="hidden", name="board", value=b.device)
+                                a.input(type="hidden", name="action", value="forget")
             if view.sign_in is not None and view.sign_in.on:
                 with a.dialog(id="replace-token", **{"aria-labelledby": "replace-token-title"}):
                     with a.form(method="dialog"):
@@ -1023,6 +1078,14 @@ def config_html(pages: list[EnvPage], view: View, writable: bool,
                         with a.div(klass="choice"):
                             a.button(value="cancel", _t="Cancel")
                             a.button(value="confirm", klass="primary", _t="Replace token")
+                if view.sign_in.boards:
+                    with a.dialog(id="forget-board", **{"aria-labelledby": "forget-board-title"}):
+                        with a.form(method="dialog"):
+                            a.h2(klass="label", id="forget-board-title", _t=FORGET_TITLE)
+                            a.p(klass="lead", _t=FORGET_LEAD)
+                            with a.div(klass="choice"):
+                                a.button(value="cancel", _t="Cancel")
+                                a.button(value="confirm", klass="primary", _t="Forget")
             with a.dialog(id="review", **{"aria-labelledby": "review-title"}):
                 with a.form(method="dialog"):
                     a.h2(klass="label", id="review-title", _t="Save and restart?")
@@ -1082,7 +1145,9 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
                      display: DisplaySync | None = None,
                      boards: Callable[[str], dict | None] | None = None,
                      take_network: Callable[[str], None] | None = None,
-                     login: Login | None = None) -> Blueprint:
+                     login: Login | None = None,
+                     board_keys: BoardKeys | None = None,
+                     board_names: dict[str, str] | None = None) -> Blueprint:
     """The /web/config routes for the file at ``path``.
 
     Args:
@@ -1102,6 +1167,9 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
             what an install writes, so the server can take them as it runs.
         login: the site's sign-in, for what the Server tab says of it and
             for the token.
+        board_keys: the boards' keys, which the Server tab shows for a
+            person to approve while a password is set; ``board_names`` names
+            each board as the page does.
     """
     bp = Blueprint("config", __name__, url_prefix="/web/config")
     stores = stores or {}
@@ -1139,6 +1207,9 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
             view.display = display_panel(boards("canary-display"))
         if login is not None and view.sign_in is None:
             view.sign_in = sign_in_state(login)
+        if view.sign_in is not None and view.sign_in.on and board_keys is not None:
+            names = board_names or {}
+            view.sign_in.boards = [(names.get(b.device, b.device), b) for b in board_keys.boards()]
         return config_html(pages, view, writable(), bak()), status
 
     @bp.route("/live", methods=["GET"])
@@ -1270,6 +1341,18 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
                 abort(404)
             login.replace_token()
             return redirect("config?token=replaced#server", 303)
+
+        if mode == "board":
+            device = form.get("board", "")
+            if login is None or not login.on or board_keys is None \
+                    or board_keys.board(device) is None:
+                abort(404)
+            act = {"approve": board_keys.approve, "reject": board_keys.reject,
+                   "forget": board_keys.forget}.get(action)
+            if act is None:
+                abort(400)
+            act(device)
+            return redirect("config#server", 303)
 
         if mode == "restore":
             try:

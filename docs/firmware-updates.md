@@ -4,7 +4,10 @@ How to test the updates over the air with a server on your own computer. First g
 ([boards.md](boards.md)).
 
 Each board takes new firmware from the server. The server offers each board the newest image of its product that
-works with the server's version: the same major and minor version, while the major is 0. A server that runs from a
+works with the server's version: the same major and minor version, while the major is 0. With a password set, a
+board that has its key takes an image only with the server's signature over it ([pages.md](pages.md#board-keys)).
+A board checks every image while it holds a key, password or not. To test an update without the check, use a
+board that has never paired, or one installed again over USB. A server that runs from a
 checkout reports what `git describe` gives, for example `v0.6.2-5-gab12cd4`, so it offers development builds.
 
 1. Make the folders, and set `client.firmware.enabled: true` in `config.yaml`:

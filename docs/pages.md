@@ -83,7 +83,8 @@ The Settings page, `/web/config`:
   recreated.
 - The Storage tab downloads each store as a file, one JSON document a line, and takes such a file back. An upload
   adds what is missing, and asks before it replaces a document.
-- The Server tab's Sign-in group says whether a password is set, and shows the access token (below).
+- The Server tab's Sign-in group says whether a password is set, and shows the access token and each board's
+  key (below).
 - The page goes out with `Cache-Control: no-store`, because it holds the access token and the Wi-Fi password.
 
 The install page, `/web/install`:
@@ -125,7 +126,8 @@ The install page, `/web/install`:
   settings.
 - **Which routes need it.** Every route, except the ones the boards use, the sign-in itself and the files a page
   loads (`login.is_open`): `/`, the page images, `/firmware.bin`, `/firmware.merged.bin`, `/install-firmware.sh`,
-  `GET /about`, `/calibration`, `/board-settings`, `POST /sensor-readings`, `/web/login`, `POST /web/logout`, the
+  `GET /about`, `/calibration`, `/board-settings`, `POST /sensor-readings`, `POST /pair`, `/web/login`,
+  `POST /web/logout`, the
   `.css`, `.js` and `.ttf` files under `/web/`, and epd's files under `/static/` and `/install/`. A route not in
   that list needs a sign-in, so a new route stays closed until someone opens it on purpose.
 - **`/network.bin` needs it,** because it holds the Wi-Fi password. The install page still works, since the
@@ -163,6 +165,37 @@ The install page, `/web/install`:
   limit counts each visitor apart, the cookie is Secure for an HTTPS visitor, and the Origin check compares with
   the address the browser used. Off, the server ignores those headers, so nobody can fake an address. A change
   refused while they are present names the setting, since the person cannot save it from the page then.
+
+### Board keys
+
+With a password set, each board signs its posts with a key of its own, and the server signs the answers that
+change a board: the image, `/board-settings` and `/calibration`. epd does the work (its
+[protocol.md](https://github.com/chrisjtwomey/epd/blob/main/docs/protocol.md#board-keys)); canary turns it on
+with the password, names the answers to sign (`SIGNED_QUERIES` in `server.py`), and shows the keys.
+
+- **Why with the password.** A person approves each key in Settings. Without a password anyone on the network
+  could open Settings and approve a key of their own, so the keys would protect nothing.
+- **Pairing.** A board's first post after the password is set gets 401 and `Canary-Key: pair`. The board agrees a
+  key with the server by ECDH at `POST /pair`, keeps it in its settings store, and logs its id, on the Logs page
+  while MQTT logging is on, and on its serial log: "paired with http://…: key 1a2b3c4d5e6f7a8b waits for approval
+  in the server's Settings". The Sign-in group then shows "New key 1a2b3c4d5e6f7a8b, asked for …", with
+  **Approve** and **Reject**.
+- **Approve only a key the board's log shows.** A device that answers in the server's place at the moment of
+  pairing could agree a key of its own with the board. The board logs the id of the key it holds, so the two ids
+  match only when nobody stood between them.
+- **The keys themselves stay on the server,** in `data/board-keys.json`, mode 0600. The page shows only their
+  ids, which is all a person needs to match the board's log.
+- **Forget** drops a board's key, after a confirm. The board asks for a new one at its next post.
+- A new request for a board leaves its approved key working until you approve the new one. While a key waits for
+  approval, the board still gets signed settings and updates, under that key. So does a board still on a key you
+  rejected or forgot, until it pairs again: its answers hold nothing secret, and its posts are refused.
+- **A board with a key pairs again only when the server proves it holds that key:** the `pair` answer is signed
+  with it. So a device in the server's place cannot make the board take a key of its own. For this the server keeps
+  the last four keys of each board that it rejected, forgot or replaced, and takes no post under them.
+- Without a password the server takes every post, offers no pairing, and the page shows no keys. It goes on
+  signing its answers under each board's key, so a board keeps working with its key.
+- **If the data volume, and with it `data/board-keys.json`, is lost, each board with a key needs a USB install.**
+  The server can no longer prove who it is, so the boards keep their keys and refuse its settings and images.
 
 ## The pages and the pools
 

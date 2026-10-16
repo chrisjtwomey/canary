@@ -55,6 +55,8 @@ The dock has no clock, and does not ask NTP.
   while the server was down empties one batch a pass, and no new reading waits for more than one request.
 - The queue is 2 MB of PSRAM: about 1,500 readings, or five days at a reading every five minutes. A restart empties
   it.
+- A 401 keeps the batch, as a 409 does: the server waits for the dock's key to be approved
+  ([pages.md](pages.md#board-keys)).
 
 On the server:
 

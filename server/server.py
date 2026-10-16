@@ -19,7 +19,8 @@ from datetime import datetime, time as clock_time
 from typing import Callable
 
 import yaml
-from epd_server import DisplayServer, LogStore, ReadingsStore, align_process_timezone
+from epd_server import (BoardKeys, DisplayServer, LogStore, ReadingsStore,
+                        align_process_timezone)
 from epd_server.config import (ConfigError, CoreConfig, get_prop_by_keys, load_core_config,
                                load_yaml)
 from epd_server.firmware import is_clean_tag
@@ -81,6 +82,10 @@ CERTIFICATE_DIR = os.path.join(cwd, "data", "certificate")
 # The cookies' secret and the access token, in the data volume, so that a
 # redeploy keeps every sign-in and the token.
 LOGIN_PATH = os.path.join(cwd, "data", "login.json")
+# Each board's key, in the data volume for the same reason.
+BOARD_KEYS_PATH = os.path.join(cwd, "data", "board-keys.json")
+# The answers that change a board, which a board with a key takes only signed.
+SIGNED_QUERIES = ("board-settings", "calibration")
 # The history windows the pages ask for, as history_24h and history_72h.
 HISTORY_HOURS = (24, 72)
 
@@ -488,6 +493,11 @@ def main():
     board_settings = BoardSettings(settings.dock, dock_sync, calibration, reports.device, now=clock)
     display_sync = DisplaySync(display_settings, settings.display_sync, reports.device, now=clock)
 
+    login = Login(os.environ.get(PASSWORD_ENV, ""), LOGIN_PATH)
+    if not login.on:
+        log.warning("no password: anyone who can reach the server can change its settings. "
+                    "Set %s to turn on sign-in", PASSWORD_ENV)
+    board_keys = BoardKeys(BOARD_KEYS_PATH, FIRMWARE_PRODUCTS)
     try:
         server = DisplayServer(
             pages=[*pages, splash],
@@ -516,14 +526,13 @@ def main():
             version_gate=True,
             sensor_poll=make_sensor_poll(settings.syncs, schedule.page_wake),
             on_refused=reports.refused,
+            board_keys=board_keys,
+            require_signatures=login.on,
+            signed_queries=SIGNED_QUERIES,
         )
     except ValueError as exc:
         log.error(str(exc))
         sys.exit(1)
-    login = Login(os.environ.get(PASSWORD_ENV, ""), LOGIN_PATH)
-    if not login.on:
-        log.warning("no password: anyone who can reach the server can change its settings. "
-                    "Set %s to turn on sign-in", PASSWORD_ENV)
     guard(server.app, login, settings.reverse_proxy)
     splash_when_off(server.app, off_hours, [p.name for p in pages], splash.name, clock)
     server.app.register_blueprint(web_blueprint(pages, source, logging_on=core.mqtt.enabled))
@@ -544,7 +553,10 @@ def main():
                                                    check_config, restart_soon, stores,
                                                    dock=board_settings, display=display_sync,
                                                    boards=reports.device,
-                                                   take_network=take_network, login=login))
+                                                   take_network=take_network, login=login,
+                                                   board_keys=board_keys,
+                                                   board_names={b.product: b.name
+                                                                for b in INSTALL_BOARDS}))
 
     if args.once or args.only:
         server.regenerate(only=args.only)

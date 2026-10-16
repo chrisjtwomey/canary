@@ -258,6 +258,10 @@ void test_a_version_mismatch_is_held_not_dropped() {
     TEST_ASSERT_EQUAL_INT(TRY_LATER, postResult(409));
 }
 
+void test_a_post_waiting_for_its_key_is_held_not_dropped() {
+    TEST_ASSERT_EQUAL_INT(TRY_LATER, postResult(401));
+}
+
 void test_drain_sends_the_oldest_few_per_pass() {
     uint8_t mem[1024];
     RingBacklog ring(mem, sizeof(mem), "psram");
@@ -526,6 +530,7 @@ int main(int, char**) {
     RUN_TEST(test_file_backlog_refuses_what_it_cannot_store_as_one_line);
     RUN_TEST(test_post_result_reads_the_status);
     RUN_TEST(test_a_version_mismatch_is_held_not_dropped);
+    RUN_TEST(test_a_post_waiting_for_its_key_is_held_not_dropped);
     RUN_TEST(test_drain_keeps_everything_while_the_versions_differ);
     RUN_TEST(test_drain_sends_the_oldest_few_per_pass);
     RUN_TEST(test_drain_stops_at_the_first_that_must_wait_and_keeps_it);

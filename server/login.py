@@ -26,7 +26,7 @@ import os
 import secrets
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable
 from urllib.parse import quote
 
@@ -52,7 +52,7 @@ HOME = "/web/"
 # What the boards ask for, and what the sign-in page needs.
 OPEN_GET = frozenset({"/", "/about", "/board-settings", "/calibration", "/firmware.bin",
                       "/firmware.merged.bin", "/install-firmware.sh", "/web/login"})
-OPEN_POST = frozenset({"/sensor-readings", "/calibration", "/web/login", "/web/logout"})
+OPEN_POST = frozenset({"/sensor-readings", "/calibration", "/pair", "/web/login", "/web/logout"})
 # epd's own files: the static folder, and the install page's scripts.
 OPEN_PREFIXES = ("/static/", "/install/")
 # The routes the access token reads.
@@ -348,10 +348,11 @@ def login_blueprint(login: Login) -> Blueprint:
 @dataclass
 class SignInState:
     """What the Settings page says of the sign-in. ``replaced`` says the
-    access token was just replaced."""
+    access token was just replaced; ``boards`` are each board's name and keys."""
     on: bool
     token: str = ""
     replaced: bool = False
+    boards: list = field(default_factory=list)
 
 
 def state(login: Login) -> SignInState:

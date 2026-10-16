@@ -256,7 +256,7 @@ static void restoreFromServer() {
     snprintf(url, sizeof(url), "%s?device=%s&before=%lu&sample_s=%u&history_days=%u", calibrationURL,
              CLIENT_NAME, (unsigned long)bootEpoch, (unsigned)rate, (unsigned)IBsec::kHistoryDays);
     int32_t size = 1024;
-    uint8_t* answer = downloadFile(url, clientUserAgent(CLIENT_NAME), &size, nullptr);
+    uint8_t* answer = downloadSigned(url, clientUserAgent(CLIENT_NAME), &size, nullptr);
     // A copy BSEC cannot start from counts as none.
     const SavedCopy ours = {nvsState.len > 0 && learnedFor(nvsState, rate), nvsState.accuracy,
                             nvsState.savedEpoch};
@@ -549,7 +549,7 @@ static void fetchSettings() {
     if (!settingsURL[0]) return;
     PageResponse rsp = {};
     int32_t size = sizeof(settingsText) - 1;
-    uint8_t* body = downloadFile(settingsURL, clientUserAgent(CLIENT_NAME), &size, &rsp);
+    uint8_t* body = downloadSigned(settingsURL, clientUserAgent(CLIENT_NAME), &size, &rsp);
     heardFrom(rsp, millis(), false);
     if (!body) {
         logf(LOG_WARNING, "settings: no answer; keeping %s",

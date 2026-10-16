@@ -61,7 +61,7 @@ def sign_in(client, password=PASSWORD, address="10.0.0.2", **kw):
 BOARD_ROUTES = [("GET", "/"), ("GET", "/breathe.png"), ("GET", "/firmware.bin"),
                 ("GET", "/firmware.merged.bin"), ("GET", "/install-firmware.sh"),
                 ("GET", "/about"), ("GET", "/calibration"), ("GET", "/board-settings"),
-                ("POST", "/sensor-readings"), ("POST", "/calibration")]
+                ("POST", "/sensor-readings"), ("POST", "/calibration"), ("POST", "/pair")]
 PAGE_FILES = [("GET", "/web/web.css"), ("GET", "/web/config.js"),
               ("GET", "/web/fonts/x.ttf"), ("GET", "/static/install/install.js"),
               ("GET", "/install/install.js"), ("GET", "/web/login")]

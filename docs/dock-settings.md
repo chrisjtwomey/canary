@@ -17,6 +17,9 @@ The server holds the dock's settings: the `dock` block of `config.yaml`, which t
 
 - The dock asks `GET /board-settings` at the pre-warm before each slot, and applies what has changed. It keeps the
   answer in NVS, so it starts on the same settings after a power cut.
+- Once the dock has a key, it takes the answer only with the server's signature over it (epd's `downloadSigned`),
+  so a device that answers in the server's place cannot change the dock's settings. Its calibration copy from
+  `GET /calibration` is checked the same way ([pages.md](pages.md#board-keys)).
 - The answer carries a version, which is a hash of the settings. The dock reports the version it runs, and any key
   it refused, in its `client` object. The Dock tab says whether the dock has taken the saved settings. The
   Display tab says the same of the display ([schedules.md](schedules.md#the-displays-sync)).

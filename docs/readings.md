@@ -190,7 +190,11 @@ Each dock document also carries how its sensors are, as opposed to what they mea
   `{"new": 3, "repeated": 0}`.
 - A document is stored by its device and `ts`. A second copy of the same pair is ignored, and counted as repeated.
   So to send it again after a lost reply changes nothing.
-- A timeout, a 5xx or a 409 keeps the whole batch in the queue. The dock tries again after its next reading.
+- A timeout, a 5xx, a 409 or a 401 keeps the whole batch in the queue. The dock tries again after its next
+  reading. A 401 is the server waiting for the dock's key to be approved, or asking for a new signature
+  ([pages.md](pages.md#board-keys)).
+- A board that holds a key signs each post with it, by epd's `postJson`, password or not. With a password set, the
+  server takes a post only with a good signature from an approved key.
 - Any other 4xx makes the dock send that batch again one document at a time, so a document that the server refuses
   costs only itself.
 - Each whole document goes to the Diagnostics pages. With `source.kind: store`, each document also goes into the

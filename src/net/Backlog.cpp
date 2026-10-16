@@ -179,6 +179,9 @@ PostResult postResult(int httpStatus) {
     // The document is sound and only the pairing is wrong, so it is held
     // until the two match again rather than dropped.
     if (httpStatus == 409) return TRY_LATER;
+    // 401 is the server waiting for this board's key to be approved, or
+    // asking for a fresh signature: the same document goes through once it is.
+    if (httpStatus == 401) return TRY_LATER;
     if (httpStatus >= 400 && httpStatus < 500 && httpStatus != 408 && httpStatus != 429) {
         return REFUSED;
     }

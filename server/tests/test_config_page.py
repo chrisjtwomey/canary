@@ -10,13 +10,16 @@ from types import SimpleNamespace
 import pytest
 import yaml
 from bs4 import BeautifulSoup
-from epd_server import ReadingsStore
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+from epd_server import BoardKeys, ReadingsStore
 from flask import Flask
 
 import config_form as cf
 from about import config_version
-from config_page import (NO_PASSWORD, PASSWORD_SET, REPLACE_LEAD, REPLACE_TITLE, TOKEN_REPLACED,
-                         TOKEN_USE, _bytes, _contents_parts, _since, config_blueprint)
+from config_page import (FORGET_TITLE, NO_BOARD_KEY, NO_PASSWORD, PASSWORD_SET, REPLACE_LEAD,
+                         REPLACE_TITLE, TOKEN_REPLACED, TOKEN_USE, _bytes, _contents_parts, _since,
+                         config_blueprint)
 from login import Login, guard
 from transfer import Corrupt, Held, Overlap, Transfer
 from server import check_config, make_pages
@@ -1301,3 +1304,81 @@ def test_replace_token_makes_a_new_one_and_says_so_once(signed_in, login):
 
 def test_a_token_needs_a_password_set(client):
     assert client.post("/web/config", data={"mode": "token"}).status_code == 404
+
+
+# ── Board keys in the Sign-in group ─────────────────────────────────
+
+def board_keys_client(path, tz, tmp_path, password="pw"):
+    login = Login(password, str(tmp_path / "login.json"))
+    keys = BoardKeys(str(tmp_path / "board-keys.json"), ["canary-dock", "canary-display"])
+    app = Flask(__name__)
+    app.register_blueprint(config_blueprint(make_pages(tz, width=1280, height=720), path,
+                                            check_config, lambda: None, login=login,
+                                            board_keys=keys,
+                                            board_names={"canary-dock": "Dock",
+                                                         "canary-display": "Display"}))
+    guard(app, login)
+    client = app.test_client()
+    client.post("/web/login", data={"password": password})
+    return client, keys
+
+
+def pair(keys, device="canary-dock"):
+    half = ec.generate_private_key(ec.SECP256R1()).public_key().public_bytes(
+        serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+    keys.pair(device, half)
+    return keys.board(device).pending.id
+
+
+def test_each_board_shows_its_key_and_what_can_be_done_with_it(path, tz, tmp_path):
+    client, keys = board_keys_client(path, tz, tmp_path)
+    approved = pair(keys)
+    keys.approve("canary-dock")
+    pending = pair(keys)
+    soup = soup_of(client.get("/web/config"))
+    dock = one(soup, "#board-canary-dock")
+    assert one(dock, ".name").text == "Dock"
+    helps = [p.text for p in dock.select(".help")]
+    assert helps[0].startswith(f"Key {approved}, approved ")
+    assert helps[1].startswith(f"New key {pending}, asked for ")
+    assert helps[1].endswith("Approve it only if the board's log shows the same key.")
+    assert [b.text for b in dock.select("button")] == ["Approve", "Reject", "Forget"]
+    assert one(soup, "#board-canary-display .help").text == NO_BOARD_KEY
+    assert one(soup, "#board-canary-display").select("button") == []
+    assert attr(one(soup, "#forget-canary-dock-form"), "data-dialog") == "forget-board"
+    assert one(soup, "#forget-board h2").text == FORGET_TITLE
+
+
+@pytest.mark.parametrize("action, approved, pending", [
+    ("approve", "new", None), ("reject", "old", None), ("forget", None, None)])
+def test_a_board_key_is_approved_rejected_or_forgotten(path, tz, tmp_path, action, approved,
+                                                        pending):
+    client, keys = board_keys_client(path, tz, tmp_path)
+    ids = {"old": pair(keys)}
+    keys.approve("canary-dock")
+    ids["new"] = pair(keys)
+    rsp = client.post("/web/config", data={"mode": "board", "board": "canary-dock",
+                                           "action": action})
+    assert (rsp.status_code, rsp.headers["Location"]) == (303, "config#server")
+    b = keys.board("canary-dock")
+    assert (b.approved.id if b.approved else None) == (ids[approved] if approved else None)
+    assert b.pending is None
+
+
+@pytest.mark.parametrize("data, status", [
+    ({"mode": "board", "board": "nobody", "action": "approve"}, 404),
+    ({"mode": "board", "board": "canary-dock", "action": "check"}, 400),
+])
+def test_a_board_action_needs_a_board_and_an_action(path, tz, tmp_path, data, status):
+    client, _ = board_keys_client(path, tz, tmp_path)
+    assert client.post("/web/config", data=data).status_code == status
+
+
+def test_without_a_password_no_board_keys_show_or_change(path, tz, tmp_path):
+    client, keys = board_keys_client(path, tz, tmp_path, password="")
+    pair(keys)
+    soup = soup_of(client.get("/web/config"))
+    assert soup.select(".board-key, #forget-board") == []
+    rsp = client.post("/web/config", data={"mode": "board", "board": "canary-dock",
+                                           "action": "approve"})
+    assert rsp.status_code == 404 and keys.board("canary-dock").approved is None

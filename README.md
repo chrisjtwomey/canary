@@ -58,8 +58,10 @@ cd canary
 - `http://<server>:8080/web/` shows the pages, and `/web/config` is the Settings page. Set your altitude there, in
   the Server tab, so that the pages show the pressure at sea level. **Until you set a password, anyone on your
   network can see the pages and change the settings.** See [Sign-in](#sign-in).
-- The readings, board reports, board logs, calibration copies, the HTTPS certificate and the sign-in's secret and
-  token go in the `canary-data` volume. They stay when Docker recreates the container.
+- The readings, board reports, board logs, calibration copies, the HTTPS certificate, the sign-in's secret and
+  token, and the boards' keys go in the `canary-data` volume. They stay when Docker recreates the container. If
+  you delete the volume while a password is set, each board needs its firmware installed again over USB, since the
+  server no longer holds its key.
 - The images follow this repo's `main` branch. Your boards take each new version.
 
 #### Sign-in
@@ -70,7 +72,11 @@ The site is open until you set a password. To set one:
 2. Run `docker compose up -d`.
 
 - Every page under `/web/`, the settings for an install (`/network.bin`) and the data then need the password.
-  The boards need none.
+  The boards need no password: they use a key of their own (below).
+- Each board then signs what it posts, with a key of its own. At its next post after you set the password, each
+  board asks for a key. Approve it in Settings, in the Server tab, if the board's log shows the same key: the Logs
+  page while board logging is on, or the board's USB log. Until
+  then the server refuses the board's readings, and the dock keeps them. No board needs a USB cable for this.
 - A sign-in lasts 30 days. **Sign out** is in the menu. A new password signs out every browser.
 - After 5 wrong passwords, that address waits 15 minutes.
 - Over HTTP the password crosses your network unencrypted. To keep it hidden, sign in over HTTPS, on port 8443.
