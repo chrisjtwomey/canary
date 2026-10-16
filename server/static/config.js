@@ -12,7 +12,6 @@
   var tabs = all('a[data-tab]', nav);
   var panels = all('.panel[data-tab]');
   var settings = document.getElementById('settings-form');
-  var yamlForm = document.getElementById('yaml-form');
   var restoreForm = document.getElementById('restore-form');
   var dialog = document.getElementById('review');
   var POLL_MS = 2000;
@@ -40,8 +39,6 @@
       if (on && focus) t.focus();
     });
     panels.forEach(function (p) { p.hidden = p.getAttribute('data-tab') !== name; });
-    if (settings) settings.hidden = name === 'yaml';
-    if (yamlForm) yamlForm.hidden = name !== 'yaml';
     all('input[name=tab]', settings || document).forEach(function (i) { i.value = name; });
     if (location.hash.slice(1) !== name) history.replaceState(null, '', '#' + name);
   }
@@ -89,7 +86,6 @@
     if (el.classList.contains('rows')) return rowsValue(el);
     if (el.type === 'checkbox') return el.checked ? 'true' : 'false';
     if (el.classList.contains('chips')) return chipsValue(el);
-    if (el.tagName === 'TEXTAREA') return el.value.replace(/\r\n/g, '\n');
     return el.value.trim();
   }
 
@@ -779,7 +775,7 @@
 
   // ── Check, save, restore ─────────────────────────────────────────
   function firstInvalid(form) {
-    return all('input, select, textarea', form).filter(function (el) {
+    return all('input, select', form).filter(function (el) {
       return !el.disabled && !el.closest('.field[hidden]') && !el.checkValidity();
     })[0];
   }
@@ -919,7 +915,7 @@
     next();
   }
 
-  [settings, yamlForm, restoreForm].forEach(function (form) {
+  [settings, restoreForm].forEach(function (form) {
     if (!form) return;
     form.addEventListener('submit', function (e) {
       var submitter = e.submitter;

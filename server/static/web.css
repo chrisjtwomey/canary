@@ -1569,8 +1569,7 @@ html:not(.js) .time .pick {
 }
 
 .settings input:focus,
-.settings select:focus,
-.settings textarea:focus {
+.settings select:focus {
   outline: none;
   border-color: var(--ink-mid);
 }
@@ -2042,30 +2041,6 @@ html.js .week .group-name {
   font-size: 15px;
   font-style: italic;
   color: var(--g5);
-}
-
-/* ── The YAML tab ── */
-.settings .detail {
-  max-width: 60em;
-  margin: 16px 0 0;
-  font-size: 15px;
-  font-style: italic;
-  color: var(--ink-mid);
-}
-
-.settings textarea {
-  display: block;
-  box-sizing: border-box;
-  width: 100%;
-  height: clamp(280px, calc(100vh - 430px), 900px);
-  margin: 12px 0 0;
-  padding: 12px;
-  font: 14px/1.45 ui-monospace, Menlo, Consolas, monospace;
-  color: var(--ink);
-  background: var(--paper);
-  border: 2px solid var(--ink-faint);
-  border-radius: 6px;
-  resize: vertical;
 }
 
 /* ── The bar along the bottom ── */

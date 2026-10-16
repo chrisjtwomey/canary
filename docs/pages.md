@@ -38,7 +38,9 @@ While the server runs:
 
 The Settings page, `/web/config`:
 
-- The form keeps the file's comments and layout. The YAML tab shows the keys that the form does not show.
+- The form keeps the file's comments and layout. It has no tab for the file as text: each feature brings its own
+  fields, so the text had no job left. A key with no field, such as `source.kind`, a file the form cannot read,
+  and an edit the form refuses are fixed in `config.yaml` on the server, and the page's message says so.
 - The Display tab holds the `display` and `image` blocks: the page schedule, the sync, the page sets (the
   `display.pools` key), the image's size and its page area. They are one tab because they are the settings the
   display takes at its sync.
@@ -64,11 +66,11 @@ The Settings page, `/web/config`:
   nothing.
 - A **Reset** puts a default back without an input event, so `config.js` asks the drawings to redraw. Without that, a
   drawing kept a dragged value.
-- **Check** tests an edit, as the server tests the file at start. Check and Save also refuse a key written twice
-  in one mapping, naming the key and both lines: "calibration appears twice, on lines 1 and 5. Delete one: the
-  server uses line 5." The server starts on such a file, but it takes the second copy and drops the first without
-  a word, so the person must choose. The page opens a file like that on the YAML tab with those words; the form
-  tabs say to delete one in the YAML tab.
+- **Check** tests an edit, as the server tests the file at start. A key written twice in one mapping is refused,
+  with the key and both lines. The server starts on such a file, but it takes the second copy and drops the first
+  without a word, so the person must choose. Only a hand edit makes one, since the form cannot write a key twice.
+  The page opens a file like that with no tabs, and the words "calibration appears twice, on lines 1 and 5. Delete
+  one in config.yaml on the server: the server uses line 5."
 - **Save and restart** lists the changes, keeps the old file as `config.yaml.bak`, writes the new file and
   restarts the server. **Restore** puts the `.bak` back.
 - The page opens again when `GET /about` names the version of the file it saved ([versions.md](versions.md)). A
@@ -105,7 +107,7 @@ The install page, `/web/install`:
   server gives the boards that one too, when `client.mqtt_host` is unset (`broker.py`). A broker at `localhost`,
   `127.x`, `::1` or `0.0.0.0` is the server's own machine, which no board can reach, so the field then stays empty.
 - The Wi-Fi password is a password input, with **Show** beside its label, as **Reset** sits. It is kept as typed,
-  spaces included. The YAML tab and the board settings file still hold it in plain text: the dots only keep it off
+  spaces included. `config.yaml` and the board settings file still hold it in plain text: the dots only keep it off
   the screen.
 - A sketch of the device shows which board is which, because the two names alone do not say which part of the
   device each one is. `install-sketch.js` draws it with rough.js, as the charts are drawn, traced from

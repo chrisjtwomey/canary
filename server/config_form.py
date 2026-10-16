@@ -374,7 +374,15 @@ class FieldError(ValueError):
 
 
 class FormError(ValueError):
-    """The form cannot make this edit at all. The message says to use the YAML tab."""
+    """The form cannot make this edit at all. The message says to edit config.yaml on the
+    server."""
+
+
+# What the page says of a file only a hand edit on the server can fix.
+NOT_YAML = "config.yaml is not valid YAML. Fix it on the server."
+NOT_A_MAPPING = "config.yaml has no settings at its top level. Fix it on the server."
+EDIT_ON_SERVER = "Edit config.yaml on the server."
+ON_SERVER = " in config.yaml on the server"
 
 
 # ── Reading ─────────────────────────────────────────────────────────
@@ -388,11 +396,11 @@ def read(text: str) -> dict:
     try:
         cfg = yaml.safe_load(text)
     except yaml.YAMLError:
-        raise FormError("Not valid YAML. Fix it in the YAML tab.")
+        raise FormError(NOT_YAML)
     if cfg is None:
         return {}
     if not isinstance(cfg, dict):
-        raise FormError("Top level is not a mapping. Fix it in the YAML tab.")
+        raise FormError(NOT_A_MAPPING)
     return cfg
 
 
@@ -1010,15 +1018,15 @@ class Doc:
             try:
                 root = _yaml(self.ind, self.offset).load(text)
             except DuplicateKeyError as exc:
-                raise FormError(_twice_words(exc, text.splitlines(), " in the YAML tab")) from None
+                raise FormError(_twice_words(exc, text.splitlines(), ON_SERVER)) from None
             except Exception:  # noqa: BLE001 - any ruamel failure means the form cannot edit it
-                raise FormError("Not valid YAML. Fix it in the YAML tab.") from None
+                raise FormError(NOT_YAML) from None
         else:
             root, self.ind, self.offset = None, 2, 2
         if root is None:
             root = CommentedMap()
         if not isinstance(root, CommentedMap):
-            raise FormError("Top level is not a mapping. Fix it in the YAML tab.")
+            raise FormError(NOT_A_MAPPING)
         self.root = root
 
     def text(self) -> str:
@@ -1314,11 +1322,10 @@ def _check_reads_back(cfg: dict, text: str, changed: list[str], expect: dict) ->
     allowed = [tuple(k.split(".")) for k in changed]
     for path in _changed_paths(cfg, new):
         if not any(path[:len(p)] == p or p[:len(path)] == path for p in allowed):
-            raise FormError(f"This edit also changes {name_of(path)}. Edit it in the YAML tab.")
+            raise FormError(f"This edit also changes {name_of(path)}. {EDIT_ON_SERVER}")
     for path, value in expect.items():
         if not _reads_as(lookup(new, path), value):
-            raise FormError(f"The form cannot save {name_of(path)} as entered. "
-                            f"Edit it in the YAML tab.")
+            raise FormError(f"The form cannot save {name_of(path)} as entered. {EDIT_ON_SERVER}")
 
 
 # ── Words for the page ──────────────────────────────────────────────

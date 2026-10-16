@@ -553,8 +553,8 @@ def test_text_that_is_not_yaml_is_left_to_the_yaml_check():
     assert cf.twice("server: [") is None
 
 
-def test_the_form_names_a_key_written_twice_and_the_tab_to_fix_it_in():
+def test_the_form_names_a_key_written_twice_and_says_to_fix_it_on_the_server():
     with pytest.raises(cf.FormError) as exc:
         cf.apply(TWICE_AT_THE_TOP, as_posted(TWICE_AT_THE_TOP, server__port="8081"))
     assert str(exc.value) == ("calibration appears twice, on lines 1 and 5. "
-                              "Delete one in the YAML tab: the server uses line 5.")
+                              "Delete one in config.yaml on the server: the server uses line 5.")

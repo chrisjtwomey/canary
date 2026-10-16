@@ -1,5 +1,5 @@
-"""config.yaml in the browser: shown as a form and as text, checked as the
-server checks it, saved, restarted on."""
+"""config.yaml in the browser: shown as a form, checked as the server checks
+it, saved, restarted on."""
 import io
 import json
 import os
@@ -62,15 +62,13 @@ def posted(soup, form_id="settings-form", **changes) -> dict[str, list[str]]:
     """What the browser posts for the form ``form_id`` as the page shows it,
     with ``changes`` made. A key's dots are double underscores."""
     data: dict[str, list[str]] = {}
-    for el in one(soup, f"#{form_id}").select("input[name], select[name], textarea[name]"):
+    for el in one(soup, f"#{form_id}").select("input[name], select[name]"):
         if el.has_attr("disabled") or el.find_parent("template"):
             continue
         name = attr(el, "name")
         if el.name == "select":
             chosen = el.select_one("option[selected]") or el.select_one("option")
             value = attr(chosen, "value") if chosen else ""
-        elif el.name == "textarea":
-            value = el.get_text()
         elif attr(el, "type") in ("checkbox", "radio"):
             if not el.has_attr("checked"):
                 continue
@@ -88,9 +86,16 @@ def write(path, text):
         f.write(text)
 
 
-def test_the_page_shows_the_file_as_a_form_and_as_text(client, path):
+def changed(client, **changes) -> dict[str, list[str]]:
+    """The settings form as the page shows it now, with ``changes`` made."""
+    return posted(soup_of(client.get("/web/config")), **changes)
+
+
+HTTPS_ON_PORT = "Port and HTTPS port cannot be the same."
+
+
+def test_the_page_shows_the_file_as_a_form(client, path):
     soup = soup_of(client.get("/web/config"))
-    assert one(soup, "textarea[name=text]").get_text() == GOOD
     assert attr(one(soup, ".bar a.config-link"), "aria-current") == "page"
     assert soup.select_one("#read-only") is None
     assert attr(one(soup, "#f-server-timezone"), "value") == "Europe/Dublin"
@@ -100,7 +105,8 @@ def test_the_page_shows_the_file_as_a_form_and_as_text(client, path):
     assert one(soup, '[data-field="server.port"] .reset').has_attr("hidden")
     assert soup.select_one('[data-field="source.kind"]') is None
     assert [attr(t, "data-tab") for t in soup.select("nav.tabs a")] == [
-        "server", "display", "dock", "storage", "firmware", "mqtt", "yaml"]
+        "server", "display", "dock", "storage", "firmware", "mqtt"]
+    assert soup.select("textarea, #yaml-form") == []
 
 
 def test_the_form_posted_back_as_it_is_changes_nothing(client, path, restarts):
@@ -224,38 +230,33 @@ def test_review_lists_the_changes_and_writes_nothing(client, path, restarts):
 
 def test_a_save_from_config_js_is_answered_in_json(client, path, restarts):
     json = {"Accept": "application/json"}
-    rsp = client.post("/web/config", data={"text": EDITED, "action": "save"}, headers=json)
-    assert rsp.get_json() == {"saved": True, "config": config_version(EDITED)} and restarts == [1]
-    rsp = client.post("/web/config", data={"text": EDITED, "action": "save"}, headers=json)
+    rsp = client.post("/web/config", data={**changed(client, server__port="9090"),
+                                           "action": "save"}, headers=json)
+    saved = open(path).read()
+    assert rsp.get_json() == {"saved": True, "config": config_version(saved)} and restarts == [1]
+    rsp = client.post("/web/config", data={**changed(client), "action": "save"}, headers=json)
     assert rsp.get_json() == {"saved": False, "same": True} and restarts == [1]
-    rsp = client.post("/web/config", data={"text": UNKNOWN_PAGE, "action": "save"}, headers=json)
-    assert rsp.status_code == 400 and "radon.png" in rsp.get_json()["problem"]
-    assert open(path).read() == EDITED and restarts == [1]
-
-
-def test_a_save_names_the_version_of_the_file_it_wrote(client, path):
-    """The version /about names once the server runs the file: of the text
-    as written, with the newline the save adds."""
-    rsp = client.post("/web/config", data={"text": EDITED.rstrip("\n"), "action": "save"},
-                      headers={"Accept": "application/json"})
-
-    assert rsp.get_json()["config"] == config_version(open(path).read())
+    rsp = client.post("/web/config", data={**changed(client, server__https_port="9090"),
+                                           "action": "save"}, headers=json)
+    assert rsp.status_code == 400 and HTTPS_ON_PORT in rsp.get_json()["problem"]
+    assert open(path).read() == saved and restarts == [1]
 
 
 def test_review_of_a_refused_config_says_why(client, path):
-    rsp = client.post("/web/config", data={"text": UNKNOWN_PAGE, "action": "review"})
-    assert rsp.status_code == 400 and "radon.png" in rsp.get_json()["problem"]
+    rsp = client.post("/web/config", data={**changed(client, server__https_port="8080"),
+                                           "action": "review"})
+    assert rsp.status_code == 400 and HTTPS_ON_PORT in rsp.get_json()["problem"]
 
 
 def test_check_says_so_and_changes_nothing(client, path, restarts):
-    rsp = client.post("/web/config", data={"text": UNKNOWN_PAGE.replace("radon", "breathe"),
+    rsp = client.post("/web/config", data={**changed(client, server__port="9090"),
                                            "action": "check"})
     assert rsp.status_code == 200
     assert one(soup_of(rsp), "#note").get_text() == "No problems found."
     notice = one(soup_of(rsp), "dialog#notice")
     assert one(notice, "#notice-title").get_text() == "No problems found"
     assert one(notice, ".lead").get_text() == "Save and restart to apply these changes."
-    assert "Display · Page sets · co2" in [th.get_text() for th in notice.select(".changes th")]
+    assert "Server · Port" in [th.get_text() for th in notice.select(".changes th")]
     assert [b.get_text() for b in notice.select("button")] == ["Close", "Save and restart"]
     assert open(path).read() == GOOD and restarts == []
 
@@ -293,21 +294,27 @@ def test_check_of_the_file_as_it_is_offers_no_save(client, path, restarts):
     ("server:\n  timezone: Europe/Dublin\nserver:\n  port: 8080\n",
      "server appears twice, on lines 1 and 3. Delete one: the server uses line 3."),
 ])
-def test_a_config_the_server_would_refuse_is_not_saved(client, path, restarts, text, words):
-    rsp = client.post("/web/config", data={"text": text, "action": "save"})
+def test_a_config_the_server_would_refuse_fails_the_check(text, words):
+    with pytest.raises(ValueError) as exc:
+        check_config(text)
+    assert words in str(exc.value)
+
+
+def test_a_form_the_server_would_refuse_is_not_saved(client, path, restarts):
+    rsp = client.post("/web/config", data={**changed(client, server__https_port="8080"),
+                                           "action": "save"})
     assert rsp.status_code == 400
     problem = one(soup_of(rsp), "#problem").get_text()
-    assert problem.startswith("Not saved:") and words in problem
-    assert one(soup_of(rsp), "textarea").get_text() == text
+    assert problem.startswith("Not saved:")
     assert open(path).read() == GOOD and restarts == []
     assert not os.path.exists(path + ".bak")
 
 
 def test_save_keeps_the_old_file_writes_the_new_and_restarts(client, path, restarts):
-    text = "source:\r\n  kind: mock\r\n  seed: 9"
-    rsp = client.post("/web/config", data={"text": text, "action": "save"})
+    rsp = client.post("/web/config", data={**changed(client, server__port="9090"),
+                                           "action": "save"})
     assert rsp.status_code == 200
-    assert open(path).read() == "source:\n  kind: mock\n  seed: 9\n"
+    assert yaml.safe_load(open(path).read())["server"]["port"] == 9090
     assert open(path + ".bak").read() == GOOD
     assert restarts == [1]
     assert one(soup_of(rsp), "#restarting") is not None
@@ -315,12 +322,18 @@ def test_save_keeps_the_old_file_writes_the_new_and_restarts(client, path, resta
 
 def test_restore_puts_the_previous_version_back_and_keeps_this_one(client, path, restarts):
     assert soup_of(client.get("/web/config")).select_one("#restore-form") is None
-    client.post("/web/config", data={"text": EDITED, "action": "save"})
+    client.post("/web/config", data={**changed(client, server__port="9090"), "action": "save"})
+    saved = open(path).read()
     assert one(soup_of(client.get("/web/config")), "#restore-form") is not None
     rsp = client.post("/web/config", data={"mode": "restore", "action": "save"})
     assert rsp.status_code == 200
-    assert open(path).read() == GOOD and open(path + ".bak").read() == EDITED
+    assert open(path).read() == GOOD and open(path + ".bak").read() == saved
     assert restarts == [1, 1]
+
+
+def test_a_mode_the_page_has_not_got_is_refused(client, path, restarts):
+    rsp = client.post("/web/config", data={"mode": "yaml", "text": EDITED, "action": "save"})
+    assert rsp.status_code == 400 and open(path).read() == GOOD and restarts == []
 
 
 def test_restore_with_nothing_to_restore_says_so(client, path, restarts):
@@ -340,8 +353,9 @@ def test_a_read_only_file_can_be_checked_but_not_saved(client, path, restarts):
     soup = soup_of(client.get("/web/config"))
     assert one(soup, "#read-only") is not None
     assert all(attr(b, "disabled") == "disabled" for b in soup.select("button[value=save]"))
-    assert client.post("/web/config", data={"text": EDITED, "action": "check"}).status_code == 200
-    assert client.post("/web/config", data={"text": EDITED, "action": "save"}).status_code == 403
+    edit = changed(client, server__port="9090")
+    assert client.post("/web/config", data={**edit, "action": "check"}).status_code == 200
+    assert client.post("/web/config", data={**edit, "action": "save"}).status_code == 403
     assert restarts == []
 
 
@@ -353,7 +367,8 @@ def test_a_failed_write_says_why_and_does_not_restart(client, path, restarts, mo
     def refuse(src, dst):
         raise PermissionError(13, "Permission denied", dst)
     monkeypatch.setattr("config_page.shutil.copyfile", refuse)
-    rsp = client.post("/web/config", data={"text": EDITED, "action": "save"})
+    rsp = client.post("/web/config", data={**changed(client, server__port="9090"),
+                                           "action": "save"})
     assert rsp.status_code == 500
     assert "Permission denied" in one(soup_of(rsp), "#problem").get_text()
     assert restarts == []
@@ -367,26 +382,36 @@ def test_a_field_an_environment_variable_sets_is_locked_and_says_so(client, monk
     assert "SERVER_PORT" in one(soup, '[data-field="server.port"] .env').get_text()
 
 
-def test_a_file_with_a_key_written_twice_opens_on_the_yaml_tab_with_the_problem(client, path):
+def test_a_file_with_a_key_written_twice_says_to_fix_it_on_the_server(client, path):
     write(path, "server:\n  timezone: Europe/Dublin\nserver:\n  port: 8080\n")
     soup = soup_of(client.get("/web/config"))
     assert one(soup, "#unreadable").get_text() == (
-        "server appears twice, on lines 1 and 3. Delete one: the server uses line 3.")
-    assert [attr(t, "data-tab") for t in soup.select("nav.tabs a")] == ["yaml"]
+        "server appears twice, on lines 1 and 3. Delete one in config.yaml on the server: "
+        "the server uses line 3.")
+    assert soup.select("nav.tabs, #settings-form") == []
+
+
+@pytest.mark.parametrize("text, words", [("server: [", cf.NOT_YAML),
+                                         ("- a list", cf.NOT_A_MAPPING)])
+def test_a_file_the_form_cannot_read_says_to_fix_it_on_the_server(client, path, text, words):
+    write(path, text)
+    soup = soup_of(client.get("/web/config"))
+    assert one(soup, "#unreadable").get_text() == words
+    assert soup.select("nav.tabs, #settings-form") == []
 
 
 def test_text_from_the_file_is_escaped(client, path):
-    text = "# </textarea><script>alert(1)</script>\n" + GOOD
-    rsp = client.post("/web/config", data={"text": text + "bad: [", "action": "check"})
-    soup = soup_of(rsp)
-    assert one(soup, "textarea[name=text]").get_text() == text + "bad: ["
+    write(path, "'<b>k</b>': 1\n'<b>k</b>': 2\n")
+    soup = soup_of(client.get("/web/config"))
+    assert "<b>k</b> appears twice" in one(soup, "#unreadable").get_text()
+    assert soup.find("b") is None
     assert [attr(s, "src") for s in soup.find_all("script")] == [
         "rough.iife.min.js", "config.js", "timepick.js", "sheet.js", "ago.js"]
 
 
 def test_a_posted_tab_name_is_one_of_the_tabs(client, path):
-    rsp = client.post("/web/config", data={"text": GOOD, "action": "check",
-                                           "mode": "form", "tab": '"><b>'})
+    rsp = client.post("/web/config", data={**changed(client), "action": "check",
+                                           "tab": '"><b>'})
     assert "<b>" not in attr(one(soup_of(rsp), "input[name=tab]"), "value")
 
 
@@ -1196,7 +1221,7 @@ def test_before_any_recalibration_the_row_says_how_to_do_one(dock_client):
 def test_only_form_controls_carry_a_data_key(dock_client):
     """config.js reads the value of everything with one: anything else stops its scripts."""
     for el in soup_of(dock_client.get("/web/config")).select("[data-key]"):
-        assert el.name in ("input", "select", "textarea", "fieldset") \
+        assert el.name in ("input", "select", "fieldset") \
             or "segments" in el.get("class", []), el.name
 
 

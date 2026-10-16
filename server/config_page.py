@@ -1,14 +1,14 @@
-"""config.yaml in the browser: a form in tabs, the file as text, a check, a
-save and a restart.
+"""config.yaml in the browser: a form in tabs, a check, a save and a restart.
+A key with no field, or a file the form cannot read, is edited in the file on
+the server.
 
-    GET  /web/config     the form, and the file as text in the last tab
+    GET  /web/config     the form
     GET  /web/config/export/<store>
                          everything one store holds, a JSON document a line
     POST /web/config/import/<store>
                          such a file back into that store, all of it or none;
                          replace=true puts it over the records that exist
     POST /web/config     mode=form: the form's values written into the file
-                         mode=yaml: the text as given
                          mode=restore: config.yaml.bak
                          mode=recalibrate: the dock's SCD41 recalibrated to
                               ppm at its next reading; no action, no restart
@@ -57,8 +57,7 @@ from web import menu_bar, page_head
 MAX_UPLOAD = 64 * 1024 * 1024
 # The browse page's URL from /web/config, once the server answers again.
 BROWSE_HREF = "./"
-YAML_TAB = "yaml"
-TAB_NAMES = [t.name for t in cf.TABS] + [YAML_TAB]
+TAB_NAMES = [t.name for t in cf.TABS]
 
 # What each drawing on a sheet shows, and how to change it by dragging.
 VISUAL_CAPTIONS = {
@@ -114,8 +113,6 @@ class Report:
 @dataclass
 class View:
     """What the config page shows."""
-    text: str                       # the YAML tab's text
-    file_text: str                  # the file as it is
     values: dict[str, Any]          # each field as its input shows it
     initial: dict[str, Any]         # the same from the file: what a change is measured against
     defaults: dict[str, str] = field(default_factory=dict)   # each default, as its input shows it
@@ -188,17 +185,17 @@ def file_view(text: str) -> View:
     try:
         cfg = cf.read(text)
     except cf.FormError as exc:
-        return _unreadable(text, str(exc))
-    doubled = cf.twice(text)
+        return _unreadable(str(exc))
+    doubled = cf.twice(text, cf.ON_SERVER)
     if doubled:
-        return _unreadable(text, doubled)
+        return _unreadable(doubled)
     values = cf.shown(cfg)
-    return View(text, text, values, dict(values), cf.defaults(cfg))
+    return View(values, dict(values), cf.defaults(cfg))
 
 
-def _unreadable(text: str, problem: str) -> View:
+def _unreadable(problem: str) -> View:
     values = cf.shown({})
-    return View(text, text, values, dict(values), tab=YAML_TAB, unreadable=problem)
+    return View(values, dict(values), unreadable=problem)
 
 
 def _id(key: str) -> str:
@@ -935,7 +932,7 @@ def _group(a: Airium, g: cf.Group, view: View, images: list[str], locked: bool,
 
 def _tab_problems(view: View) -> set[str]:
     tabs = {cf.TAB_OF[k] for k in view.errors if k in cf.TAB_OF}
-    if view.problem and view.tab and view.tab != YAML_TAB:
+    if view.problem and view.tab:
         tabs.add(view.tab)
     return tabs
 
@@ -944,7 +941,6 @@ def config_html(pages: list[EnvPage], view: View, writable: bool,
                 bak: datetime | None = None) -> str:
     images = [p.png_filename for p in pages]
     tabs = [] if view.unreadable else [(t.name, t.title) for t in cf.TABS]
-    tabs.append((YAML_TAB, "YAML"))
     marked = _tab_problems(view)
     status = view.note or view.status or (
         "Not saved. Fix the marked fields." if view.errors
@@ -968,12 +964,13 @@ def config_html(pages: list[EnvPage], view: View, writable: bool,
                                 a.span(klass="stamp", _t=f"Last saved {_when(bak)}")
                                 a.button(type="submit", name="action", value="save",
                                          klass="link", _t="Restore")
-                with a.nav(klass="tabs", role="tablist", **{"aria-label": "Sections"},
-                           **({"data-open": view.tab} if view.tab else {})):
-                    for name, title in tabs:
-                        a.a(href=f"#{name}", id=f"tab-{name}", role="tab",
-                            klass="tab problem" if name in marked else "tab",
-                            _t=title, **{"data-tab": name, "aria-controls": f"panel-{name}"})
+                if tabs:
+                    with a.nav(klass="tabs", role="tablist", **{"aria-label": "Sections"},
+                               **({"data-open": view.tab} if view.tab else {})):
+                        for name, title in tabs:
+                            a.a(href=f"#{name}", id=f"tab-{name}", role="tab",
+                                klass="tab problem" if name in marked else "tab",
+                                _t=title, **{"data-tab": name, "aria-controls": f"panel-{name}"})
                 if not writable:
                     a.p(klass="banner", id="read-only",
                         _t=READ_ONLY)
@@ -1018,17 +1015,6 @@ def config_html(pages: list[EnvPage], view: View, writable: bool,
                         with a.form(method="post", action="config", id="token-form",
                                     **{"data-dialog": "replace-token"}):
                             a.input(type="hidden", name="mode", value="token")
-                with a.form(method="post", action="config", id="yaml-form",
-                            **{"data-title": "Save and restart?",
-                               "data-confirm": "Save and restart"}):
-                    a.input(type="hidden", name="mode", value="yaml")
-                    a.input(type="hidden", name="tab", value=YAML_TAB)
-                    with a.section(klass="panel", id=f"panel-{YAML_TAB}", role="tabpanel",
-                                   **{"data-tab": YAML_TAB, "aria-labelledby": f"tab-{YAML_TAB}"}):
-                        a.textarea(name="text", rows="24", spellcheck="false", _t=view.text,
-                                   **{"aria-label": "config.yaml", "data-key": "text",
-                                      "data-initial": view.file_text})
-                        _savebar(a, writable, status, discard=True)
             if view.sign_in is not None and view.sign_in.on:
                 with a.dialog(id="replace-token", **{"aria-labelledby": "replace-token-title"}):
                     with a.form(method="dialog"):
@@ -1249,7 +1235,7 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
     @bp.route("", methods=["POST"])
     def change():
         form = request.form
-        mode = form.get("mode") or ("yaml" if "text" in form else "form")
+        mode = form.get("mode", "form")
         action = form.get("action", "check")
         with open(path) as f:
             current = f.read()
@@ -1291,10 +1277,8 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
                     text = f.read()
             except OSError:
                 return refuse("No earlier version to restore.", 404)
-        elif mode == "yaml":
-            # A text box sends its lines with CRLF.
-            text = form.get("text", "").replace("\r\n", "\n")
-            view.text, view.tab = text, YAML_TAB
+        elif mode != "form":
+            abort(400)
         else:
             view.values.update(cf.submitted(form))
             try:

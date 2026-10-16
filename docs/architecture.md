@@ -104,7 +104,7 @@ server/
   web.py  html_doc.py          /web/: the pages in a browser, the explorer, and GET /history
   install_page.py              /web/install: epd's install page in this site's layout, with the boards' network
                                settings above the boards
-  config_page.py               /web/config: config.yaml as a form in tabs and as text, checked, saved, and restarted on;
+  config_page.py               /web/config: config.yaml as a form in tabs, checked, saved, and restarted on;
                                whether each board runs the saved settings
   config_form.py               the form's fields, and how a filled-in form edits config.yaml
   login.py                     the sign-in: the password, its cookie, the token for scripts, and the Origin check
