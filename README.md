@@ -82,7 +82,8 @@ The site is open until you set a password. To set one:
 - Over HTTP the password crosses your network unencrypted. To keep it hidden, sign in over HTTPS, on port 8443.
 - Another app, such as Home Assistant or a script, reads the data with the access token, not the password. Copy
   it from Settings, in the Server tab, and send it as `Authorization: Bearer <token>`. It can read `/history`,
-  `/logs`, `/status` and `/sensor-readings` only. **Replace token** makes a new one: then update each app.
+  `/logs`, `/status`, `/sensor-readings` and `/network.bin` only. `/network.bin` holds the Wi-Fi password, for the
+  terminal install below. **Replace token** makes a new one: then update each app.
 - Behind a reverse proxy, turn on **Reverse proxy** in the Server tab. The server then takes each visitor's address
   from the proxy, for the limit on wrong passwords. If the proxy changes the `Host` header, each save fails until
   the setting is on: then set `reverse_proxy: true` under `server:` in `server/config.yaml`, and run
@@ -108,8 +109,8 @@ later, you must open it and lift the TinyS3 off its strips.
   the server's name.
 - Safari cannot install firmware. From a terminal on macOS or Linux, the same install is
   `curl -O http://<server>:8080/install-firmware.sh`, then `sh install-firmware.sh dock` or
-  `sh install-firmware.sh display`. With a password set, the terminal install cannot get the network settings,
-  and it says it cannot reach the server. Use one of the browsers above.
+  `sh install-firmware.sh display`. With a password set, the script asks for it. To skip the question, set
+  `TOKEN` to the access token from Settings: `TOKEN=<token> sh install-firmware.sh dock`.
 - Behind a reverse proxy that has its own certificate, set the HTTPS port to 0 in Settings and open the page
   through the proxy.
 

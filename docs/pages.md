@@ -131,8 +131,8 @@ The install page, `/web/install`:
   `.css`, `.js` and `.ttf` files under `/web/`, and epd's files under `/static/` and `/install/`. A route not in
   that list needs a sign-in, so a new route stays closed until someone opens it on purpose.
 - **`/network.bin` needs it,** because it holds the Wi-Fi password. The install page still works, since the
-  browser is signed in. epd's `install-firmware.sh` cannot sign in, so with a password set it stops, with
-  "Cannot reach the server".
+  browser is signed in. epd's `install-firmware.sh` asks for the password and posts it to `/web/login`
+  (`login_url`), or sends the access token from `TOKEN`.
 - **A page asks a browser to sign in.** A page visit without a sign-in goes to `/web/login?next=<page>`, and back
   to that page after. `next` must be a path on this site, so the page cannot send a person elsewhere. A script's
   request gets 401 with `{"problem": ...}` instead, which `config.js` and `install-form.js` show after "Not
@@ -148,15 +148,16 @@ The install page, `/web/install`:
   wait 15 minutes from the last, with 429 and Retry-After. Tries while it waits are refused unchecked and do not
   make the wait longer. The count lives in memory, so a restart clears it.
 - **The access token** is for other apps and scripts, so the password stays out of them. It reads `GET /history`,
-  `/logs`, `/status` and `/sensor-readings` only, sent as `Authorization: Bearer <token>`, so a leaked token can
-  change nothing. A request without it gets 401 and `WWW-Authenticate: Bearer`, which no browser answers with a
-  prompt.
+  `/logs`, `/status`, `/sensor-readings` and `/network.bin` only, sent as `Authorization: Bearer <token>`, so a
+  leaked token can change nothing. `/network.bin` is there so that the terminal install can run with no password
+  prompt. It holds the Wi-Fi password, so a leaked token gives that away too, and Settings says so. A request
+  without it gets 401 and `WWW-Authenticate: Bearer`, which no browser answers with a prompt.
 - **There is always one token,** as Sonarr and OctoPrint each have one API key. The server makes it at its first
   start with a password. The Sign-in group shows it behind **Show**, with **Replace token**, which asks first,
   because every app that uses the old token loses access. There is no Delete: Replace ends the old token as a
   Delete would. `data/login.json` keeps the token itself, not a hash, so that the page can show it again. That
-  costs nothing here: whoever can read the file can read the readings beside it, and those are all the token
-  reads.
+  costs nothing here: whoever can read the file can also read `config.yaml` and the readings, and those hold all
+  that the token reads.
 - **Changes from another site.** Each POST, PUT, PATCH and DELETE whose `Origin` is not this server gets 403, with
   a password or without: without the check, a page on another site could post to this one from a visitor's
   browser. A request with no `Origin`, as from a board or curl, passes.

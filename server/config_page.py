@@ -728,7 +728,7 @@ def _recalibrate(a: Airium, state: DockState, report: Report, sheet: bool = Fals
 NO_PASSWORD = (f"No password set. Anyone on your network can change these settings. "
                f"To add one, set {PASSWORD_ENV} on the server and restart it.")
 PASSWORD_SET = f"Sign-in is on. The password comes from {PASSWORD_ENV}."
-TOKEN_USE = "Lets other apps read your data. They cannot change settings."
+TOKEN_USE = "Lets other apps read your data and the Wi-Fi password. They cannot change settings."
 TOKEN_REPLACED = "Token replaced. Update each app that uses the old one."
 REPLACE_TITLE = "Replace the token?"
 REPLACE_LEAD = "Apps that use the old one lose access."

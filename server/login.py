@@ -8,7 +8,7 @@ comes from this site.
 
 With no password set, every route is open. With one, every route needs the
 cookie except the ones the boards use and the files a page loads (is_open);
-the data routes in DATA also take the access token. After TRIES wrong
+the routes in DATA also take the access token. After TRIES wrong
 passwords in a row, an address waits WAIT_S.
 
 Each POST, PUT, PATCH or DELETE whose Origin is another site gets 403, with a
@@ -56,7 +56,7 @@ OPEN_POST = frozenset({"/sensor-readings", "/calibration", "/pair", "/web/login"
 # epd's own files: the static folder, and the install page's scripts.
 OPEN_PREFIXES = ("/static/", "/install/")
 # The routes the access token reads.
-DATA = frozenset({"/history", "/logs", "/status", "/sensor-readings"})
+DATA = frozenset({"/history", "/logs", "/status", "/sensor-readings", "/network.bin"})
 CHANGES = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 FORWARDED = ("X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto")
 

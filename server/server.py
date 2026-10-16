@@ -521,6 +521,7 @@ def main():
             install_boards=INSTALL_BOARDS,
             settings_url="web/config",
             install_url="web/install",
+            login_url="web/login",
             header_prefix="Canary",
             server_version=about.version,
             version_gate=True,

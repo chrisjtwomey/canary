@@ -111,6 +111,12 @@ def test_network_bin_needs_a_sign_in(client):
     assert client.get("/network.bin?product=canary-dock").data == b"ok"
 
 
+def test_the_terminal_install_signs_in_with_the_password_alone(client):
+    rsp = client.post("/web/login", data={"password": PASSWORD})
+    assert rsp.status_code == 303
+    assert client.get("/network.bin?product=canary-dock").data == b"ok"
+
+
 def test_with_no_password_every_route_is_open(tmp_path):
     login = Login("", str(tmp_path / "login.json"))
     client = site(login).test_client()
@@ -242,8 +248,8 @@ def test_the_access_token_reads_the_data(client, login, path):
     assert rsp.data == b"ok"
 
 
-@pytest.mark.parametrize("method, path", [("GET", "/web/config"), ("GET", "/network.bin"),
-                                          ("POST", "/web/config"), ("GET", "/web/")])
+@pytest.mark.parametrize("method, path", [("GET", "/web/config"), ("POST", "/web/config"),
+                                          ("GET", "/web/")])
 def test_the_access_token_opens_nothing_else(client, login, method, path):
     rsp = client.open(path, method=method, headers={"Authorization": f"Bearer {login.token}"})
     assert rsp.status_code == 401
