@@ -945,6 +945,19 @@
     });
   });
 
+  // A form with data-dialog posts only once that dialog is confirmed.
+  all('form[data-dialog]').forEach(function (form) {
+    var dialog = document.getElementById(form.getAttribute('data-dialog'));
+    if (!dialog || !dialog.showModal) return;
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      dialog.showModal();
+    });
+    dialog.addEventListener('close', function () {
+      if (dialog.returnValue === 'confirm') form.submit();
+    });
+  });
+
   all('a.discard').forEach(function (a) {
     a.addEventListener('click', function (e) {
       e.preventDefault();

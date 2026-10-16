@@ -107,6 +107,7 @@ server/
   config_page.py               /web/config: config.yaml as a form in tabs and as text, checked, saved, and restarted on;
                                whether each board runs the saved settings
   config_form.py               the form's fields, and how a filled-in form edits config.yaml
+  login.py                     the sign-in: the password, its cookie, the token for scripts, and the Origin check
   transfer.py                  a store out to a file and back in, and what it holds, for the Storage tab
   board_logs.py                what each board logs over MQTT, for the Logs view
   schedule.py                  the dock's reading slots (schedules.md)

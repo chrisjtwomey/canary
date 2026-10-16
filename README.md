@@ -56,11 +56,31 @@ cd canary
   To build again, restart the server with `docker compose restart`. `docker compose logs -f firmware-builder`
   shows the build.
 - `http://<server>:8080/web/` shows the pages, and `/web/config` is the Settings page. Set your altitude there, in
-  the Server tab, so that the pages show the pressure at sea level. **It has no login: anyone on your network can
-  change the settings.**
-- The readings, board reports, board logs, calibration copies and the HTTPS certificate go in the `canary-data`
-  volume. They stay when Docker recreates the container.
+  the Server tab, so that the pages show the pressure at sea level. **Until you set a password, anyone on your
+  network can see the pages and change the settings.** See [Sign-in](#sign-in).
+- The readings, board reports, board logs, calibration copies, the HTTPS certificate and the sign-in's secret and
+  token go in the `canary-data` volume. They stay when Docker recreates the container.
 - The images follow this repo's `main` branch. Your boards take each new version.
+
+#### Sign-in
+
+The site is open until you set a password. To set one:
+
+1. Beside `docker-compose.yml`, create a file `.env` with the line `CANARY_PASSWORD=<your password>`.
+2. Run `docker compose up -d`.
+
+- Every page under `/web/`, the settings for an install (`/network.bin`) and the data then need the password.
+  The boards need none.
+- A sign-in lasts 30 days. **Sign out** is in the menu. A new password signs out every browser.
+- After 5 wrong passwords, that address waits 15 minutes.
+- Over HTTP the password crosses your network unencrypted. To keep it hidden, sign in over HTTPS, on port 8443.
+- Another app, such as Home Assistant or a script, reads the data with the access token, not the password. Copy
+  it from Settings, in the Server tab, and send it as `Authorization: Bearer <token>`. It can read `/history`,
+  `/logs`, `/status` and `/sensor-readings` only. **Replace token** makes a new one: then update each app.
+- Behind a reverse proxy, turn on **Reverse proxy** in the Server tab. The server then takes each visitor's address
+  from the proxy, for the limit on wrong passwords. If the proxy changes the `Host` header, each save fails until
+  the setting is on: then set `reverse_proxy: true` under `server:` in `server/config.yaml`, and run
+  `docker compose restart`.
 
 ### 2. Install each board's firmware
 
@@ -82,7 +102,8 @@ later, you must open it and lift the TinyS3 off its strips.
   the server's name.
 - Safari cannot install firmware. From a terminal on macOS or Linux, the same install is
   `curl -O http://<server>:8080/install-firmware.sh`, then `sh install-firmware.sh dock` or
-  `sh install-firmware.sh display`.
+  `sh install-firmware.sh display`. With a password set, the terminal install cannot get the network settings,
+  and it says it cannot reach the server. Use one of the browsers above.
 - Behind a reverse proxy that has its own certificate, set the HTTPS port to 0 in Settings and open the page
   through the proxy.
 

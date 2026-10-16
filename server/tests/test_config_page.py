@@ -15,7 +15,9 @@ from flask import Flask
 
 import config_form as cf
 from about import config_version
-from config_page import _bytes, _contents_parts, _since, config_blueprint
+from config_page import (NO_PASSWORD, PASSWORD_SET, REPLACE_LEAD, REPLACE_TITLE, TOKEN_REPLACED,
+                         TOKEN_USE, _bytes, _contents_parts, _since, config_blueprint)
+from login import Login, guard
 from transfer import Corrupt, Held, Overlap, Transfer
 from server import check_config, make_pages
 from tests.html import attr, one
@@ -1206,3 +1208,71 @@ def test_each_group_with_a_heading_says_what_it_is_for_under_it(dock_client):
     page = one(soup, "#panel-display .section .heading")
     assert one(page, ".about").get_text() == "When to change to the next page"
 
+
+
+# ── The Sign-in group ────────────────────────────────────────────────
+
+def login_client(path, tz, login):
+    app = Flask(__name__)
+    app.register_blueprint(config_blueprint(make_pages(tz, width=1280, height=720), path,
+                                            check_config, lambda: None, login=login))
+    guard(app, login)
+    return app.test_client()
+
+
+@pytest.fixture
+def login(tmp_path):
+    return Login("pw", str(tmp_path / "login.json"))
+
+
+@pytest.fixture
+def signed_in(path, tz, login):
+    client = login_client(path, tz, login)
+    client.post("/web/login", data={"password": "pw"})
+    return client
+
+
+def test_with_no_password_the_server_tab_says_anyone_can_change_the_settings(path, tz, tmp_path):
+    client = login_client(path, tz, Login("", str(tmp_path / "login.json")))
+    soup = soup_of(client.get("/web/config"))
+    panel = one(soup, "#panel-server")
+    assert one(panel, "#no-password").text == NO_PASSWORD
+    assert not soup.select("#token-form, #token, #replace-token, .sign-out")
+
+
+def test_with_a_password_the_server_tab_shows_the_token_and_the_menu_sign_out(signed_in, login):
+    rsp = signed_in.get("/web/config")
+    assert rsp.headers["Cache-Control"] == "no-store"
+    soup = soup_of(rsp)
+    panel = one(soup, "#panel-server")
+    assert one(panel, "#password-set").text == PASSWORD_SET
+    token = one(panel, "#access-token")
+    assert (attr(token, "type"), attr(token, "value")) == ("password", login.token)
+    assert token.get("name") is None
+    assert attr(one(panel, "#token .reveal"), "aria-controls") == "access-token"
+    assert one(panel, "#token .help").text == TOKEN_USE
+    button = one(panel, "#token .control button")
+    assert (button.text, attr(button, "form")) == ("Replace token", "token-form")
+    form = one(soup, "#token-form")
+    assert form.find_parent(id="settings-form") is None
+    assert attr(form, "data-dialog") == "replace-token"
+    dialog = one(soup, "#replace-token")
+    assert (one(dialog, "h2").text, one(dialog, ".lead").text) == (REPLACE_TITLE, REPLACE_LEAD)
+    assert [b.text for b in dialog.select("button")] == ["Cancel", "Replace token"]
+    assert one(soup, ".bar .sign-out button").text == "Sign out"
+    assert attr(one(soup, ".bar .sign-out"), "action") == "logout"
+
+
+def test_replace_token_makes_a_new_one_and_says_so_once(signed_in, login):
+    old = login.token
+    rsp = signed_in.post("/web/config", data={"mode": "token"})
+    assert (rsp.status_code, rsp.headers["Location"]) == (303, "config?token=replaced#server")
+    assert login.token != old
+    soup = soup_of(signed_in.get("/web/config?token=replaced"))
+    assert one(soup, "#token .help").text == TOKEN_REPLACED
+    assert attr(one(soup, "#access-token"), "value") == login.token
+    assert one(soup_of(signed_in.get("/web/config")), "#token .help").text == TOKEN_USE
+
+
+def test_a_token_needs_a_password_set(client):
+    assert client.post("/web/config", data={"mode": "token"}).status_code == 404

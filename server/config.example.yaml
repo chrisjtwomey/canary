@@ -4,6 +4,7 @@
 server:
   port: 8080
   https_port: 8443  # the install page needs HTTPS; 0 behind a reverse proxy with a certificate
+  reverse_proxy: false  # true behind a reverse proxy, which then gives each visitor's address
   timezone: Europe/Dublin
   regen_lead_seconds: 60
 

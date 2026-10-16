@@ -100,7 +100,8 @@ class Group:
     """``store`` names the store this group's file holds, for the export row.
     ``action`` names a row after the fields: ``recalibrate``, which acts at
     once rather than saving; ``position``, a grid that sets the group's two
-    alignments together; or ``display``, the size the display reports. ``visual``
+    alignments together; ``display``, the size the display reports; or
+    ``sign-in``, whether a password is set, and the token for scripts. ``visual``
     names a drawing of the group's values that can also set them: ``dial``,
     the day's syncs, ``slot``, the time before one sync, ``start``, the
     minutes after the SCD41 starts, ``panel``, the
@@ -153,7 +154,11 @@ TABS: tuple[Tab, ...] = (
             Field("server.https_port", "HTTPS port", "For the install page. 0 = off.", "int", 8443,
                   minimum=0, maximum=65535,
                   refused="Port and HTTPS port cannot be the same."),
+            Field("server.reverse_proxy", "Reverse proxy",
+                  "Turn on if a proxy such as Caddy or nginx passes requests to this server. "
+                  "Leave off without one.", "bool", False),
         )),
+        Group("Sign-in", about="Who can open this site", fields=(), action="sign-in"),
         Group("Pages", about="When the server draws each page", fields=(
             Field("server.regen_lead_seconds", "Drawing time", "", "int", 120,
                   unit="seconds", minimum=0),

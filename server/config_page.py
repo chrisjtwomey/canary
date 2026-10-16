@@ -12,6 +12,8 @@ save and a restart.
                          mode=restore: config.yaml.bak
                          mode=recalibrate: the dock's SCD41 recalibrated to
                               ppm at its next reading; no action, no restart
+                         mode=token: a new access token in place of the old;
+                              no restart
                          then action=check: whether that would start the server
                               action=review: the same, and what it changes, as JSON
                               action=save: the same check, then the old file kept
@@ -19,8 +21,8 @@ save and a restart.
                               server restarted on it; as JSON, with the
                               config_version /about names once it runs it
 
-Nothing guards these routes yet: anyone who can reach the server can change
-its config.
+With CANARY_PASSWORD set, these routes need a sign-in (login.py); without
+it, anyone who can reach the server can change its config.
 """
 from __future__ import annotations
 
@@ -44,6 +46,7 @@ import dock_settings as ds
 from about import config_version
 from display_settings import DisplaySync
 from html_doc import Html
+from login import PASSWORD_ENV, Login, SignInState, state as sign_in_state
 from metrics import RH_BANDS, TEMP_BANDS, VERDICTS
 from pages.base import EnvPage
 from metrics import age_span
@@ -130,6 +133,7 @@ class View:
     display: dict | None = None     # the display's panel as it reports it: width, height, board
     display_state: DisplayState | None = None
     changes: list[dict] = field(default_factory=list)   # what a check found a save would change
+    sign_in: SignInState | None = None
 
 
 @dataclass
@@ -719,6 +723,38 @@ def _recalibrate(a: Airium, state: DockState, report: Report, sheet: bool = Fals
             a.p(klass="help", id="recalibrate-state", _t=_recalibration_words(state))
 
 
+# What the Sign-in group says, by the state of the sign-in.
+NO_PASSWORD = (f"No password set. Anyone on your network can change these settings. "
+               f"To add one, set {PASSWORD_ENV} on the server and restart it.")
+PASSWORD_SET = f"Sign-in is on. The password comes from {PASSWORD_ENV}."
+TOKEN_USE = "Lets other apps read your data. They cannot change settings."
+TOKEN_REPLACED = "Token replaced. Update each app that uses the old one."
+REPLACE_TITLE = "Replace the token?"
+REPLACE_LEAD = "Apps that use the old one lose access."
+
+
+def _sign_in(a: Airium, state: SignInState, sheet: bool = False) -> None:
+    """Whether a password is set, and the access token, hidden until Show.
+    Replace belongs to the form beside the settings form, as the
+    recalibration's button does."""
+    if not state.on:
+        a.p(klass="help", id="no-password", _t=NO_PASSWORD)
+        return
+    a.p(klass="help", id="password-set", _t=PASSWORD_SET)
+    with a.div(klass="field wide", id="token"):
+        with a.div(klass="head"):
+            a.label(klass="name", for_="access-token", _t="Access token")
+            a.button(type="button", klass="reveal", _t="Show",
+                     **{"aria-controls": "access-token"})
+        if sheet:
+            a.span(klass="leader", **{"aria-hidden": "true"})
+        with a.div(klass="control"):
+            a.button(type="submit", klass="button", form="token-form", _t="Replace token")
+        a.input(type="password", klass="token-value", id="access-token", value=state.token,
+                readonly="readonly", spellcheck="false", autocomplete="off")
+        a.p(klass="help", _t=TOKEN_REPLACED if state.replaced else TOKEN_USE)
+
+
 def _changes_table(a: Airium, changes: list[dict]) -> None:
     """Each change as its setting, what it was and what it becomes."""
     with a.div(klass="changes-box"):
@@ -893,6 +929,8 @@ def _group(a: Airium, g: cf.Group, view: View, images: list[str], locked: bool,
                 _display_size(a, view)
             if g.action == "recalibrate" and view.dock is not None:
                 _recalibrate(a, view.dock, view.report, sheet)
+            if g.action == "sign-in" and view.sign_in is not None:
+                _sign_in(a, view.sign_in, sheet)
 
 
 def _tab_problems(view: View) -> set[str]:
@@ -976,6 +1014,10 @@ def config_html(pages: list[EnvPage], view: View, writable: bool,
                     if view.dock is not None:
                         with a.form(method="post", action="config", id="recalibrate-form"):
                             a.input(type="hidden", name="mode", value="recalibrate")
+                    if view.sign_in is not None and view.sign_in.on:
+                        with a.form(method="post", action="config", id="token-form",
+                                    **{"data-dialog": "replace-token"}):
+                            a.input(type="hidden", name="mode", value="token")
                 with a.form(method="post", action="config", id="yaml-form",
                             **{"data-title": "Save and restart?",
                                "data-confirm": "Save and restart"}):
@@ -987,6 +1029,14 @@ def config_html(pages: list[EnvPage], view: View, writable: bool,
                                    **{"aria-label": "config.yaml", "data-key": "text",
                                       "data-initial": view.file_text})
                         _savebar(a, writable, status, discard=True)
+            if view.sign_in is not None and view.sign_in.on:
+                with a.dialog(id="replace-token", **{"aria-labelledby": "replace-token-title"}):
+                    with a.form(method="dialog"):
+                        a.h2(klass="label", id="replace-token-title", _t=REPLACE_TITLE)
+                        a.p(klass="lead", _t=REPLACE_LEAD)
+                        with a.div(klass="choice"):
+                            a.button(value="cancel", _t="Cancel")
+                            a.button(value="confirm", klass="primary", _t="Replace token")
             with a.dialog(id="review", **{"aria-labelledby": "review-title"}):
                 with a.form(method="dialog"):
                     a.h2(klass="label", id="review-title", _t="Save and restart?")
@@ -1045,7 +1095,8 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
                      dock: ds.BoardSettings | None = None,
                      display: DisplaySync | None = None,
                      boards: Callable[[str], dict | None] | None = None,
-                     take_network: Callable[[str], None] | None = None) -> Blueprint:
+                     take_network: Callable[[str], None] | None = None,
+                     login: Login | None = None) -> Blueprint:
     """The /web/config routes for the file at ``path``.
 
     Args:
@@ -1063,6 +1114,8 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
         take_network: takes a saved file whose changes are all to the
             install page's settings, in place of a restart: they change only
             what an install writes, so the server can take them as it runs.
+        login: the site's sign-in, for what the Server tab says of it and
+            for the token.
     """
     bp = Blueprint("config", __name__, url_prefix="/web/config")
     stores = stores or {}
@@ -1070,6 +1123,11 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
     @bp.record_once
     def cap_uploads(state):
         state.app.config.setdefault("MAX_CONTENT_LENGTH", MAX_UPLOAD)
+
+    @bp.after_request
+    def keep_secrets_out_of_caches(rsp):
+        rsp.headers.setdefault("Cache-Control", "no-store")
+        return rsp
 
     def writable() -> bool:
         return os.access(path, os.W_OK)
@@ -1093,6 +1151,8 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
         board_states(view)
         if boards is not None:
             view.display = display_panel(boards("canary-display"))
+        if login is not None and view.sign_in is None:
+            view.sign_in = sign_in_state(login)
         return config_html(pages, view, writable(), bak()), status
 
     @bp.route("/live", methods=["GET"])
@@ -1182,6 +1242,8 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
         if request.args.get("saved"):
             board_states(view)
             view.status = _saved_words({"dock": view.dock, "display": view.display_state})
+        if request.args.get("token") == "replaced" and login is not None:
+            view.sign_in = replace(sign_in_state(login), replaced=True)
         return page(view)
 
     @bp.route("", methods=["POST"])
@@ -1216,6 +1278,12 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
                 view.report = Report("recalibrate", str(exc), True)
                 return page(view, 400)
             return redirect("config#dock", 303)
+
+        if mode == "token":
+            if login is None or not login.on:
+                abort(404)
+            login.replace_token()
+            return redirect("config?token=replaced#server", 303)
 
         if mode == "restore":
             try:

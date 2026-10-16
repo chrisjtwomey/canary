@@ -198,6 +198,8 @@ Each dock document also carries how its sensors are, as opposed to what they mea
 
 ## Reading them back
 
+With a password set, these routes need a sign-in or the token for scripts ([pages.md](pages.md#the-sign-in)).
+
 `GET /sensor-readings?from=<epoch>&to=<epoch>&device=<device>` gives the stored documents in that window, oldest
 first. By default it gives the last day, and every board unless `device` names one.
 

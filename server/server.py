@@ -37,6 +37,7 @@ from config_page import config_blueprint
 from display_settings import DISPLAY, DisplaySync, display_version
 from dock_settings import DOCK, BoardSettings, DockSettings, load_dock_settings
 from install_page import install_blueprint
+from login import PASSWORD_ENV, Login, guard
 from metrics import COMFORT, Comfort, temp_along_feel
 from off_hours import OffHoursSchedule, splash_when_off
 from pages.air import AirPage
@@ -77,6 +78,9 @@ INSTALL_BOARDS = (
 # The HTTPS port's self-signed certificate, in the data volume, so that a
 # browser that has accepted it keeps it across a redeploy.
 CERTIFICATE_DIR = os.path.join(cwd, "data", "certificate")
+# The cookies' secret and the access token, in the data volume, so that a
+# redeploy keeps every sign-in and the token.
+LOGIN_PATH = os.path.join(cwd, "data", "login.json")
 # The history windows the pages ask for, as history_24h and history_72h.
 HISTORY_HOURS = (24, 72)
 
@@ -254,6 +258,7 @@ class Settings:
     dock_sync: Week
     display_sync: Week
     dock: DockSettings
+    reverse_proxy: bool
 
     @property
     def syncs(self) -> dict[str, Week]:
@@ -337,6 +342,9 @@ def load_settings(config: dict) -> Settings:
     if not core.network.mqtt_host:
         core = dataclasses.replace(core, network=dataclasses.replace(
             core.network, mqtt_host=board_broker(core.mqtt.host)))
+    reverse_proxy = get_prop_by_keys(config, "server", "reverse_proxy", default=False)
+    if not isinstance(reverse_proxy, bool):
+        raise ConfigError("server.reverse_proxy must be true or false")
     return Settings(
         core=core,
         kind=kind,
@@ -355,6 +363,7 @@ def load_settings(config: dict) -> Settings:
         dock_sync=make_dock_sync(config, core.server.timezone),
         display_sync=make_display_sync(config, core.server.timezone),
         dock=load_dock_settings(config),
+        reverse_proxy=reverse_proxy,
     )
 
 
@@ -511,6 +520,11 @@ def main():
     except ValueError as exc:
         log.error(str(exc))
         sys.exit(1)
+    login = Login(os.environ.get(PASSWORD_ENV, ""), LOGIN_PATH)
+    if not login.on:
+        log.warning("no password: anyone who can reach the server can change its settings. "
+                    "Set %s to turn on sign-in", PASSWORD_ENV)
+    guard(server.app, login, settings.reverse_proxy)
     splash_when_off(server.app, off_hours, [p.name for p in pages], splash.name, clock)
     server.app.register_blueprint(web_blueprint(pages, source, logging_on=core.mqtt.enabled))
     server.app.register_blueprint(install_blueprint(
@@ -530,7 +544,7 @@ def main():
                                                    check_config, restart_soon, stores,
                                                    dock=board_settings, display=display_sync,
                                                    boards=reports.device,
-                                                   take_network=take_network))
+                                                   take_network=take_network, login=login))
 
     if args.once or args.only:
         server.regenerate(only=args.only)

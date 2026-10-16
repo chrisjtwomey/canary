@@ -134,6 +134,35 @@ body.web :focus-visible {
   border-bottom-color: var(--ink);
 }
 
+/* Sign out is a form, so that no link from another site can sign a visitor
+   out; its button looks like the links beside it. */
+.bar .sign-out {
+  margin: 0;
+}
+
+.bar .sign-out button {
+  font: inherit;
+  font-size: 17px;
+  color: var(--ink-soft);
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+.bar .sign-out button:hover {
+  color: var(--ink);
+}
+
+.sign-in form {
+  max-width: 360px;
+}
+
+.sign-in .choice {
+  margin-top: 18px;
+}
+
 /* A phone folds the menu to one row: the page showing, a step either side
    of it, and Pages to unfold the rest. The box that unfolds it is hidden,
    as the span switch's radios are. */
@@ -1152,6 +1181,14 @@ html.js .range-panel .panel-name {
 .panel.sheet .field .caution,
 .panel.sheet .field .error {
   grid-column: 1 / -1;
+}
+
+.settings .field .token-value {
+  grid-column: 1 / -1;
+  max-width: none;
+  margin-top: 8px;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 14px;
 }
 
 .panel.sheet input[type="number"],

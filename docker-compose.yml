@@ -2,6 +2,10 @@ services:
   canary-server:
     image: ghcr.io/chrisjtwomey/canary-server:latest
     restart: unless-stopped
+    environment:
+      # The site's password, from .env beside this file. Without one the site
+      # is open to anyone who can reach it. README.md, "Sign-in", says more.
+      CANARY_PASSWORD: ${CANARY_PASSWORD:-}
     ports:
       - "8080:8080"
       # HTTPS, for the install page. The page links to it by this number, so

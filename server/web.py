@@ -29,7 +29,7 @@ from typing import Callable, Iterable
 
 from airium import Airium
 from epd_server.source import DataSource
-from flask import Blueprint, jsonify, request, send_from_directory
+from flask import Blueprint, g, has_request_context, jsonify, request, send_from_directory
 from markupsafe import Markup
 
 from html_doc import Html
@@ -175,7 +175,8 @@ own_version = functools.cache(server_version)
 
 
 def menu_bar(a: Airium, pages: list[EnvPage], browse_href: str, current: str) -> None:
-    """The menu across the top, with this server's version beside the name.
+    """The menu across the top, with this server's version beside the name,
+    and Sign out while the visitor is signed in (login.py).
     ``browse_href`` is how a page link reaches the browse page from here;
     ``current`` names the page or view that is showing."""
     showing = next((p for p in pages if p.name == current), None)
@@ -191,6 +192,9 @@ def menu_bar(a: Airium, pages: list[EnvPage], browse_href: str, current: str) ->
                                     ("config", "Settings")):
                     extra = {"aria-current": "page"} if current == view else {}
                     a.a(klass=f"{view}-link", href=view, _t=words, **extra)
+                if has_request_context() and g.get("signed_in"):
+                    with a.form(method="post", action="logout", klass="sign-out"):
+                        a.button(type="submit", _t="Sign out")
         with a.div(klass="here"):
             if showing is not None:
                 a.button(type="button", klass="step", id="prev", _t="‹",

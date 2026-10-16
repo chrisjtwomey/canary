@@ -34,6 +34,7 @@ While the server runs:
 | `/web/explore` | One measurement over a time window. Drag to move in time. Scroll or pinch to zoom. |
 | `/web/config` | `config.yaml` as a form, in tabs. |
 | `/web/install` | Installs a board's firmware and network settings over USB. |
+| `/web/login` | The sign-in, once `CANARY_PASSWORD` is set. |
 
 The Settings page, `/web/config`:
 
@@ -80,7 +81,8 @@ The Settings page, `/web/config`:
   recreated.
 - The Storage tab downloads each store as a file, one JSON document a line, and takes such a file back. An upload
   adds what is missing, and asks before it replaces a document.
-- The page has no login.
+- The Server tab's Sign-in group says whether a password is set, and shows the access token (below).
+- The page goes out with `Cache-Control: no-store`, because it holds the access token and the Wi-Fi password.
 
 The install page, `/web/install`:
 
@@ -111,6 +113,54 @@ The install page, `/web/install`:
   45 degrees, as a diagram's callout does. The display's ends on its USB port. Beside the list the sketch starts
   level with the fields, in the space beside them. On a narrow screen it sits above the list with each part
   named, because a leader would cross the rows.
+
+### The sign-in
+
+`login.py` puts a sign-in in front of the site once `CANARY_PASSWORD` is set.
+
+- **No password, no sign-in.** Every route is open, as for a new install, so a person can start without a step.
+  The log warns at start, and the Server tab's Sign-in group says that anyone on the network can change the
+  settings.
+- **Which routes need it.** Every route, except the ones the boards use, the sign-in itself and the files a page
+  loads (`login.is_open`): `/`, the page images, `/firmware.bin`, `/firmware.merged.bin`, `/install-firmware.sh`,
+  `GET /about`, `/calibration`, `/board-settings`, `POST /sensor-readings`, `/web/login`, `POST /web/logout`, the
+  `.css`, `.js` and `.ttf` files under `/web/`, and epd's files under `/static/` and `/install/`. A route not in
+  that list needs a sign-in, so a new route stays closed until someone opens it on purpose.
+- **`/network.bin` needs it,** because it holds the Wi-Fi password. The install page still works, since the
+  browser is signed in. epd's `install-firmware.sh` cannot sign in, so with a password set it stops, with
+  "Cannot reach the server".
+- **A page asks a browser to sign in.** A page visit without a sign-in goes to `/web/login?next=<page>`, and back
+  to that page after. `next` must be a path on this site, so the page cannot send a person elsewhere. A script's
+  request gets 401 with `{"problem": ...}` instead, which `config.js` and `install-form.js` show after "Not
+  saved:".
+- **The cookie** lasts 30 days, with HttpOnly and SameSite=Lax. After a sign-in over HTTPS it is also Secure, so
+  it never goes over HTTP, and it has a name of its own (`__Secure-canary-sign-in`): a browser lets no HTTP page
+  set a cookie over a Secure one of the same name, so one name would stop a sign-in over HTTP after one over
+  HTTPS. A sign-in over HTTP works on HTTPS too. Sign out is a form in the menu bar, not a link, so no link on
+  another site can sign a person out.
+- **Its key** is the password together with a random secret in `data/login.json`. A new password signs out every
+  browser. The secret keeps a copied cookie from testing guesses at the password away from the server.
+- **Wrong passwords:** 5 in a row from one address, each within 15 minutes of the one before, make that address
+  wait 15 minutes from the last, with 429 and Retry-After. Tries while it waits are refused unchecked and do not
+  make the wait longer. The count lives in memory, so a restart clears it.
+- **The access token** is for other apps and scripts, so the password stays out of them. It reads `GET /history`,
+  `/logs`, `/status` and `/sensor-readings` only, sent as `Authorization: Bearer <token>`, so a leaked token can
+  change nothing. A request without it gets 401 and `WWW-Authenticate: Bearer`, which no browser answers with a
+  prompt.
+- **There is always one token,** as Sonarr and OctoPrint each have one API key. The server makes it at its first
+  start with a password. The Sign-in group shows it behind **Show**, with **Replace token**, which asks first,
+  because every app that uses the old token loses access. There is no Delete: Replace ends the old token as a
+  Delete would. `data/login.json` keeps the token itself, not a hash, so that the page can show it again. That
+  costs nothing here: whoever can read the file can read the readings beside it, and those are all the token
+  reads.
+- **Changes from another site.** Each POST, PUT, PATCH and DELETE whose `Origin` is not this server gets 403, with
+  a password or without: without the check, a page on another site could post to this one from a visitor's
+  browser. A request with no `Origin`, as from a board or curl, passes.
+- **Behind a reverse proxy** (`server.reverse_proxy`, the Server tab's **Reverse proxy**), Werkzeug's `ProxyFix`
+  takes the visitor's address, scheme and host from `X-Forwarded-For`, `-Proto`, `-Host` and `-Port`. Then the
+  limit counts each visitor apart, the cookie is Secure for an HTTPS visitor, and the Origin check compares with
+  the address the browser used. Off, the server ignores those headers, so nobody can fake an address. A change
+  refused while they are present names the setting, since the person cannot save it from the page then.
 
 ## The pages and the pools
 
