@@ -1354,6 +1354,16 @@ form:empty {
   color: var(--ink-soft);
 }
 
+/* The value the dock still runs: dashed, as the Not synchronized pill is. */
+.field .in-use {
+  margin: 5px 0 0;
+  padding-left: 8px;
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--ink-mid);
+  border-left: 3px dashed var(--ink-mid);
+}
+
 .field .error {
   margin: 6px 0 0;
   padding-left: 8px;

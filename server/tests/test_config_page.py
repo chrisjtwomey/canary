@@ -1382,3 +1382,47 @@ def test_without_a_password_no_board_keys_show_or_change(path, tz, tmp_path):
     rsp = client.post("/web/config", data={"mode": "board", "board": "canary-dock",
                                            "action": "approve"})
     assert rsp.status_code == 404 and keys.board("canary-dock").approved is None
+
+
+def in_use_client(tmp_path, path, tz, runs):
+    """The Dock tab with a 4.5 °C offset saved, and a dock that reports the
+    version ``runs`` gives: the one before the save, or this one."""
+    import dataclasses
+    from dock_settings import BoardSettings, DockSettings, SettingsVersions
+    from epd_server.timeranges import TimeRanges, parse_hhmm
+    from sources.calibration import CalibrationStore
+    from tests.conftest import AT, TZ
+    before = DockSettings()
+    saved = dataclasses.replace(before, scd41_temperature_offset_c=4.5)
+    versions = SettingsVersions(str(tmp_path / "versions.json"))
+    versions.keep(before.version, before.document())
+    version = runs(before, saved).version
+    dock = BoardSettings(saved, TimeRanges([(parse_hhmm("00:00"), 300)], TZ),
+                         CalibrationStore(tmp_path / "calibration.db"), lambda device: {"doc": {"client": {"dock": {"settings": {
+                             "version": version, "refused": []}}}}, "age_s": 60,
+                             "offline": False},
+                         now=lambda: AT, versions=versions)
+    app = Flask(__name__)
+    app.register_blueprint(config_blueprint(make_pages(tz, width=1280, height=720), path,
+                                            check_config, lambda: None, dock=dock))
+    return app.test_client()
+
+
+def test_a_value_the_dock_does_not_run_yet_shows_what_it_runs(tmp_path, path, tz):
+    client = in_use_client(tmp_path, path, tz, lambda before, saved: before)
+
+    panel = one(soup_of(client.get("/web/config")), "#panel-dock")
+
+    lines = panel.select(".in-use")
+    assert [line.get_text() for line in lines] == ["In use: 4.0 °C"]
+    assert lines[0].find_parent(attrs={"data-field": True})["data-field"] == \
+        "dock.scd41.temperature_offset_c"
+    assert client.get("/web/config/live").json["in_use"] == {
+        "dock.scd41.temperature_offset_c": "4.0 °C"}
+
+
+def test_a_dock_that_runs_the_saved_settings_shows_no_in_use_line(tmp_path, path, tz):
+    client = in_use_client(tmp_path, path, tz, lambda before, saved: saved)
+
+    assert one(soup_of(client.get("/web/config")), "#panel-dock").select(".in-use") == []
+    assert client.get("/web/config/live").json["in_use"] == {}

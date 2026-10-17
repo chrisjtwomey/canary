@@ -59,9 +59,9 @@ cd canary
   the Server tab, so that the pages show the pressure at sea level. **Until you set a password, anyone on your
   network can see the pages and change the settings.** See [Sign-in](#sign-in).
 - The readings, board reports, board logs, calibration copies, the HTTPS certificate, the sign-in's secret and
-  token, and the boards' keys go in the `canary-data` volume. They stay when Docker recreates the container. If
-  you delete the volume while a password is set, each board needs its firmware installed again over USB, since the
-  server no longer holds its key.
+  token, the boards' keys and the last settings sent to the dock go in the `canary-data` volume. They stay when
+  Docker recreates the container. If you delete the volume while a password is set, each board needs its firmware
+  installed again over USB, since the server no longer holds its key.
 - The images follow this repo's `main` branch. Your boards take each new version.
 
 #### Sign-in

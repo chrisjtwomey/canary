@@ -1,12 +1,13 @@
 """GET /board-settings: the dock's settings from config.yaml, the light's
 schedule, and a recalibration waiting to run."""
+import dataclasses
 from datetime import datetime
 
 import pytest
 from epd_server.config import ConfigError
 
-from dock_settings import (DOCK, RECALIBRATE_WITHIN_S, BoardSettings, DockSettings,
-                           load_dock_settings)
+from dock_settings import (DOCK, RECALIBRATE_WITHIN_S, VERSIONS_KEPT, BoardSettings, DockSettings,
+                           SettingsVersions, load_dock_settings)
 from epd_server.timeranges import TimeRanges, parse_hhmm
 from server import check_config
 from sources.calibration import CalibrationStore
@@ -375,3 +376,77 @@ def test_a_recalibration_past_the_hour_and_not_run_has_expired(requests):
 @pytest.mark.parametrize("now, slot", [(at(12, 3), "12:05"), (at(1, 10), "01:30")])
 def test_the_next_sync_is_the_next_slot_in_local_time(now, slot, requests):
     assert board(requests=requests, now=now).next_sync() == slot
+
+
+# ── What the dock runs ───────────────────────────────────────────────
+
+OLD = DockSettings()
+NEW = dataclasses.replace(OLD, scd41_temperature_offset_c=4.5, led_brightness_pct=40)
+
+
+def runs(version, health=None, **dock):
+    entry = report(settings={"version": version, "refused": []}, **dock)
+    if health is not None:
+        entry["doc"]["health"] = health
+    return entry
+
+
+def test_the_versions_sent_survive_a_restart_newest_last(tmp_path):
+    path = str(tmp_path / "data" / "versions.json")
+    versions = SettingsVersions(path)
+    for n in range(VERSIONS_KEPT + 2):
+        versions.keep(f"v{n}", {"n": n})
+    versions.keep(f"v{VERSIONS_KEPT + 1}", {"n": "again"})
+
+    again = SettingsVersions(path)
+    assert [k["version"] for k in again.kept] == [f"v{n}" for n in range(2, VERSIONS_KEPT + 2)]
+    assert again.get("v2") == {"n": 2} and again.get("v1") is None
+    assert again.get(f"v{VERSIONS_KEPT + 1}") == {"n": VERSIONS_KEPT + 1}
+
+
+def test_a_damaged_file_of_versions_starts_empty(tmp_path):
+    path = tmp_path / "versions.json"
+    path.write_text("{not json")
+    assert SettingsVersions(str(path)).kept == []
+
+
+def test_each_answer_keeps_its_version(tmp_path, requests):
+    versions = SettingsVersions(str(tmp_path / "versions.json"))
+    BoardSettings(OLD, SYNC, requests, lambda d: None, now=lambda: at(12, 0), versions=versions).answer(
+        {"device": DOCK})
+    assert versions.get(OLD.version) == OLD.document()
+
+
+def test_after_a_save_the_dock_runs_the_version_sent_before_it(tmp_path):
+    versions = SettingsVersions(str(tmp_path / "versions.json"))
+    versions.keep(OLD.version, OLD.document())
+    dock = BoardSettings(NEW, SYNC, None, lambda d: runs(OLD.version), now=lambda: at(12, 0),
+                         versions=versions)
+    assert dock.running() == OLD.document()
+
+
+def test_a_version_the_server_did_not_keep_runs_unknown_settings(tmp_path):
+    dock = BoardSettings(NEW, SYNC, None, lambda d: runs("0badf00d"), now=lambda: at(12, 0),
+                         versions=SettingsVersions(str(tmp_path / "versions.json")))
+    assert dock.running() is None
+    assert board(NEW, report=None).running() is None
+
+
+@pytest.mark.parametrize("health, dock, expected", [
+    ({"scd41": {"offset_c": 3.0}}, {}, ("scd41", "temperature_offset_c", 3.0)),
+    ({"scd41": {"offset_c": 4.0}}, {}, ("scd41", "temperature_offset_c", 4.0)),
+    ({"scd41": {"asc": False}}, {}, ("scd41", "self_calibration", False)),
+    ({"shtc3": {"low_power": True}}, {}, ("shtc3", "low_power", True)),
+    ({}, {"bsec": {"sample_s": 3}}, ("bsec", "sample_s", 3)),
+    ({}, {"bsec": {"sample_s": 0}}, ("bsec", "sample_s", 300)),
+])
+def test_what_the_dock_reads_back_takes_the_place_of_the_version(health, dock, expected):
+    running = board(OLD, report=runs(OLD.version, health, **dock)).running()
+    section, key, value = expected
+    assert running[section][key] == value
+
+
+def test_an_offset_read_back_within_its_rounding_is_the_one_sent():
+    settings = dataclasses.replace(OLD, scd41_temperature_offset_c=4.25)
+    running = board(settings, report=runs(settings.version, {"scd41": {"offset_c": 4.3}})).running()
+    assert running == settings.document()

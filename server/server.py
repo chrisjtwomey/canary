@@ -36,7 +36,7 @@ from board_logs import LogsQuery
 from config_form import twice
 from config_page import config_blueprint
 from display_settings import DISPLAY, DisplaySync, display_version
-from dock_settings import DOCK, BoardSettings, DockSettings, load_dock_settings
+from dock_settings import DOCK, BoardSettings, DockSettings, SettingsVersions, load_dock_settings
 from install_page import install_blueprint
 from login import PASSWORD_ENV, Login, guard
 from metrics import COMFORT, Comfort, temp_along_feel
@@ -84,6 +84,8 @@ CERTIFICATE_DIR = os.path.join(cwd, "data", "certificate")
 LOGIN_PATH = os.path.join(cwd, "data", "login.json")
 # Each board's key, in the data volume for the same reason.
 BOARD_KEYS_PATH = os.path.join(cwd, "data", "board-keys.json")
+# The last settings versions sent to the dock, which a save's restart must keep.
+DOCK_VERSIONS_PATH = os.path.join(cwd, "data", "dock-settings-versions.json")
 # The answers that change a board, which a board with a key takes only signed.
 SIGNED_QUERIES = ("board-settings", "calibration")
 # The history windows the pages ask for, as history_24h and history_72h.
@@ -490,7 +492,8 @@ def main():
     status = StatusSource(reports)
     board_logs = LogStore(store_file(settings.logs_path), keep_days=settings.logs_days)
     logs = LogsQuery(board_logs, tz)
-    board_settings = BoardSettings(settings.dock, dock_sync, calibration, reports.device, now=clock)
+    board_settings = BoardSettings(settings.dock, dock_sync, calibration, reports.device, now=clock,
+                                   versions=SettingsVersions(DOCK_VERSIONS_PATH))
     display_sync = DisplaySync(display_settings, settings.display_sync, reports.device, now=clock)
 
     login = Login(os.environ.get(PASSWORD_ENV, ""), LOGIN_PATH)

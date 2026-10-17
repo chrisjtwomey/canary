@@ -7,6 +7,7 @@ import yaml
 from werkzeug.datastructures import MultiDict
 
 import config_form as cf
+from dock_settings import DockSettings
 from schedule import DEFAULT_PAGE_WEEK
 from server import check_config, load_settings
 
@@ -558,3 +559,24 @@ def test_the_form_names_a_key_written_twice_and_says_to_fix_it_on_the_server():
         cf.apply(TWICE_AT_THE_TOP, as_posted(TWICE_AT_THE_TOP, server__port="8081"))
     assert str(exc.value) == ("calibration appears twice, on lines 1 and 5. "
                               "Delete one in config.yaml on the server: the server uses line 5.")
+
+
+def test_in_use_names_each_value_the_dock_runs_that_differs_in_the_tabs_words():
+    saved = DockSettings()
+    running = dataclasses.replace(saved, scd41_temperature_offset_c=3.5, led_brightness_pct=40,
+                                  bsec_sample_s=3, scd41_self_calibration=False, log_level="info",
+                                  pm_warmup_s=60, led_looks=saved.led_looks[:1])
+
+    words = cf.in_use({"dock": running.document()}, {"dock": saved.document()})
+
+    assert words == {
+        "dock.pm.warmup_s": "60 seconds",
+        "dock.scd41.temperature_offset_c": "3.5 °C",
+        "dock.scd41.self_calibration": "Off",
+        "dock.bsec.sample_s": "Every 3 s",
+        "dock.led.brightness_pct": "40%",
+        "dock.led.looks": words["dock.led.looks"],
+        "dock.log.level": "Info",
+    }
+    assert words["dock.led.looks"].startswith("Booting ") and " · " not in words["dock.led.looks"]
+    assert cf.in_use({"dock": saved.document()}, {"dock": saved.document()}) == {}

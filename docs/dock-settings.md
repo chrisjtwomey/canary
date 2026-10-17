@@ -23,6 +23,14 @@ The server holds the dock's settings: the `dock` block of `config.yaml`, which t
 - The answer carries a version, which is a hash of the settings. The dock reports the version it runs, and any key
   it refused, in its `client` object. The Dock tab says whether the dock has taken the saved settings. The
   Display tab says the same of the display ([schedules.md](schedules.md#the-displays-sync)).
+- Under each Dock tab setting whose value the dock does not run yet, a line says what it runs: "In use: 4.0 °C".
+  A save restarts the server while the dock still runs the version before it, so the server keeps the last 5
+  versions it sent in `data/dock-settings-versions.json` (`SettingsVersions`) and reads the old value from there. Four
+  values come from the dock's own report instead, because the dock reads them back: the SCD41's offset (to
+  0.1 °C) and self-calibration, the SHTC3's low power, and BSEC's sample time. So a sensor that did not take its
+  value shows too. The page's 10 s check updates the lines, so a line goes once the dock takes the value. A
+  version the server did not keep shows no lines. The sync schedule and the light's schedule have no line: the
+  server applies them itself.
 - The dock holds each value to limits of its own. So a value out of range from the server changes nothing.
 - A board that has missed two of its syncs (two slots of its own schedule) is offline. The Boards page marks it.
   The Dock tab greys out its settings and its recalibration until the dock syncs again, because nothing sent then

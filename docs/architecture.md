@@ -105,8 +105,10 @@ server/
   install_page.py              /web/install: epd's install page in this site's layout, with the boards' network
                                settings above the boards
   config_page.py               /web/config: config.yaml as a form in tabs, checked, saved, and restarted on;
-                               whether each board runs the saved settings; the access token and the boards' keys
-  config_form.py               the form's fields, and how a filled-in form edits config.yaml
+                               whether each board runs the saved settings, and what the dock runs in their place;
+                               the access token and the boards' keys
+  config_form.py               the form's fields, how a filled-in form edits config.yaml, and a setting's value
+                               in words
   login.py                     the sign-in: the password, its cookie, the token for scripts, and the Origin check;
                                the boards' keys are epd's BoardKeys, turned on with the password in server.py
   transfer.py                  a store out to a file and back in, and what it holds, for the Storage tab
@@ -116,7 +118,7 @@ server/
   off_hours.py                 the splash screen while the page schedule is off (schedules.md)
   after_reading.py             each page made after the dock's reading at its slot, and the display's wake after
                                that (schedules.md)
-  dock_settings.py             the dock block and GET /board-settings (dock-settings.md)
+  dock_settings.py             the dock block, GET /board-settings, and the last versions sent (dock-settings.md)
   display_settings.py          whether the display runs the saved display and image blocks (schedules.md)
   sources/                     the mock room, readings ingest, calibration store, device status, the corrections
                                the pages see: sea-level pressure, and no IAQ below accuracy 2

@@ -1454,8 +1454,9 @@ def _with_words(cfg: dict) -> dict:
     return {**cfg, "dock": dock, "display": display}
 
 
-def changes(old: dict, new: dict) -> list[dict[str, str]]:
-    """Each setting that differs from ``old`` to ``new``, in words, in the form's order."""
+def _differences(old: dict, new: dict) -> list[tuple[tuple, Field | None, Any, Any]]:
+    """Each setting that differs from ``old`` to ``new``, in the form's order:
+    its path, its field, and both values as the words take them."""
     old, new = _with_words(old), _with_words(new)
     a, b = _flat(old), _flat(new)
     order = {f.key: i for i, f in enumerate(FIELDS)}
@@ -1470,6 +1471,27 @@ def changes(old: dict, new: dict) -> list[dict[str, str]]:
             before, after = (_unit_words(f, v) for v in (before, after))
         if f is not None and f.kind == "stops":
             before, after = (dict(f.choices).get(str(v), v) for v in (before, after))
-        out.append((order.get(f.key, len(order)) if f else len(order),
-                    {"name": name_of(path), "old": _words(before), "new": _words(after)}))
-    return [c for _, c in sorted(out, key=lambda x: x[0])]
+        out.append((order.get(f.key, len(order)) if f else len(order), path, f, before, after))
+    return [(path, f, before, after) for _, path, f, before, after in
+            sorted(out, key=lambda x: x[0])]
+
+
+def changes(old: dict, new: dict) -> list[dict[str, str]]:
+    """Each setting that differs from ``old`` to ``new``, in words, in the form's order."""
+    return [{"name": name_of(path), "old": _words(before), "new": _words(after)}
+            for path, _, before, after in _differences(old, new)]
+
+
+def in_use(running: dict, saved: dict) -> dict[str, str]:
+    """Each field whose value in ``running`` differs from ``saved``, keyed by
+    the field: the running value in words, with its unit, as "4.0 °C"."""
+    out = {}
+    for _, f, before, _ in _differences(running, saved):
+        if f is None:
+            continue
+        words = dict(f.choices).get(str(before)) if f.kind == "choice" else None
+        words = words or _words(before)
+        if f.unit and f.scale == 1 and f.kind in ("int", "number"):
+            words += f.unit if f.unit == "%" else f" {f.unit}"
+        out[f.key] = words[:1].upper() + words[1:]
+    return out

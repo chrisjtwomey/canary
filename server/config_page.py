@@ -150,6 +150,7 @@ class DockState:
     expired: dict | None = None     # a recalibration that lapsed before the dock ran it
     next_sync: str = ""             # the local time of its next slot, HH:MM
     light: str | None = None        # what its light showed at its last report
+    in_use: dict[str, str] = field(default_factory=dict)   # field key: the value it runs, in words
 
 
 def display_panel(entry: dict | None) -> dict | None:
@@ -180,9 +181,11 @@ def display_state(display: DisplaySync) -> DisplayState:
 def dock_state(dock: ds.BoardSettings) -> DockState:
     applied, refused = dock.applied()
     offline, age = dock.offline()
+    running = dock.running()
+    in_use = cf.in_use({"dock": running}, {"dock": dock.settings.document()}) if running else {}
     return DockState(applied, refused, dock.pending(), dock.last_recalibration(),
                      offline=offline, age_s=age, expired=dock.expired(),
-                     next_sync=dock.next_sync(), light=dock.light())
+                     next_sync=dock.next_sync(), light=dock.light(), in_use=in_use)
 
 
 def file_view(text: str) -> View:
@@ -470,6 +473,9 @@ def _field(a: Airium, f: cf.Field, view: View, images: list[str], heading: str,
             _control(a, f, view, env, locked)
         if f.help and f.kind not in cf.ROWS:
             a.p(klass="help", _t=f.help)
+        running = view.dock.in_use.get(f.key) if view.dock else None
+        if running:
+            a.p(klass="in-use", _t=f"In use: {running}")
         if f.caution:
             # config.js shows it while the value is below data-below.
             shown = f.cautions(env if env is not None else view.values.get(f.key))
@@ -1224,7 +1230,7 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
             a = Html()
             _settings_line(a, state, "dock")
             answer.update(state=str(a), recalibration=_recalibration_words(state),
-                          offline=state.offline, light=state.light)
+                          offline=state.offline, light=state.light, in_use=state.in_use)
         if display is not None:
             a = Html()
             _settings_line(a, display_state(display), "display")

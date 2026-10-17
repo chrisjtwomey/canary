@@ -79,6 +79,9 @@ The Settings page, `/web/config`:
 - After a save, the save bar names each board that has yet to take the new settings, and when: "Saved. The dock
   takes the new settings at 17:30, the display at 17:45." The Dock and Display tabs each say whether that board
   runs the saved settings ([dock-settings.md](dock-settings.md), [schedules.md](schedules.md#the-displays-sync)).
+  Under each dock setting that the dock does not run yet, "In use: 4.0 °C" says what it runs. `GET /web/config/live`
+  carries these lines as `in_use`, and `config.js` updates them every 10 s
+  ([dock-settings.md](dock-settings.md#how-the-dock-takes-them)).
 - When a container has the file mounted alone, the `.bak` stays in the container. It goes when the container is
   recreated.
 - The Storage tab downloads each store as a file, one JSON document a line, and takes such a file back. An upload

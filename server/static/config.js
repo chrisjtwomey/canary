@@ -1002,6 +1002,28 @@
       && (!ppm || ppm.value === ppm.defaultValue);
   }
 
+  // The line under each Dock tab field whose value the dock does not run yet.
+  function showInUse(inUse) {
+    var panel = document.getElementById('panel-dock');
+    if (!panel) return;
+    panel.querySelectorAll('[data-field]').forEach(function (field) {
+      var words = inUse[field.getAttribute('data-field')];
+      var line = field.querySelector(':scope > .in-use');
+      if (!words) {
+        if (line) line.remove();
+        return;
+      }
+      if (!line) {
+        line = document.createElement('p');
+        line.className = 'in-use';
+        var help = field.querySelector(':scope > .help');
+        if (help) help.after(line);
+        else field.appendChild(line);
+      }
+      line.textContent = 'In use: ' + words;
+    });
+  }
+
   function live() {
     if (document.hidden || saving) return;
     fetch('config/live', { cache: 'no-store' })
@@ -1019,6 +1041,7 @@
         if (line) line.textContent = s.recalibration;
         var preview = document.getElementById('visual-led');
         if (preview && s.light && !s.offline) preview.setAttribute('data-light', s.light);
+        if (s.in_use) showInUse(s.in_use);
         if (s.offline !== locked && untouched()) {
           leaving = true;
           location.reload();

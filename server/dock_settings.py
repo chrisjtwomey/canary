@@ -18,12 +18,15 @@ light is dark until the next reading, and a recalibration waiting to run.
 
 The dock reports what it applied in its client status's ``dock`` block, as
 ``settings`` with the version and any keys it refused, and its last
-recalibration as ``recalibrated``.
+recalibration as ``recalibrated``. The server keeps the last versions it
+sent (SettingsVersions), so the Dock tab can show the value the dock runs beside
+one saved since.
 """
 from __future__ import annotations
 
 import hashlib
 import json
+import os
 import time
 from dataclasses import dataclass
 from datetime import datetime, time as clock_time
@@ -108,6 +111,16 @@ RECALIBRATE_MAX_PPM = 2000
 # A recalibration the dock has not run within this is dropped: the air it
 # was meant for has gone.
 RECALIBRATE_WITHIN_S = 3600
+# The settings versions kept: the dock runs the newest it took, which is
+# one of the last few sent unless it has been offline through several saves.
+VERSIONS_KEPT = 5
+# What the dock reads back from its sensors, and the setting each one is.
+READ_BACK = ((("health", "scd41", "offset_c"), ("scd41", "temperature_offset_c")),
+             (("health", "scd41", "asc"), ("scd41", "self_calibration")),
+             (("health", "shtc3", "low_power"), ("shtc3", "low_power")),
+             (("client", "dock", "bsec", "sample_s"), ("bsec", "sample_s")))
+# The offset comes back rounded to 0.1 °C.
+OFFSET_READ_BACK_C = 0.05
 
 
 @dataclass(frozen=True)
@@ -286,6 +299,45 @@ def check_ppm(ppm) -> int:
     return value
 
 
+class SettingsVersions:
+    """The last VERSIONS_KEPT settings documents sent to the dock, by version, in
+    a JSON file: a save restarts the server, and the dock runs the version
+    from before it until its next sync."""
+
+    def __init__(self, path: str):
+        self.path = path
+        try:
+            with open(path) as f:
+                kept = json.load(f)
+        except (OSError, ValueError):
+            kept = []
+        self.kept: list[dict] = [k for k in kept if isinstance(k, dict)
+                                 and isinstance(k.get("version"), str)] \
+            if isinstance(kept, list) else []
+
+    def keep(self, version: str, document: dict) -> None:
+        if self.kept and self.kept[-1]["version"] == version:
+            return
+        self.kept = [k for k in self.kept if k["version"] != version]
+        self.kept = (self.kept + [{"version": version, "document": document}])[-VERSIONS_KEPT:]
+        os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
+        part = self.path + ".part"
+        with open(part, "w") as f:
+            json.dump(self.kept, f)
+        os.replace(part, self.path)
+
+    def get(self, version: str) -> dict | None:
+        return next((k["document"] for k in self.kept if k["version"] == version), None)
+
+
+def _at(doc: Any, path: tuple) -> Any:
+    for key in path:
+        if not isinstance(doc, dict) or key not in doc:
+            return None
+        doc = doc[key]
+    return doc
+
+
 class BoardSettings:
     """The answer to ``GET /board-settings``, and what the Config page says
     about it.
@@ -297,16 +349,18 @@ class BoardSettings:
         reported: what the server knows of a device, as DeviceReports.device
             gives it, or None.
         now: the clock, for tests.
+        versions: where the versions sent to the dock are kept, for running().
     """
 
     def __init__(self, settings: DockSettings, sync: Week, requests,
                  reported: Callable[[str], dict | None],
-                 now: Callable[[], float] = time.time):
+                 now: Callable[[], float] = time.time, versions: SettingsVersions | None = None):
         self.settings = settings
         self.sync = sync
         self.requests = requests
         self.reported = reported
         self.now = now
+        self.versions = versions
 
     def answer(self, args: dict) -> dict:
         """The GET /board-settings handler.
@@ -320,6 +374,8 @@ class BoardSettings:
         if device != DOCK:
             raise ValueError(f"{device} has no settings")
         doc: dict[str, Any] = {"version": self.settings.version, **self.settings.document()}
+        if self.versions is not None:
+            self.versions.keep(self.settings.version, self.settings.document())
         doc["led"] = {**doc["led"], "dark": self.dark()}
         pending = self.pending()
         if pending is not None:
@@ -394,6 +450,36 @@ class BoardSettings:
             ValueError: ``ppm`` is out of range.
         """
         return self.requests.request(DOCK, "scd41", check_ppm(ppm), int(self.now()))
+
+    def running(self) -> dict | None:
+        """The settings the dock runs, as a document: those of the version it
+        reports, with what it reads back from its sensors in their place.
+        None before it reports, or when the server kept no copy of its version."""
+        version = _at(self._dock(), ("settings", "version"))
+        if version == self.settings.version:
+            doc = self.settings.document()
+        elif isinstance(version, str) and self.versions is not None:
+            doc = self.versions.get(version)
+        else:
+            doc = None
+        if doc is None:
+            return None
+        doc = json.loads(json.dumps(doc))
+        report = self._entry().get("doc") or {}
+        for source, setting in READ_BACK:
+            value, section = _at(report, source), doc.get(setting[0])
+            if value is None or not isinstance(section, dict) or setting[1] not in section:
+                continue
+            ran = section[setting[1]]
+            if setting == ("scd41", "temperature_offset_c"):
+                if isinstance(value, (int, float)) and abs(value - ran) > OFFSET_READ_BACK_C:
+                    section[setting[1]] = value
+            elif setting == ("bsec", "sample_s"):
+                if isinstance(value, int) and value > 0:
+                    section[setting[1]] = value
+            elif isinstance(value, bool):
+                section[setting[1]] = value
+        return doc
 
     def applied(self) -> tuple[bool | None, list[str]]:
         """Whether the dock runs these settings, None when it has not said,
