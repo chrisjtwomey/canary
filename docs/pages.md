@@ -274,7 +274,7 @@ The `display` block in `config.yaml`:
   threshold, the Dock tab's setting, or changing fast, as its delta page judges a change. Temperature and humidity
   count as over outside the comfort settings' acceptable range; pressure only by a fast change. Close to a
   threshold is not urgent: on a week of a real room that rule alone made something urgent at 59 % of slots,
-  mostly humidity, and the pages' guide lines already show it. Over and fast alone came to 22 %.
+  mostly humidity, and the pages' guide lines already show it. Over and fast alone came to 21 %.
   - The main page comes first for a threshold, the delta page for a fast change, then the other, then the trace.
     A fast change in humidity starts on the main page, since the Comfort delta page shows the temperature.
   - Urgent measurements take turns, over before fast, and one page of the schedule's own follows each full turn.
