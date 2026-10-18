@@ -116,6 +116,7 @@ server/
   schedule.py                  the dock's reading slots (schedules.md)
   broker.py                    the MQTT broker the boards get when config.yaml names none for them
   off_hours.py                 the splash screen while the page schedule is off (schedules.md)
+  urgency.py                   a measurement's pages first while it is over its limit or changing fast (pages.md)
   after_reading.py             each page made after the dock's reading at its slot, and the display's wake after
                                that (schedules.md)
   dock_settings.py             the dock block, GET /board-settings, and the last versions sent (dock-settings.md)

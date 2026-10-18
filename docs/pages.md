@@ -42,7 +42,7 @@ The Settings page, `/web/config`:
   fields, so the text had no job left. A key with no field, such as `source.kind`, a file the form cannot read,
   and an edit the form refuses are fixed in `config.yaml` on the server, and the page's message says so.
 - The Display tab holds the `display` and `image` blocks: the page schedule, the sync, the page sets (the
-  `display.pools` key), the image's size and its page area. They are one tab because they are the settings the
+  `display.pools` key) with **Prioritise alerts**, the image's size and its page area. They are one tab because they are the settings the
   display takes at its sync.
 - A warm-up trades accuracy for time or power, so it has a recommended value: the particle fan's is 35 s, the
   SCD41's is 3 minutes. The group's drawing marks it with a dashed line, "recommended", and a line under the field
@@ -264,10 +264,27 @@ The `display` block in `config.yaml`:
 
 - `pools` is what the display can show: named lists of pages. Each pool shows its pages in turn, from a random start
   that moves every `reshuffle_hours`. The clock seeds the random start, so a restart changes nothing.
-- `schedule` is when. At each slot of its `week`, the display shows the next pool in `order`. Each group of days has
+- `schedule` is when. At each slot of its `week`, the display shows the next pool in `order`, unless a
+  measurement is urgent (`prioritise_alerts`, below). Each group of days has
   its own time ranges, and each range has an interval ([schedules.md](schedules.md)). While a range is off, the
   display shows the splash screen, which is in no pool.
 - To keep a pool off the panel, leave it out of `order`.
+- `prioritise_alerts`, on by default (the Display tab's **Prioritise alerts**), shows a measurement's pages first
+  while it needs attention (`server/urgency.py`). A measurement is urgent when it is at or over its alert
+  threshold, the Dock tab's setting, or changing fast, as its delta page judges a change. Temperature and humidity
+  count as over outside the comfort settings' acceptable range; pressure only by a fast change. Close to a
+  threshold is not urgent: on a week of a real room that rule alone made something urgent at 59 % of slots,
+  mostly humidity, and the pages' guide lines already show it. Over and fast alone came to 22 %.
+  - The main page comes first for a threshold, the delta page for a fast change, then the other, then the trace.
+    A fast change in humidity starts on the main page, since the Comfort delta page shows the temperature.
+  - Urgent measurements take turns, over before fast, and one page of the schedule's own follows each full turn.
+    So a long alert keeps 3 slots in 4, and the rest of the panel still shows. The turn is kept in memory: a
+    restart, or a change in what is urgent, starts it again. After an alert the schedule's own rotation carries
+    on from the clock, so the pages it would have shown meanwhile are skipped.
+  - Only pages in the pools in `order` show, and the splash while the schedule is off is never replaced.
+  - The wake times do not change. epd asks `choose_page` for each wake's page just before it makes it, 10 s
+    after the dock's reading at that slot, so the choice sees that reading. The display fetches the page that
+    `EPD-Next-URL` named and gets the urgent page in its place.
 - To check pages on the panel quickly, set the page schedule to one range of `every: 60`, and restart the server.
 
 ## Add a page

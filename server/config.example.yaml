@@ -33,6 +33,7 @@ display:
     reshuffle_hours: 3
   sync:             # when the display sends its state and takes any update, beside each page it fetches
     every: 1800     # seconds, on the wall clock from midnight; 0 for only beside each page
+  prioritise_alerts: true   # a measurement over its limit or changing fast shows its pages first
 
 image:
   width: 1280

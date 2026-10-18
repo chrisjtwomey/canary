@@ -41,6 +41,7 @@ from install_page import install_blueprint
 from login import PASSWORD_ENV, Login, guard
 from metrics import COMFORT, Comfort, temp_along_feel
 from off_hours import OffHoursSchedule, splash_when_off
+from urgency import Prioritiser
 from pages.air import AirPage
 from pages.breathe import BreathePage
 from pages.comfort import ComfortPage
@@ -266,6 +267,7 @@ class Settings:
     display_sync: Week
     dock: DockSettings
     reverse_proxy: bool
+    prioritise_alerts: bool
 
     @property
     def syncs(self) -> dict[str, Week]:
@@ -312,13 +314,17 @@ def load_comfort(config: dict) -> Comfort:
     return c
 
 
+# The keys of the display block that are canary's own, which epd's would refuse.
+DISPLAY_KEYS_OF_OURS = ("sync", "prioritise_alerts")
+
+
 def epd_config(config: dict) -> dict:
-    """``config`` as epd reads it: without ``display.sync``, which is canary's
-    own and which epd's display block would refuse."""
+    """``config`` as epd reads it: without DISPLAY_KEYS_OF_OURS."""
     display = config.get("display")
-    if not isinstance(display, dict) or "sync" not in display:
+    if not isinstance(display, dict) or not set(display) & set(DISPLAY_KEYS_OF_OURS):
         return config
-    return {**config, "display": {k: v for k, v in display.items() if k != "sync"}}
+    return {**config, "display": {k: v for k, v in display.items()
+                                  if k not in DISPLAY_KEYS_OF_OURS}}
 
 
 def load_settings(config: dict) -> Settings:
@@ -352,6 +358,9 @@ def load_settings(config: dict) -> Settings:
     reverse_proxy = get_prop_by_keys(config, "server", "reverse_proxy", default=False)
     if not isinstance(reverse_proxy, bool):
         raise ConfigError("server.reverse_proxy must be true or false")
+    prioritise_alerts = get_prop_by_keys(config, "display", "prioritise_alerts", default=True)
+    if not isinstance(prioritise_alerts, bool):
+        raise ConfigError("display.prioritise_alerts must be true or false")
     return Settings(
         core=core,
         kind=kind,
@@ -371,6 +380,7 @@ def load_settings(config: dict) -> Settings:
         display_sync=make_display_sync(config, core.server.timezone),
         dock=load_dock_settings(config),
         reverse_proxy=reverse_proxy,
+        prioritise_alerts=prioritise_alerts,
     )
 
 
@@ -501,6 +511,17 @@ def main():
         log.warning("no password: anyone who can reach the server can change its settings. "
                     "Set %s to turn on sign-in", PASSWORD_ENV)
     board_keys = BoardKeys(BOARD_KEYS_PATH, FIRMWARE_PRODUCTS)
+    prioritiser = None
+    if settings.prioritise_alerts:
+        fresh = make_source(settings.seed, clock, reports, settings.altitude_m, store)
+
+        def newest() -> tuple[dict, list[dict]]:
+            fresh.invalidate()
+            data = fresh.datasets()
+            return data["latest"](), data["history_24h"]()
+
+        prioritiser = Prioritiser(newest, core.server.schedule.pages(), settings.dock,
+                                  settings.comfort, keep={splash.png_filename})
     try:
         server = DisplayServer(
             pages=[*pages, splash],
@@ -533,6 +554,7 @@ def main():
             board_keys=board_keys,
             require_signatures=login.on,
             signed_queries=SIGNED_QUERIES,
+            choose_page=prioritiser.choose if prioritiser else None,
         )
     except ValueError as exc:
         log.error(str(exc))

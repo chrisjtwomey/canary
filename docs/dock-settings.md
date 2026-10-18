@@ -9,7 +9,8 @@ The server holds the dock's settings: the `dock` block of `config.yaml`, which t
 - The SCD41's temperature offset and self-calibration.
 - The SHTC3's low-power mode.
 - BSEC's sample rate.
-- The limits of poor air for CO₂, fine dust and IAQ.
+- The limits of poor air for CO₂, fine dust and IAQ. The display's urgent pages use them too
+  ([pages.md](pages.md#the-pages-and-the-pools)).
 - The LED's brightness, smoothness, schedule and looks ([led.md](led.md)).
 - The dock's log level.
 

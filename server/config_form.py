@@ -214,6 +214,8 @@ TABS: tuple[Tab, ...] = (
         )),
         Group("Page sets", about="The pages to show, in groups taken in turn", fields=(
             Field("display.pools", "Page sets", "Drag to reorder.", "pools", env=False),
+            Field("display.prioritise_alerts", "Prioritise alerts",
+                  "Shows fast changing or alerting measurements first.", "bool", True, env=False),
         )),
         Group("Size", about="The size of the image the display shows", fields=(
             Field("image.width", "Width", "", "int", 1280, unit="px",

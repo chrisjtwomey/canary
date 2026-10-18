@@ -31,6 +31,8 @@ images, and a `schedule` of `type: times` or `type: timeranges`. CANARY uses `ti
   This is because some clocks change at 01:00: in spring that hour does not happen, and in autumn it happens twice.
 - The page's turn through the pools is counted over the week, from the slots of the days before. So it continues
   from one day into the next, whatever each day holds.
+- While a measurement is over its alert threshold or changing fast, its pages take a slot's place, and the slot's
+  time stays (`prioritise_alerts`, [pages.md](pages.md#the-pages-and-the-pools)).
 
 The Display tab of `/web/config` edits the week beside a dial of the day:
 
