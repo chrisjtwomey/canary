@@ -541,13 +541,13 @@ static void runRecalibration(uint32_t id, uint16_t ppm) {
     logSensorChanges();
 }
 
-static void heardFrom(const PageResponse& rsp, uint32_t atMs, bool schedule);
+static void heardFrom(const ServerResponse& rsp, uint32_t atMs, bool schedule);
 
 // The server's settings, applied, and its recalibration, run. A failed
 // request keeps what the dock runs.
 static void fetchSettings() {
     if (!settingsURL[0]) return;
-    PageResponse rsp = {};
+    ServerResponse rsp = {};
     int32_t size = sizeof(settingsText) - 1;
     uint8_t* body = downloadSigned(settingsURL, clientUserAgent(CLIENT_NAME), &size, &rsp);
     heardFrom(rsp, millis(), false);
@@ -622,11 +622,11 @@ static bool           waitForNextReading = false;
 // the schedule.
 class ReadingsPoster : public IPoster {
 public:
-    PageResponse heard = {};
+    ServerResponse heard = {};
     uint32_t     heardAtMs = 0;
 
     int post(const char* request) override {
-        PageResponse rsp = {};
+        ServerResponse rsp = {};
         const int code = postJson(readingsURL, clientUserAgent(CLIENT_NAME), request, &rsp);
         if (rsp.serverEpoch) {
             heard = rsp;
@@ -644,7 +644,7 @@ static char stampOut[sizeof(body)];
 // What a response said about the time, and, for a readings post, about the
 // next slot. The first time sets the boot epoch, stamps the readings taken
 // before it and sets the clock the log lines show.
-static void heardFrom(const PageResponse& rsp, uint32_t atMs, bool schedule) {
+static void heardFrom(const ServerResponse& rsp, uint32_t atMs, bool schedule) {
     if (!rsp.serverEpoch) return;
     const bool first = !serverClock.known();
     portENTER_CRITICAL(&clockLock);
@@ -683,7 +683,7 @@ static void askForTime(uint32_t nowMs) {
     if (asked && nowMs - askedAtMs < kAskForTimeEveryMs) return;
     asked = true;
     askedAtMs = nowMs;
-    PageResponse rsp = {};
+    ServerResponse rsp = {};
     int32_t size = 2048;
     free(downloadFile(aboutURL, clientUserAgent(CLIENT_NAME), &size, &rsp));
     heardFrom(rsp, millis(), false);
@@ -790,7 +790,7 @@ static void sendCalibration() {
     if (!withMember(device, "calibration", calibration, calibrationBody, sizeof(calibrationBody))) {
         return;
     }
-    PageResponse rsp = {};
+    ServerResponse rsp = {};
     const int code = postJson(calibrationURL, clientUserAgent(CLIENT_NAME), calibrationBody, &rsp);
     heardFrom(rsp, millis(), false);
     switch (postResult(code)) {
@@ -828,7 +828,7 @@ static void updateProgress(int done, int total) {
 // Not while on trial, and not while readings are queued, since a restart
 // empties the queue: unless the server is refusing them for this board's
 // version, when nothing will drain it and the update is what fixes that.
-static void takeOffer(const PageResponse& rsp, bool refusedForVersion) {
+static void takeOffer(const ServerResponse& rsp, bool refusedForVersion) {
     if (trial.pending()) return;
     if (queue->count() > 0 && !refusedForVersion) return;
     const char* rejected = otaRejectedVersion();
@@ -855,8 +855,8 @@ static void sendQueued() {
         return;
     }
     const SendResult r = sendBatch(*queue, readingsPoster, kBatchDocs, batch, batchBytes);
-    const PageResponse heard = readingsPoster.heard;
-    readingsPoster.heard = PageResponse();
+    const ServerResponse heard = readingsPoster.heard;
+    readingsPoster.heard = ServerResponse();
     heardFrom(heard, readingsPoster.heardAtMs, true);
     const unsigned left = (unsigned)queue->count();
     if (r.dropped) {

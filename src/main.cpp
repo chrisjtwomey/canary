@@ -52,9 +52,9 @@ ClientConfig builtInSettings();
 static InkplateBoard inkplateBoard;
 
 static const uint8_t  kRotation = 0;             // landscape, as the board comes: the USB-C port on the right
-// Buffer size when the server sends no Content-Length. An eight-grey
-// 1280x720 PNG is under 200 KB.
-static const int32_t  kDownloadFallbackBytes = 512 * 1024;
+// The most a page download accepts. An eight-grey 1280x720 PNG is under
+// 200 KB.
+static const int32_t  kPageLimitBytes = 512 * 1024;
 // A shorter wait is spent awake: a wake costs a boot and Wi-Fi.
 static const uint32_t kShortestSleepS = 10;
 static const uint32_t kWifiRetryS = 30;
@@ -154,7 +154,7 @@ static bool drawFetchedPage() {
 
 static bool drawVersionNotice() {
     releaseImage();
-    const PageResponse& rsp = fetched->response;
+    const ServerResponse& rsp = fetched->response;
     const bool offered = updateOffered(CLIENT_VERSION, rsp.firmwareVersion, rsp.firmwareURL,
                                        otaRejectedVersion());
     return showVersionNotice(CLIENT_VERSION, rsp.serverVersion, offered);
@@ -179,7 +179,7 @@ static void fetchSucceeded() {
     }
 }
 
-static void takeOffer(const PageResponse& rsp) {
+static void takeOffer(const ServerResponse& rsp) {
     beginUpdateProgress(rsp.firmwareVersion);
     // Mains power, so no battery to wait for.
     takeOfferedUpdate(rsp, clientUserAgent(epdBoard().deviceName()), 100, 0, showUpdateProgress);
@@ -200,7 +200,7 @@ static void fetchAndDraw() {
     // One try each wake: a failure backs off to a later one.
     const char* errMsg = nullptr;
     PageFetch page = {};
-    page.length = kDownloadFallbackBytes;
+    page.length = kPageLimitBytes;
     const char* url = nextURL[0] ? nextURL : config.serverURL;
 
     if (!fetchPage(url, clientUserAgent(epdBoard().deviceName()), 0, &page, &errMsg)) {
@@ -257,8 +257,8 @@ static ClientStatus clientStatus() {
 // The display's own state, with no readings round it, and what the server
 // answers: the next sync, and any update on offer. Nothing is held for a
 // retry: the next wake's report says the same things, fresher.
-static PageResponse postStatus() {
-    PageResponse rsp = {};
+static ServerResponse postStatus() {
+    ServerResponse rsp = {};
     char doc[64];
     snprintf(doc, sizeof(doc), "{\"ts\":%lu,\"device\":\"%s\"}", (unsigned long)epochNow(), CLIENT_NAME);
     if (!clientStatusJson(clientStatus(), clientJson, sizeof(clientJson)) ||
@@ -283,7 +283,7 @@ static void wake() {
     const bool page = pageDue(plan, epochNow());
     if (page) fetchAndDraw();
 
-    const PageResponse rsp = postStatus();
+    const ServerResponse rsp = postStatus();
     keepServerTime(rsp);
     synced(plan, epochNow(), rsp.nextSensorPollSeconds);
     if (!startedAt && rsp.serverEpoch) startedAt = rsp.serverEpoch - millis() / 1000;
