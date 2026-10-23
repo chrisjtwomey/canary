@@ -14,7 +14,7 @@ ClientConfig builtInSettings() {
     cfg.defaultRefreshSeconds = 300;
     cfg.wifiSSID = "XXXX";
     cfg.wifiPass = "XXXX";
-    cfg.wifiRetries = 10;
+    cfg.wifiConnectTimeoutSeconds = 10;
     cfg.mqttEnabled = false;
     cfg.mqttBroker = "XXXX";
     cfg.mqttPort = 1883;

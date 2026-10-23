@@ -47,7 +47,7 @@ static void drawLogo() {
     IBoard& board = epdBoard();
     board.setBlackAndWhite(true);
     board.clearDisplay();
-    if (!board.drawPngFromBuffer((uint8_t*)splashPng, (int32_t)(splashPngEnd - splashPng), 0, 0, false, false))
+    if (!board.drawPngFromBuffer(splashPng, (int32_t)(splashPngEnd - splashPng), 0, 0, PngDraw::Plain))
         log(LOG_ERROR, "the splash image would not decode");
     noticeReplaced();
 }

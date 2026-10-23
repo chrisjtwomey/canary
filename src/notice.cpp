@@ -34,7 +34,7 @@ static RTC_DATA_ATTR char shown[128];
 static void draw(const uint8_t* png, const uint8_t* end, const char* fact) {
     IBoard& board = epdBoard();
     board.clearDisplay();
-    if (!board.drawPngFromBuffer((uint8_t*)png, (int32_t)(end - png), 0, 0, false, false))
+    if (!board.drawPngFromBuffer(png, (int32_t)(end - png), 0, 0, PngDraw::Plain))
         log(LOG_ERROR, "the notice image would not decode");
 
     board.setFont(&FrauncesDetail);

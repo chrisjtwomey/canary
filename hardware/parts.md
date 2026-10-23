@@ -70,7 +70,7 @@ No conflict with 0x12, 0x62, 0x70, 0x76/0x77.
 - Board define **`ARDUINO_INKPLATE5V2`** (Arduino core `INKPLATE5V2`). Selects `Inkplate5V2Driver.h`, `MULTIPLE_DISPLAY_MODES`, `USES_I2S`.
 - No PlatformIO board JSON exists. The `esp32` environment uses `board = esp32dev`, `board_build.f_cpu = 240000000L` and `-DARDUINO_INKPLATE5V2 -DBOARD_HAS_PSRAM -mfix-esp32-psram-cache-issue`.
 - `INKPLATE_1BIT 0`, `INKPLATE_3BIT 1`; `E_INK_WIDTH 1280`, `E_INK_HEIGHT 720`.
-- RTC API as used by the kit: `setEpoch`, `getEpoch`, `getRtcData`, `setAlarmEpoch(epoch, match)`, `clearAlarmFlag`. Match modes `_SS`, `_MMSS`, `_HHMMSS`, `_DHHMMSS`, `_WHHMMSS`.
+- RTC API as used by the kit: `setEpoch`, `getEpoch`, `setAlarmEpoch(epoch, match)`, `clearAlarmFlag`. Match modes `_SS`, `_MMSS`, `_HHMMSS`, `_DHHMMSS`, `_WHHMMSS`.
 - Do a full update after a run of partial updates *(docs FAQ)*; `setFullUpdateThreshold(n)`.
 
 ### Physical *(KiCad PCB, component side, origin top-left, mm)*

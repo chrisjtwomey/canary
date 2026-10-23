@@ -811,7 +811,7 @@ static void sendCalibration() {
 // Mains power and no schedule to keep, so there is nothing to do but wait
 // for the network to come back, unless an image on trial fails to join.
 static void waitForNetwork() {
-    while (configureWiFi(config.wifiSSID, config.wifiPass, config.wifiRetries) != ESP_OK) {
+    while (configureWiFi(config.wifiSSID, config.wifiPass, config.wifiConnectTimeoutSeconds) != ESP_OK) {
         trialFailed("wifi connect timeout");
         log(LOG_ERROR, "wifi connect timeout; trying again in 30 s");
         delay(30000);

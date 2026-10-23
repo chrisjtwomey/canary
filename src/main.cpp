@@ -101,7 +101,7 @@ static void sleepUntil(uint32_t at) {
     const uint32_t seconds = secondsUntil(at, epochNow());
     enableWakeOnTimer(seconds + seconds / 20 + 60);
     logf(LOG_INFO, "sleeping %u s", seconds);
-    sleep((time_t)at);
+    sleepUntil((time_t)at);
 }
 
 // A new image that cannot complete a cycle is not worth keeping. Mains
@@ -194,7 +194,7 @@ static const AfterFetchSteps kAfterFetch = {drawFetchedPage, drawVersionNotice,
 static void fetchAndDraw() {
     if (WiFi.status() != WL_CONNECTED) {
         log(LOG_WARNING, "wifi down; reconnecting");
-        configureWiFi(config.wifiSSID, config.wifiPass, config.wifiRetries);
+        configureWiFi(config.wifiSSID, config.wifiPass, config.wifiConnectTimeoutSeconds);
     }
 
     // One try each wake: a failure backs off to a later one.
