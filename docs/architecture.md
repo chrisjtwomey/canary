@@ -94,7 +94,7 @@ include/display/fonts/         the pages' face as one-bit fonts, from scripts/gf
 src/sim/main.cpp               the sensor loop as a host binary
 src/validate/main.cpp          the bench routine
 lib/bme68x/                    Bosch's BME68x API
-scripts/                       bsec.py, dock_core.py, gfxfont.py, notices.py, version.py
+scripts/                       bsec.py, coverage_report.py, dock_core.py, gfxfont.py, notices.py, version.py
 test/                          host tests, native env
 setup.sh                       the first start: runs docker-compose.yml's setup service, then starts the stack
 server/

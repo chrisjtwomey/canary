@@ -89,6 +89,24 @@ pio test -e native            # the room, the mocks, the drivers, SensorSuite
 cd server && pytest           # the server
 ```
 
+### Coverage
+
+```sh
+pip install gcovr                       # once, into the Python that runs the script
+python3 scripts/coverage_report.py      # --server or --firmware for one
+```
+
+Both figures count lines. The server's leaves out the tests. The firmware's
+counts only what `native` compiles, `src/sensors` and `src/net`; the rest of
+`src/` runs only on a board and is left to the bench.
+
+On each push to main, the Coverage workflow (`.github/workflows/coverage.yaml`)
+runs the script with `--badges` and writes the two figures, rounded down, to a
+public gist that the README's badges read. It writes with the `GIST_TOKEN`
+secret, a fine-grained token with only the Gists permission. When the token
+expires, the workflow fails and the badges keep their last figures; it is
+apart from PlatformIO CI, so CI still passes and the images still publish.
+
 ## Building the dock
 
 The dock builds in a PlatformIO folder of its own, `~/.platformio-canary-dock`. Give it in every dock command,

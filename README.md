@@ -1,5 +1,10 @@
 # CANARY
 
+[![PlatformIO CI](https://github.com/chrisjtwomey/canary/actions/workflows/build.yaml/badge.svg)](https://github.com/chrisjtwomey/canary/actions/workflows/build.yaml)
+[![Images](https://github.com/chrisjtwomey/canary/actions/workflows/release.yaml/badge.svg)](https://github.com/chrisjtwomey/canary/actions/workflows/release.yaml)
+[![Server coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/chrisjtwomey/3c210a371fde90aa65369080ad509e39/raw/canary-server-coverage.json)](CONTRIBUTING.md#coverage)
+[![Firmware coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/chrisjtwomey/3c210a371fde90aa65369080ad509e39/raw/canary-firmware-coverage.json)](CONTRIBUTING.md#coverage)
+
 CANARY shows the air in a room on a 5.2" e-paper display. It measures CO₂, particulates, gas (VOC),
 temperature, humidity and pressure.
 
