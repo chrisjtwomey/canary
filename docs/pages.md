@@ -47,7 +47,7 @@ The Settings page, `/web/config`:
 - A warm-up trades accuracy for time or power, so it has a recommended value: the particle fan's is 35 s, the
   SCD41's is 3 minutes. The group's drawing marks it with a dashed line, "recommended", and a line under the field
   warns while the value is below it. A shorter warm-up is still saved, because it can be the right choice for a
-  dock on a battery. `Field.cautions` and `config.js` apply the same rule.
+  dock on a battery. epd's `Field.cautions` and `config.js` apply the same rule.
 - The Server tab's Comfort group sets the Comfort page's edges (the `comfort` block). Its drawing is the Comfort
   page's chart, with the room's last 6 hours from `GET /history`. Each comfortable edge drags, temperature in 0.5 °C
   steps and humidity in 1 % steps, and the dot at the comfortable ranges' centre moves every edge. The acceptable

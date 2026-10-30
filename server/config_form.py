@@ -1,124 +1,21 @@
-"""The config page's form: its tabs and fields, and what a filled-in form
-does to config.yaml, through epd's config_file. Every edit is read back with
-PyYAML before it is accepted.
+"""The config page's tabs and fields, this project's own kinds of field, and
+its settings in words, as one form on epd's settings_form.
 """
 from __future__ import annotations
 
-import json
-import math
-import os
 import re
-from dataclasses import dataclass
-from datetime import datetime
 from typing import Any
 
-from epd_server.config_file import (EDIT_ON_SERVER, MISSING, NOT_A_MAPPING, NOT_YAML,  # noqa: F401
-                                     ON_SERVER, Doc, FormError, changed_paths, flat, lookup, read,
-                                     reads_as, same, twice)
+from epd_server.config_file import (MISSING, NOT_A_MAPPING, NOT_YAML, ON_SERVER, Doc,  # noqa: F401
+                                     FormError, lookup, read, same, twice)
+from epd_server.settings_form import (Edit, Field, FieldError, Form, Group, Kind,  # noqa: F401
+                                      Tab, clock_time, default_of, host_zone, initial, input_text,
+                                      scaled, words_of)
 
 import dock_settings as ds
 from broker import board_broker
 from epd_server.timeranges import DAYS, MAX_RANGES
 from schedule import DEFAULT_DISPLAY_SYNC_S, DEFAULT_DOCK_WEEK, DEFAULT_PAGE_WEEK
-
-
-@dataclass(frozen=True)
-class Field:
-    """One setting on the form.
-
-    ``default`` is what the server takes when the key is absent, or a function
-    of the config that gives it; the form shows it as the field's value.
-    ``hint`` is an example of the value, for a field with no default. ``when``
-    is another field and a
-    value, as ``source.kind=store``, or values, as ``log.level=info|debug``:
-    the field shows only while that one holds one of them. ``env`` is false for keys the server reads without looking for an
-    environment variable. ``recommended`` is the value to keep, which the
-    group's drawing marks; below it, ``caution`` shows under the field. With
-    ``zero_means_always``, 0 is not below it: the fan's 0 keeps it on.
-    ``refused`` is what the field says when the server's check refuses its
-    value, in place of the check's own words, which name config keys.
-    """
-    key: str
-    label: str
-    help: str = ""
-    kind: str = "text"      # text password zone int number bool choice stops time window pools order week looks
-    default: Any = None
-    hint: str = ""
-    choices: tuple[tuple[str, str], ...] = ()
-    unit: str = ""
-    minimum: float | None = None
-    maximum: float | None = None
-    step: int = 1
-    when: str = ""
-    env: bool = True
-    long: str = ""          # the name in messages, when the label leans on its place on the page
-    scale: int = 1          # the file's units in one of the input's: 60 shows seconds as minutes
-    recommended: float | None = None
-    caution: str = ""
-    zero_means_always: bool = False
-    refused: str = ""
-
-    def cautions(self, value: Any) -> bool:
-        """Whether ``value``, as the form or the file holds it, is below the recommended one."""
-        if self.recommended is None:
-            return False
-        try:
-            v = float(value)
-        except (TypeError, ValueError):
-            return False
-        return v < self.recommended and not (v == 0 and self.zero_means_always)
-
-    @property
-    def path(self) -> tuple[str, ...]:
-        return tuple(self.key.split("."))
-
-    @property
-    def env_name(self) -> str:
-        return "_".join(self.path).upper()
-
-
-    def env_value(self) -> str | None:
-        """The environment variable that sets this key over the file, if one is set."""
-        return os.environ.get(self.env_name) if self.env else None
-
-
-@dataclass(frozen=True)
-class Group:
-    """``store`` names the store this group's file holds, for the export row.
-    ``action`` names a row after the fields: ``recalibrate``, which acts at
-    once rather than saving; ``position``, a grid that sets the group's two
-    alignments together; ``display``, the size the display reports; or
-    ``sign-in``, whether a password is set, and the token for scripts. ``visual``
-    names a drawing of the group's values that can also set them: ``dial``,
-    the day's syncs, ``slot``, the time before one sync, ``start``, the
-    minutes after the SCD41 starts, ``panel``, the
-    image and its drawn area. ``disk``, the space the stores take on the
-    server's disk, and ``led``, the light playing one of its looks, only
-    show. ``caption`` says what the drawing shows, when
-    the page's own words for it do not. ``about`` is the line under the
-    heading that says what the group is for."""
-    heading: str
-    fields: tuple[Field, ...]
-    store: str = ""
-    action: str = ""
-    visual: str = ""
-    caption: str = ""
-    about: str = ""
-
-
-@dataclass(frozen=True)
-class Tab:
-    """``sheet`` sets the tab out as a spec sheet: each group under a rule,
-    its heading in a column beside it, and each field a line with a dotted
-    leader from its name to its value."""
-    name: str
-    title: str
-    groups: tuple[Group, ...]
-    sheet: bool = False
-
-    @property
-    def fields(self) -> list[Field]:
-        return [f for g in self.groups for f in g.fields]
 
 
 # The status light's triggers, as the Dock tab names them, in their order.
@@ -132,6 +29,11 @@ SMOOTHNESS_STOPS = tuple((str(i), f"{n} steps" if n else "Smooth")
                          for i, n in enumerate(ds.LED_SMOOTHNESS_STEPS, 1))
 # What each limit's help says it is for.
 POOR_AIR_HELP = "Above this, the status light shows its Alert pattern."
+
+
+def _light_default(end: str):
+    """What the light's schedule shows for ``end`` while it is on all day."""
+    return lambda cfg: ds.DEFAULT_LED_SCHEDULE[end] if _light_block(cfg) is None else None
 
 
 TABS: tuple[Tab, ...] = (
@@ -275,10 +177,10 @@ TABS: tuple[Tab, ...] = (
                   "stops", ds.LED_SMOOTHNESS, choices=SMOOTHNESS_STOPS),
             Field("dock.led.schedule", "Schedule", "The hours the light is on. Off = all day.",
                   "window", False, env=False),
-            Field("dock.led.schedule.from", "From", "", "time", when="dock.led.schedule=true",
-                  env=False, long="Schedule from"),
-            Field("dock.led.schedule.to", "To", "", "time", when="dock.led.schedule=true",
-                  env=False, long="Schedule to"),
+            Field("dock.led.schedule.from", "From", "", "time", _light_default("from"),
+                  when="dock.led.schedule=true", env=False, long="Schedule from"),
+            Field("dock.led.schedule.to", "To", "", "time", _light_default("to"),
+                  when="dock.led.schedule=true", env=False, long="Schedule to"),
             Field("dock.led.looks", "Patterns",
                   "The status light shows the first row that applies. Length is one cycle of "
                   "its pattern.", "looks",
@@ -353,68 +255,11 @@ INSTALL_FIELDS: tuple[Field, ...] = (
 
 INSTALL_KEYS = frozenset(f.key for f in INSTALL_FIELDS)
 
-FIELDS: tuple[Field, ...] = tuple(f for t in TABS for f in t.fields) + INSTALL_FIELDS
-BY_KEY: dict[str, Field] = {f.key: f for f in FIELDS}
-TAB_OF: dict[str, str] = {f.key: t.name for t in TABS for f in t.fields}
-
-
-class FieldError(ValueError):
-    """A value the form cannot write. The message is for the person filling it in."""
-
-
-def host_zone() -> str:
-    """The zone the server runs in when config.yaml names none."""
-    tz = datetime.now().astimezone().tzinfo
-    return str(getattr(tz, "key", "") or (tz.tzname(None) if tz else "") or "UTC")
-
-
 def pool_names(cfg: dict) -> list[str]:
     pools = lookup(cfg, ("display", "pools"))
     return [str(n) for n in pools] if isinstance(pools, dict) else []
 
 
-def default_of(f: Field, cfg: dict) -> Any:
-    """What the server takes for ``f`` when config.yaml leaves it out."""
-    return f.default(cfg) if callable(f.default) else f.default
-
-
-def effective(cfg: dict, key: str) -> Any:
-    """The value the server uses for ``key``: the file's, or the default."""
-    v = lookup(cfg, BY_KEY[key].path)
-    return default_of(BY_KEY[key], cfg) if v is MISSING else v
-
-
-def _scaled(f: Field, value: Any) -> Any:
-    """``value`` from the file in the input's units."""
-    if f.scale == 1 or isinstance(value, bool) or not isinstance(value, (int, float)):
-        return value
-    shown = value / f.scale
-    return int(shown) if shown == int(shown) else shown
-
-
-def input_text(f: Field, value: Any) -> str:
-    """A value from the file as ``f``'s input shows it."""
-    return _as_input(_scaled(f, value))
-
-
-def _as_input(value: Any) -> str:
-    if value is None or value is MISSING:
-        return ""
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, list):
-        return ", ".join(map(str, value))
-    return str(value)
-
-
-def _pool_rows(v: Any) -> list[tuple[str, str]]:
-    if not isinstance(v, dict):
-        return []
-    return [(str(n), ", ".join(map(str, p if isinstance(p, list) else [p]))) for n, p in v.items()]
-
-
-# The fields that are rows of inputs rather than one.
-ROWS = ("pools", "week", "looks")
 # Each day's name, short as a group's chip shows it, and whole.
 DAY_SHORT = {d: d.capitalize() for d in DAYS}
 DAY_LONG = dict(zip(DAYS, ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
@@ -478,63 +323,6 @@ def _look_rows(v: Any) -> list[tuple[str, str, str]]:
              str(r.get("length_s", ds.LED_STILL_LENGTH_S))) for r in v if isinstance(r, dict)]
 
 
-def shown(cfg: dict) -> dict[str, Any]:
-    """Each field's value as its input shows it: a string, or rows for the
-    pools, a schedule's groups of days and their ranges, and the light's looks."""
-    out: dict[str, Any] = {}
-    light = _light_block(cfg)
-    for f in FIELDS:
-        v = lookup(cfg, f.path)
-        if f.kind == "pools":
-            out[f.key] = _pool_rows(v)
-        elif f.kind == "week":
-            out[f.key] = _week_rows(_week_in_order(default_of(f, cfg) if v is MISSING else v))
-        elif f.kind == "looks":
-            out[f.key] = _look_rows(_looks_in_order(default_of(f, cfg) if v is MISSING else v))
-        elif f.kind == "window":
-            out[f.key] = "true" if light is not None else "false"
-        elif f.key.startswith(LIGHT_KEY + ".") and light is None:
-            out[f.key] = ds.DEFAULT_LED_SCHEDULE[f.path[-1]]
-        else:
-            out[f.key] = _as_input(_scaled(f, default_of(f, cfg) if v is MISSING else v))
-    return out
-
-
-def defaults(cfg: dict) -> dict[str, str]:
-    """Each field's default as its input shows it, for the fields that have one."""
-    light = _light_block(cfg)
-    out: dict[str, str] = {}
-    for f in FIELDS:
-        if f.kind in ROWS:
-            continue
-        if f.key.startswith(LIGHT_KEY + ".") and light is None:
-            d: Any = ds.DEFAULT_LED_SCHEDULE[f.path[-1]]
-        else:
-            d = default_of(f, cfg)
-        if d is not None:
-            out[f.key] = _as_input(_scaled(f, d))
-    return out
-
-
-
-def submitted(form) -> dict[str, Any]:
-    """The values a posted form holds, as :func:`shown` gives them."""
-    out: dict[str, Any] = {}
-    for f in FIELDS:
-        if f.key not in form:
-            continue
-        if f.kind == "pools":
-            out[f.key] = list(zip(form.getlist(f.key + ".name"), form.getlist(f.key + ".pages")))
-        elif f.kind == "week":
-            out[f.key] = _submitted_week(form, f.key)
-        elif f.kind == "looks":
-            out[f.key] = list(zip(form.getlist(f.key + ".trigger"), form.getlist(f.key + ".pattern"),
-                                  form.getlist(f.key + ".length_s")))
-        else:
-            out[f.key] = form.getlist(f.key)[-1]
-    return out
-
-
 def _submitted_week(form, key: str) -> list[tuple[str, list[tuple[str, str]]]]:
     """A week's groups as the form posts them: ``<key>.<n>.days``, and each
     row's ``<key>.<n>.from`` and ``<key>.<n>.every``, in the order of ``n``."""
@@ -543,53 +331,6 @@ def _submitted_week(form, key: str) -> list[tuple[str, list[tuple[str, str]]]]:
     return [(form.getlist(f"{key}.{n}.days")[-1],
              list(zip(form.getlist(f"{key}.{n}.from"), form.getlist(f"{key}.{n}.every"))))
             for n in groups]
-
-
-def initial(value: Any) -> str:
-    """A value as config.js compares it, to tell whether the field has changed."""
-    if isinstance(value, list):
-        return json.dumps([list(r) for r in value], separators=(",", ":"), ensure_ascii=False)
-    return value
-
-
-# ── Parsing ─────────────────────────────────────────────────────────
-
-_HHMM = re.compile(r"(\d{1,2}):(\d{2})")
-
-
-def _either(words) -> str:
-    """"A or B", "A, B or C": the choices as a person lists them."""
-    words = list(words)
-    return words[0] if len(words) == 1 else ", ".join(words[:-1]) + " or " + words[-1]
-
-
-def _bounds(f: Field, v: float) -> None:
-    if f.minimum is not None and v < f.minimum:
-        raise FieldError(f"Enter {f.minimum:g} or more.")
-    if f.maximum is not None and v > f.maximum:
-        raise FieldError(f"Enter {f.maximum:g} or less.")
-    if f.step > 1 and v % f.step:
-        raise FieldError(f"Enter a multiple of {f.step}.")
-
-
-def _images(pages: str) -> list[str]:
-    return [p.strip() for p in pages.split(",") if p.strip()]
-
-
-def _parse_pools(rows) -> dict[str, list[str]]:
-    pools: dict[str, list[str]] = {}
-    for name, pages in rows:
-        name, images = name.strip(), _images(pages)
-        if not name and not images:
-            continue
-        if not name:
-            raise FieldError("Each set needs a name.")
-        if name in pools:
-            raise FieldError(f"Two sets are named {name}. Rename one.")
-        if not images:
-            raise FieldError(f"{name} has no pages. Add one.")
-        pools[name] = images
-    return pools
 
 
 def _in_order(ranges: Any) -> Any:
@@ -620,10 +361,9 @@ def _parse_clock(rows) -> list[dict]:
         at, every = at.strip(), every.strip()
         if not at and not every:
             continue
-        m = _HHMM.fullmatch(at)
-        if not m or int(m[1]) > 23 or int(m[2]) > 59:
-            raise FieldError(f"{at or 'A time range'}: enter a time as HH:MM.")
-        at = f"{int(m[1]):02d}:{m[2]}"
+        given, at = at, clock_time(at)
+        if at is None:
+            raise FieldError(f"{given or 'A time range'}: enter a time as HH:MM.")
         try:
             minutes = int(every)
         except ValueError:
@@ -716,161 +456,6 @@ def _parse_looks(rows) -> list[dict]:
     return [looks[t] for t in ds.LED_TRIGGERS if t in looks]
 
 
-def parse(f: Field, raw: Any) -> Any:
-    """The value to write for what the input holds; None takes the key out,
-    so the server uses its default."""
-    if f.kind == "pools":
-        return _parse_pools(raw)
-    if f.kind == "week":
-        return _parse_week(raw)
-    if f.kind == "looks":
-        return _parse_looks(raw)
-    entered = str(raw)
-    raw = entered.strip()
-    if f.kind in ("bool", "window"):
-        return raw == "true"
-    if raw == "":
-        return None
-    if f.kind == "password":
-        return entered
-    if f.kind == "int":
-        try:
-            v = int(raw)
-        except ValueError:
-            raise FieldError("Enter a whole number.") from None
-        _bounds(f, v)
-        return v * f.scale
-    if f.kind == "number":
-        try:
-            v = int(raw)
-        except ValueError:
-            try:
-                v = float(raw)
-            except ValueError:
-                raise FieldError("Enter a number.") from None
-            if not math.isfinite(v):
-                raise FieldError("Enter a number.")
-        _bounds(f, v)
-        return v
-    if f.kind in ("choice", "stops"):
-        if raw not in [c for c, _ in f.choices]:
-            raise FieldError("Choose " + _either(w for _, w in f.choices) + ".")
-        return int(raw) if raw.isdigit() else raw
-    if f.kind == "time":
-        m = _HHMM.fullmatch(raw)
-        if not m or int(m[1]) > 23 or int(m[2]) > 59:
-            raise FieldError("Enter a time as HH:MM.")
-        return f"{int(m[1]):02d}:{m[2]}"
-    if f.kind == "order":
-        return _images(raw)
-    return raw
-
-
-# ── Writing ─────────────────────────────────────────────────────────
-
-# ── Applying a form ─────────────────────────────────────────────────
-
-@dataclass
-class Edit:
-    """What a posted form does to config.yaml."""
-    text: str
-    errors: dict[str, str]      # a field's key, and what is wrong with its value
-    changed: list[str]          # the fields it changes
-
-
-def _normal_pools(v: Any) -> list[tuple[str, list]]:
-    if not isinstance(v, dict):
-        return []
-    return [(str(n), p if isinstance(p, list) else [p]) for n, p in v.items()]
-
-
-def apply(text: str, form) -> Edit:
-    """config.yaml as ``text`` with the values ``form`` posts, and what they change.
-
-    A field the form leaves out stays as it is, and so does one an
-    environment variable sets. An empty field takes its key out, unless the
-    file holds the key empty already.
-
-    Raises:
-        FormError: the file cannot be edited this way, or the edit would not
-            read back as the form gave it.
-    """
-    cfg = read(text)
-    rows = submitted(form)
-    values: dict[str, Any] = {}
-    errors: dict[str, str] = {}
-    for f in FIELDS:
-        if f.key not in form or f.env_value() is not None:
-            continue
-        raw = rows[f.key] if f.kind in ROWS else form.getlist(f.key)[-1]
-        try:
-            values[f.key] = parse(f, raw)
-        except FieldError as exc:
-            errors[f.key] = str(exc)
-    if errors:
-        return Edit(text, errors, [])
-
-    doc = Doc(text)
-    changed: list[str] = []
-    expect: dict[tuple, Any] = {}
-
-    def put(path, value) -> None:
-        doc.set(path, value)
-        expect[tuple(path)] = value
-
-    def take(key: str) -> None:
-        if doc.remove(BY_KEY[key].path if key in BY_KEY else tuple(key.split("."))):
-            changed.append(key)
-            expect[tuple(key.split("."))] = MISSING
-
-    for f in FIELDS:
-        if f.key not in values or f.key.startswith(LIGHT_KEY):
-            continue
-        value = values[f.key]
-        if f.kind == "pools":
-            if not value:
-                if lookup(cfg, f.path) is not MISSING:
-                    errors[f.key] = "Add at least one pool."
-                continue
-            if _normal_pools(lookup(cfg, f.path)) != list(value.items()):
-                doc.set_pools(value)
-                expect[f.path] = value
-                changed.append(f.key)
-        elif f.kind == "week":
-            cur = lookup(cfg, f.path)
-            if not same(_week_in_order(cur), value) and not (cur is MISSING
-                                                              and value == default_of(f, cfg)):
-                put(f.path, value)
-                changed.append(f.key)
-        elif f.kind == "looks":
-            cur = lookup(cfg, f.path)
-            if not same(_normal_looks(cur), value) and not (
-                    cur is MISSING and value == _normal_looks(default_of(f, cfg))):
-                put(f.path, value)
-                changed.append(f.key)
-        else:
-            cur = lookup(cfg, f.path)
-            if value is None:
-                if cur is not MISSING and cur != "":
-                    take(f.key)
-            elif not same(cur, value) and not (cur is MISSING
-                                                 and same(default_of(f, cfg), value)):
-                put(f.path, value)
-                changed.append(f.key)
-
-    if errors:
-        return Edit(text, errors, [])
-
-    if LIGHT_KEY in values:
-        changed += _apply_light(cfg, values, put)
-
-    if not changed:
-        return Edit(text, {}, [])
-    new_text = doc.text()
-    _check_reads_back(cfg, new_text, changed, expect)
-    return Edit(new_text, {}, changed)
-
-
 def _apply_light(cfg: dict, values: dict, put) -> list[str]:
     """The light's schedule: ``{}`` when it is off, otherwise a block of the
     times the form gives, or the file's, or the defaults."""
@@ -890,75 +475,7 @@ def _apply_light(cfg: dict, values: dict, put) -> list[str]:
     return [LIGHT_KEY]
 
 
-def _check_reads_back(cfg: dict, text: str, changed: list[str], expect: dict) -> None:
-    """Refuse an edit that PyYAML would not read as the form gave it, or
-    that touched a key the form did not change."""
-    new = read(text)
-    allowed = [tuple(k.split(".")) for k in changed]
-    for path in changed_paths(cfg, new):
-        if not any(path[:len(p)] == p or p[:len(path)] == path for p in allowed):
-            raise FormError(f"This edit also changes {name_of(path)}. {EDIT_ON_SERVER}")
-    for path, value in expect.items():
-        if not reads_as(lookup(new, path), value):
-            raise FormError(f"The form cannot save {name_of(path)} as entered. {EDIT_ON_SERVER}")
-
-
 # ── Words for the page ──────────────────────────────────────────────
-
-def field_at(path: tuple) -> Field | None:
-    """The field that holds ``path``, or holds the mapping it is in."""
-    best = None
-    for f in FIELDS:
-        if path[:len(f.path)] == f.path and (best is None or len(f.path) > len(best.path)):
-            best = f
-    return best
-
-
-def locate(message: str) -> tuple[str | None, str | None]:
-    """The field and the tab a problem from load_settings is about, as far
-    as the key it starts with says."""
-    head = tuple(message.split(" ", 1)[0].rstrip(":,.").split("."))
-    f = field_at(head)
-    if f is not None:
-        return f.key, TAB_OF.get(f.key)
-    for n in range(len(head), 0, -1):
-        for t in TABS:
-            if any(f.path[:n] == head[:n] for f in t.fields):
-                return None, t.name
-    return None, None
-
-
-def name_of(path: tuple) -> str:
-    f = field_at(path)
-    if f is None:
-        return ".".join(path)
-    if f.key not in TAB_OF:
-        return " · ".join([INSTALL_TITLE, f.label, *path[len(f.path):]])
-    tab = next(t for t in TABS if t.name == TAB_OF[f.key])
-    group = next(g for g in tab.groups if f in g.fields)
-    name = f.long or f.label
-    shared = sum((o.long or o.label) == name for o in tab.fields) > 1
-    rest = path[len(f.path):]
-    return " · ".join([tab.title, *([group.heading] if shared else []), name, *rest])
-
-
-def _words(v: Any) -> str:
-    if v is MISSING:
-        return "not set"
-    if isinstance(v, bool):
-        return "on" if v else "off"
-    if isinstance(v, list):
-        return ", ".join(map(str, v))
-    if v == {}:
-        return "off"
-    return str(v)
-
-
-def _unit_words(f: Field, v: Any) -> Any:
-    """A scaled field's value in the input's units, with them, as "5 minutes"."""
-    shown = _scaled(f, v)
-    return f"{shown} {f.unit}" if shown is not v else v
-
 
 def _every_words(every: Any) -> str:
     if every == 0:
@@ -971,7 +488,7 @@ def _every_words(every: Any) -> str:
 def _clock_words(v: Any) -> str:
     """A day's ranges as "07:00 every 5 min · 01:00 every 30 min"."""
     if not isinstance(v, list):
-        return _words(v)
+        return words_of(v)
     return " · ".join(f"{r.get('from', '?')} {_every_words(r.get('every'))}"
                       if isinstance(r, dict) else str(r) for r in v)
 
@@ -980,7 +497,7 @@ def _week_words(v: Any) -> str:
     """A week as "Mon–Fri: 07:00 every 5 min · 23:00 off; Sat–Sun: 09:00
     every 10 min", or a day's ranges alone when every day has them."""
     if not isinstance(v, list) or not all(isinstance(g, dict) for g in v):
-        return _words(v)
+        return words_of(v)
     if len(v) == 1 and days_words(v[0].get("days") or []) == "Every day":
         return _clock_words(v[0].get("ranges"))
     return "; ".join(f"{days_words(g.get('days') or [])}: {_clock_words(g.get('ranges'))}"
@@ -994,7 +511,7 @@ def _seconds(v: Any) -> str:
 def _look_words(v: Any) -> str:
     """The light's looks as "No Wi-Fi triple flash 1.9 s · Well solid"."""
     if not isinstance(v, list):
-        return _words(v)
+        return words_of(v)
     if not v:
         return "none"
     return " · ".join(
@@ -1029,44 +546,77 @@ def _with_words(cfg: dict) -> dict:
     return {**cfg, "dock": dock, "display": display}
 
 
-def _differences(old: dict, new: dict) -> list[tuple[tuple, Field | None, Any, Any]]:
-    """Each setting that differs from ``old`` to ``new``, in the form's order:
-    its path, its field, and both values as the words take them."""
-    old, new = _with_words(old), _with_words(new)
-    a, b = flat(old), flat(new)
-    order = {f.key: i for i, f in enumerate(FIELDS)}
-    out = []
-    for path in changed_paths(old, new):
-        f = field_at(path)
-        before, after = a.get(path, MISSING), b.get(path, MISSING)
-        if f is not None and f.kind == "pools":
-            before = "none" if before is MISSING else before
-            after = "none" if after is MISSING else after
-        if f is not None and f.scale != 1:
-            before, after = (_unit_words(f, v) for v in (before, after))
-        if f is not None and f.kind == "stops":
-            before, after = (dict(f.choices).get(str(v), v) for v in (before, after))
-        out.append((order.get(f.key, len(order)) if f else len(order), path, f, before, after))
-    return [(path, f, before, after) for _, path, f, before, after in
-            sorted(out, key=lambda x: x[0])]
+# ── This project's kinds of field ───────────────────────────────────
+
+class Week(Kind):
+    """A schedule: groups of days, each with its rows of a start and an interval."""
+    rows = True
+
+    def show(self, f, value, cfg):
+        return _week_rows(_week_in_order(default_of(f, cfg) if value is MISSING else value))
+
+    def submitted(self, form, key):
+        return _submitted_week(form, key)
+
+    def parse(self, f, raw):
+        return _parse_week(raw)
+
+    def write(self, w, f, value):
+        cur = lookup(w.cfg, f.path)
+        if not same(_week_in_order(cur), value) and not (cur is MISSING
+                                                         and value == default_of(f, w.cfg)):
+            w.put(f.path, value)
+            w.changed.append(f.key)
 
 
-def changes(old: dict, new: dict) -> list[dict[str, str]]:
-    """Each setting that differs from ``old`` to ``new``, in words, in the form's order."""
-    return [{"name": name_of(path), "old": _words(before), "new": _words(after)}
-            for path, _, before, after in _differences(old, new)]
+class Looks(Kind):
+    """The status light's rows of a trigger, a pattern and a length."""
+    rows = True
+
+    def show(self, f, value, cfg):
+        return _look_rows(_looks_in_order(default_of(f, cfg) if value is MISSING else value))
+
+    def submitted(self, form, key):
+        return list(zip(form.getlist(key + ".trigger"), form.getlist(key + ".pattern"),
+                        form.getlist(key + ".length_s")))
+
+    def parse(self, f, raw):
+        return _parse_looks(raw)
+
+    def write(self, w, f, value):
+        cur = lookup(w.cfg, f.path)
+        if not same(_normal_looks(cur), value) and not (
+                cur is MISSING and value == _normal_looks(default_of(f, w.cfg))):
+            w.put(f.path, value)
+            w.changed.append(f.key)
 
 
-def in_use(running: dict, saved: dict) -> dict[str, str]:
-    """Each field whose value in ``running`` differs from ``saved``, keyed by
-    the field: the running value in words, with its unit, as "4.0 °C"."""
-    out = {}
-    for _, f, before, _ in _differences(running, saved):
-        if f is None:
-            continue
-        words = dict(f.choices).get(str(before)) if f.kind == "choice" else None
-        words = words or _words(before)
-        if f.unit and f.scale == 1 and f.kind in ("int", "number"):
-            words += f.unit if f.unit == "%" else f" {f.unit}"
-        out[f.key] = words[:1].upper() + words[1:]
-    return out
+class Window(Kind):
+    """The light's schedule as one switch: on when the file gives a block."""
+
+    def show(self, f, value, cfg):
+        return "true" if _light_block(cfg) is not None else "false"
+
+    def parse(self, f, raw):
+        return str(raw).strip() == "true"
+
+
+FORM = Form(TABS, INSTALL_FIELDS, INSTALL_TITLE,
+            kinds={"week": Week(), "looks": Looks(), "window": Window()},
+            joint={LIGHT_KEY: _apply_light}, with_words=_with_words)
+
+FIELDS = FORM.fields
+BY_KEY = FORM.by_key
+TAB_OF = FORM.tab_of
+ROWS = tuple(name for name, kind in FORM.kinds.items() if kind.rows)
+effective = FORM.effective
+shown = FORM.shown
+defaults = FORM.defaults
+submitted = FORM.submitted
+parse = FORM.parse
+apply = FORM.apply
+field_at = FORM.field_at
+locate = FORM.locate
+name_of = FORM.name_of
+changes = FORM.changes
+in_use = FORM.in_use

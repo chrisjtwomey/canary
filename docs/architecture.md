@@ -108,7 +108,7 @@ server/
   config_page.py               /web/config: config.yaml as a form in tabs, checked, saved, and restarted on;
                                whether each board runs the saved settings, and what the dock runs in their place;
                                the access token and the boards' keys
-  config_form.py               the form's fields, how a filled-in form edits config.yaml, and a setting's value
+  config_form.py               the form's fields and its own kinds, on epd's settings_form, and a setting's value
                                in words
   login.py                     canary's choices for epd's sign-in: the routes the boards use, the token's routes, the page;
                                the boards' keys are epd's BoardKeys, turned on with the password in server.py
