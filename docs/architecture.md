@@ -109,7 +109,7 @@ server/
                                the access token and the boards' keys
   config_form.py               the form's fields, how a filled-in form edits config.yaml, and a setting's value
                                in words
-  login.py                     the sign-in: the password, its cookie, the token for scripts, and the Origin check;
+  login.py                     canary's choices for epd's sign-in: the routes the boards use, the token's routes, the page;
                                the boards' keys are epd's BoardKeys, turned on with the password in server.py
   transfer.py                  a store out to a file and back in, and what it holds, for the Storage tab
   schedule.py                  the dock's reading slots (schedules.md)

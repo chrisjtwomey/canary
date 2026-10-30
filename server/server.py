@@ -354,9 +354,6 @@ def load_settings(config: dict) -> Settings:
     if not core.network.mqtt_host:
         core = dataclasses.replace(core, network=dataclasses.replace(
             core.network, mqtt_host=board_broker(core.mqtt.host)))
-    reverse_proxy = get_prop_by_keys(config, "server", "reverse_proxy", default=False)
-    if not isinstance(reverse_proxy, bool):
-        raise ConfigError("server.reverse_proxy must be true or false")
     prioritise_alerts = get_prop_by_keys(config, "display", "prioritise_alerts", default=True)
     if not isinstance(prioritise_alerts, bool):
         raise ConfigError("display.prioritise_alerts must be true or false")
@@ -378,7 +375,7 @@ def load_settings(config: dict) -> Settings:
         dock_sync=make_dock_sync(config, core.server.timezone),
         display_sync=make_display_sync(config, core.server.timezone),
         dock=load_dock_settings(config),
-        reverse_proxy=reverse_proxy,
+        reverse_proxy=core.server.reverse_proxy,
         prioritise_alerts=prioritise_alerts,
     )
 

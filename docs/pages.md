@@ -122,7 +122,7 @@ The install page, `/web/install`:
 
 ### The sign-in
 
-`login.py` puts a sign-in in front of the site once `CANARY_PASSWORD` is set.
+epd's sign-in (`epd_server.login`) sits in front of the site once `CANARY_PASSWORD` is set. `login.py` holds canary's choices: its open routes, its access-token routes and its page.
 
 - **No password, no sign-in.** Every route is open, as for a new install, so a person can start without a step.
   The log warns at start, and the Server tab's Sign-in group says that anyone on the network can change the
