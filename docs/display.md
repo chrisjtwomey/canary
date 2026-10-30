@@ -61,4 +61,4 @@ The display draws a notice in place of a page in two cases:
 - While the display writes an update, it draws the logo again with a progress bar under it, and under that
   "Installing firmware" and the version, in the pages' italic from a second one-bit font.
 - The bar fills in ten steps. Each step is a partial update of the panel, which works only in black and white. The
-  Inkplate library makes each eleventh partial update a full refresh (`include/display/ProgressBar.h`).
+  Inkplate library makes each eleventh partial update a full refresh (epd's `ProgressBar`).

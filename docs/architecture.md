@@ -112,7 +112,6 @@ server/
   login.py                     the sign-in: the password, its cookie, the token for scripts, and the Origin check;
                                the boards' keys are epd's BoardKeys, turned on with the password in server.py
   transfer.py                  a store out to a file and back in, and what it holds, for the Storage tab
-  board_logs.py                what each board logs over MQTT, for the Logs view
   schedule.py                  the dock's reading slots (schedules.md)
   broker.py                    the MQTT broker the boards get when config.yaml names none for them
   off_hours.py                 the splash screen while the page schedule is off (schedules.md)

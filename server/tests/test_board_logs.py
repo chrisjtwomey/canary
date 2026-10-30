@@ -1,13 +1,12 @@
-"""GET /logs, the Logs view it serves, and the log store as a file."""
+"""The Logs view, and the log store as a file."""
 import json
 from zoneinfo import ZoneInfo
 
 import pytest
 from bs4 import BeautifulSoup
-from epd_server import LogStore
+from epd_server import LogsQuery, LogStore
 from flask import Flask
 
-from board_logs import MAX_LINES, LogsQuery
 from server import load_settings, make_pages
 from tests.html import attr, one
 from transfer import Overlap, Transfer
@@ -40,39 +39,6 @@ def pages(tz):
 @pytest.fixture
 def query(store):
     return LogsQuery(store, TZ)
-
-
-def test_the_newest_lines_every_board_and_the_zone(query):
-    answer = query.answer({"limit": "3"})
-    assert [line["text"] for line in answer["lines"]] == \
-        ["INFO - reading 4", "WARNING - fetch took 3 tries", "ERROR - POST failed"]
-    assert answer["boards"] == ["canary-display", "canary-dock"]
-    assert answer["tz"] == "Europe/Dublin"
-
-
-def test_paging_forward_and_back(query):
-    assert [line["id"] for line in query.answer({"after": "5"})["lines"]] == [6, 7]
-    assert [line["id"] for line in query.answer({"before": "3"})["lines"]] == [1, 2]
-
-
-def test_filters(query):
-    assert [line["board"] for line in query.answer({"board": "canary-display"})["lines"]] == ["canary-display"]
-    assert [line["level"] for line in query.answer({"level": "WARNING"})["lines"]] == ["WARNING", "ERROR"]
-    assert [line["text"] for line in query.answer({"q": "POST"})["lines"]] == ["ERROR - POST failed"]
-    assert query.answer({"board": "", "level": "", "q": ""})["lines"] == query.answer({})["lines"]
-
-
-def test_an_answer_is_capped(query, monkeypatch):
-    asked = {}
-    monkeypatch.setattr(query.store, "lines", lambda **kw: asked.update(kw) or [])
-    query.answer({"limit": "100000"})
-    assert asked["limit"] == MAX_LINES
-
-
-@pytest.mark.parametrize("args", [{"after": "x"}, {"limit": "1.5"}, {"level": "LOUD"}])
-def test_a_bad_argument_is_refused(query, args):
-    with pytest.raises(ValueError):
-        query.answer(args)
 
 
 def test_the_logs_view_has_its_filters_and_says_when_logging_is_off(query, pages, source):

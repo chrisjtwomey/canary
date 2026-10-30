@@ -19,7 +19,7 @@ from datetime import datetime, time as clock_time
 from typing import Callable
 
 import yaml
-from epd_server import (BoardKeys, DisplayServer, LogStore, ReadingsStore,
+from epd_server import (BoardKeys, DisplayServer, LogsQuery, LogStore, ReadingsStore,
                         align_process_timezone)
 from epd_server.config import (ConfigError, CoreConfig, get_prop_by_keys, load_core_config,
                                load_yaml)
@@ -32,7 +32,6 @@ from epd_server.timeranges import TimeRanges, Week, check_interval
 from about import About, config_version
 from after_reading import AfterReadingSchedule
 from broker import board_broker
-from board_logs import LogsQuery
 from config_form import twice
 from config_page import config_blueprint
 from display_settings import DISPLAY, DisplaySync, display_version

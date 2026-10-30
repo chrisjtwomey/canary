@@ -3,8 +3,8 @@
 #include <Arduino.h>
 
 #include "epd.h"
+#include "progress_bar.h"
 #include "display/Notice.h"
-#include "display/ProgressBar.h"
 #include "display/fonts/FrauncesDetail.h"
 #include "display/fonts/FrauncesDetailItalic.h"
 #include "log_utils.h"
