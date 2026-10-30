@@ -70,6 +70,7 @@ The kit is a library, not a framework: it does not need to know what a sensor is
 platformio.ini                 envs: esp32 (the display), dock (the TinyS3), dock-mock (-DUSE_MOCK_SENSORS), dock-validate, native, sim;
                                a -dev twin of each board env builds against an epd checkout
 partitions.csv
+pio-constraints.txt            holds the dock build's PlatformIO core at 6.2.0
 src/main.cpp                   the display: fetch, draw, post its own state
 src/dock/main.cpp              the dock's loop (dock.md)
 src/defaults.example.cpp       copy to defaults.cpp: Wi-Fi, server URL, MQTT logging

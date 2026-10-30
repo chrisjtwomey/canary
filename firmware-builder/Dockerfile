@@ -16,7 +16,8 @@ RUN pip install --no-cache-dir platformio==6.2.0
 # volume at /platformio keeps the toolchain; the dock's is in /platformio/dock
 # (build.sh). Open to every uid, because compose chooses the uid.
 ENV PLATFORMIO_CORE_DIR=/platformio \
-    HOME=/tmp
+    HOME=/tmp \
+    UV_CONSTRAINT=/src/canary/pio-constraints.txt
 RUN mkdir -m 1777 /platformio
 
 # The version the images are named by, stamped as the server image stamps
@@ -27,7 +28,7 @@ ENV CANARY_VERSION=${CANARY_VERSION}
 # The firmware sources at this commit, with the example settings. The build
 # downloads epd from the PlatformIO registry, at the version platformio.ini
 # pins.
-COPY platformio.ini partitions.csv /src/canary/
+COPY platformio.ini partitions.csv pio-constraints.txt /src/canary/
 COPY include /src/canary/include
 COPY lib /src/canary/lib
 COPY src /src/canary/src

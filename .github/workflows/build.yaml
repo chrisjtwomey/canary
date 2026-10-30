@@ -53,6 +53,8 @@ jobs:
       # nothing is attached, and the wiring check. In a PlatformIO folder of
       # its own (CONTRIBUTING.md, Building the dock).
       - name: Build the dock
+        env:
+          UV_CONSTRAINT: ${{ github.workspace }}/canary/pio-constraints.txt
         run: PLATFORMIO_CORE_DIR=~/.platformio-canary-dock pio run -e dock -e dock-mock -e dock-validate
 
       # This project's own logic, on the host: the room model, the sensor

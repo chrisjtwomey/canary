@@ -1,6 +1,7 @@
 *
 !platformio.ini
 !partitions.csv
+!pio-constraints.txt
 !include
 !lib
 !src

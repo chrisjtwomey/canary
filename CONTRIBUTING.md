@@ -116,6 +116,8 @@ The dock builds in a PlatformIO folder of its own, `~/.platformio-canary-dock`. 
 PLATFORMIO_CORE_DIR=~/.platformio-canary-dock pio run -e dock -t upload
 ```
 
+The first build in a new folder also needs `UV_CONSTRAINT=$PWD/pio-constraints.txt`. That file says why.
+
 - The dock's `custom_sdkconfig` turns on automatic light sleep. The core's precompiled IDF libraries do not have it,
   so pioarduino compiles them again. It writes them into a package that all builds in the PlatformIO folder share,
   and the display then does not build in that folder. `scripts/dock_core.py` stops a dock build in `~/.platformio`

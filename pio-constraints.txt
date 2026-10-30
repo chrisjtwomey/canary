@@ -1,0 +1,5 @@
+# The core the platform installs for itself, held at the version the dock builds
+# on. Move it when platformio.ini moves the platform. pioarduino 6.2.0.post1
+# fails the check in platform 55.03.312-1, which asks for ">=6.2.0".
+# UV_CONSTRAINT points at this file: CI and firmware-builder set it.
+pioarduino==6.2.0
