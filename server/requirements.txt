@@ -1,1 +1,1 @@
-epd-server==0.23.0
+epd-server==0.23.1
