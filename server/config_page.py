@@ -42,6 +42,7 @@ from typing import Any, Callable
 from airium import Airium
 from epd_server.board_keys import Board, BoardKeys
 from epd_server.timeranges import MAX_RANGES
+from epd_server.settings_page import save_flow
 from flask import Blueprint, Response, abort, jsonify, redirect, request
 from markupsafe import Markup
 
@@ -90,20 +91,6 @@ NOTICES = {
 
 # One wording for the state, whether it is a banner or a refused save.
 READ_ONLY = "Cannot save: the server is missing write access to the configuration."
-
-
-def save(path: str, text: str) -> str:
-    """Keep ``path`` as it was beside it, then write ``text`` over it in place.
-    Returns what it wrote: ``text`` ending in a newline.
-
-    In place, because a file mounted into a container on its own cannot be
-    replaced by a rename.
-    """
-    shutil.copyfile(path, path + ".bak")
-    written = text if text.endswith("\n") else text + "\n"
-    with open(path, "w") as f:
-        f.write(written)
-    return written
 
 
 @dataclass
@@ -1360,71 +1347,38 @@ def config_blueprint(pages: list[EnvPage], path: str, check: Callable[[str], Non
             act(device)
             return redirect("config#server", 303)
 
-        if mode == "restore":
-            try:
-                with open(path + ".bak") as f:
-                    text = f.read()
-            except OSError:
-                return refuse("No earlier version to restore.", 404)
-        elif mode != "form":
+        if mode not in ("form", "restore"):
             abort(400)
-        else:
+        if mode == "form":
             view.values.update(cf.submitted(form))
-            try:
-                edit = cf.apply(current, form)
-            except cf.FormError as exc:
-                return refuse(str(exc))
-            if edit.errors:
-                view.errors = edit.errors
-                key = next(f.key for f in cf.FIELDS if f.key in edit.errors)
-                view.tab = cf.TAB_OF.get(key, view.tab)
-                return refuse(f"{cf.name_of(cf.BY_KEY[key].path)}: {edit.errors[key]}", key=key)
-            text = edit.text
+        out = save_flow(cf.FORM, path, form, check, restart=restart, live_keys=cf.INSTALL_KEYS,
+                        take_live=take_network, read_only=READ_ONLY)
 
-        try:
-            check(text)
-        except ValueError as exc:
-            problem = str(exc)
-            if mode == "form":
-                key, tab = cf.locate(problem)
-                if key:
-                    f = cf.BY_KEY[key]
-                    if f.refused:
-                        problem = f"{cf.name_of(f.path)}: {f.refused}"
-                    view.errors[key] = f.refused or problem
-                view.tab = tab or view.tab
-                return refuse(problem, key=key)
-            return refuse(problem)
-
-        if action == "review":
-            return jsonify(changes=cf.changes(cf.read(current), cf.read(text)),
-                           same=text == current)
-        if action != "save":
-            if text == current:
+        if out.state == "refused":
+            view.errors = out.errors
+            if mode == "form" and out.tab:
+                view.tab = out.tab
+            return refuse(out.problem, out.status, out.key)
+        if out.state == "review":
+            return jsonify(changes=out.changes, same=out.same)
+        if out.state == "checked":
+            if out.same:
                 view.note = "Nothing to save."
             else:
                 view.note = "No problems found."
-                view.changes = cf.changes(cf.read(current), cf.read(text))
+                view.changes = out.changes
             return page(view)
-        if text == current:
+        if out.state == "same":
             if wants_json:
                 return jsonify(saved=False, same=True)
             view.note = "Nothing to save."
             return page(view)
-        if not writable():
-            return refuse(READ_ONLY, 403)
-        try:
-            written = save(path, text)
-        except OSError as exc:
-            return refuse(f"Save failed: {exc.strerror}.", 500)
-        if take_network is not None and mode == "form" and set(edit.changed) <= cf.INSTALL_KEYS:
-            take_network(written)
+        if out.state == "live":
             if wants_json:
-                return jsonify(saved=True, config=config_version(written), restarted=False)
+                return jsonify(saved=True, config=config_version(out.written), restarted=False)
             return redirect("install", 303)
-        restart()
         if wants_json:
-            return jsonify(saved=True, config=config_version(written))
+            return jsonify(saved=True, config=config_version(out.written))
         return restarting_html(pages, view.tab or cf.TABS[0].name)
 
     return bp

@@ -367,7 +367,7 @@ def test_an_empty_config_starts_on_the_defaults():
 
 
 def test_a_failed_write_says_why_and_does_not_restart(client, path, restarts, monkeypatch):
-    def refuse(src, dst):
+    def refuse(src, dst, **_kwargs):
         raise PermissionError(13, "Permission denied", dst)
     monkeypatch.setattr("config_page.shutil.copyfile", refuse)
     rsp = client.post("/web/config", data={**changed(client, server__port="9090"),
