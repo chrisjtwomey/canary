@@ -1,3 +1,1 @@
-epd-server==0.22.0
-# The config page edits config.yaml and keeps its comments.
-ruamel.yaml>=0.18
+epd-server==0.23.0
